@@ -1,3 +1,46 @@
-export const banner = "AI Workspace v0";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
-console.log(banner);
+import { ZodError } from "zod";
+
+import { loadTaskContract } from "./task-loader.js";
+
+export function runCli(args: string[]): number {
+  const taskPath = args[0];
+
+  if (!taskPath) {
+    console.error("Error: Task file path is required.");
+    return 1;
+  }
+
+  try {
+    const task = loadTaskContract(taskPath);
+
+    console.log("Task Contract: valid");
+    console.log(`ID: ${task.id}`);
+    console.log(`Repository: ${task.targetRepository}`);
+    console.log(`Objective: ${task.objective}`);
+
+    return 0;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      console.error("Error: Task file contains malformed JSON.");
+    } else if (error instanceof ZodError) {
+      console.error("Error: TaskContract validation failed.");
+    } else if (error instanceof Error && "code" in error) {
+      console.error(`Error: Unable to read task file: ${taskPath}`);
+    } else {
+      console.error("Error: Unable to load TaskContract.");
+    }
+
+    return 1;
+  }
+}
+
+const isEntryPoint =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+
+if (isEntryPoint) {
+  process.exitCode = runCli(process.argv.slice(2));
+}

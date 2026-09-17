@@ -1,0 +1,28 @@
+{
+  "id": "task-example-001",
+  "goalId": "goal-example-001",
+  "objective": "Load and validate a TaskContract from JSON",
+  "targetRepository": "ai-workspace",
+  "allowedPaths": [
+    "src/task-loader.ts",
+    "src/task-loader.test.ts",
+    "src/cli.ts",
+    "src/cli.test.ts",
+    "tasks/example.json"
+  ],
+  "forbiddenPaths": [
+    "docs/architecture.md",
+    "README.md"
+  ],
+  "constraints": [
+    "Do not access the target Repository"
+  ],
+  "acceptanceCriteria": [
+    "The TaskContract loads and validates successfully"
+  ],
+  "verification": [
+    "pnpm typecheck",
+    "pnpm test",
+    "pnpm dev ./tasks/example.json"
+  ]
+}

@@ -11,4 +11,13 @@ describe("CLI", () => {
 
     error.mockRestore();
   });
+
+  it("rejects a missing Repository path argument", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(runCli(["task.json"])).toBe(1);
+    expect(error).toHaveBeenCalledWith("Error: Repository path is required.");
+
+    error.mockRestore();
+  });
 });

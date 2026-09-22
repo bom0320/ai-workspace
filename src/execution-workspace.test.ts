@@ -11,7 +11,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createExecutionWorkspace } from "./execution-workspace.js";
+import {
+  createExecutionWorkspace,
+  removeExecutionWorkspace,
+} from "./execution-workspace.js";
 
 let repositoryPath: string | undefined;
 let workspacePath: string | undefined;
@@ -35,7 +38,12 @@ function createGitRepository(): string {
 }
 
 afterEach(() => {
-  if (repositoryPath && workspacePath && existsSync(repositoryPath)) {
+  if (
+    repositoryPath &&
+    workspacePath &&
+    existsSync(repositoryPath) &&
+    existsSync(workspacePath)
+  ) {
     try {
       execFileSync("git", [
         "-C",
@@ -99,5 +107,41 @@ describe("createExecutionWorkspace", () => {
     expect(() => createExecutionWorkspace(repository)).toThrow(
       "Failed to create execution workspace",
     );
+  });
+});
+
+describe("removeExecutionWorkspace", () => {
+  it("force removes the worktree directory and Git registration", () => {
+    const repository = createGitRepository();
+
+    workspacePath = createExecutionWorkspace(repository);
+
+    expect(existsSync(workspacePath)).toBe(true);
+    expect(
+      execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], {
+        encoding: "utf8",
+      }),
+    ).toContain(workspacePath);
+
+    writeFileSync(join(workspacePath, "committed.txt"), "modified content\n");
+    writeFileSync(join(workspacePath, "untracked.txt"), "untracked content\n");
+
+    removeExecutionWorkspace(repository, workspacePath);
+
+    expect(existsSync(workspacePath)).toBe(false);
+    expect(
+      execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], {
+        encoding: "utf8",
+      }),
+    ).not.toContain(workspacePath);
+  });
+
+  it("reports Git failures with removal context", () => {
+    const repository = createGitRepository();
+    const missingWorkspace = join(repository, "missing-worktree");
+
+    expect(() =>
+      removeExecutionWorkspace(repository, missingWorkspace),
+    ).toThrow("Failed to remove execution workspace");
   });
 });

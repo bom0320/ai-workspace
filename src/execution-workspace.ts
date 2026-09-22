@@ -46,3 +46,39 @@ export function createExecutionWorkspace(repositoryRoot: string): string {
 
   return resolve(workspacePath);
 }
+
+export function removeExecutionWorkspace(
+  repositoryRoot: string,
+  workspaceRoot: string,
+): void {
+  try {
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repositoryRoot,
+        "worktree",
+        "remove",
+        "--force",
+        workspaceRoot,
+      ],
+      { encoding: "utf8", stdio: "pipe" },
+    );
+  } catch (error) {
+    let detail = error instanceof Error ? error.message : String(error);
+
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "stderr" in error &&
+      typeof error.stderr === "string" &&
+      error.stderr.trim()
+    ) {
+      detail = error.stderr.trim();
+    }
+
+    throw new Error(`Failed to remove execution workspace: ${detail}`, {
+      cause: error,
+    });
+  }
+}

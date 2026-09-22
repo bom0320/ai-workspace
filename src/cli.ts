@@ -4,7 +4,10 @@ import { pathToFileURL } from "node:url";
 import { ZodError } from "zod";
 
 import { runCodexWorker } from "./codex-worker.js";
-import { createExecutionWorkspace } from "./execution-workspace.js";
+import {
+  createExecutionWorkspace,
+  removeExecutionWorkspace,
+} from "./execution-workspace.js";
 import { resolveRepositoryRoot } from "./repository.js";
 import { loadTaskContract } from "./task-loader.js";
 import { runVerification } from "./verification-runner.js";
@@ -68,40 +71,55 @@ export function runCli(args: string[]): number {
   }
 
   console.log(`Execution Workspace: ${workspaceRoot}`);
+  let exitCode = 0;
+  let workerPassed = true;
 
   try {
-    runCodexWorker(task, workspaceRoot);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    try {
+      runCodexWorker(task, workspaceRoot);
+      console.log("Codex Worker: complete");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
 
-    console.error(`Error: Codex Worker failed: ${message}`);
-    return 1;
-  }
-
-  console.log("Codex Worker: complete");
-
-  const verification = runVerification(task.verification, workspaceRoot);
-
-  if (!verification.passed) {
-    console.error("Verification: failed");
-
-    for (const command of verification.commands.filter(
-      (command) => !command.passed,
-    )) {
-      console.error(
-        `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
-      );
+      console.error(`Error: Codex Worker failed: ${message}`);
+      exitCode = 1;
+      workerPassed = false;
     }
 
-    return 1;
+    if (workerPassed) {
+      const verification = runVerification(task.verification, workspaceRoot);
+
+      if (!verification.passed) {
+        console.error("Verification: failed");
+
+        for (const command of verification.commands.filter(
+          (command) => !command.passed,
+        )) {
+          console.error(
+            `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
+          );
+        }
+
+        exitCode = 1;
+      } else {
+        console.log("Verification: passed");
+        console.log(`ID: ${task.id}`);
+        console.log(`Repository: ${task.targetRepository}`);
+        console.log(`Objective: ${task.objective}`);
+      }
+    }
+  } finally {
+    try {
+      removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+
+      console.error(`Error: Execution Workspace cleanup failed: ${message}`);
+      exitCode = 1;
+    }
   }
 
-  console.log("Verification: passed");
-  console.log(`ID: ${task.id}`);
-  console.log(`Repository: ${task.targetRepository}`);
-  console.log(`Objective: ${task.objective}`);
-
-  return 0;
+  return exitCode;
 }
 
 const isEntryPoint =

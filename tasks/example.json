@@ -22,7 +22,6 @@
   ],
   "verification": [
     "pnpm typecheck",
-    "pnpm test",
-    "pnpm dev ./tasks/example.json ."
+    "pnpm test"
   ]
 }

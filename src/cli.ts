@@ -3,8 +3,11 @@ import { pathToFileURL } from "node:url";
 
 import { ZodError } from "zod";
 
+import { runCodexWorker } from "./codex-worker.js";
+import { createExecutionWorkspace } from "./execution-workspace.js";
 import { resolveRepositoryRoot } from "./repository.js";
 import { loadTaskContract } from "./task-loader.js";
+import { runVerification } from "./verification-runner.js";
 
 export function runCli(args: string[]): number {
   const taskPath = args[0];
@@ -38,6 +41,8 @@ export function runCli(args: string[]): number {
     return 1;
   }
 
+  console.log("Task Contract: valid");
+
   let repositoryRoot;
 
   try {
@@ -49,10 +54,51 @@ export function runCli(args: string[]): number {
     return 1;
   }
 
-  console.log("Task Contract: valid");
+  console.log(`Repository Root: ${repositoryRoot}`);
+
+  let workspaceRoot;
+
+  try {
+    workspaceRoot = createExecutionWorkspace(repositoryRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+
+    console.error(`Error: Execution Workspace creation failed: ${message}`);
+    return 1;
+  }
+
+  console.log(`Execution Workspace: ${workspaceRoot}`);
+
+  try {
+    runCodexWorker(task, workspaceRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+
+    console.error(`Error: Codex Worker failed: ${message}`);
+    return 1;
+  }
+
+  console.log("Codex Worker: complete");
+
+  const verification = runVerification(task.verification, workspaceRoot);
+
+  if (!verification.passed) {
+    console.error("Verification: failed");
+
+    for (const command of verification.commands.filter(
+      (command) => !command.passed,
+    )) {
+      console.error(
+        `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
+      );
+    }
+
+    return 1;
+  }
+
+  console.log("Verification: passed");
   console.log(`ID: ${task.id}`);
   console.log(`Repository: ${task.targetRepository}`);
-  console.log(`Repository Root: ${repositoryRoot}`);
   console.log(`Objective: ${task.objective}`);
 
   return 0;

@@ -13,6 +13,7 @@ import {
   removeExecutionWorkspace,
 } from "./execution-workspace.js";
 import { resolveRepositoryRoot } from "./repository.js";
+import { checkScope } from "./scope-enforcement.js";
 import { loadTaskContract } from "./task-loader.js";
 import { runVerification } from "./verification-runner.js";
 
@@ -99,6 +100,25 @@ export function runCli(args: string[]): number {
         const message = error instanceof Error ? error.message : "Unknown error";
 
         console.error(`Error: Execution Evidence collection failed: ${message}`);
+        exitCode = 1;
+        executionReady = false;
+      }
+    }
+
+    if (executionReady) {
+      const scope = checkScope(
+        changedPaths,
+        task.allowedPaths,
+        task.forbiddenPaths,
+      );
+
+      if (!scope.passed) {
+        console.error("Scope: failed");
+
+        for (const path of scope.violations) {
+          console.error(`Scope violation: ${path}`);
+        }
+
         exitCode = 1;
         executionReady = false;
       }

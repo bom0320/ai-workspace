@@ -8,6 +8,7 @@ import {
   removeExecutionWorkspace,
 } from "./execution-workspace.js";
 import { resolveRepositoryRoot } from "./repository.js";
+import { checkScope } from "./scope-enforcement.js";
 import { loadTaskContract } from "./task-loader.js";
 import { runVerification } from "./verification-runner.js";
 import { runCli } from "./cli.js";
@@ -19,6 +20,7 @@ vi.mock("./execution-workspace.js", () => ({
   removeExecutionWorkspace: vi.fn(),
 }));
 vi.mock("./repository.js", () => ({ resolveRepositoryRoot: vi.fn() }));
+vi.mock("./scope-enforcement.js", () => ({ checkScope: vi.fn() }));
 vi.mock("./task-loader.js", () => ({ loadTaskContract: vi.fn() }));
 vi.mock("./verification-runner.js", () => ({ runVerification: vi.fn() }));
 
@@ -40,6 +42,7 @@ const createExecutionWorkspaceMock = vi.mocked(createExecutionWorkspace);
 const removeExecutionWorkspaceMock = vi.mocked(removeExecutionWorkspace);
 const runCodexWorkerMock = vi.mocked(runCodexWorker);
 const collectChangedPathsMock = vi.mocked(collectChangedPaths);
+const checkScopeMock = vi.mocked(checkScope);
 const runVerificationMock = vi.mocked(runVerification);
 
 beforeEach(() => {
@@ -52,6 +55,7 @@ beforeEach(() => {
   createExecutionWorkspaceMock.mockReturnValue("/tmp/execution-workspace");
   runCodexWorkerMock.mockReturnValue("Codex final output");
   collectChangedPathsMock.mockReturnValue(["src/example.ts"]);
+  checkScopeMock.mockReturnValue({ passed: true, violations: [] });
   runVerificationMock.mockReturnValue({ passed: true, commands: [] });
 });
 
@@ -85,6 +89,7 @@ describe("CLI", () => {
     );
     expect(runCodexWorkerMock).not.toHaveBeenCalled();
     expect(collectChangedPathsMock).not.toHaveBeenCalled();
+    expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
@@ -99,6 +104,7 @@ describe("CLI", () => {
       "Error: Codex Worker failed: Failed to run Codex worker: Codex failed",
     );
     expect(collectChangedPathsMock).not.toHaveBeenCalled();
+    expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledWith(
@@ -137,6 +143,28 @@ describe("CLI", () => {
     expect(runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Execution Evidence collection failed: Failed to collect execution evidence: Git failed",
+    );
+    expect(checkScopeMock).not.toHaveBeenCalled();
+    expect(runVerificationMock).not.toHaveBeenCalled();
+    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+  });
+
+  it("fails on Scope violations without running Verification", () => {
+    checkScopeMock.mockReturnValue({
+      passed: false,
+      violations: ["README.md", "docs/architecture.md"],
+    });
+
+    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(checkScopeMock).toHaveBeenCalledWith(
+      ["src/example.ts"],
+      task.allowedPaths,
+      task.forbiddenPaths,
+    );
+    expect(console.error).toHaveBeenCalledWith("Scope: failed");
+    expect(console.error).toHaveBeenCalledWith("Scope violation: README.md");
+    expect(console.error).toHaveBeenCalledWith(
+      "Scope violation: docs/architecture.md",
     );
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
@@ -188,6 +216,11 @@ describe("CLI", () => {
     expect(collectChangedPathsMock).toHaveBeenCalledWith(
       "/tmp/execution-workspace",
     );
+    expect(checkScopeMock).toHaveBeenCalledWith(
+      ["src/example.ts"],
+      task.allowedPaths,
+      task.forbiddenPaths,
+    );
     expect(runVerificationMock).toHaveBeenCalledWith(
       task.verification,
       "/tmp/execution-workspace",
@@ -210,6 +243,9 @@ describe("CLI", () => {
       collectChangedPathsMock.mock.invocationCallOrder[0],
     );
     expect(collectChangedPathsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      checkScopeMock.mock.invocationCallOrder[0],
+    );
+    expect(checkScopeMock.mock.invocationCallOrder[0]).toBeLessThan(
       runVerificationMock.mock.invocationCallOrder[0],
     );
     expect(runVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(

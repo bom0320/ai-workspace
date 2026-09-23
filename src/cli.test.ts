@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runCodexWorker } from "./codex-worker.js";
 import type { TaskContract } from "./contracts/task.js";
+import { collectChangedPaths } from "./execution-evidence.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
@@ -12,6 +13,7 @@ import { runVerification } from "./verification-runner.js";
 import { runCli } from "./cli.js";
 
 vi.mock("./codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("./execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
 vi.mock("./execution-workspace.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),
@@ -37,6 +39,7 @@ const resolveRepositoryRootMock = vi.mocked(resolveRepositoryRoot);
 const createExecutionWorkspaceMock = vi.mocked(createExecutionWorkspace);
 const removeExecutionWorkspaceMock = vi.mocked(removeExecutionWorkspace);
 const runCodexWorkerMock = vi.mocked(runCodexWorker);
+const collectChangedPathsMock = vi.mocked(collectChangedPaths);
 const runVerificationMock = vi.mocked(runVerification);
 
 beforeEach(() => {
@@ -48,6 +51,7 @@ beforeEach(() => {
   resolveRepositoryRootMock.mockReturnValue("/repositories/example");
   createExecutionWorkspaceMock.mockReturnValue("/tmp/execution-workspace");
   runCodexWorkerMock.mockReturnValue("Codex final output");
+  collectChangedPathsMock.mockReturnValue(["src/example.ts"]);
   runVerificationMock.mockReturnValue({ passed: true, commands: [] });
 });
 
@@ -80,6 +84,7 @@ describe("CLI", () => {
       "Error: Execution Workspace creation failed: worktree creation failed",
     );
     expect(runCodexWorkerMock).not.toHaveBeenCalled();
+    expect(collectChangedPathsMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
@@ -93,6 +98,7 @@ describe("CLI", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Error: Codex Worker failed: Failed to run Codex worker: Codex failed",
     );
+    expect(collectChangedPathsMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledWith(
@@ -120,6 +126,19 @@ describe("CLI", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Failed command: pnpm test (exit code: 1)",
     );
+    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+  });
+
+  it("fails when Execution Evidence collection fails", () => {
+    collectChangedPathsMock.mockImplementation(() => {
+      throw new Error("Failed to collect execution evidence: Git failed");
+    });
+
+    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Execution Evidence collection failed: Failed to collect execution evidence: Git failed",
+    );
+    expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
@@ -166,6 +185,9 @@ describe("CLI", () => {
       task,
       "/tmp/execution-workspace",
     );
+    expect(collectChangedPathsMock).toHaveBeenCalledWith(
+      "/tmp/execution-workspace",
+    );
     expect(runVerificationMock).toHaveBeenCalledWith(
       task.verification,
       "/tmp/execution-workspace",
@@ -185,6 +207,9 @@ describe("CLI", () => {
       createExecutionWorkspaceMock.mock.invocationCallOrder[0],
     ).toBeLessThan(runCodexWorkerMock.mock.invocationCallOrder[0]);
     expect(runCodexWorkerMock.mock.invocationCallOrder[0]).toBeLessThan(
+      collectChangedPathsMock.mock.invocationCallOrder[0],
+    );
+    expect(collectChangedPathsMock.mock.invocationCallOrder[0]).toBeLessThan(
       runVerificationMock.mock.invocationCallOrder[0],
     );
     expect(runVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(

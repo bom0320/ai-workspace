@@ -5,6 +5,10 @@ import { ZodError } from "zod";
 
 import { runCodexWorker } from "./codex-worker.js";
 import {
+  collectChangedPaths,
+  type ExecutionEvidence,
+} from "./execution-evidence.js";
+import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
 } from "./execution-workspace.js";
@@ -72,27 +76,46 @@ export function runCli(args: string[]): number {
 
   console.log(`Execution Workspace: ${workspaceRoot}`);
   let exitCode = 0;
-  let workerPassed = true;
+  let executionReady = true;
+  let workerOutput = "";
+  let changedPaths: string[] = [];
 
   try {
     try {
-      runCodexWorker(task, workspaceRoot);
+      workerOutput = runCodexWorker(task, workspaceRoot);
       console.log("Codex Worker: complete");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
 
       console.error(`Error: Codex Worker failed: ${message}`);
       exitCode = 1;
-      workerPassed = false;
+      executionReady = false;
     }
 
-    if (workerPassed) {
-      const verification = runVerification(task.verification, workspaceRoot);
+    if (executionReady) {
+      try {
+        changedPaths = collectChangedPaths(workspaceRoot);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
 
-      if (!verification.passed) {
+        console.error(`Error: Execution Evidence collection failed: ${message}`);
+        exitCode = 1;
+        executionReady = false;
+      }
+    }
+
+    if (executionReady) {
+      const verification = runVerification(task.verification, workspaceRoot);
+      const evidence: ExecutionEvidence = {
+        workerOutput,
+        changedPaths,
+        verification,
+      };
+
+      if (!evidence.verification.passed) {
         console.error("Verification: failed");
 
-        for (const command of verification.commands.filter(
+        for (const command of evidence.verification.commands.filter(
           (command) => !command.passed,
         )) {
           console.error(
@@ -103,6 +126,7 @@ export function runCli(args: string[]): number {
         exitCode = 1;
       } else {
         console.log("Verification: passed");
+        console.log(`Changed Paths: ${evidence.changedPaths.length}`);
         console.log(`ID: ${task.id}`);
         console.log(`Repository: ${task.targetRepository}`);
         console.log(`Objective: ${task.objective}`);

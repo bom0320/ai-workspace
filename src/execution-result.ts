@@ -1,0 +1,22 @@
+import type { ExecutionEvidence } from "./execution-evidence.js";
+import type { ScopeCheckResult } from "./scope-enforcement.js";
+
+export type ExecutionFailureStage =
+  | "workspace"
+  | "worker"
+  | "evidence"
+  | "scope"
+  | "verification"
+  | "cleanup";
+
+export type ExecutionFailure = {
+  stage: ExecutionFailureStage;
+  message: string;
+};
+
+export type ExecutionResult = {
+  passed: boolean;
+  evidence: ExecutionEvidence;
+  scope?: ScopeCheckResult;
+  failures: ExecutionFailure[];
+};

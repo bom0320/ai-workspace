@@ -3,9 +3,9 @@ import { execFileSync } from "node:child_process";
 import type { VerificationResult } from "./verification-runner.js";
 
 export type ExecutionEvidence = {
-  workerOutput: string;
-  changedPaths: string[];
-  verification: VerificationResult;
+  workerOutput?: string;
+  changedPaths?: string[];
+  verification?: VerificationResult;
 };
 
 export function collectChangedPaths(workspaceRoot: string): string[] {

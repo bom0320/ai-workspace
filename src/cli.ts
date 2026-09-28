@@ -3,19 +3,9 @@ import { pathToFileURL } from "node:url";
 
 import { ZodError } from "zod";
 
-import { runCodexWorker } from "./codex-worker.js";
-import {
-  collectChangedPaths,
-  type ExecutionEvidence,
-} from "./execution-evidence.js";
-import {
-  createExecutionWorkspace,
-  removeExecutionWorkspace,
-} from "./execution-workspace.js";
 import { resolveRepositoryRoot } from "./repository.js";
-import { checkScope } from "./scope-enforcement.js";
+import { executeTask } from "./task-executor.js";
 import { loadTaskContract } from "./task-loader.js";
-import { runVerification } from "./verification-runner.js";
 
 export function runCli(args: string[]): number {
   const taskPath = args[0];
@@ -64,106 +54,59 @@ export function runCli(args: string[]): number {
 
   console.log(`Repository Root: ${repositoryRoot}`);
 
-  let workspaceRoot;
+  const result = executeTask(task, repositoryRoot);
 
-  try {
-    workspaceRoot = createExecutionWorkspace(repositoryRoot);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-
-    console.error(`Error: Execution Workspace creation failed: ${message}`);
-    return 1;
+  if (result.evidence.workerOutput !== undefined) {
+    console.log("Codex Worker: complete");
   }
 
-  console.log(`Execution Workspace: ${workspaceRoot}`);
-  let exitCode = 0;
-  let executionReady = true;
-  let workerOutput = "";
-  let changedPaths: string[] = [];
+  if (result.scope && !result.scope.passed) {
+    console.error("Scope: failed");
 
-  try {
-    try {
-      workerOutput = runCodexWorker(task, workspaceRoot);
-      console.log("Codex Worker: complete");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-
-      console.error(`Error: Codex Worker failed: ${message}`);
-      exitCode = 1;
-      executionReady = false;
-    }
-
-    if (executionReady) {
-      try {
-        changedPaths = collectChangedPaths(workspaceRoot);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-
-        console.error(`Error: Execution Evidence collection failed: ${message}`);
-        exitCode = 1;
-        executionReady = false;
-      }
-    }
-
-    if (executionReady) {
-      const scope = checkScope(
-        changedPaths,
-        task.allowedPaths,
-        task.forbiddenPaths,
-      );
-
-      if (!scope.passed) {
-        console.error("Scope: failed");
-
-        for (const path of scope.violations) {
-          console.error(`Scope violation: ${path}`);
-        }
-
-        exitCode = 1;
-        executionReady = false;
-      }
-    }
-
-    if (executionReady) {
-      const verification = runVerification(task.verification, workspaceRoot);
-      const evidence: ExecutionEvidence = {
-        workerOutput,
-        changedPaths,
-        verification,
-      };
-
-      if (!evidence.verification.passed) {
-        console.error("Verification: failed");
-
-        for (const command of evidence.verification.commands.filter(
-          (command) => !command.passed,
-        )) {
-          console.error(
-            `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
-          );
-        }
-
-        exitCode = 1;
-      } else {
-        console.log("Verification: passed");
-        console.log(`Changed Paths: ${evidence.changedPaths.length}`);
-        console.log(`ID: ${task.id}`);
-        console.log(`Repository: ${task.targetRepository}`);
-        console.log(`Objective: ${task.objective}`);
-      }
-    }
-  } finally {
-    try {
-      removeExecutionWorkspace(repositoryRoot, workspaceRoot);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-
-      console.error(`Error: Execution Workspace cleanup failed: ${message}`);
-      exitCode = 1;
+    for (const path of result.scope.violations) {
+      console.error(`Scope violation: ${path}`);
     }
   }
 
-  return exitCode;
+  if (result.evidence.verification) {
+    if (result.evidence.verification.passed) {
+      console.log("Verification: passed");
+    } else {
+      console.error("Verification: failed");
+
+      for (const command of result.evidence.verification.commands.filter(
+        (command) => !command.passed,
+      )) {
+        console.error(
+          `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
+        );
+      }
+    }
+  }
+
+  for (const failure of result.failures) {
+    if (failure.stage === "scope" || failure.stage === "verification") {
+      continue;
+    }
+
+    const labels = {
+      workspace: "Execution Workspace creation",
+      worker: "Codex Worker",
+      evidence: "Execution Evidence collection",
+      cleanup: "Execution Workspace cleanup",
+    } as const;
+
+    console.error(`Error: ${labels[failure.stage]} failed: ${failure.message}`);
+  }
+
+  if (result.passed) {
+    console.log(`Changed Paths: ${result.evidence.changedPaths?.length ?? 0}`);
+    console.log(`ID: ${task.id}`);
+    console.log(`Repository: ${task.targetRepository}`);
+    console.log(`Objective: ${task.objective}`);
+  }
+
+  return result.passed ? 0 : 1;
 }
 
 const isEntryPoint =

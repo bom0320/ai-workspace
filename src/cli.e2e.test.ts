@@ -5,17 +5,24 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, delimiter, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import type { ExecutionResult } from "./execution/execution-result.js";
+
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(projectRoot, "src", "cli.ts");
+const tsxImport = pathToFileURL(
+  createRequire(import.meta.url).resolve("tsx"),
+).href;
 
 type Scenario = "success" | "scope" | "worker-failure" | "verification-failure";
 
@@ -24,6 +31,7 @@ type ScenarioResult = {
   stdout: string;
   stderr: string;
   verificationRan: boolean;
+  storedResult: ExecutionResult;
 };
 
 function git(repositoryRoot: string, args: string[]): string {
@@ -131,9 +139,9 @@ function runScenario(scenario: Scenario): ScenarioResult {
 
     const cli = spawnSync(
       process.execPath,
-      ["--import", "tsx", cliPath, taskPath, repositoryRoot],
+      ["--import", tsxImport, cliPath, taskPath, repositoryRoot],
       {
-        cwd: projectRoot,
+        cwd: temporaryRoot,
         encoding: "utf8",
         timeout: 30_000,
         env: {
@@ -148,11 +156,40 @@ function runScenario(scenario: Scenario): ScenarioResult {
 
     expect(cli.error).toBeUndefined();
     expect(cli.signal).toBeNull();
-    expect(existsSync(workerRecord)).toBe(true);
+    expect(
+      existsSync(workerRecord),
+      `CLI stdout:\n${cli.stdout}\nCLI stderr:\n${cli.stderr}`,
+    ).toBe(true);
 
     workspaceRoot = readFileSync(workerRecord, "utf8");
     expect(workspaceRoot).not.toBe(repositoryRoot);
     expect(workspaceRoot).not.toBe("");
+
+    const artifactsMatch = cli.stdout.match(/^Run Artifacts: (.+)$/m);
+    expect(artifactsMatch).not.toBeNull();
+    const runDirectory = artifactsMatch?.[1];
+    expect(runDirectory).toBeDefined();
+    expect(
+      runDirectory?.startsWith(
+        join(realpathSync(temporaryRoot), ".ai-workspace", "runs"),
+      ),
+    ).toBe(true);
+    expect(runDirectory?.startsWith(repositoryRoot)).toBe(false);
+    expect(existsSync(join(runDirectory!, "changes.patch"))).toBe(true);
+    expect(existsSync(join(runDirectory!, "task.json"))).toBe(true);
+    expect(existsSync(join(runDirectory!, "result.json"))).toBe(true);
+    expect(readFileSync(join(runDirectory!, "base-commit.txt"), "utf8").trim()).toBe(
+      originalHead,
+    );
+
+    const storedResult = JSON.parse(
+      readFileSync(join(runDirectory!, "result.json"), "utf8"),
+    ) as ExecutionResult;
+    expect(storedResult.passed).toBe(scenario === "success");
+    expect(storedResult.artifacts).toEqual({
+      directory: runDirectory,
+      baseCommit: originalHead,
+    });
 
     const verificationRan = existsSync(verificationRecord);
 
@@ -174,12 +211,14 @@ function runScenario(scenario: Scenario): ScenarioResult {
       originalWorktrees
     );
     expect(existsSync(workspaceRoot)).toBe(false);
+    expect(existsSync(runDirectory!)).toBe(true);
 
     return {
       status: cli.status,
       stdout: cli.stdout,
       stderr: cli.stderr,
       verificationRan,
+      storedResult,
     };
   } finally {
     try {
@@ -209,6 +248,7 @@ describe("CLI end-to-end execution", () => {
     expect(result.stdout).toContain("Verification: passed");
     expect(result.stdout).toContain("Changed Paths: 1");
     expect(result.verificationRan).toBe(true);
+    expect(result.storedResult.failures).toEqual([]);
   });
 
   it("rejects a forbidden change without running Verification", () => {
@@ -218,6 +258,10 @@ describe("CLI end-to-end execution", () => {
     expect(result.stderr).toContain("Scope: failed");
     expect(result.stderr).toContain("Scope violation: forbidden.txt");
     expect(result.verificationRan).toBe(false);
+    expect(result.storedResult.evidence.changedPaths).toEqual([
+      "forbidden.txt",
+    ]);
+    expect(result.storedResult.failures[0]?.stage).toBe("scope");
   });
 
   it("reports Worker failure without running Verification", () => {
@@ -227,6 +271,7 @@ describe("CLI end-to-end execution", () => {
     expect(result.stderr).toContain("Error: Codex Worker failed:");
     expect(result.stderr).toContain("fake Codex failed intentionally");
     expect(result.verificationRan).toBe(false);
+    expect(result.storedResult.failures[0]?.stage).toBe("worker");
   });
 
   it("reports an executed Verification command that fails", () => {
@@ -240,5 +285,7 @@ describe("CLI end-to-end execution", () => {
       )} verify.cjs (exit code: 9)`
     );
     expect(result.verificationRan).toBe(true);
+    expect(result.storedResult.evidence.verification?.passed).toBe(false);
+    expect(result.storedResult.failures[0]?.stage).toBe("verification");
   });
 });

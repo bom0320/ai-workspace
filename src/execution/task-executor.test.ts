@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runCodexWorker } from "../workers/codex-worker.js";
 import type { TaskContract } from "../contracts/task.js";
+import {
+  createExecutionRun,
+  getExecutionBaseCommit,
+  preserveExecutionChanges,
+  writeExecutionResult,
+} from "./execution-artifacts.js";
 import { collectChangedPaths } from "./execution-evidence.js";
 import {
   createExecutionWorkspace,
@@ -12,6 +18,12 @@ import { executeTask } from "./task-executor.js";
 import { runVerification } from "../verification/verification-runner.js";
 
 vi.mock("../workers/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("./execution-artifacts.js", () => ({
+  createExecutionRun: vi.fn(),
+  getExecutionBaseCommit: vi.fn(),
+  preserveExecutionChanges: vi.fn(),
+  writeExecutionResult: vi.fn(),
+}));
 vi.mock("./execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
 vi.mock("../repository/execution-workspace.js", () => ({
   createExecutionWorkspace: vi.fn(),
@@ -38,14 +50,20 @@ const task: TaskContract = {
 
 const createExecutionWorkspaceMock = vi.mocked(createExecutionWorkspace);
 const removeExecutionWorkspaceMock = vi.mocked(removeExecutionWorkspace);
+const createExecutionRunMock = vi.mocked(createExecutionRun);
+const getExecutionBaseCommitMock = vi.mocked(getExecutionBaseCommit);
+const preserveExecutionChangesMock = vi.mocked(preserveExecutionChanges);
+const writeExecutionResultMock = vi.mocked(writeExecutionResult);
 const runCodexWorkerMock = vi.mocked(runCodexWorker);
 const collectChangedPathsMock = vi.mocked(collectChangedPaths);
 const checkScopeMock = vi.mocked(checkScope);
 const runVerificationMock = vi.mocked(runVerification);
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  createExecutionRunMock.mockReturnValue("/runs/run-001");
   createExecutionWorkspaceMock.mockReturnValue("/tmp/execution-workspace");
+  getExecutionBaseCommitMock.mockReturnValue("base-commit-sha");
   runCodexWorkerMock.mockReturnValue("Codex final output");
   collectChangedPathsMock.mockReturnValue(["src/example.ts"]);
   checkScopeMock.mockReturnValue({ passed: true, violations: [] });
@@ -65,6 +83,10 @@ describe("executeTask", () => {
       },
       scope: { passed: true, violations: [] },
       failures: [],
+      artifacts: {
+        directory: "/runs/run-001",
+        baseCommit: "base-commit-sha",
+      },
     });
     expect(createExecutionWorkspaceMock.mock.invocationCallOrder[0]).toBeLessThan(
       runCodexWorkerMock.mock.invocationCallOrder[0],
@@ -79,7 +101,13 @@ describe("executeTask", () => {
       runVerificationMock.mock.invocationCallOrder[0],
     );
     expect(runVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(
+      preserveExecutionChangesMock.mock.invocationCallOrder[0],
+    );
+    expect(preserveExecutionChangesMock.mock.invocationCallOrder[0]).toBeLessThan(
       removeExecutionWorkspaceMock.mock.invocationCallOrder[0],
+    );
+    expect(removeExecutionWorkspaceMock.mock.invocationCallOrder[0]).toBeLessThan(
+      writeExecutionResultMock.mock.invocationCallOrder[0],
     );
   });
 
@@ -94,9 +122,11 @@ describe("executeTask", () => {
       passed: false,
       evidence: {},
       failures: [{ stage: "workspace", message: "worktree creation failed" }],
+      artifacts: { directory: "/runs/run-001" },
     });
     expect(runCodexWorkerMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
+    expect(writeExecutionResultMock).toHaveBeenCalledOnce();
   });
 
   it("records Worker failure, skips later stages, and cleans up", () => {
@@ -243,6 +273,15 @@ describe("executeTask", () => {
     expect(result.failures).toEqual([
       { stage: "cleanup", message: "worktree removal failed" },
     ]);
+    expect(writeExecutionResultMock).toHaveBeenCalledWith(
+      "/runs/run-001",
+      expect.objectContaining({
+        passed: false,
+        failures: [
+          { stage: "cleanup", message: "worktree removal failed" },
+        ],
+      }),
+    );
   });
 
   it("preserves both Worker and cleanup failures", () => {
@@ -259,6 +298,40 @@ describe("executeTask", () => {
     expect(result.failures).toEqual([
       { stage: "worker", message: "worker failed" },
       { stage: "cleanup", message: "cleanup failed" },
+    ]);
+    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+  });
+
+  it("retains the Workspace and returns failure when change preservation fails", () => {
+    preserveExecutionChangesMock.mockImplementation(() => {
+      throw new Error("patch storage failed");
+    });
+
+    const result = executeTask(task, "/repositories/example");
+
+    expect(result.passed).toBe(false);
+    expect(result.failures).toEqual([
+      { stage: "preservation", message: "patch storage failed" },
+    ]);
+    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
+    expect(writeExecutionResultMock).toHaveBeenCalledOnce();
+  });
+
+  it("reports final result storage failure without losing earlier failures", () => {
+    runCodexWorkerMock.mockImplementation(() => {
+      throw new Error("worker failed");
+    });
+    writeExecutionResultMock.mockImplementation(() => {
+      throw new Error("result storage failed");
+    });
+
+    const result = executeTask(task, "/repositories/example");
+
+    expect(result.passed).toBe(false);
+    expect(result.failures).toEqual([
+      { stage: "worker", message: "worker failed" },
+      { stage: "report", message: "result storage failed" },
     ]);
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });

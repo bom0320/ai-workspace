@@ -4,3 +4,4 @@ coverage/
 dist/
 *.tsbuildinfo
 .DS_Store
+.ai-workspace/runs/

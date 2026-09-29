@@ -1,5 +1,11 @@
 import { runCodexWorker } from "../workers/codex-worker.js";
 import type { TaskContract } from "../contracts/task.js";
+import {
+  createExecutionRun,
+  getExecutionBaseCommit,
+  preserveExecutionChanges,
+  writeExecutionResult,
+} from "./execution-artifacts.js";
 import { collectChangedPaths } from "./execution-evidence.js";
 import type {
   ExecutionFailure,
@@ -11,6 +17,35 @@ import {
 } from "../repository/execution-workspace.js";
 import { checkScope } from "../verification/scope-enforcement.js";
 import { runVerification } from "../verification/verification-runner.js";
+
+function finishExecution(
+  evidence: ExecutionResult["evidence"],
+  scope: ExecutionResult["scope"],
+  failures: ExecutionFailure[],
+  artifacts: NonNullable<ExecutionResult["artifacts"]>,
+  retainedWorkspace?: string,
+): ExecutionResult {
+  const result: ExecutionResult = {
+    passed: failures.length === 0,
+    evidence,
+    ...(scope === undefined ? {} : { scope }),
+    failures,
+    artifacts,
+    ...(retainedWorkspace === undefined ? {} : { retainedWorkspace }),
+  };
+
+  try {
+    writeExecutionResult(artifacts.directory, result);
+  } catch (error) {
+    failures.push({
+      stage: "report",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    result.passed = false;
+  }
+
+  return result;
+}
 
 function runTaskStages(
   task: TaskContract,
@@ -80,6 +115,22 @@ export function executeTask(
   const failures: ExecutionFailure[] = [];
   let scope: ExecutionResult["scope"];
   let workspaceRoot: string;
+  let runDirectory: string;
+
+  try {
+    runDirectory = createExecutionRun(task);
+  } catch (error) {
+    failures.push({
+      stage: "preservation",
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    return { passed: false, evidence, failures };
+  }
+
+  const artifacts: NonNullable<ExecutionResult["artifacts"]> = {
+    directory: runDirectory,
+  };
 
   try {
     workspaceRoot = createExecutionWorkspace(repositoryRoot);
@@ -89,26 +140,62 @@ export function executeTask(
       message: error instanceof Error ? error.message : String(error),
     });
 
-    return { passed: false, evidence, failures };
+    return finishExecution(evidence, scope, failures, artifacts);
   }
+
+  try {
+    artifacts.baseCommit = getExecutionBaseCommit(workspaceRoot);
+  } catch (error) {
+    failures.push({
+      stage: "preservation",
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    return finishExecution(
+      evidence,
+      scope,
+      failures,
+      artifacts,
+      workspaceRoot,
+    );
+  }
+
+  let changesPreserved = false;
 
   try {
     scope = runTaskStages(task, workspaceRoot, evidence, failures);
   } finally {
     try {
-      removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+      preserveExecutionChanges(
+        workspaceRoot,
+        runDirectory,
+        artifacts.baseCommit,
+      );
+      changesPreserved = true;
     } catch (error) {
       failures.push({
-        stage: "cleanup",
+        stage: "preservation",
         message: error instanceof Error ? error.message : String(error),
       });
     }
+
+    if (changesPreserved) {
+      try {
+        removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+      } catch (error) {
+        failures.push({
+          stage: "cleanup",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
-  return {
-    passed: failures.length === 0,
+  return finishExecution(
     evidence,
-    ...(scope === undefined ? {} : { scope }),
+    scope,
     failures,
-  };
+    artifacts,
+    changesPreserved ? undefined : workspaceRoot,
+  );
 }

@@ -7,7 +7,9 @@ export type ExecutionFailureStage =
   | "evidence"
   | "scope"
   | "verification"
-  | "cleanup";
+  | "cleanup"
+  | "preservation"
+  | "report";
 
 export type ExecutionFailure = {
   stage: ExecutionFailureStage;
@@ -19,4 +21,9 @@ export type ExecutionResult = {
   evidence: ExecutionEvidence;
   scope?: ScopeCheckResult;
   failures: ExecutionFailure[];
+  artifacts?: {
+    directory: string;
+    baseCommit?: string;
+  };
+  retainedWorkspace?: string;
 };

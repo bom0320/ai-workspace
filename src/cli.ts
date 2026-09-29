@@ -56,6 +56,14 @@ export function runCli(args: string[]): number {
 
   const result = executeTask(task, repositoryRoot);
 
+  if (result.artifacts) {
+    console.log(`Run Artifacts: ${result.artifacts.directory}`);
+  }
+
+  if (result.retainedWorkspace) {
+    console.error(`Execution Workspace retained: ${result.retainedWorkspace}`);
+  }
+
   if (result.evidence.workerOutput !== undefined) {
     console.log("Codex Worker: complete");
   }
@@ -98,6 +106,8 @@ export function runCli(args: string[]): number {
       evidence: "Execution Evidence collection",
       verification: "Verification",
       cleanup: "Execution Workspace cleanup",
+      preservation: "Execution result preservation",
+      report: "Final execution report",
     } as const;
 
     console.error(`Error: ${labels[failure.stage]} failed: ${failure.message}`);

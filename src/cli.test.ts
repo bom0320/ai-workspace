@@ -35,6 +35,10 @@ const successfulResult: ExecutionResult = {
   },
   scope: { passed: true, violations: [] },
   failures: [],
+  artifacts: {
+    directory: "/workspace/.ai-workspace/runs/run-001",
+    baseCommit: "base-commit-sha",
+  },
 };
 
 const loadTaskContractMock = vi.mocked(loadTaskContract);
@@ -107,6 +111,9 @@ describe("CLI", () => {
     expect(console.log).toHaveBeenCalledWith("Codex Worker: complete");
     expect(console.log).toHaveBeenCalledWith("Verification: passed");
     expect(console.log).toHaveBeenCalledWith("Changed Paths: 1");
+    expect(console.log).toHaveBeenCalledWith(
+      "Run Artifacts: /workspace/.ai-workspace/runs/run-001",
+    );
   });
 
   it("returns failure and reports preserved result details", () => {
@@ -182,6 +189,43 @@ describe("CLI", () => {
     expect(runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Verification failed: verification runner failed",
+    );
+  });
+
+  it("reports preservation failure and the retained Workspace", () => {
+    executeTaskMock.mockReturnValue({
+      passed: false,
+      evidence: { workerOutput: "Codex final output" },
+      failures: [
+        { stage: "preservation", message: "patch storage failed" },
+      ],
+      artifacts: { directory: "/workspace/.ai-workspace/runs/run-002" },
+      retainedWorkspace: "/tmp/execution-workspace",
+    });
+
+    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(console.log).toHaveBeenCalledWith(
+      "Run Artifacts: /workspace/.ai-workspace/runs/run-002",
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      "Execution Workspace retained: /tmp/execution-workspace",
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Execution result preservation failed: patch storage failed",
+    );
+  });
+
+  it("reports final result storage failure", () => {
+    executeTaskMock.mockReturnValue({
+      passed: false,
+      evidence: {},
+      failures: [{ stage: "report", message: "result storage failed" }],
+      artifacts: { directory: "/workspace/.ai-workspace/runs/run-003" },
+    });
+
+    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Final execution report failed: result storage failed",
     );
   });
 });

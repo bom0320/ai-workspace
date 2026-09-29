@@ -128,6 +128,7 @@ describe("CLI", () => {
         { stage: "scope", message: "Scope violations: README.md" },
         { stage: "cleanup", message: "worktree removal failed" },
       ],
+      retainedWorkspace: "/tmp/execution-workspace",
     });
 
     expect(runCli(["task.json", "/repositories/example"])).toBe(1);
@@ -137,6 +138,9 @@ describe("CLI", () => {
     );
     expect(console.error).toHaveBeenCalledWith(
       "Error: Execution Workspace cleanup failed: worktree removal failed",
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      "Execution Workspace retained: /tmp/execution-workspace",
     );
   });
 

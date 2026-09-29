@@ -50,6 +50,7 @@ function finishExecution(
 function runTaskStages(
   task: TaskContract,
   workspaceRoot: string,
+  baseCommit: string,
   evidence: ExecutionResult["evidence"],
   failures: ExecutionFailure[],
 ): ExecutionResult["scope"] {
@@ -63,28 +64,40 @@ function runTaskStages(
     return;
   }
 
-  try {
-    evidence.changedPaths = collectChangedPaths(workspaceRoot);
-  } catch (error) {
-    failures.push({
-      stage: "evidence",
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return;
-  }
+  const collectScope = (): ExecutionResult["scope"] => {
+    try {
+      evidence.changedPaths = collectChangedPaths(workspaceRoot, baseCommit);
+    } catch (error) {
+      failures.push({
+        stage: "evidence",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
 
-  const scope = checkScope(
-    evidence.changedPaths,
-    task.allowedPaths,
-    task.forbiddenPaths,
-  );
+    const scope = checkScope(
+      evidence.changedPaths,
+      task.allowedPaths,
+      task.forbiddenPaths,
+    );
 
-  if (!scope.passed) {
-    failures.push({
-      stage: "scope",
-      message: `Scope violations: ${scope.violations.join(", ")}`,
-    });
+    if (
+      !scope.passed &&
+      !failures.some((failure) => failure.stage === "scope")
+    ) {
+      failures.push({
+        stage: "scope",
+        message: `Scope violations: ${scope.violations.join(", ")}`,
+      });
+    }
+
     return scope;
+  };
+
+  const workerScope = collectScope();
+
+  if (!workerScope || !workerScope.passed) {
+    return workerScope;
   }
 
   try {
@@ -94,17 +107,16 @@ function runTaskStages(
       stage: "verification",
       message: error instanceof Error ? error.message : String(error),
     });
-    return scope;
   }
 
-  if (!evidence.verification.passed) {
+  if (evidence.verification && !evidence.verification.passed) {
     failures.push({
       stage: "verification",
       message: "Verification failed.",
     });
   }
 
-  return scope;
+  return collectScope() ?? workerScope;
 }
 
 export function executeTask(
@@ -161,9 +173,16 @@ export function executeTask(
   }
 
   let changesPreserved = false;
+  let cleanupSucceeded = false;
 
   try {
-    scope = runTaskStages(task, workspaceRoot, evidence, failures);
+    scope = runTaskStages(
+      task,
+      workspaceRoot,
+      artifacts.baseCommit,
+      evidence,
+      failures,
+    );
   } finally {
     try {
       preserveExecutionChanges(
@@ -182,6 +201,7 @@ export function executeTask(
     if (changesPreserved) {
       try {
         removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+        cleanupSucceeded = true;
       } catch (error) {
         failures.push({
           stage: "cleanup",
@@ -196,6 +216,6 @@ export function executeTask(
     scope,
     failures,
     artifacts,
-    changesPreserved ? undefined : workspaceRoot,
+    changesPreserved && cleanupSucceeded ? undefined : workspaceRoot,
   );
 }

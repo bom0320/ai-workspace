@@ -8,11 +8,22 @@ export type ExecutionEvidence = {
   verification?: VerificationResult;
 };
 
-export function collectChangedPaths(workspaceRoot: string): string[] {
+export function collectChangedPaths(
+  workspaceRoot: string,
+  baseCommit: string,
+): string[] {
   try {
     const tracked = execFileSync(
       "git",
-      ["-C", workspaceRoot, "diff", "--name-only", "-z", "HEAD", "--"],
+      [
+        "-C",
+        workspaceRoot,
+        "diff",
+        "--name-only",
+        "-z",
+        baseCommit,
+        "--",
+      ],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     const untracked = execFileSync(

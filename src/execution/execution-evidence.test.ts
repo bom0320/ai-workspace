@@ -8,6 +8,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { collectChangedPaths } from "./execution-evidence.js";
 
 const temporaryDirectories: string[] = [];
+const gitIdentity = {
+  ...process.env,
+  GIT_AUTHOR_NAME: "Test User",
+  GIT_AUTHOR_EMAIL: "test@example.com",
+  GIT_COMMITTER_NAME: "Test User",
+  GIT_COMMITTER_EMAIL: "test@example.com",
+};
 
 function createGitRepository(): string {
   const repository = mkdtempSync(join(tmpdir(), "ai-workspace-evidence-"));
@@ -22,17 +29,17 @@ function createGitRepository(): string {
     "git",
     ["-C", repository, "commit", "--quiet", "-m", "initial"],
     {
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: "Test User",
-        GIT_AUTHOR_EMAIL: "test@example.com",
-        GIT_COMMITTER_NAME: "Test User",
-        GIT_COMMITTER_EMAIL: "test@example.com",
-      },
+      env: gitIdentity,
     },
   );
 
   return repository;
+}
+
+function head(repository: string): string {
+  return execFileSync("git", ["-C", repository, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
 }
 
 afterEach(() => {
@@ -43,7 +50,9 @@ afterEach(() => {
 
 describe("collectChangedPaths", () => {
   it("returns an empty array when the workspace has no changes", () => {
-    expect(collectChangedPaths(createGitRepository())).toEqual([]);
+    const repository = createGitRepository();
+
+    expect(collectChangedPaths(repository, head(repository))).toEqual([]);
   });
 
   it("detects a modified tracked file", () => {
@@ -51,7 +60,9 @@ describe("collectChangedPaths", () => {
 
     writeFileSync(join(repository, "modified.txt"), "changed\n");
 
-    expect(collectChangedPaths(repository)).toEqual(["modified.txt"]);
+    expect(collectChangedPaths(repository, head(repository))).toEqual([
+      "modified.txt",
+    ]);
   });
 
   it("detects a new untracked file", () => {
@@ -59,7 +70,9 @@ describe("collectChangedPaths", () => {
 
     writeFileSync(join(repository, "untracked.txt"), "new\n");
 
-    expect(collectChangedPaths(repository)).toEqual(["untracked.txt"]);
+    expect(collectChangedPaths(repository, head(repository))).toEqual([
+      "untracked.txt",
+    ]);
   });
 
   it("detects a deleted tracked file", () => {
@@ -67,7 +80,9 @@ describe("collectChangedPaths", () => {
 
     rmSync(join(repository, "deleted.txt"));
 
-    expect(collectChangedPaths(repository)).toEqual(["deleted.txt"]);
+    expect(collectChangedPaths(repository, head(repository))).toEqual([
+      "deleted.txt",
+    ]);
   });
 
   it("returns all changed paths without duplicates in sorted order", () => {
@@ -79,7 +94,7 @@ describe("collectChangedPaths", () => {
     writeFileSync(join(repository, "untracked.txt"), "untracked\n");
     execFileSync("git", ["-C", repository, "add", "added.txt"]);
 
-    expect(collectChangedPaths(repository)).toEqual([
+    expect(collectChangedPaths(repository, head(repository))).toEqual([
       "added.txt",
       "deleted.txt",
       "modified.txt",
@@ -92,7 +107,23 @@ describe("collectChangedPaths", () => {
 
     writeFileSync(join(repository, "file with spaces.txt"), "changed\n");
 
-    expect(collectChangedPaths(repository)).toEqual(["file with spaces.txt"]);
+    expect(collectChangedPaths(repository, head(repository))).toEqual([
+      "file with spaces.txt",
+    ]);
+  });
+
+  it("detects a change committed after the execution base commit", () => {
+    const repository = createGitRepository();
+    const baseCommit = head(repository);
+    writeFileSync(join(repository, "modified.txt"), "committed change\n");
+    execFileSync("git", ["-C", repository, "add", "modified.txt"]);
+    execFileSync("git", ["-C", repository, "commit", "--quiet", "-m", "worker"], {
+      env: gitIdentity,
+    });
+
+    expect(collectChangedPaths(repository, baseCommit)).toEqual([
+      "modified.txt",
+    ]);
   });
 
   it("reports Git failures with Evidence context", () => {
@@ -100,7 +131,7 @@ describe("collectChangedPaths", () => {
 
     temporaryDirectories.push(directory);
 
-    expect(() => collectChangedPaths(directory)).toThrow(
+    expect(() => collectChangedPaths(directory, "missing-base")).toThrow(
       "Failed to collect execution evidence",
     );
   });

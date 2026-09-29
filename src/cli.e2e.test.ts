@@ -24,7 +24,14 @@ const tsxImport = pathToFileURL(
   createRequire(import.meta.url).resolve("tsx"),
 ).href;
 
-type Scenario = "success" | "scope" | "worker-failure" | "verification-failure";
+type Scenario =
+  | "success"
+  | "scope"
+  | "worker-failure"
+  | "verification-failure"
+  | "worker-commit-allowed"
+  | "worker-commit-forbidden"
+  | "verification-scope";
 
 type ScenarioResult = {
   status: number | null;
@@ -67,7 +74,12 @@ function runScenario(scenario: Scenario): ScenarioResult {
       [
         'const { readFileSync, writeFileSync } = require("node:fs");',
         "writeFileSync(process.env.E2E_VERIFICATION_RECORD, process.cwd());",
+        'if (process.env.E2E_SCENARIO === "verification-scope") {',
+        '  writeFileSync("forbidden.txt", "changed by verification\\n");',
+        "  process.exit(0);",
+        "}",
         'if (process.env.E2E_SCENARIO === "verification-failure") {',
+        '  writeFileSync("verification-output.txt", "failed verification output\\n");',
         '  console.error("verification failed intentionally");',
         "  process.exit(9);",
         "}",
@@ -101,6 +113,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
       fakeCodexPath,
       [
         `#!${process.execPath}`,
+        'const { execFileSync } = require("node:child_process");',
         'const { writeFileSync } = require("node:fs");',
         'const { join } = require("node:path");',
         "writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());",
@@ -108,16 +121,27 @@ function runScenario(scenario: Scenario): ScenarioResult {
         '  console.error("fake Codex failed intentionally");',
         "  process.exit(7);",
         "}",
-        'const target = process.env.E2E_SCENARIO === "scope"',
+        'const target = ["scope", "worker-commit-forbidden"].includes(process.env.E2E_SCENARIO)',
         '  ? "forbidden.txt"',
         '  : "allowed.txt";',
         'writeFileSync(join(process.cwd(), target), "changed by worker\\n");',
+        'if (process.env.E2E_SCENARIO.startsWith("worker-commit-")) {',
+        '  execFileSync("git", ["add", target]);',
+        '  execFileSync("git", ["commit", "-m", "worker commit"]);',
+        "}",
         'console.log("fake Codex completed");',
       ].join("\n")
     );
     chmodSync(fakeCodexPath, 0o755);
 
-    const changedPath = scenario === "scope" ? "forbidden.txt" : "allowed.txt";
+    const changedPath = ["scope", "worker-commit-forbidden"].includes(scenario)
+      ? "forbidden.txt"
+      : "allowed.txt";
+    const allowedPaths = ["allowed.txt"];
+
+    if (scenario === "verification-failure") {
+      allowedPaths.push("verification-output.txt");
+    }
     writeFileSync(
       taskPath,
       JSON.stringify(
@@ -126,7 +150,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
           goalId: "e2e-goal",
           objective: "Exercise the complete v0 execution flow",
           targetRepository: "temporary-repository",
-          allowedPaths: ["allowed.txt"],
+          allowedPaths,
           forbiddenPaths: ["forbidden.txt"],
           constraints: ["Only make the requested test change"],
           acceptanceCriteria: [`${changedPath} is handled as expected`],
@@ -185,7 +209,9 @@ function runScenario(scenario: Scenario): ScenarioResult {
     const storedResult = JSON.parse(
       readFileSync(join(runDirectory!, "result.json"), "utf8"),
     ) as ExecutionResult;
-    expect(storedResult.passed).toBe(scenario === "success");
+    expect(storedResult.passed).toBe(
+      scenario === "success" || scenario === "worker-commit-allowed",
+    );
     expect(storedResult.artifacts).toEqual({
       directory: runDirectory,
       baseCommit: originalHead,
@@ -286,6 +312,45 @@ describe("CLI end-to-end execution", () => {
     );
     expect(result.verificationRan).toBe(true);
     expect(result.storedResult.evidence.verification?.passed).toBe(false);
+    expect(result.storedResult.evidence.changedPaths).toEqual([
+      "allowed.txt",
+      "verification-output.txt",
+    ]);
     expect(result.storedResult.failures[0]?.stage).toBe("verification");
+  });
+
+  it("includes an allowed Worker commit in changed paths", () => {
+    const result = runScenario("worker-commit-allowed");
+
+    expect(result.status).toBe(0);
+    expect(result.storedResult.evidence.changedPaths).toEqual(["allowed.txt"]);
+    expect(result.storedResult.scope).toEqual({ passed: true, violations: [] });
+  });
+
+  it("rejects a forbidden Worker commit before Verification", () => {
+    const result = runScenario("worker-commit-forbidden");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Scope violation: forbidden.txt");
+    expect(result.verificationRan).toBe(false);
+    expect(result.storedResult.evidence.changedPaths).toEqual([
+      "forbidden.txt",
+    ]);
+  });
+
+  it("rejects a forbidden file created by successful Verification", () => {
+    const result = runScenario("verification-scope");
+
+    expect(result.status).toBe(1);
+    expect(result.verificationRan).toBe(true);
+    expect(result.storedResult.evidence.verification?.passed).toBe(true);
+    expect(result.storedResult.evidence.changedPaths).toEqual([
+      "allowed.txt",
+      "forbidden.txt",
+    ]);
+    expect(result.storedResult.scope).toEqual({
+      passed: false,
+      violations: ["forbidden.txt"],
+    });
   });
 });

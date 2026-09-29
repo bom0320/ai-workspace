@@ -101,6 +101,9 @@ describe("executeTask", () => {
       runVerificationMock.mock.invocationCallOrder[0],
     );
     expect(runVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(
+      collectChangedPathsMock.mock.invocationCallOrder[1],
+    );
+    expect(collectChangedPathsMock.mock.invocationCallOrder[1]).toBeLessThan(
       preserveExecutionChangesMock.mock.invocationCallOrder[0],
     );
     expect(preserveExecutionChangesMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -108,6 +111,16 @@ describe("executeTask", () => {
     );
     expect(removeExecutionWorkspaceMock.mock.invocationCallOrder[0]).toBeLessThan(
       writeExecutionResultMock.mock.invocationCallOrder[0],
+    );
+    expect(collectChangedPathsMock).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/execution-workspace",
+      "base-commit-sha",
+    );
+    expect(collectChangedPathsMock).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/execution-workspace",
+      "base-commit-sha",
     );
   });
 
@@ -257,6 +270,7 @@ describe("executeTask", () => {
       { stage: "verification", message: "Verification failed." },
       { stage: "cleanup", message: "cleanup failed" },
     ]);
+    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
   });
 
   it("turns cleanup failure into a failed result while preserving Evidence", () => {
@@ -273,6 +287,7 @@ describe("executeTask", () => {
     expect(result.failures).toEqual([
       { stage: "cleanup", message: "worktree removal failed" },
     ]);
+    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
     expect(writeExecutionResultMock).toHaveBeenCalledWith(
       "/runs/run-001",
       expect.objectContaining({
@@ -280,6 +295,7 @@ describe("executeTask", () => {
         failures: [
           { stage: "cleanup", message: "worktree removal failed" },
         ],
+        retainedWorkspace: "/tmp/execution-workspace",
       }),
     );
   });
@@ -299,7 +315,67 @@ describe("executeTask", () => {
       { stage: "worker", message: "worker failed" },
       { stage: "cleanup", message: "cleanup failed" },
     ]);
+    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+  });
+
+  it("fails final Scope when Verification creates a forbidden file", () => {
+    collectChangedPathsMock
+      .mockReturnValueOnce(["src/example.ts"])
+      .mockReturnValueOnce(["README.md", "src/example.ts"]);
+    checkScopeMock
+      .mockReturnValueOnce({ passed: true, violations: [] })
+      .mockReturnValueOnce({ passed: false, violations: ["README.md"] });
+
+    const result = executeTask(task, "/repositories/example");
+
+    expect(result.passed).toBe(false);
+    expect(result.evidence.changedPaths).toEqual([
+      "README.md",
+      "src/example.ts",
+    ]);
+    expect(result.scope).toEqual({
+      passed: false,
+      violations: ["README.md"],
+    });
+    expect(result.failures).toEqual([
+      { stage: "scope", message: "Scope violations: README.md" },
+    ]);
+  });
+
+  it("keeps Verification failure while capturing final changed paths", () => {
+    const taskWithVerificationOutput: TaskContract = {
+      ...task,
+      allowedPaths: ["src/example.ts", "verification-output.txt"],
+    };
+    collectChangedPathsMock
+      .mockReturnValueOnce(["src/example.ts"])
+      .mockReturnValueOnce(["src/example.ts", "verification-output.txt"]);
+    runVerificationMock.mockReturnValue({
+      passed: false,
+      commands: [
+        {
+          command: "pnpm test",
+          passed: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: "tests failed",
+        },
+      ],
+    });
+
+    const result = executeTask(
+      taskWithVerificationOutput,
+      "/repositories/example",
+    );
+
+    expect(result.evidence.changedPaths).toEqual([
+      "src/example.ts",
+      "verification-output.txt",
+    ]);
+    expect(result.failures).toEqual([
+      { stage: "verification", message: "Verification failed." },
+    ]);
   });
 
   it("retains the Workspace and returns failure when change preservation fails", () => {

@@ -182,6 +182,53 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
+  it("preserves prior Evidence and scope when Verification throws", () => {
+    runVerificationMock.mockImplementation(() => {
+      throw new Error("verification runner failed");
+    });
+
+    const result = executeTask(task, "/repositories/example");
+
+    expect(result.passed).toBe(false);
+    expect(result.evidence).toEqual({
+      workerOutput: "Codex final output",
+      changedPaths: ["src/example.ts"],
+    });
+    expect(result.scope).toEqual({ passed: true, violations: [] });
+    expect(result.failures).toEqual([
+      { stage: "verification", message: "verification runner failed" },
+    ]);
+    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+  });
+
+  it("preserves Verification and both failures when Verification and cleanup fail", () => {
+    const verification = {
+      passed: false,
+      commands: [
+        {
+          command: "pnpm test",
+          passed: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: "tests failed",
+        },
+      ],
+    };
+    runVerificationMock.mockReturnValue(verification);
+    removeExecutionWorkspaceMock.mockImplementation(() => {
+      throw new Error("cleanup failed");
+    });
+
+    const result = executeTask(task, "/repositories/example");
+
+    expect(result.passed).toBe(false);
+    expect(result.evidence.verification).toBe(verification);
+    expect(result.failures).toEqual([
+      { stage: "verification", message: "Verification failed." },
+      { stage: "cleanup", message: "cleanup failed" },
+    ]);
+  });
+
   it("turns cleanup failure into a failed result while preserving Evidence", () => {
     removeExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("worktree removal failed");

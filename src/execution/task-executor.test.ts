@@ -64,15 +64,15 @@ beforeEach(() => {
   createExecutionRunMock.mockReturnValue("/runs/run-001");
   createExecutionWorkspaceMock.mockReturnValue("/tmp/execution-workspace");
   getExecutionBaseCommitMock.mockReturnValue("base-commit-sha");
-  runCodexWorkerMock.mockReturnValue("Codex final output");
+  runCodexWorkerMock.mockResolvedValue("Codex final output");
   collectChangedPathsMock.mockReturnValue(["src/example.ts"]);
   checkScopeMock.mockReturnValue({ passed: true, violations: [] });
-  runVerificationMock.mockReturnValue({ passed: true, commands: [] });
+  runVerificationMock.mockResolvedValue({ passed: true, commands: [] });
 });
 
-describe("executeTask", () => {
-  it("returns complete evidence and scope after a successful ordered execution", () => {
-    const result = executeTask(task, "/repositories/example");
+describe("executeTask", async () => {
+  it("returns complete evidence and scope after a successful ordered execution", async () => {
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result).toEqual({
       passed: true,
@@ -124,12 +124,12 @@ describe("executeTask", () => {
     );
   });
 
-  it("records Workspace creation failure without attempting cleanup", () => {
+  it("records Workspace creation failure without attempting cleanup", async () => {
     createExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("worktree creation failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result).toEqual({
       passed: false,
@@ -142,29 +142,75 @@ describe("executeTask", () => {
     expect(writeExecutionResultMock).toHaveBeenCalledOnce();
   });
 
-  it("records Worker failure, skips later stages, and cleans up", () => {
+  it("records Worker failure, skips later stages, and cleans up", async () => {
     runCodexWorkerMock.mockImplementation(() => {
       throw new Error("worker failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.failures).toEqual([
       { stage: "worker", message: "worker failed" },
     ]);
-    expect(result.evidence).toEqual({});
-    expect(collectChangedPathsMock).not.toHaveBeenCalled();
+    expect(result.evidence).toEqual({ changedPaths: ["src/example.ts"] });
+    expect(collectChangedPathsMock).toHaveBeenCalledWith(
+      "/tmp/execution-workspace",
+      "base-commit-sha",
+    );
     expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("preserves Worker output when Evidence collection fails", () => {
+  it("keeps Worker timeout and records paths changed before timeout", async () => {
+    runCodexWorkerMock.mockRejectedValue(
+      new Error(
+        "Failed to run Codex worker: Codex worker timed out after 25 ms.",
+      ),
+    );
+    collectChangedPathsMock.mockReturnValue(["partial-change.txt"]);
+
+    const result = await executeTask(task, "/repositories/example", {
+      workerTimeoutMs: 25,
+    });
+
+    expect(runCodexWorkerMock).toHaveBeenCalledWith(
+      task,
+      "/tmp/execution-workspace",
+      25,
+    );
+    expect(result.evidence.changedPaths).toEqual(["partial-change.txt"]);
+    expect(result.failures).toEqual([
+      {
+        stage: "worker",
+        message:
+          "Failed to run Codex worker: Codex worker timed out after 25 ms.",
+      },
+    ]);
+    expect(runVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps Worker failure when collecting its partial changes also fails", async () => {
+    runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
+    collectChangedPathsMock.mockImplementation(() => {
+      throw new Error("evidence failed");
+    });
+
+    const result = await executeTask(task, "/repositories/example");
+
+    expect(result.failures).toEqual([
+      { stage: "worker", message: "worker failed" },
+      { stage: "evidence", message: "evidence failed" },
+    ]);
+    expect(runVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves Worker output when Evidence collection fails", async () => {
     collectChangedPathsMock.mockImplementation(() => {
       throw new Error("Git status failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.evidence).toEqual({ workerOutput: "Codex final output" });
     expect(result.failures).toEqual([
@@ -175,14 +221,14 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("preserves Evidence and scope while skipping Verification on a Scope failure", () => {
+  it("preserves Evidence and scope while skipping Verification on a Scope failure", async () => {
     checkScopeMock.mockReturnValue({
       passed: false,
       violations: ["README.md"],
     });
     collectChangedPathsMock.mockReturnValue(["README.md"]);
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.evidence).toEqual({
       workerOutput: "Codex final output",
@@ -199,7 +245,7 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("preserves failed Verification as Evidence", () => {
+  it("preserves failed Verification as Evidence", async () => {
     const verification = {
       passed: false,
       commands: [
@@ -212,9 +258,9 @@ describe("executeTask", () => {
         },
       ],
     };
-    runVerificationMock.mockReturnValue(verification);
+    runVerificationMock.mockResolvedValue(verification);
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.evidence.verification).toBe(verification);
@@ -225,12 +271,12 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("preserves prior Evidence and scope when Verification throws", () => {
+  it("preserves prior Evidence and scope when Verification throws", async () => {
     runVerificationMock.mockImplementation(() => {
       throw new Error("verification runner failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.evidence).toEqual({
@@ -244,7 +290,7 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("preserves Verification and both failures when Verification and cleanup fail", () => {
+  it("preserves Verification and both failures when Verification and cleanup fail", async () => {
     const verification = {
       passed: false,
       commands: [
@@ -257,12 +303,12 @@ describe("executeTask", () => {
         },
       ],
     };
-    runVerificationMock.mockReturnValue(verification);
+    runVerificationMock.mockResolvedValue(verification);
     removeExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("cleanup failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.evidence.verification).toBe(verification);
@@ -273,12 +319,12 @@ describe("executeTask", () => {
     expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
   });
 
-  it("turns cleanup failure into a failed result while preserving Evidence", () => {
+  it("turns cleanup failure into a failed result while preserving Evidence", async () => {
     removeExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("worktree removal failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.evidence.workerOutput).toBe("Codex final output");
@@ -300,7 +346,7 @@ describe("executeTask", () => {
     );
   });
 
-  it("preserves both Worker and cleanup failures", () => {
+  it("preserves both Worker and cleanup failures", async () => {
     runCodexWorkerMock.mockImplementation(() => {
       throw new Error("worker failed");
     });
@@ -308,7 +354,7 @@ describe("executeTask", () => {
       throw new Error("cleanup failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual([
@@ -319,7 +365,7 @@ describe("executeTask", () => {
     expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
   });
 
-  it("fails final Scope when Verification creates a forbidden file", () => {
+  it("fails final Scope when Verification creates a forbidden file", async () => {
     collectChangedPathsMock
       .mockReturnValueOnce(["src/example.ts"])
       .mockReturnValueOnce(["README.md", "src/example.ts"]);
@@ -327,7 +373,7 @@ describe("executeTask", () => {
       .mockReturnValueOnce({ passed: true, violations: [] })
       .mockReturnValueOnce({ passed: false, violations: ["README.md"] });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.evidence.changedPaths).toEqual([
@@ -343,7 +389,7 @@ describe("executeTask", () => {
     ]);
   });
 
-  it("keeps Verification failure while capturing final changed paths", () => {
+  it("keeps Verification failure while capturing final changed paths", async () => {
     const taskWithVerificationOutput: TaskContract = {
       ...task,
       allowedPaths: ["src/example.ts", "verification-output.txt"],
@@ -351,7 +397,7 @@ describe("executeTask", () => {
     collectChangedPathsMock
       .mockReturnValueOnce(["src/example.ts"])
       .mockReturnValueOnce(["src/example.ts", "verification-output.txt"]);
-    runVerificationMock.mockReturnValue({
+    runVerificationMock.mockResolvedValue({
       passed: false,
       commands: [
         {
@@ -364,7 +410,7 @@ describe("executeTask", () => {
       ],
     });
 
-    const result = executeTask(
+    const result = await executeTask(
       taskWithVerificationOutput,
       "/repositories/example",
     );
@@ -378,12 +424,12 @@ describe("executeTask", () => {
     ]);
   });
 
-  it("retains the Workspace and returns failure when change preservation fails", () => {
+  it("retains the Workspace and returns failure when change preservation fails", async () => {
     preserveExecutionChangesMock.mockImplementation(() => {
       throw new Error("patch storage failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual([
@@ -394,7 +440,7 @@ describe("executeTask", () => {
     expect(writeExecutionResultMock).toHaveBeenCalledOnce();
   });
 
-  it("reports final result storage failure without losing earlier failures", () => {
+  it("reports final result storage failure without losing earlier failures", async () => {
     runCodexWorkerMock.mockImplementation(() => {
       throw new Error("worker failed");
     });
@@ -402,7 +448,7 @@ describe("executeTask", () => {
       throw new Error("result storage failed");
     });
 
-    const result = executeTask(task, "/repositories/example");
+    const result = await executeTask(task, "/repositories/example");
 
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual([

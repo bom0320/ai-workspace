@@ -1,4 +1,6 @@
-import { spawnSync } from "node:child_process";
+import { runCommand } from "../execution/command-runner.js";
+
+export const DEFAULT_VERIFICATION_TIMEOUT_MS = 5 * 60 * 1_000;
 
 export type VerificationCommandResult = {
   command: string;
@@ -6,6 +8,7 @@ export type VerificationCommandResult = {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  timedOut?: boolean;
 };
 
 export type VerificationResult = {
@@ -13,28 +16,38 @@ export type VerificationResult = {
   commands: VerificationCommandResult[];
 };
 
-export function runVerification(
+export async function runVerification(
   verification: string[],
   workspaceRoot: string,
-): VerificationResult {
-  const commands = verification.map((command) => {
-    const result = spawnSync(command, {
+  timeoutMs = DEFAULT_VERIFICATION_TIMEOUT_MS,
+): Promise<VerificationResult> {
+  const commands: VerificationCommandResult[] = [];
+
+  for (const command of verification) {
+    const result = await runCommand(command, [], {
       cwd: workspaceRoot,
-      encoding: "utf8",
       shell: true,
+      timeoutMs,
     });
-    const stderr = [result.stderr, result.error?.message]
+    const timeoutMessage = result.timedOut
+      ? `Verification command timed out after ${timeoutMs} ms.`
+      : "";
+    const stderr = [result.stderr, result.error?.message, timeoutMessage]
       .filter((value): value is string => Boolean(value))
       .join("\n");
 
-    return {
+    commands.push({
       command,
-      passed: result.status === 0 && result.error === undefined,
-      exitCode: result.status,
-      stdout: result.stdout ?? "",
+      passed:
+        result.exitCode === 0 &&
+        result.error === undefined &&
+        !result.timedOut,
+      exitCode: result.exitCode,
+      stdout: result.stdout,
       stderr,
-    };
-  });
+      ...(result.timedOut ? { timedOut: true } : {}),
+    });
+  }
 
   return {
     passed: commands.every((command) => command.passed),

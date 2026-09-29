@@ -18,6 +18,11 @@ import {
 import { checkScope } from "../verification/scope-enforcement.js";
 import { runVerification } from "../verification/verification-runner.js";
 
+export type TaskExecutionOptions = {
+  workerTimeoutMs?: number;
+  verificationTimeoutMs?: number;
+};
+
 function finishExecution(
   evidence: ExecutionResult["evidence"],
   scope: ExecutionResult["scope"],
@@ -47,20 +52,38 @@ function finishExecution(
   return result;
 }
 
-function runTaskStages(
+async function runTaskStages(
   task: TaskContract,
   workspaceRoot: string,
   baseCommit: string,
   evidence: ExecutionResult["evidence"],
   failures: ExecutionFailure[],
-): ExecutionResult["scope"] {
+  options: TaskExecutionOptions,
+): Promise<ExecutionResult["scope"]> {
   try {
-    evidence.workerOutput = runCodexWorker(task, workspaceRoot);
+    evidence.workerOutput = await runCodexWorker(
+      task,
+      workspaceRoot,
+      options.workerTimeoutMs,
+    );
   } catch (error) {
     failures.push({
       stage: "worker",
       message: error instanceof Error ? error.message : String(error),
     });
+
+    try {
+      evidence.changedPaths = collectChangedPaths(workspaceRoot, baseCommit);
+    } catch (evidenceError) {
+      failures.push({
+        stage: "evidence",
+        message:
+          evidenceError instanceof Error
+            ? evidenceError.message
+            : String(evidenceError),
+      });
+    }
+
     return;
   }
 
@@ -101,7 +124,11 @@ function runTaskStages(
   }
 
   try {
-    evidence.verification = runVerification(task.verification, workspaceRoot);
+    evidence.verification = await runVerification(
+      task.verification,
+      workspaceRoot,
+      options.verificationTimeoutMs,
+    );
   } catch (error) {
     failures.push({
       stage: "verification",
@@ -119,10 +146,11 @@ function runTaskStages(
   return collectScope() ?? workerScope;
 }
 
-export function executeTask(
+export async function executeTask(
   task: TaskContract,
   repositoryRoot: string,
-): ExecutionResult {
+  options: TaskExecutionOptions = {},
+): Promise<ExecutionResult> {
   const evidence: ExecutionResult["evidence"] = {};
   const failures: ExecutionFailure[] = [];
   let scope: ExecutionResult["scope"];
@@ -176,12 +204,13 @@ export function executeTask(
   let cleanupSucceeded = false;
 
   try {
-    scope = runTaskStages(
+    scope = await runTaskStages(
       task,
       workspaceRoot,
       artifacts.baseCommit,
       evidence,
       failures,
+      options,
     );
   } finally {
     try {

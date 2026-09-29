@@ -49,36 +49,39 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.stubEnv("AI_WORKSPACE_WORKER_TIMEOUT_MS", "");
+  vi.stubEnv("AI_WORKSPACE_VERIFICATION_TIMEOUT_MS", "");
   loadTaskContractMock.mockReturnValue(task);
   resolveRepositoryRootMock.mockReturnValue("/repositories/example");
-  executeTaskMock.mockReturnValue(successfulResult);
+  executeTaskMock.mockResolvedValue(successfulResult);
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
-describe("CLI", () => {
-  it("rejects a missing Task file argument", () => {
-    expect(runCli([])).toBe(1);
+describe("CLI", async () => {
+  it("rejects a missing Task file argument", async () => {
+    expect(await runCli([])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Task file path is required.",
     );
   });
 
-  it("rejects a missing Repository path argument", () => {
-    expect(runCli(["task.json"])).toBe(1);
+  it("rejects a missing Repository path argument", async () => {
+    expect(await runCli(["task.json"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Repository path is required.",
     );
   });
 
-  it("keeps TaskContract validation as a preflight failure", () => {
+  it("keeps TaskContract validation as a preflight failure", async () => {
     loadTaskContractMock.mockImplementation(() => {
       throw new ZodError([]);
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: TaskContract validation failed.",
     );
@@ -86,28 +89,41 @@ describe("CLI", () => {
     expect(executeTaskMock).not.toHaveBeenCalled();
   });
 
-  it("keeps Repository resolution as a preflight failure", () => {
+  it("keeps Repository resolution as a preflight failure", async () => {
     resolveRepositoryRootMock.mockImplementation(() => {
       throw new Error("not a Git repository");
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Repository resolution failed: not a Git repository",
     );
     expect(executeTaskMock).not.toHaveBeenCalled();
   });
 
-  it("passes the validated Task and Repository root to executeTask", () => {
-    expect(runCli(["task.json", "/repositories/example"])).toBe(0);
+  it("passes the validated Task and Repository root to executeTask", async () => {
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
     expect(executeTaskMock).toHaveBeenCalledWith(
       task,
       "/repositories/example",
+      {},
     );
   });
 
-  it("returns success and reports an ExecutionResult that passed", () => {
-    expect(runCli(["task.json", "/repositories/example"])).toBe(0);
+  it("passes finite timeout overrides to executeTask", async () => {
+    vi.stubEnv("AI_WORKSPACE_WORKER_TIMEOUT_MS", "25");
+    vi.stubEnv("AI_WORKSPACE_VERIFICATION_TIMEOUT_MS", "30");
+
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
+    expect(executeTaskMock).toHaveBeenCalledWith(
+      task,
+      "/repositories/example",
+      { workerTimeoutMs: 25, verificationTimeoutMs: 30 },
+    );
+  });
+
+  it("returns success and reports an ExecutionResult that passed", async () => {
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
     expect(console.log).toHaveBeenCalledWith("Codex Worker: complete");
     expect(console.log).toHaveBeenCalledWith("Verification: passed");
     expect(console.log).toHaveBeenCalledWith("Changed Paths: 1");
@@ -116,8 +132,8 @@ describe("CLI", () => {
     );
   });
 
-  it("returns failure and reports preserved result details", () => {
-    executeTaskMock.mockReturnValue({
+  it("returns failure and reports preserved result details", async () => {
+    executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: {
         workerOutput: "Codex final output",
@@ -131,7 +147,7 @@ describe("CLI", () => {
       retainedWorkspace: "/tmp/execution-workspace",
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Scope: failed");
     expect(console.error).toHaveBeenCalledWith(
       "Scope violation: README.md",
@@ -144,8 +160,8 @@ describe("CLI", () => {
     );
   });
 
-  it("reports failed Verification commands from ExecutionResult", () => {
-    executeTaskMock.mockReturnValue({
+  it("reports failed Verification commands from ExecutionResult", async () => {
+    executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: {
         workerOutput: "Codex final output",
@@ -167,7 +183,7 @@ describe("CLI", () => {
       failures: [{ stage: "verification", message: "Verification failed." }],
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Verification: failed");
     expect(console.error).toHaveBeenCalledWith(
       "Failed command: pnpm test (exit code: 1)",
@@ -177,8 +193,8 @@ describe("CLI", () => {
     );
   });
 
-  it("reports a Verification failure when no Verification Evidence exists", () => {
-    executeTaskMock.mockReturnValue({
+  it("reports a Verification failure when no Verification Evidence exists", async () => {
+    executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: {
         workerOutput: "Codex final output",
@@ -190,14 +206,14 @@ describe("CLI", () => {
       ],
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Verification failed: verification runner failed",
     );
   });
 
-  it("reports preservation failure and the retained Workspace", () => {
-    executeTaskMock.mockReturnValue({
+  it("reports preservation failure and the retained Workspace", async () => {
+    executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: { workerOutput: "Codex final output" },
       failures: [
@@ -207,7 +223,7 @@ describe("CLI", () => {
       retainedWorkspace: "/tmp/execution-workspace",
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.log).toHaveBeenCalledWith(
       "Run Artifacts: /workspace/.ai-workspace/runs/run-002",
     );
@@ -219,15 +235,15 @@ describe("CLI", () => {
     );
   });
 
-  it("reports final result storage failure", () => {
-    executeTaskMock.mockReturnValue({
+  it("reports final result storage failure", async () => {
+    executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: {},
       failures: [{ stage: "report", message: "result storage failed" }],
       artifacts: { directory: "/workspace/.ai-workspace/runs/run-003" },
     });
 
-    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       "Error: Final execution report failed: result storage failed",
     );

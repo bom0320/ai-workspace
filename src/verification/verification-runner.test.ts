@@ -1,4 +1,10 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -27,9 +33,9 @@ afterEach(() => {
 });
 
 describe("runVerification", () => {
-  it("records a successful command", () => {
+  it("records a successful command", async () => {
     const command = nodeCommand("process.stdout.write('success')");
-    const result = runVerification([command], process.cwd());
+    const result = await runVerification([command], process.cwd());
 
     expect(result).toEqual({
       passed: true,
@@ -45,12 +51,12 @@ describe("runVerification", () => {
     });
   });
 
-  it("records a failed command and preserves stdout and stderr", () => {
+  it("records a failed command and preserves stdout and stderr", async () => {
     const command = nodeCommand(
       "process.stdout.write('partial output'); " +
         "process.stderr.write('failure details'); process.exit(3)",
     );
-    const result = runVerification([command], process.cwd());
+    const result = await runVerification([command], process.cwd());
 
     expect(result.commands[0]).toEqual({
       command,
@@ -61,8 +67,8 @@ describe("runVerification", () => {
     });
   });
 
-  it("fails the overall result when any command fails", () => {
-    const result = runVerification(
+  it("fails the overall result when any command fails", async () => {
+    const result = await runVerification(
       [
         nodeCommand("process.exit(0)"),
         nodeCommand("process.exit(2)"),
@@ -79,9 +85,9 @@ describe("runVerification", () => {
     ]);
   });
 
-  it("uses the execution workspace as the command cwd", () => {
+  it("uses the execution workspace as the command cwd", async () => {
     const workspaceRoot = createTemporaryDirectory();
-    const result = runVerification(
+    const result = await runVerification(
       [nodeCommand("process.stdout.write(process.cwd())")],
       workspaceRoot,
     );
@@ -89,8 +95,8 @@ describe("runVerification", () => {
     expect(result.commands[0]?.stdout).toBe(realpathSync(workspaceRoot));
   });
 
-  it("records a command that cannot be found as a failure", () => {
-    const result = runVerification(
+  it("records a command that cannot be found as a failure", async () => {
+    const result = await runVerification(
       ["ai-workspace-command-that-does-not-exist"],
       process.cwd(),
     );
@@ -99,5 +105,42 @@ describe("runVerification", () => {
     expect(command?.passed).toBe(false);
     expect(command?.exitCode).not.toBe(0);
     expect(command?.stderr).not.toBe("");
+  });
+
+  it("times out a process group before a child can keep modifying files", async () => {
+    const workspaceRoot = createTemporaryDirectory();
+    const markerPath = join(workspaceRoot, "late-change.txt");
+    writeFileSync(
+      join(workspaceRoot, "child.cjs"),
+      [
+        'const { writeFileSync } = require("node:fs");',
+        "setTimeout(() => {",
+        `  writeFileSync(${JSON.stringify(markerPath)}, "late change");`,
+        "}, 500);",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(workspaceRoot, "parent.cjs"),
+      [
+        'const { spawn } = require("node:child_process");',
+        `spawn(${JSON.stringify(process.execPath)}, ["child.cjs"], { stdio: "ignore" });`,
+        "setTimeout(() => {}, 5_000);",
+      ].join("\n"),
+    );
+    const command = `${JSON.stringify(process.execPath)} parent.cjs`;
+
+    const result = await runVerification([command], workspaceRoot, 50);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(result.passed).toBe(false);
+    expect(result.commands[0]).toMatchObject({
+      command,
+      passed: false,
+      timedOut: true,
+    });
+    expect(result.commands[0]?.stderr).toContain(
+      "Verification command timed out after 50 ms.",
+    );
+    expect(existsSync(markerPath)).toBe(false);
   });
 });

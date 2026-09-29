@@ -28,7 +28,9 @@ type Scenario =
   | "success"
   | "scope"
   | "worker-failure"
+  | "worker-timeout"
   | "verification-failure"
+  | "verification-timeout"
   | "worker-commit-allowed"
   | "worker-commit-forbidden"
   | "verification-scope";
@@ -39,6 +41,8 @@ type ScenarioResult = {
   stderr: string;
   verificationRan: boolean;
   storedResult: ExecutionResult;
+  lateWorkerChange: boolean;
+  lateVerificationChange: boolean;
 };
 
 function git(repositoryRoot: string, args: string[]): string {
@@ -54,6 +58,11 @@ function runScenario(scenario: Scenario): ScenarioResult {
   const fakeBinRoot = join(temporaryRoot, "bin");
   const workerRecord = join(temporaryRoot, "worker-cwd.txt");
   const verificationRecord = join(temporaryRoot, "verification-cwd.txt");
+  const lateWorkerRecord = join(temporaryRoot, "late-worker-change.txt");
+  const lateVerificationRecord = join(
+    temporaryRoot,
+    "late-verification-change.txt",
+  );
   const taskPath = join(temporaryRoot, "task.json");
   let workspaceRoot: string | undefined;
 
@@ -72,8 +81,16 @@ function runScenario(scenario: Scenario): ScenarioResult {
     writeFileSync(
       join(repositoryRoot, "verify.cjs"),
       [
+        'const { spawn } = require("node:child_process");',
         'const { readFileSync, writeFileSync } = require("node:fs");',
         "writeFileSync(process.env.E2E_VERIFICATION_RECORD, process.cwd());",
+        'if (process.env.E2E_SCENARIO === "verification-timeout") {',
+        "  spawn(process.execPath, [",
+        '    "-e",',
+        '    `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(process.env.E2E_LATE_VERIFICATION_RECORD)}, "late"), 1500)`,',
+        '  ], { stdio: "ignore" });',
+        "  setTimeout(() => {}, 5_000);",
+        "}",
         'if (process.env.E2E_SCENARIO === "verification-scope") {',
         '  writeFileSync("forbidden.txt", "changed by verification\\n");',
         "  process.exit(0);",
@@ -113,18 +130,25 @@ function runScenario(scenario: Scenario): ScenarioResult {
       fakeCodexPath,
       [
         `#!${process.execPath}`,
-        'const { execFileSync } = require("node:child_process");',
+        'const { execFileSync, spawn } = require("node:child_process");',
         'const { writeFileSync } = require("node:fs");',
         'const { join } = require("node:path");',
         "writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());",
-        'if (process.env.E2E_SCENARIO === "worker-failure") {',
-        '  console.error("fake Codex failed intentionally");',
-        "  process.exit(7);",
-        "}",
         'const target = ["scope", "worker-commit-forbidden"].includes(process.env.E2E_SCENARIO)',
         '  ? "forbidden.txt"',
         '  : "allowed.txt";',
         'writeFileSync(join(process.cwd(), target), "changed by worker\\n");',
+        'if (process.env.E2E_SCENARIO === "worker-timeout") {',
+        "  spawn(process.execPath, [",
+        '    "-e",',
+        '    `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(process.env.E2E_LATE_WORKER_RECORD)}, "late"), 1500)`,',
+        '  ], { stdio: "ignore" });',
+        "  setTimeout(() => {}, 5_000);",
+        "}",
+        'if (process.env.E2E_SCENARIO === "worker-failure") {',
+        '  console.error("fake Codex failed intentionally");',
+        "  process.exit(7);",
+        "}",
         'if (process.env.E2E_SCENARIO.startsWith("worker-commit-")) {',
         '  execFileSync("git", ["add", target]);',
         '  execFileSync("git", ["commit", "-m", "worker commit"]);',
@@ -174,6 +198,12 @@ function runScenario(scenario: Scenario): ScenarioResult {
           E2E_SCENARIO: scenario,
           E2E_WORKER_RECORD: workerRecord,
           E2E_VERIFICATION_RECORD: verificationRecord,
+          E2E_LATE_WORKER_RECORD: lateWorkerRecord,
+          E2E_LATE_VERIFICATION_RECORD: lateVerificationRecord,
+          AI_WORKSPACE_WORKER_TIMEOUT_MS:
+            scenario === "worker-timeout" ? "500" : "",
+          AI_WORKSPACE_VERIFICATION_TIMEOUT_MS:
+            scenario === "verification-timeout" ? "500" : "",
         },
       }
     );
@@ -239,12 +269,21 @@ function runScenario(scenario: Scenario): ScenarioResult {
     expect(existsSync(workspaceRoot)).toBe(false);
     expect(existsSync(runDirectory!)).toBe(true);
 
+    if (
+      scenario === "worker-timeout" ||
+      scenario === "verification-timeout"
+    ) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_700);
+    }
+
     return {
       status: cli.status,
       stdout: cli.stdout,
       stderr: cli.stderr,
       verificationRan,
       storedResult,
+      lateWorkerChange: existsSync(lateWorkerRecord),
+      lateVerificationChange: existsSync(lateVerificationRecord),
     };
   } finally {
     try {
@@ -297,7 +336,19 @@ describe("CLI end-to-end execution", () => {
     expect(result.stderr).toContain("Error: Codex Worker failed:");
     expect(result.stderr).toContain("fake Codex failed intentionally");
     expect(result.verificationRan).toBe(false);
+    expect(result.storedResult.evidence.changedPaths).toEqual(["allowed.txt"]);
     expect(result.storedResult.failures[0]?.stage).toBe("worker");
+  });
+
+  it("preserves partial Worker changes and stops child processes on timeout", () => {
+    const result = runScenario("worker-timeout");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Codex worker timed out after 500 ms.");
+    expect(result.verificationRan).toBe(false);
+    expect(result.storedResult.evidence.changedPaths).toEqual(["allowed.txt"]);
+    expect(result.storedResult.failures[0]?.stage).toBe("worker");
+    expect(result.lateWorkerChange).toBe(false);
   });
 
   it("reports an executed Verification command that fails", () => {
@@ -317,6 +368,25 @@ describe("CLI end-to-end execution", () => {
       "verification-output.txt",
     ]);
     expect(result.storedResult.failures[0]?.stage).toBe("verification");
+  });
+
+  it("preserves a Verification timeout and stops its child processes", () => {
+    const result = runScenario("verification-timeout");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Verification: failed");
+    expect(result.verificationRan).toBe(true);
+    expect(result.storedResult.evidence.verification?.commands[0]).toMatchObject(
+      {
+        passed: false,
+        timedOut: true,
+      },
+    );
+    expect(result.storedResult.evidence.verification?.commands[0]?.stderr).toContain(
+      "Verification command timed out after 500 ms.",
+    );
+    expect(result.storedResult.failures[0]?.stage).toBe("verification");
+    expect(result.lateVerificationChange).toBe(false);
   });
 
   it("includes an allowed Worker commit in changed paths", () => {

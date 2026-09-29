@@ -4,10 +4,24 @@ import { pathToFileURL } from "node:url";
 import { ZodError } from "zod";
 
 import { loadTaskContract } from "./contracts/task-loader.js";
-import { executeTask } from "./execution/task-executor.js";
+import {
+  executeTask,
+  type TaskExecutionOptions,
+} from "./execution/task-executor.js";
 import { resolveRepositoryRoot } from "./repository/repository.js";
 
-export function runCli(args: string[]): number {
+function timeoutFromEnvironment(name: string): number | undefined {
+  const value = process.env[name];
+
+  if (value === undefined) {
+    return;
+  }
+
+  const timeoutMs = Number(value);
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined;
+}
+
+export async function runCli(args: string[]): Promise<number> {
   const taskPath = args[0];
   const repositoryPath = args[1];
 
@@ -54,7 +68,22 @@ export function runCli(args: string[]): number {
 
   console.log(`Repository Root: ${repositoryRoot}`);
 
-  const result = executeTask(task, repositoryRoot);
+  const executionOptions: TaskExecutionOptions = {};
+  const workerTimeoutMs = timeoutFromEnvironment(
+    "AI_WORKSPACE_WORKER_TIMEOUT_MS",
+  );
+  const verificationTimeoutMs = timeoutFromEnvironment(
+    "AI_WORKSPACE_VERIFICATION_TIMEOUT_MS",
+  );
+
+  if (workerTimeoutMs !== undefined) {
+    executionOptions.workerTimeoutMs = workerTimeoutMs;
+  }
+  if (verificationTimeoutMs !== undefined) {
+    executionOptions.verificationTimeoutMs = verificationTimeoutMs;
+  }
+
+  const result = await executeTask(task, repositoryRoot, executionOptions);
 
   if (result.artifacts) {
     console.log(`Run Artifacts: ${result.artifacts.directory}`);
@@ -128,5 +157,7 @@ const isEntryPoint =
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
 if (isEntryPoint) {
-  process.exitCode = runCli(process.argv.slice(2));
+  runCli(process.argv.slice(2)).then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }

@@ -1,11 +1,13 @@
-import { execFileSync } from "node:child_process";
-
 import type { TaskContract } from "../contracts/task.js";
+import { runCommand } from "../execution/command-runner.js";
 
-export function runCodexWorker(
+export const DEFAULT_CODEX_WORKER_TIMEOUT_MS = 15 * 60 * 1_000;
+
+export async function runCodexWorker(
   task: TaskContract,
   workspaceRoot: string,
-): string {
+  timeoutMs = DEFAULT_CODEX_WORKER_TIMEOUT_MS,
+): Promise<string> {
   const prompt = [
     "Complete the following task within the provided repository workspace.",
     "",
@@ -31,31 +33,29 @@ export function runCodexWorker(
       "- (none)",
   ].join("\n");
 
-  try {
-    return execFileSync(
-      "codex",
-      ["exec", "--sandbox", "workspace-write", prompt],
-      {
-        cwd: workspaceRoot,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-  } catch (error) {
-    let detail = error instanceof Error ? error.message : String(error);
+  const result = await runCommand(
+    "codex",
+    ["exec", "--sandbox", "workspace-write", prompt],
+    { cwd: workspaceRoot, timeoutMs },
+  );
 
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "stderr" in error &&
-      typeof error.stderr === "string" &&
-      error.stderr.trim()
-    ) {
-      detail = error.stderr.trim();
-    }
+  if (result.timedOut) {
+    const error = new Error(`Codex worker timed out after ${timeoutMs} ms.`);
+    throw new Error(`Failed to run Codex worker: ${error.message}`, {
+      cause: error,
+    });
+  }
 
+  if (result.error || result.exitCode !== 0) {
+    const detail =
+      result.stderr.trim() ||
+      result.error?.message ||
+      `Codex exited with code ${result.exitCode ?? "unavailable"}.`;
+    const error = result.error ?? new Error(detail);
     throw new Error(`Failed to run Codex worker: ${detail}`, {
       cause: error,
     });
   }
+
+  return result.stdout;
 }

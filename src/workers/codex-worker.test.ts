@@ -1,13 +1,10 @@
-import { execFileSync } from "node:child_process";
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TaskContract } from "../contracts/task.js";
+import { runCommand } from "../execution/command-runner.js";
 import { runCodexWorker } from "./codex-worker.js";
 
-vi.mock("node:child_process", () => ({
-  execFileSync: vi.fn(),
-}));
+vi.mock("../execution/command-runner.js", () => ({ runCommand: vi.fn() }));
 
 const task: TaskContract = {
   id: "task-001",
@@ -21,34 +18,42 @@ const task: TaskContract = {
   verification: ["pnpm test"],
 };
 
-const execFileSyncMock = vi.mocked(execFileSync);
+const runCommandMock = vi.mocked(runCommand);
 
 beforeEach(() => {
-  execFileSyncMock.mockReset();
+  runCommandMock.mockReset();
 });
 
 describe("runCodexWorker", () => {
-  it("runs Codex in the workspace with TaskContract instructions", () => {
-    execFileSyncMock.mockReturnValue("Codex final output");
+  it("runs Codex in the workspace with TaskContract instructions", async () => {
+    runCommandMock.mockResolvedValue({
+      stdout: "Codex final output",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    });
 
-    const output = runCodexWorker(task, "/tmp/execution-workspace");
+    const output = await runCodexWorker(
+      task,
+      "/tmp/execution-workspace",
+      1_000,
+    );
 
     expect(output).toBe("Codex final output");
-    expect(execFileSyncMock).toHaveBeenCalledOnce();
+    expect(runCommandMock).toHaveBeenCalledOnce();
 
-    const [command, args, options] = execFileSyncMock.mock.calls[0];
-    const prompt = args?.[3];
+    const [command, args, options] = runCommandMock.mock.calls[0];
+    const prompt = args[3];
 
     expect(command).toBe("codex");
-    expect(args?.slice(0, 3)).toEqual([
+    expect(args.slice(0, 3)).toEqual([
       "exec",
       "--sandbox",
       "workspace-write",
     ]);
-    expect(options).toMatchObject({
+    expect(options).toEqual({
       cwd: "/tmp/execution-workspace",
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
+      timeoutMs: 1_000,
     });
     expect(prompt).toContain(task.objective);
     expect(prompt).toContain(task.allowedPaths[0]);
@@ -58,24 +63,33 @@ describe("runCodexWorker", () => {
     expect(prompt).toContain(task.verification[0]);
   });
 
-  it("preserves the Codex failure and stderr in a Worker error", () => {
-    const originalError = Object.assign(new Error("Command failed"), {
+  it("preserves Codex stderr in a Worker error", async () => {
+    runCommandMock.mockResolvedValue({
+      stdout: "",
       stderr: "Codex authentication failed",
+      exitCode: 1,
+      timedOut: false,
     });
 
-    execFileSyncMock.mockImplementation(() => {
-      throw originalError;
+    await expect(
+      runCodexWorker(task, "/tmp/execution-workspace"),
+    ).rejects.toThrow(
+      "Failed to run Codex worker: Codex authentication failed",
+    );
+  });
+
+  it("reports Worker timeout distinctly", async () => {
+    runCommandMock.mockResolvedValue({
+      stdout: "partial output",
+      stderr: "",
+      exitCode: null,
+      timedOut: true,
     });
 
-    try {
-      runCodexWorker(task, "/tmp/execution-workspace");
-      throw new Error("Expected runCodexWorker to fail");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toBe(
-        "Failed to run Codex worker: Codex authentication failed",
-      );
-      expect((error as Error).cause).toBe(originalError);
-    }
+    await expect(
+      runCodexWorker(task, "/tmp/execution-workspace", 25),
+    ).rejects.toThrow(
+      "Failed to run Codex worker: Codex worker timed out after 25 ms.",
+    );
   });
 });

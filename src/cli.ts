@@ -85,7 +85,10 @@ export function runCli(args: string[]): number {
   }
 
   for (const failure of result.failures) {
-    if (failure.stage === "scope" || failure.stage === "verification") {
+    if (
+      failure.stage === "scope" ||
+      (failure.stage === "verification" && result.evidence.verification)
+    ) {
       continue;
     }
 
@@ -93,6 +96,7 @@ export function runCli(args: string[]): number {
       workspace: "Execution Workspace creation",
       worker: "Codex Worker",
       evidence: "Execution Evidence collection",
+      verification: "Verification",
       cleanup: "Execution Workspace cleanup",
     } as const;
 

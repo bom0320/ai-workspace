@@ -161,5 +161,27 @@ describe("CLI", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Failed command: pnpm test (exit code: 1)",
     );
+    expect(console.error).not.toHaveBeenCalledWith(
+      "Error: Verification failed: Verification failed.",
+    );
+  });
+
+  it("reports a Verification failure when no Verification Evidence exists", () => {
+    executeTaskMock.mockReturnValue({
+      passed: false,
+      evidence: {
+        workerOutput: "Codex final output",
+        changedPaths: ["src/example.ts"],
+      },
+      scope: { passed: true, violations: [] },
+      failures: [
+        { stage: "verification", message: "verification runner failed" },
+      ],
+    });
+
+    expect(runCli(["task.json", "/repositories/example"])).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Verification failed: verification runner failed",
+    );
   });
 });

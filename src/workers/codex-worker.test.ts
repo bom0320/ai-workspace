@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskContract } from "./contracts/task.js";
+import type { TaskContract } from "../contracts/task.js";
 import { runCodexWorker } from "./codex-worker.js";
 
 vi.mock("node:child_process", () => ({

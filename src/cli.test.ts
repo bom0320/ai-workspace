@@ -2,15 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import type { TaskContract } from "./contracts/task.js";
-import type { ExecutionResult } from "./execution-result.js";
-import { resolveRepositoryRoot } from "./repository.js";
-import { executeTask } from "./task-executor.js";
-import { loadTaskContract } from "./task-loader.js";
+import { loadTaskContract } from "./contracts/task-loader.js";
+import type { ExecutionResult } from "./execution/execution-result.js";
+import { executeTask } from "./execution/task-executor.js";
+import { resolveRepositoryRoot } from "./repository/repository.js";
 import { runCli } from "./cli.js";
 
-vi.mock("./repository.js", () => ({ resolveRepositoryRoot: vi.fn() }));
-vi.mock("./task-executor.js", () => ({ executeTask: vi.fn() }));
-vi.mock("./task-loader.js", () => ({ loadTaskContract: vi.fn() }));
+vi.mock("./contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
+vi.mock("./execution/task-executor.js", () => ({ executeTask: vi.fn() }));
+vi.mock("./repository/repository.js", () => ({
+  resolveRepositoryRoot: vi.fn(),
+}));
 
 const task: TaskContract = {
   id: "task-001",

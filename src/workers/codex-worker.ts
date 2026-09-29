@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-import type { TaskContract } from "./contracts/task.js";
+import type { TaskContract } from "../contracts/task.js";
 
 export function runCodexWorker(
   task: TaskContract,

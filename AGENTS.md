@@ -48,7 +48,11 @@
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
 - `src/cli.ts`: 현재 CLI entry point
-- `src/contracts/`: 시스템 경계에서 사용하는 runtime-validated contracts
+- `src/contracts/`: runtime-validated contract와 TaskContract loader
+- `src/execution/`: Repository Task 실행 흐름, 결과, Evidence
+- `src/repository/`: Repository resolution과 격리된 Git worktree lifecycle
+- `src/workers/`: 제한된 Task를 수행하는 Worker integration
+- `src/verification/`: Scope enforcement와 verification command 실행
 - co-located `*.test.ts`: 해당 구현 모듈의 unit test
 
 현재 존재하지 않는 디렉터리를 예상 구조로 미리 추가하지 않는다.

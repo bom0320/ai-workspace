@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 
 import { ZodError } from "zod";
 
-import { resolveRepositoryRoot } from "./repository.js";
-import { executeTask } from "./task-executor.js";
-import { loadTaskContract } from "./task-loader.js";
+import { loadTaskContract } from "./contracts/task-loader.js";
+import { executeTask } from "./execution/task-executor.js";
+import { resolveRepositoryRoot } from "./repository/repository.js";
 
 export function runCli(args: string[]): number {
   const taskPath = args[0];

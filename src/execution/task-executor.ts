@@ -1,5 +1,5 @@
-import { runCodexWorker } from "./codex-worker.js";
-import type { TaskContract } from "./contracts/task.js";
+import { runCodexWorker } from "../workers/codex-worker.js";
+import type { TaskContract } from "../contracts/task.js";
 import { collectChangedPaths } from "./execution-evidence.js";
 import type {
   ExecutionFailure,
@@ -8,9 +8,9 @@ import type {
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "./execution-workspace.js";
-import { checkScope } from "./scope-enforcement.js";
-import { runVerification } from "./verification-runner.js";
+} from "../repository/execution-workspace.js";
+import { checkScope } from "../verification/scope-enforcement.js";
+import { runVerification } from "../verification/verification-runner.js";
 
 export function executeTask(
   task: TaskContract,

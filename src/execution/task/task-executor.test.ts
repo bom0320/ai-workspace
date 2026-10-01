@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runCodexWorker } from "../workers/codex-worker.js";
-import type { TaskContract } from "../contracts/task.js";
+import { runCodexWorker } from "../../workers/codex-worker.js";
+import type { TaskContract } from "../../contracts/task.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
@@ -12,12 +12,12 @@ import { collectChangedPaths } from "./execution-evidence.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../repository/execution-workspace.js";
-import { checkScope } from "../verification/scope-enforcement.js";
+} from "../../repository/execution-workspace.js";
+import { checkScope } from "../../verification/scope-enforcement.js";
 import { executeTask } from "./task-executor.js";
-import { runVerification } from "../verification/verification-runner.js";
+import { runVerification } from "../../verification/verification-runner.js";
 
-vi.mock("../workers/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("../../workers/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
 vi.mock("./execution-artifacts.js", () => ({
   createExecutionRun: vi.fn(),
   getExecutionBaseCommit: vi.fn(),
@@ -25,14 +25,14 @@ vi.mock("./execution-artifacts.js", () => ({
   writeExecutionResult: vi.fn(),
 }));
 vi.mock("./execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
-vi.mock("../repository/execution-workspace.js", () => ({
+vi.mock("../../repository/execution-workspace.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),
 }));
-vi.mock("../verification/scope-enforcement.js", () => ({
+vi.mock("../../verification/scope-enforcement.js", () => ({
   checkScope: vi.fn(),
 }));
-vi.mock("../verification/verification-runner.js", () => ({
+vi.mock("../../verification/verification-runner.js", () => ({
   runVerification: vi.fn(),
 }));
 

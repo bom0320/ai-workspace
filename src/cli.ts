@@ -7,7 +7,7 @@ import { loadTaskContract } from "./contracts/task-loader.js";
 import {
   executeTask,
   type TaskExecutionOptions,
-} from "./execution/task-executor.js";
+} from "./execution/task/task-executor.js";
 import { resolveRepositoryRoot } from "./repository/repository.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {

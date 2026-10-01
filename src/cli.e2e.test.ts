@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import type { ExecutionResult } from "./execution/execution-result.js";
+import type { ExecutionResult } from "./execution/task/execution-result.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(projectRoot, "src", "cli.ts");

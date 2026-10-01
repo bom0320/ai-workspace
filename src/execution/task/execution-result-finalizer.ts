@@ -5,7 +5,7 @@ import {
   type ExecutionState,
 } from "./execution-stages.js";
 
-export function finishExecution(
+export function finalizeExecutionResult(
   state: ExecutionState,
   artifacts: NonNullable<ExecutionResult["artifacts"]>,
   retainedWorkspace?: string

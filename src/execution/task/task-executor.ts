@@ -8,7 +8,7 @@ import {
   getExecutionBaseCommit,
   preserveExecutionChanges,
 } from "./execution-artifacts.js";
-import { finishExecution } from "./execution-finalizer.js";
+import { finalizeExecutionResult } from "./execution-result-finalizer.js";
 import type { ExecutionResult } from "./execution-result.js";
 import {
   addExecutionFailure,
@@ -57,7 +57,7 @@ export async function executeTask(
   } catch (error) {
     addExecutionFailure(state, "workspace", error);
 
-    return finishExecution(state, artifacts);
+    return finalizeExecutionResult(state, artifacts);
   }
 
   try {
@@ -65,7 +65,7 @@ export async function executeTask(
   } catch (error) {
     addExecutionFailure(state, "preservation", error);
 
-    return finishExecution(state, artifacts, workspaceRoot);
+    return finalizeExecutionResult(state, artifacts, workspaceRoot);
   }
 
   const baseCommit = artifacts.baseCommit;
@@ -109,5 +109,5 @@ export async function executeTask(
   const retainedWorkspace =
     changesPreserved && cleanupSucceeded ? undefined : workspaceRoot;
 
-  return finishExecution(state, artifacts, retainedWorkspace);
+  return finalizeExecutionResult(state, artifacts, retainedWorkspace);
 }

@@ -1,5 +1,11 @@
-import { runCodexWorker } from "../workers/codex-worker.js";
 import type { TaskContract } from "../contracts/task.js";
+import {
+  createExecutionWorkspace,
+  removeExecutionWorkspace,
+} from "../repository/execution-workspace.js";
+import { checkScope } from "../verification/scope-enforcement.js";
+import { runVerification } from "../verification/verification-runner.js";
+import { runCodexWorker } from "../workers/codex-worker.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
@@ -9,32 +15,186 @@ import {
 import { collectChangedPaths } from "./execution-evidence.js";
 import type {
   ExecutionFailure,
+  ExecutionFailureStage,
   ExecutionResult,
 } from "./execution-result.js";
-import {
-  createExecutionWorkspace,
-  removeExecutionWorkspace,
-} from "../repository/execution-workspace.js";
-import { checkScope } from "../verification/scope-enforcement.js";
-import { runVerification } from "../verification/verification-runner.js";
 
 export type TaskExecutionOptions = {
   workerTimeoutMs?: number;
   verificationTimeoutMs?: number;
 };
 
+type ExecutionState = {
+  evidence: ExecutionResult["evidence"];
+  failures: ExecutionFailure[];
+  scope?: ExecutionResult["scope"];
+};
+
+type CleanupResult = {
+  retainedWorkspace?: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function addFailure(
+  state: ExecutionState,
+  stage: ExecutionFailureStage,
+  error: unknown
+): void {
+  state.failures.push({
+    stage,
+    message: errorMessage(error),
+  });
+}
+
+function collectEvidence(
+  state: ExecutionState,
+  workspaceRoot: string,
+  baseCommit: string
+): boolean {
+  try {
+    state.evidence.changedPaths = collectChangedPaths(
+      workspaceRoot,
+      baseCommit
+    );
+
+    return true;
+  } catch (error) {
+    addFailure(state, "evidence", error);
+    return false;
+  }
+}
+
+function checkExecutionScope(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  baseCommit: string
+): boolean {
+  if (!collectEvidence(state, workspaceRoot, baseCommit)) {
+    return false;
+  }
+
+  const scope = checkScope(
+    state.evidence.changedPaths ?? [],
+    task.allowedPaths,
+    task.forbiddenPaths
+  );
+
+  state.scope = scope;
+
+  if (scope.passed) {
+    return true;
+  }
+
+  const alreadyRecorded = state.failures.some(
+    (failure) => failure.stage === "scope"
+  );
+
+  if (!alreadyRecorded) {
+    state.failures.push({
+      stage: "scope",
+      message: `Scope violations: ${scope.violations.join(", ")}`,
+    });
+  }
+
+  return false;
+}
+
+async function runWorker(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  options: TaskExecutionOptions
+): Promise<boolean> {
+  try {
+    state.evidence.workerOutput = await runCodexWorker(
+      task,
+      workspaceRoot,
+      options.workerTimeoutMs
+    );
+
+    return true;
+  } catch (error) {
+    addFailure(state, "worker", error);
+    return false;
+  }
+}
+
+async function verifyTask(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  options: TaskExecutionOptions
+): Promise<void> {
+  try {
+    state.evidence.verification = await runVerification(
+      task.verification,
+      workspaceRoot,
+      options.verificationTimeoutMs
+    );
+  } catch (error) {
+    addFailure(state, "verification", error);
+    return;
+  }
+
+  if (!state.evidence.verification.passed) {
+    state.failures.push({
+      stage: "verification",
+      message: "Verification failed.",
+    });
+  }
+}
+
+function preserveAndCleanup(
+  state: ExecutionState,
+  repositoryRoot: string,
+  workspaceRoot: string,
+  runDirectory: string,
+  baseCommit: string
+): CleanupResult {
+  let changesPreserved = false;
+  let cleanupSucceeded = false;
+
+  try {
+    preserveExecutionChanges(workspaceRoot, runDirectory, baseCommit);
+
+    changesPreserved = true;
+  } catch (error) {
+    addFailure(state, "preservation", error);
+  }
+
+  if (changesPreserved) {
+    try {
+      removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+
+      cleanupSucceeded = true;
+    } catch (error) {
+      addFailure(state, "cleanup", error);
+    }
+  }
+
+  if (changesPreserved && cleanupSucceeded) {
+    return {};
+  }
+
+  return {
+    retainedWorkspace: workspaceRoot,
+  };
+}
+
 function finishExecution(
-  evidence: ExecutionResult["evidence"],
-  scope: ExecutionResult["scope"],
-  failures: ExecutionFailure[],
+  state: ExecutionState,
   artifacts: NonNullable<ExecutionResult["artifacts"]>,
-  retainedWorkspace?: string,
+  retainedWorkspace?: string
 ): ExecutionResult {
   const result: ExecutionResult = {
-    passed: failures.length === 0,
-    evidence,
-    ...(scope === undefined ? {} : { scope }),
-    failures,
+    passed: state.failures.length === 0,
+    evidence: state.evidence,
+    ...(state.scope === undefined ? {} : { scope: state.scope }),
+    failures: state.failures,
     artifacts,
     ...(retainedWorkspace === undefined ? {} : { retainedWorkspace }),
   };
@@ -42,209 +202,87 @@ function finishExecution(
   try {
     writeExecutionResult(artifacts.directory, result);
   } catch (error) {
-    failures.push({
-      stage: "report",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    addFailure(state, "report", error);
     result.passed = false;
   }
 
   return result;
 }
 
-async function runTaskStages(
-  task: TaskContract,
-  workspaceRoot: string,
-  baseCommit: string,
-  evidence: ExecutionResult["evidence"],
-  failures: ExecutionFailure[],
-  options: TaskExecutionOptions,
-): Promise<ExecutionResult["scope"]> {
-  try {
-    evidence.workerOutput = await runCodexWorker(
-      task,
-      workspaceRoot,
-      options.workerTimeoutMs,
-    );
-  } catch (error) {
-    failures.push({
-      stage: "worker",
-      message: error instanceof Error ? error.message : String(error),
-    });
-
-    try {
-      evidence.changedPaths = collectChangedPaths(workspaceRoot, baseCommit);
-    } catch (evidenceError) {
-      failures.push({
-        stage: "evidence",
-        message:
-          evidenceError instanceof Error
-            ? evidenceError.message
-            : String(evidenceError),
-      });
-    }
-
-    return;
-  }
-
-  const collectScope = (): ExecutionResult["scope"] => {
-    try {
-      evidence.changedPaths = collectChangedPaths(workspaceRoot, baseCommit);
-    } catch (error) {
-      failures.push({
-        stage: "evidence",
-        message: error instanceof Error ? error.message : String(error),
-      });
-      return;
-    }
-
-    const scope = checkScope(
-      evidence.changedPaths,
-      task.allowedPaths,
-      task.forbiddenPaths,
-    );
-
-    if (
-      !scope.passed &&
-      !failures.some((failure) => failure.stage === "scope")
-    ) {
-      failures.push({
-        stage: "scope",
-        message: `Scope violations: ${scope.violations.join(", ")}`,
-      });
-    }
-
-    return scope;
-  };
-
-  const workerScope = collectScope();
-
-  if (!workerScope || !workerScope.passed) {
-    return workerScope;
-  }
-
-  try {
-    evidence.verification = await runVerification(
-      task.verification,
-      workspaceRoot,
-      options.verificationTimeoutMs,
-    );
-  } catch (error) {
-    failures.push({
-      stage: "verification",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  if (evidence.verification && !evidence.verification.passed) {
-    failures.push({
-      stage: "verification",
-      message: "Verification failed.",
-    });
-  }
-
-  return collectScope() ?? workerScope;
-}
-
 export async function executeTask(
   task: TaskContract,
   repositoryRoot: string,
-  options: TaskExecutionOptions = {},
+  options: TaskExecutionOptions = {}
 ): Promise<ExecutionResult> {
-  const evidence: ExecutionResult["evidence"] = {};
-  const failures: ExecutionFailure[] = [];
-  let scope: ExecutionResult["scope"];
-  let workspaceRoot: string;
+  const state: ExecutionState = {
+    evidence: {},
+    failures: [],
+  };
+
   let runDirectory: string;
 
   try {
     runDirectory = createExecutionRun(task);
   } catch (error) {
-    failures.push({
-      stage: "preservation",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    addFailure(state, "preservation", error);
 
-    return { passed: false, evidence, failures };
+    return {
+      passed: false,
+      evidence: state.evidence,
+      failures: state.failures,
+    };
   }
 
   const artifacts: NonNullable<ExecutionResult["artifacts"]> = {
     directory: runDirectory,
   };
 
+  let workspaceRoot: string;
+
   try {
     workspaceRoot = createExecutionWorkspace(repositoryRoot);
   } catch (error) {
-    failures.push({
-      stage: "workspace",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    addFailure(state, "workspace", error);
 
-    return finishExecution(evidence, scope, failures, artifacts);
+    return finishExecution(state, artifacts);
   }
 
   try {
     artifacts.baseCommit = getExecutionBaseCommit(workspaceRoot);
   } catch (error) {
-    failures.push({
-      stage: "preservation",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    addFailure(state, "preservation", error);
 
-    return finishExecution(
-      evidence,
-      scope,
-      failures,
-      artifacts,
-      workspaceRoot,
-    );
+    return finishExecution(state, artifacts, workspaceRoot);
   }
 
-  let changesPreserved = false;
-  let cleanupSucceeded = false;
+  const baseCommit = artifacts.baseCommit;
 
-  try {
-    scope = await runTaskStages(
+  const workerSucceeded = await runWorker(task, state, workspaceRoot, options);
+
+  if (!workerSucceeded) {
+    collectEvidence(state, workspaceRoot, baseCommit);
+  } else {
+    const scopePassed = checkExecutionScope(
       task,
+      state,
       workspaceRoot,
-      artifacts.baseCommit,
-      evidence,
-      failures,
-      options,
+      baseCommit
     );
-  } finally {
-    try {
-      preserveExecutionChanges(
-        workspaceRoot,
-        runDirectory,
-        artifacts.baseCommit,
-      );
-      changesPreserved = true;
-    } catch (error) {
-      failures.push({
-        stage: "preservation",
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
 
-    if (changesPreserved) {
-      try {
-        removeExecutionWorkspace(repositoryRoot, workspaceRoot);
-        cleanupSucceeded = true;
-      } catch (error) {
-        failures.push({
-          stage: "cleanup",
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
+    if (scopePassed) {
+      await verifyTask(task, state, workspaceRoot, options);
+
+      checkExecutionScope(task, state, workspaceRoot, baseCommit);
     }
   }
 
-  return finishExecution(
-    evidence,
-    scope,
-    failures,
-    artifacts,
-    changesPreserved && cleanupSucceeded ? undefined : workspaceRoot,
+  const cleanup = preserveAndCleanup(
+    state,
+    repositoryRoot,
+    workspaceRoot,
+    runDirectory,
+    baseCommit
   );
+
+  return finishExecution(state, artifacts, cleanup.retainedWorkspace);
 }

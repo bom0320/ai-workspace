@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const nonEmptyString = z.string().min(1);
 
+// TaskContract schema is the runtime source of truth.
 export const taskContractSchema = z.object({
   // Unique identifier for this task.
   id: nonEmptyString,

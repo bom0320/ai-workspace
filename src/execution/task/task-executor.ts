@@ -7,8 +7,8 @@ import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
-  writeExecutionResult,
 } from "./execution-artifacts.js";
+import { finishExecution } from "./execution-finalizer.js";
 import type { ExecutionResult } from "./execution-result.js";
 import {
   addExecutionFailure,
@@ -21,30 +21,6 @@ import {
 } from "./execution-stages.js";
 
 export type { TaskExecutionOptions } from "./execution-stages.js";
-
-function finishExecution(
-  state: ExecutionState,
-  artifacts: NonNullable<ExecutionResult["artifacts"]>,
-  retainedWorkspace?: string
-): ExecutionResult {
-  const result: ExecutionResult = {
-    passed: state.failures.length === 0,
-    evidence: state.evidence,
-    ...(state.scope === undefined ? {} : { scope: state.scope }),
-    failures: state.failures,
-    artifacts,
-    ...(retainedWorkspace === undefined ? {} : { retainedWorkspace }),
-  };
-
-  try {
-    writeExecutionResult(artifacts.directory, result);
-  } catch (error) {
-    addExecutionFailure(state, "report", error);
-    result.passed = false;
-  }
-
-  return result;
-}
 
 export async function executeTask(
   task: TaskContract,
@@ -93,6 +69,7 @@ export async function executeTask(
   }
 
   const baseCommit = artifacts.baseCommit;
+
   const workerSucceeded = await runWorkerStage(
     task,
     state,
@@ -104,6 +81,7 @@ export async function executeTask(
     collectChangedPathsEvidence(state, workspaceRoot, baseCommit);
   } else if (runScopeStage(task, state, workspaceRoot, baseCommit)) {
     await runVerificationStage(task, state, workspaceRoot, options);
+
     runScopeStage(task, state, workspaceRoot, baseCommit);
   }
 
@@ -112,6 +90,7 @@ export async function executeTask(
 
   try {
     preserveExecutionChanges(workspaceRoot, runDirectory, baseCommit);
+
     changesPreserved = true;
   } catch (error) {
     addExecutionFailure(state, "preservation", error);
@@ -120,6 +99,7 @@ export async function executeTask(
   if (changesPreserved) {
     try {
       removeExecutionWorkspace(repositoryRoot, workspaceRoot);
+
       cleanupSucceeded = true;
     } catch (error) {
       addExecutionFailure(state, "cleanup", error);

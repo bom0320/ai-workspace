@@ -1,4 +1,4 @@
-import type { ExecutionEvidence } from "../../services/artifacts/execution-evidence.js";
+import type { ExecutionEvidence } from "../../services/evidence/execution-evidence.js";
 import type { ScopeCheckResult } from "../../services/verification/scope-enforcement.js";
 
 export type ExecutionFailureStage =

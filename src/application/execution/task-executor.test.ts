@@ -8,7 +8,7 @@ import {
   preserveExecutionChanges,
   writeExecutionResult,
 } from "../../services/artifacts/execution-artifacts.js";
-import { collectChangedPaths } from "../../services/artifacts/execution-evidence.js";
+import { collectChangedPaths } from "../../services/evidence/execution-evidence.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
@@ -24,7 +24,7 @@ vi.mock("../../services/artifacts/execution-artifacts.js", () => ({
   preserveExecutionChanges: vi.fn(),
   writeExecutionResult: vi.fn(),
 }));
-vi.mock("../../services/artifacts/execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
+vi.mock("../../services/evidence/execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
 vi.mock("../../infrastructure/git/execution-workspace.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),

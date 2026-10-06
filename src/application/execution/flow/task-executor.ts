@@ -1,28 +1,28 @@
-import type { TaskContract } from "../../contracts/task.js";
+import type { TaskContract } from "../../../contracts/task.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../../infrastructure/git/index.js";
+} from "../../../infrastructure/git/index.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
-} from "../../services/artifacts/index.js";
-import { finalizeExecutionResult } from "./execution-result-finalizer.js";
-import type { ExecutionResult } from "./execution-result.js";
+} from "../../../services/artifacts/index.js";
+import { finalizeExecutionResult } from "./result-finalizer.js";
+import type { ExecutionResult } from "../model/result.js";
 import {
   addExecutionFailure,
   collectChangedPathsEvidence,
   runScopeStage,
   runVerificationStage,
   runWorkerStage,
-} from "./execution-stages.js";
+} from "./stages.js";
 import type {
   ExecutionState,
   TaskExecutionOptions,
-} from "./execution-state.js";
+} from "../model/state.js";
 
-export type { TaskExecutionOptions } from "./execution-state.js";
+export type { TaskExecutionOptions } from "../model/state.js";
 
 export async function executeTask(
   task: TaskContract,

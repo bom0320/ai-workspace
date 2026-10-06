@@ -1,4 +1,4 @@
-import type { ExecutionFailure, ExecutionResult } from "./execution-result.js";
+import type { ExecutionFailure, ExecutionResult } from "./result.js";
 
 export type TaskExecutionOptions = {
   workerTimeoutMs?: number;

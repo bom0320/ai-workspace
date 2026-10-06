@@ -8,6 +8,8 @@ Task 로딩, Repository 확인, Worker 실행, 경로 범위 검사, 검증 명�
 binary patch 및 실행 결과 보존, worktree 정리를 지원한다. CEO Agent, 멀티에이전트,
 공유 메모리, 자동 재시도, 자동 dependency 설치는 구현되어 있지 않다.
 
+자세한 구조와 설계 원칙은 [docs/architecture.md](docs/architecture.md)를 참고한다.
+
 ## 사전 준비
 
 - Node.js와 pnpm

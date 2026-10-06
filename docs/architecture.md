@@ -506,3 +506,51 @@ Human
 - Harness controls execution.
 - Verifier evaluates evidence.
 - Shared State stores organizational truth.
+
+## 6. Source Architecture
+
+현재 v0 코드는 다음의 계층 구조를 사용한다.
+
+```text
+src/
+├── application/
+├── services/
+├── infrastructure/
+└── contracts/
+```
+
+- `application`: use case, execution flow, orchestration, 실행 순서와 상태 전이 조율
+- `services`: Worker, Verification, Evidence, Artifact 등 application이 사용하는 기능 단위
+- `infrastructure`: Git, OS Process 등 외부 시스템과 저수준 실행 구현
+- `contracts`: TaskContract runtime validation schema와 schema에서 파생된 타입
+
+### 6.1 Module Internal Structure
+
+모든 모듈에 동일한 하위 폴더 구조를 강제하지 않는다.
+
+현재 실행 모듈은 다음처럼 실행 흐름과 핵심 모델을 분리한다.
+
+```text
+application/execution/
+├── flow/
+├── model/
+└── index.ts
+```
+
+- `flow/`: 실행 흐름과 orchestration
+- `model/`: execution 모듈의 핵심 상태와 결과 모델
+- `index.ts`: 외부 public API
+
+`flow / model` 구조는 모든 모듈에 강제하지 않는다. 역할이 충분히 복잡해졌을 때만
+내부 구조를 분리하며, 단일 책임 모듈은 불필요하게 깊게 만들지 않는다.
+
+폴더 분리 기준은 타입의 존재 여부가 아니라 책임을 구조적으로 분리할 필요성이다.
+
+### 6.2 Import and Public API Boundaries
+
+- 다른 모듈에 접근할 때는 해당 모듈의 `index.ts` public API를 사용한다.
+- 같은 모듈 내부에서는 구현 파일을 직접 import한다.
+- 모듈 내부에서 자기 모듈의 `index.ts`를 다시 import하지 않는다.
+- `index.ts`에는 외부에 필요한 API만 export하고 내부 helper를 무분별하게 노출하지 않는다.
+- Layer dependency와 module boundary가 코드 구조에서 드러나도록 유지한다.
+- circular dependency를 만들지 않는다.

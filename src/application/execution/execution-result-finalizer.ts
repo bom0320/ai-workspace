@@ -1,4 +1,4 @@
-import { writeExecutionResult } from "../../services/artifacts/execution-artifacts.js";
+import { writeExecutionResult } from "../../services/artifacts/index.js";
 import type { ExecutionResult } from "./execution-result.js";
 import { addExecutionFailure } from "./execution-stages.js";
 import type { ExecutionState } from "./execution-state.js";

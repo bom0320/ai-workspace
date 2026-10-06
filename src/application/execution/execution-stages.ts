@@ -1,8 +1,10 @@
 import type { TaskContract } from "../../contracts/task.js";
-import { checkScope } from "../../services/verification/scope-enforcement.js";
-import { runVerification } from "../../services/verification/verification-runner.js";
-import { runCodexWorker } from "../../services/worker/codex-worker.js";
-import { collectChangedPaths } from "../../services/evidence/execution-evidence.js";
+import {
+  checkScope,
+  runVerification,
+} from "../../services/verification/index.js";
+import { runCodexWorker } from "../../services/worker/index.js";
+import { collectChangedPaths } from "../../services/evidence/index.js";
 import type {
   ExecutionFailureStage,
 } from "./execution-result.js";

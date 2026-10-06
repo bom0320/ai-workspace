@@ -2,12 +2,12 @@ import type { TaskContract } from "../../contracts/task.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../../infrastructure/git/execution-workspace.js";
+} from "../../infrastructure/git/index.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
-} from "../../services/artifacts/execution-artifacts.js";
+} from "../../services/artifacts/index.js";
 import { finalizeExecutionResult } from "./execution-result-finalizer.js";
 import type { ExecutionResult } from "./execution-result.js";
 import {

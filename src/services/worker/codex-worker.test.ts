@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TaskContract } from "../../contracts/task.js";
-import { runCommand } from "../../infrastructure/process/command-runner.js";
+import { runCommand } from "../../infrastructure/process/index.js";
 import { runCodexWorker } from "./codex-worker.js";
 
-vi.mock("../../infrastructure/process/command-runner.js", () => ({ runCommand: vi.fn() }));
+vi.mock("../../infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 
 const task: TaskContract = {
   id: "task-001",

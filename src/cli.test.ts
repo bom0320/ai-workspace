@@ -3,14 +3,14 @@ import { ZodError } from "zod";
 
 import type { TaskContract } from "./contracts/task.js";
 import { loadTaskContract } from "./contracts/task-loader.js";
-import type { ExecutionResult } from "./application/execution/execution-result.js";
-import { executeTask } from "./application/execution/task-executor.js";
-import { resolveRepositoryRoot } from "./infrastructure/git/repository.js";
+import type { ExecutionResult } from "./application/execution/index.js";
+import { executeTask } from "./application/execution/index.js";
+import { resolveRepositoryRoot } from "./infrastructure/git/index.js";
 import { runCli } from "./cli.js";
 
 vi.mock("./contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
-vi.mock("./application/execution/task-executor.js", () => ({ executeTask: vi.fn() }));
-vi.mock("./infrastructure/git/repository.js", () => ({
+vi.mock("./application/execution/index.js", () => ({ executeTask: vi.fn() }));
+vi.mock("./infrastructure/git/index.js", () => ({
   resolveRepositoryRoot: vi.fn(),
 }));
 

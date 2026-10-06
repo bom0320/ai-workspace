@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { TaskContract } from "../../contracts/task.js";
+import type { TaskContract } from "@/contracts/task.js";
 
 function errorDetail(error: unknown): string {
   if (

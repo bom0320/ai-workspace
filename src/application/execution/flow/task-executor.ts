@@ -1,13 +1,13 @@
-import type { TaskContract } from "../../../contracts/task.js";
+import type { TaskContract } from "@/contracts/task.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../../../infrastructure/git/index.js";
+} from "@/infrastructure/git/index.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
-} from "../../../services/artifacts/index.js";
+} from "@/services/artifacts/index.js";
 import { finalizeExecutionResult } from "./result-finalizer.js";
 import type { ExecutionResult } from "../model/result.js";
 import {

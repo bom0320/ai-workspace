@@ -1,4 +1,4 @@
-import { runCommand } from "../../infrastructure/process/index.js";
+import { runCommand } from "@/infrastructure/process/index.js";
 
 export const DEFAULT_VERIFICATION_TIMEOUT_MS = 5 * 60 * 1_000;
 

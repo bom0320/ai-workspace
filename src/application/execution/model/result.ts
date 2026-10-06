@@ -1,5 +1,5 @@
-import type { ExecutionEvidence } from "../../../services/evidence/index.js";
-import type { ScopeCheckResult } from "../../../services/scope/index.js";
+import type { ExecutionEvidence } from "@/services/evidence/index.js";
+import type { ScopeCheckResult } from "@/services/scope/index.js";
 
 export type ExecutionFailureStage =
   | "workspace"

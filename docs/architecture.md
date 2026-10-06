@@ -565,9 +565,12 @@ services/
 
 ### 6.2 Import and Public API Boundaries
 
+- Cross-module imports use the `@/*` source alias and the target module's `index.ts`.
+- Same-module internal imports use relative paths.
 - 다른 모듈에 접근할 때는 해당 모듈의 `index.ts` public API를 사용한다.
 - 같은 모듈 내부에서는 구현 파일을 직접 import한다.
 - 모듈 내부에서 자기 모듈의 `index.ts`를 다시 import하지 않는다.
 - `index.ts`에는 외부에 필요한 API만 export하고 내부 helper를 무분별하게 노출하지 않는다.
+- 상위 mega barrel(`services/index.ts` 등)은 만들지 않는다.
 - Layer dependency와 module boundary가 코드 구조에서 드러나도록 유지한다.
 - circular dependency를 만들지 않는다.

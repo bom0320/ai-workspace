@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-import type { VerificationResult } from "../verification/index.js";
+import type { VerificationResult } from "@/services/verification/index.js";
 
 export type ExecutionEvidence = {
   workerOutput?: string;

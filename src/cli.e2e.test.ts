@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import type { ExecutionResult } from "./application/execution/index.js";
+import type { ExecutionResult } from "@/application/execution/index.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(projectRoot, "src", "cli.ts");
@@ -194,6 +194,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
         timeout: 30_000,
         env: {
           ...process.env,
+          TSX_TSCONFIG_PATH: join(projectRoot, "tsconfig.json"),
           PATH: `${fakeBinRoot}${delimiter}${process.env.PATH ?? ""}`,
           E2E_SCENARIO: scenario,
           E2E_WORKER_RECORD: workerRecord,

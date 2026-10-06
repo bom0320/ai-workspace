@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/cli.ts",
+    "dev": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

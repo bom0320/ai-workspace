@@ -1,5 +1,5 @@
-import type { TaskContract } from "../../contracts/task.js";
-import { runCommand } from "../../infrastructure/process/index.js";
+import type { TaskContract } from "@/contracts/task.js";
+import { runCommand } from "@/infrastructure/process/index.js";
 
 export const DEFAULT_CODEX_WORKER_TIMEOUT_MS = 15 * 60 * 1_000;
 

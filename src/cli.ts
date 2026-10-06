@@ -3,12 +3,12 @@ import { pathToFileURL } from "node:url";
 
 import { ZodError } from "zod";
 
-import { loadTaskContract } from "./contracts/task-loader.js";
+import { loadTaskContract } from "@/contracts/task-loader.js";
 import {
   executeTask,
   type TaskExecutionOptions,
-} from "./application/execution/index.js";
-import { resolveRepositoryRoot } from "./infrastructure/git/index.js";
+} from "@/application/execution/index.js";
+import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {
   const value = process.env[name];

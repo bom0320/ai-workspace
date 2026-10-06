@@ -74,6 +74,8 @@
 - 기존 contract의 의미를 요청 없이 변경하지 않는다.
 - 요청과 관계없는 refactoring을 하지 않는다.
 - 테스트는 가능하면 구현 파일과 co-location을 유지한다.
+- Cross-module import는 `@/*` source alias와 각 module의 `index.ts`를 사용한다.
+- Same-module internal import는 상대경로를 사용하며, 상위 mega barrel은 만들지 않는다.
 
 ## 7. Validation
 

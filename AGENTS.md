@@ -53,7 +53,8 @@
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델
 - `src/services/worker/`: 제한된 Task를 수행하는 Worker integration
-- `src/services/verification/`: Scope enforcement와 verification command 실행
+- `src/services/scope/`: 변경 경로 Scope 정책 검사
+- `src/services/verification/`: verification command 실행
 - `src/services/artifacts/`: 실행 디렉터리, patch, 결과 persistence
 - `src/services/evidence/`: 실행 중 변경 사실 수집
 - `src/infrastructure/process/`: 외부 command 실행과 process lifecycle

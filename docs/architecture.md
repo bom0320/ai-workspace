@@ -520,7 +520,7 @@ src/
 ```
 
 - `application`: use case, execution flow, orchestration, 실행 순서와 상태 전이 조율
-- `services`: Worker, Verification, Evidence, Artifact 등 application이 사용하는 기능 단위
+- `services`: Worker, Scope, Verification, Evidence, Artifact 등 application이 사용하는 기능 단위
 - `infrastructure`: Git, OS Process 등 외부 시스템과 저수준 실행 구현
 - `contracts`: TaskContract runtime validation schema와 schema에서 파생된 타입
 
@@ -545,6 +545,23 @@ application/execution/
 내부 구조를 분리하며, 단일 책임 모듈은 불필요하게 깊게 만들지 않는다.
 
 폴더 분리 기준은 타입의 존재 여부가 아니라 책임을 구조적으로 분리할 필요성이다.
+
+현재 services 계층은 역할별로 다음과 같이 구성한다.
+
+```text
+services/
+├── worker/
+├── scope/
+├── verification/
+├── evidence/
+└── artifacts/
+```
+
+- `worker/`: Codex Worker 실행
+- `scope/`: 변경 경로 정책 검사
+- `verification/`: verification command 실행
+- `evidence/`: 실행 중 관찰된 사실 수집
+- `artifacts/`: 실행 결과물 보존
 
 ### 6.2 Import and Public API Boundaries
 

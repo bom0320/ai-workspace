@@ -13,7 +13,7 @@ import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
 } from "../../../infrastructure/git/index.js";
-import { checkScope } from "../../../services/verification/index.js";
+import { checkScope } from "../../../services/scope/index.js";
 import { executeTask } from "./task-executor.js";
 import { runVerification } from "../../../services/verification/index.js";
 
@@ -30,8 +30,10 @@ vi.mock("../../../infrastructure/git/index.js", () => ({
   removeExecutionWorkspace: vi.fn(),
 }));
 vi.mock("../../../services/verification/index.js", () => ({
-  checkScope: vi.fn(),
   runVerification: vi.fn(),
+}));
+vi.mock("../../../services/scope/index.js", () => ({
+  checkScope: vi.fn(),
 }));
 
 const task: TaskContract = {

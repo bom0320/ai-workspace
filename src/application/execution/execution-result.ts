@@ -1,5 +1,5 @@
-import type { ExecutionEvidence } from "./execution-evidence.js";
-import type { ScopeCheckResult } from "../../verification/scope-enforcement.js";
+import type { ExecutionEvidence } from "../../services/artifacts/execution-evidence.js";
+import type { ScopeCheckResult } from "../../services/verification/scope-enforcement.js";
 
 export type ExecutionFailureStage =
   | "workspace"

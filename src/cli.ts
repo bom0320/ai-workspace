@@ -7,8 +7,8 @@ import { loadTaskContract } from "./contracts/task-loader.js";
 import {
   executeTask,
   type TaskExecutionOptions,
-} from "./execution/task/task-executor.js";
-import { resolveRepositoryRoot } from "./repository/repository.js";
+} from "./application/execution/task-executor.js";
+import { resolveRepositoryRoot } from "./infrastructure/git/repository.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {
   const value = process.env[name];

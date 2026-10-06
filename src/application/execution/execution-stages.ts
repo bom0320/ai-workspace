@@ -1,24 +1,15 @@
 import type { TaskContract } from "../../contracts/task.js";
-import { checkScope } from "../../verification/scope-enforcement.js";
-import { runVerification } from "../../verification/verification-runner.js";
-import { runCodexWorker } from "../../workers/codex-worker.js";
-import { collectChangedPaths } from "./execution-evidence.js";
+import { checkScope } from "../../services/verification/scope-enforcement.js";
+import { runVerification } from "../../services/verification/verification-runner.js";
+import { runCodexWorker } from "../../services/worker/codex-worker.js";
+import { collectChangedPaths } from "../../services/artifacts/execution-evidence.js";
 import type {
-  ExecutionFailure,
   ExecutionFailureStage,
-  ExecutionResult,
 } from "./execution-result.js";
-
-export type TaskExecutionOptions = {
-  workerTimeoutMs?: number;
-  verificationTimeoutMs?: number;
-};
-
-export type ExecutionState = {
-  evidence: ExecutionResult["evidence"];
-  failures: ExecutionFailure[];
-  scope?: ExecutionResult["scope"];
-};
+import type {
+  ExecutionState,
+  TaskExecutionOptions,
+} from "./execution-state.js";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

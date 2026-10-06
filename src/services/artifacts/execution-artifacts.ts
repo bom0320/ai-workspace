@@ -11,7 +11,6 @@ import {
 import { join, resolve } from "node:path";
 
 import type { TaskContract } from "../../contracts/task.js";
-import type { ExecutionResult } from "./execution-result.js";
 
 function errorDetail(error: unknown): string {
   if (
@@ -116,7 +115,7 @@ export function preserveExecutionChanges(
 
 export function writeExecutionResult(
   runDirectory: string,
-  result: ExecutionResult,
+  result: object,
 ): void {
   try {
     writeFileSync(

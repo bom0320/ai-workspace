@@ -2,12 +2,12 @@ import type { TaskContract } from "../../contracts/task.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../../repository/execution-workspace.js";
+} from "../../infrastructure/git/execution-workspace.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
-} from "./execution-artifacts.js";
+} from "../../services/artifacts/execution-artifacts.js";
 import { finalizeExecutionResult } from "./execution-result-finalizer.js";
 import type { ExecutionResult } from "./execution-result.js";
 import {
@@ -16,11 +16,13 @@ import {
   runScopeStage,
   runVerificationStage,
   runWorkerStage,
-  type ExecutionState,
-  type TaskExecutionOptions,
 } from "./execution-stages.js";
+import type {
+  ExecutionState,
+  TaskExecutionOptions,
+} from "./execution-state.js";
 
-export type { TaskExecutionOptions } from "./execution-stages.js";
+export type { TaskExecutionOptions } from "./execution-state.js";
 
 export async function executeTask(
   task: TaskContract,

@@ -1,38 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runCodexWorker } from "../../workers/codex-worker.js";
+import { runCodexWorker } from "../../services/worker/codex-worker.js";
 import type { TaskContract } from "../../contracts/task.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
   preserveExecutionChanges,
   writeExecutionResult,
-} from "./execution-artifacts.js";
-import { collectChangedPaths } from "./execution-evidence.js";
+} from "../../services/artifacts/execution-artifacts.js";
+import { collectChangedPaths } from "../../services/artifacts/execution-evidence.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "../../repository/execution-workspace.js";
-import { checkScope } from "../../verification/scope-enforcement.js";
+} from "../../infrastructure/git/execution-workspace.js";
+import { checkScope } from "../../services/verification/scope-enforcement.js";
 import { executeTask } from "./task-executor.js";
-import { runVerification } from "../../verification/verification-runner.js";
+import { runVerification } from "../../services/verification/verification-runner.js";
 
-vi.mock("../../workers/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
-vi.mock("./execution-artifacts.js", () => ({
+vi.mock("../../services/worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("../../services/artifacts/execution-artifacts.js", () => ({
   createExecutionRun: vi.fn(),
   getExecutionBaseCommit: vi.fn(),
   preserveExecutionChanges: vi.fn(),
   writeExecutionResult: vi.fn(),
 }));
-vi.mock("./execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
-vi.mock("../../repository/execution-workspace.js", () => ({
+vi.mock("../../services/artifacts/execution-evidence.js", () => ({ collectChangedPaths: vi.fn() }));
+vi.mock("../../infrastructure/git/execution-workspace.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),
 }));
-vi.mock("../../verification/scope-enforcement.js", () => ({
+vi.mock("../../services/verification/scope-enforcement.js", () => ({
   checkScope: vi.fn(),
 }));
-vi.mock("../../verification/verification-runner.js", () => ({
+vi.mock("../../services/verification/verification-runner.js", () => ({
   runVerification: vi.fn(),
 }));
 

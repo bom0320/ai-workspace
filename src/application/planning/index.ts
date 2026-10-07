@@ -8,3 +8,7 @@ export type {
 } from "./model/inspection.js";
 export type { PlanningDecision } from "./model/decision.js";
 export type { PlanningState } from "./model/state.js";
+export { runPlanningLoop } from "./flow/planning-loop.js";
+export type { Planner } from "./flow/planning-loop.js";
+export type { PlanningLimits } from "./model/limits.js";
+export type { PlanningResult } from "./model/result.js";

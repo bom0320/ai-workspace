@@ -6,3 +6,5 @@ export type {
   InspectedFile,
   InspectionResult,
 } from "./model/inspection.js";
+export type { PlanningDecision } from "./model/decision.js";
+export type { PlanningState } from "./model/state.js";

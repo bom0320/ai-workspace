@@ -1,10 +1,15 @@
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { inspectFiles } from "./inspect-files.js";
+import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
+
+vi.mock("node:fs", async (importOriginal) => ({
+  ...await importOriginal<typeof import("node:fs")>(),
+}));
 
 const temporaryDirectories: string[] = [];
 
@@ -21,6 +26,7 @@ function writeFixture(repository: string, path: string, content = "fixture"): vo
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true });
   }
@@ -71,12 +77,14 @@ describe("inspectFiles", () => {
     const repository = createRepository();
     writeFixture(repository, "file.ts");
     expect(() => inspectFiles(repository, { paths: [join(repository, "file.ts")] })).toThrow(/relative/);
+    expect(() => inspectFiles(repository, { paths: [join(repository, "file.ts")] })).toThrow(InspectionRequestError);
   });
 
   it.each(["../secret.txt", "../../outside.ts", "src/../../secret.txt"])(
     "rejects repository escape: %s",
     (path) => {
       expect(() => inspectFiles(createRepository(), { paths: [path] })).toThrow(/outside/);
+      expect(() => inspectFiles(createRepository(), { paths: [path] })).toThrow(InspectionRequestError);
     },
   );
 
@@ -95,6 +103,7 @@ describe("inspectFiles", () => {
       for (const path of [join(directory, "file.txt"), join("src", directory, "file.txt")]) {
         writeFixture(repository, path);
         expect(() => inspectFiles(repository, { paths: [path] })).toThrow(/forbidden/);
+        expect(() => inspectFiles(repository, { paths: [path] })).toThrow(InspectionRequestError);
       }
     },
   );
@@ -110,6 +119,7 @@ describe("inspectFiles", () => {
     mkdirSync(join(repository, "src"));
     for (const path of ["src", ".", ""]) {
       expect(() => inspectFiles(repository, { paths: [path] })).toThrow(/not a file/);
+      expect(() => inspectFiles(repository, { paths: [path] })).toThrow(InspectionRequestError);
     }
   });
 
@@ -117,7 +127,31 @@ describe("inspectFiles", () => {
     const repository = createRepository();
     writeFixture(repository, "valid.ts");
     expect(() => inspectFiles(repository, { paths: ["valid.ts", "missing.ts"] })).toThrow(/ENOENT/);
+    expect(() => inspectFiles(repository, { paths: ["valid.ts", "missing.ts"] })).toThrow(InspectionRequestError);
   });
+
+  it("classifies a path through a regular file as a request error", () => {
+    const repository = createRepository();
+    writeFixture(repository, "file.ts");
+    expect(() => inspectFiles(repository, { paths: [join("file.ts", "child.ts")] })).toThrow(InspectionRequestError);
+  });
+
+  it.each(["statSync", "readFileSync"] as const)(
+    "preserves unexpected %s errors without wrapping them", (operation) => {
+      const repository = createRepository();
+      writeFixture(repository, "file.ts");
+      const error = Object.assign(new Error("Permission denied"), { code: "EACCES" });
+      vi.spyOn(fs, operation).mockImplementation(() => { throw error; });
+
+      expect(() => inspectFiles(repository, { paths: ["file.ts"] })).toThrow(error);
+      try {
+        inspectFiles(repository, { paths: ["file.ts"] });
+      } catch (caught) {
+        expect(caught).toBe(error);
+        expect(caught).not.toBeInstanceOf(InspectionRequestError);
+      }
+    },
+  );
 
   it("preserves file contents and directory entries during inspection", () => {
     const repository = createRepository();

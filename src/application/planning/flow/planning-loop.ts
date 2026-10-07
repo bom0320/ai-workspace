@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import { ZodError } from "zod";
 
 import { taskContractSchema } from "@/contracts/task.js";
@@ -7,7 +7,7 @@ import type { PlanningDecision } from "../model/decision.js";
 import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningResult } from "../model/result.js";
 import type { PlanningState } from "../model/state.js";
-import { inspectFiles } from "./inspect-files.js";
+import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
 
 export type Planner = (state: PlanningState) => Promise<PlanningDecision>;
 
@@ -60,14 +60,6 @@ export async function runPlanningLoop({
     const paths: string[] = [];
     for (const path of decision.request.paths) {
       const absolutePath = resolve(root, path);
-      const relativePath = relative(root, absolutePath);
-      if (
-        isAbsolute(path) || relativePath === ".." ||
-        relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath) ||
-        path.split(sep).some((part) => [".git", "node_modules", ".ai-workspace"].includes(part))
-      ) {
-        return fail("Inspection request contains an unsafe path.");
-      }
       if (!seen.has(absolutePath)) {
         seen.add(absolutePath);
         paths.push(path);
@@ -81,8 +73,15 @@ export async function runPlanningLoop({
       return fail("Inspection request exceeds maxTotalFiles.");
     }
 
-    const result = inspectFiles(root, { paths });
-    state = { ...state, inspectedFiles: [...state.inspectedFiles, ...result.files] };
+    try {
+      const result = inspectFiles(root, { paths });
+      state = { ...state, inspectedFiles: [...state.inspectedFiles, ...result.files] };
+    } catch (error) {
+      if (error instanceof InspectionRequestError) {
+        return fail("Inspection request is invalid.");
+      }
+      throw error;
+    }
   }
 
   return fail("Planning round limit reached.");

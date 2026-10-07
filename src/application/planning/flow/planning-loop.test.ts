@@ -228,15 +228,30 @@ describe("runPlanningLoop", () => {
     await expect(runPlanningLoop({ initialState: createState(), planner, limits })).rejects.toBe(error);
   });
 
-  it.each(["../outside.ts", ".git/config", "node_modules/package.json", ".ai-workspace/result.json"])(
-    "fails unsafe inspection requests before reading: %s", async (path) => {
-      const inspect = vi.spyOn(inspection, "inspectFiles");
-      const planner = vi.fn<Planner>().mockResolvedValue({ type: "inspect", request: { paths: [path] } });
-      const result = await runPlanningLoop({ initialState: createState(), planner, limits });
-      expect(result).toMatchObject({ status: "failed", rounds: 1, reason: "Inspection request contains an unsafe path." });
-      expect(inspect).not.toHaveBeenCalled();
-    },
-  );
+  it("converts expected inspection request errors to a stable workflow failure", async () => {
+    const initialState = createState();
+    vi.spyOn(inspection, "inspectFiles").mockImplementation(() => {
+      throw new inspection.InspectionRequestError("Request details");
+    });
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "inspect", request: { paths: ["a.ts"] } });
+
+    expect(await runPlanningLoop({ initialState, planner, limits })).toEqual({
+      status: "failed", state: initialState, rounds: 1, reason: "Inspection request is invalid.",
+    });
+    expect(planner).toHaveBeenCalledOnce();
+  });
+
+  it("delegates unsafe request validation to inspectFiles", async () => {
+    const initialState = createState();
+    const inspect = vi.spyOn(inspection, "inspectFiles");
+    const paths = ["../outside.ts"];
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "inspect", request: { paths } });
+
+    expect(await runPlanningLoop({ initialState, planner, limits })).toEqual({
+      status: "failed", state: initialState, rounds: 1, reason: "Inspection request is invalid.",
+    });
+    expect(inspect).toHaveBeenCalledWith(initialState.repository.repositoryRoot, { paths });
+  });
 
   it.each([NaN, Infinity, -1, 1.5])("rejects invalid limits before calling planner: %s", async (maxRounds) => {
     const planner = vi.fn<Planner>();

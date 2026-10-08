@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli.ts",
+    "plan": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/planning-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

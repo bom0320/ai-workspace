@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 
-import type { RepositoryContext } from "../model/context.js";
+import type { RepositoryInfo } from "../model/state.js";
 
 function readOptionalFile(path: string): string | undefined {
   try {
@@ -35,7 +35,7 @@ function readPackageScripts(repositoryRoot: string): Record<string, string> {
   );
 }
 
-export function inspectRepository(repositoryRoot: string): RepositoryContext {
+export function inspectRepository(repositoryRoot: string): RepositoryInfo {
   const fileTree: string[] = [];
 
   function collectFiles(relativeDirectory: string): void {

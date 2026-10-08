@@ -1,13 +1,15 @@
 import { resolve } from "node:path";
 import { ZodError } from "zod";
 
-import type { PlanningState } from "../model/context.js";
-import type { InspectionRequest, PlanningDecision, TaskContractDraft } from "../model/decision.js";
-import type { PlanningLimits, PlanningResult } from "../model/result.js";
+import type { PlanningState } from "../model/state.js";
+import type { InspectRequest } from "../protocol/inspection.js";
+import type { PlannerDecision, TaskDraft } from "../protocol/planner.js";
+import type { PlanningLimits } from "../model/limits.js";
+import type { PlanningResult } from "../model/result.js";
 import { finalizeTaskContract } from "./finalize-task-contract.js";
 import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
 
-export type Planner = (state: PlanningState) => Promise<PlanningDecision>;
+export type Planner = (state: PlanningState) => Promise<PlannerDecision>;
 
 function hasValidLimits(limits: PlanningLimits): boolean {
   return Object.values(limits).every((value) => Number.isSafeInteger(value) && value >= 0);
@@ -15,7 +17,7 @@ function hasValidLimits(limits: PlanningLimits): boolean {
 
 function prepareInspection(
   state: PlanningState,
-  request: InspectionRequest,
+  request: InspectRequest,
   limits: PlanningLimits,
 ): { paths: string[]; reason?: never } | { reason: string; paths?: never } {
   if (request.paths.length > limits.maxFilesPerRequest) {
@@ -49,7 +51,7 @@ function inspectNewContext(state: PlanningState, paths: string[]): PlanningState
 
 function completePlanning(
   state: PlanningState,
-  draft: TaskContractDraft,
+  draft: TaskDraft,
   goalId: string,
   taskId: string,
   rounds: number,

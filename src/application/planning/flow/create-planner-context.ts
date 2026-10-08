@@ -1,6 +1,7 @@
-import type { PlannerInput, PlanningState } from "../model/context.js";
+import type { PlannerContext } from "../protocol/planner.js";
+import type { PlanningState } from "../model/state.js";
 
-export function createPlannerInput(state: PlanningState): PlannerInput {
+export function createPlannerContext(state: PlanningState): PlannerContext {
   return {
     goal: state.goal,
     repository: {

@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import { runCommand } from "@/infrastructure/process/index.js";
-import type { TaskContractDraft } from "../model/decision.js";
+import type { TaskDraft } from "../protocol/planner.js";
 
-import * as projection from "../flow/create-planner-input.js";
-import type { PlanningState } from "../model/context.js";
+import * as projection from "../flow/create-planner-context.js";
+import type { PlanningState } from "../model/state.js";
 import { createCodexPlanner } from "./codex-planner.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
@@ -24,7 +24,7 @@ const state: PlanningState = {
   },
   inspectedFiles: [{ path: "src/example.ts", content: "// Example" }],
 };
-const task: TaskContractDraft = {
+const task: TaskDraft = {
   objective: "Implement the goal",
   targetRepository: "example", allowedPaths: ["src/example.ts"],
   forbiddenPaths: [], constraints: [], acceptanceCriteria: ["The goal is implemented"],
@@ -42,14 +42,14 @@ beforeEach(() => {
 
 describe("createCodexPlanner", () => {
   it("projects state into the prompt without repositoryRoot or internal paths", async () => {
-    const createInput = vi.spyOn(projection, "createPlannerInput");
+    const createInput = vi.spyOn(projection, "createPlannerContext");
     const before = structuredClone(state);
     await createCodexPlanner()(state);
 
     expect(createInput).toHaveBeenCalledWith(state);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
-    const input = JSON.parse(prompt.split("PlannerInput:\n")[1]);
-    expect(input).toEqual(projection.createPlannerInput(state));
+    const input = JSON.parse(prompt.split("PlannerContext:\n")[1]);
+    expect(input).toEqual(projection.createPlannerContext(state));
     expect(prompt).not.toContain(state.repository.repositoryRoot);
     expect(prompt).not.toContain("repositoryRoot");
     expect(state).toEqual(before);
@@ -61,7 +61,7 @@ describe("createCodexPlanner", () => {
     expect(prompt).toContain("Do not include markdown fences");
     expect(prompt).toContain('"type":"inspect"');
     expect(prompt).toContain('"type":"complete"');
-    expect(prompt).toContain("TaskContractDraft");
+    expect(prompt).toContain("TaskDraft");
     expect(prompt).toContain("Do not generate id or goalId");
     expect(prompt).not.toContain('"id":');
     expect(prompt).not.toContain('"goalId":');

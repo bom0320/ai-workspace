@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { PlanningState } from "../model/context.js";
-import { createPlannerInput } from "./create-planner-input.js";
+import type { PlanningState } from "../model/state.js";
+import { createPlannerContext } from "./create-planner-context.js";
 
 function createState(): PlanningState {
   return {
@@ -21,10 +21,10 @@ function createState(): PlanningState {
   };
 }
 
-describe("createPlannerInput", () => {
+describe("createPlannerContext", () => {
   it("projects planning facts without exposing repositoryRoot", () => {
     const state = createState();
-    const input = createPlannerInput(state);
+    const input = createPlannerContext(state);
 
     expect(input).toEqual({
       goal: state.goal,
@@ -44,7 +44,7 @@ describe("createPlannerInput", () => {
     const state = createState();
     delete state.repository.instructions;
 
-    expect(createPlannerInput(state).repository.instructions).toBeUndefined();
+    expect(createPlannerContext(state).repository.instructions).toBeUndefined();
     expect(state.repository).not.toHaveProperty("instructions");
   });
 
@@ -58,7 +58,7 @@ describe("createPlannerInput", () => {
     Object.freeze(state.inspectedFiles);
     Object.freeze(state);
 
-    const input = createPlannerInput(state);
+    const input = createPlannerContext(state);
 
     expect(input.goal).toBe(state.goal);
     expect(input.repository.fileTree).toBe(state.repository.fileTree);

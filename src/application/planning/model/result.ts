@@ -1,12 +1,6 @@
 import type { TaskContract } from "@/contracts/task.js";
 
-import type { PlanningState } from "./context.js";
-
-export type PlanningLimits = {
-  maxRounds: number;
-  maxFilesPerRequest: number;
-  maxTotalFiles: number;
-};
+import type { PlanningState } from "./state.js";
 
 export type PlanningResult =
   | {

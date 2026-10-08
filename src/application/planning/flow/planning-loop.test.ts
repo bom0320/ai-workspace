@@ -4,17 +4,17 @@ import { join, sep } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskContractDraft } from "../model/decision.js";
+import type { TaskDraft } from "../protocol/planner.js";
 
-import type { PlanningLimits } from "../model/result.js";
-import type { PlanningState } from "../model/context.js";
+import type { PlanningLimits } from "../model/limits.js";
+import type { PlanningState } from "../model/state.js";
 import * as inspection from "./inspect-files.js";
 import * as finalization from "./finalize-task-contract.js";
 import { runPlanningLoop, type Planner } from "./planning-loop.js";
 
 const temporaryDirectories: string[] = [];
 const limits: PlanningLimits = { maxRounds: 3, maxFilesPerRequest: 3, maxTotalFiles: 3 };
-const task: TaskContractDraft = {
+const task: TaskDraft = {
   objective: "Implement the goal",
   targetRepository: "example",
   allowedPaths: ["a.ts"],

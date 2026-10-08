@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
-import type { TaskContractDraft } from "../model/decision.js";
+import type { TaskDraft } from "../protocol/planner.js";
 import { finalizeTaskContract } from "./finalize-task-contract.js";
 
 const goal: GoalSpec = {
@@ -12,7 +12,7 @@ const goal: GoalSpec = {
   targetRepository: "human-repository",
   constraints: ["No new dependencies", "Keep changes scoped", "No new dependencies"],
 };
-const draft: TaskContractDraft = {
+const draft: TaskDraft = {
   objective: "Clarify the introduction in README.md",
   targetRepository: "ai-repository",
   allowedPaths: ["README.md"],

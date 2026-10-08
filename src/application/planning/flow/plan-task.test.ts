@@ -5,7 +5,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { TaskContractDraft } from "../model/decision.js";
+import type { TaskDraft } from "../protocol/planner.js";
 
 import * as codex from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";
@@ -18,7 +18,7 @@ const goal: GoalSpec = {
   targetRepository: "example",
   constraints: ["Keep changes scoped"],
 };
-const task: TaskContractDraft = {
+const task: TaskDraft = {
   objective: goal.objective,
   targetRepository: goal.targetRepository, allowedPaths: ["example.ts"],
   forbiddenPaths: [], constraints: goal.constraints!,

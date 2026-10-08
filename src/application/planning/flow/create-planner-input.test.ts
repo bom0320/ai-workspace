@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { PlanningState } from "../model/state.js";
+import type { PlanningState } from "../model/context.js";
 import { createPlannerInput } from "./create-planner-input.js";
 
 function createState(): PlanningState {

@@ -4,10 +4,10 @@ import { join, sep } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskContractDraft } from "../model/task-draft.js";
+import type { TaskContractDraft } from "../model/decision.js";
 
-import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningState } from "../model/state.js";
+import type { PlanningLimits } from "../model/result.js";
+import type { PlanningState } from "../model/context.js";
 import * as inspection from "./inspect-files.js";
 import * as finalization from "./finalize-task-contract.js";
 import { runPlanningLoop, type Planner } from "./planning-loop.js";

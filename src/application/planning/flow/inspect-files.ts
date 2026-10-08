@@ -1,7 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
-import type { InspectionRequest, InspectionResult } from "../model/inspection.js";
+import type { InspectionRequest } from "../model/decision.js";
+import type { InspectionResult } from "../model/context.js";
 
 export class InspectionRequestError extends Error {
   override name = "InspectionRequestError";

@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
-import type { TaskContractDraft } from "../model/task-draft.js";
+import type { TaskContractDraft } from "../model/decision.js";
 import { finalizeTaskContract } from "./finalize-task-contract.js";
 
 const goal: GoalSpec = {

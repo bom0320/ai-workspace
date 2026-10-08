@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import { runCommand } from "@/infrastructure/process/index.js";
-import type { TaskContractDraft } from "../model/task-draft.js";
+import type { TaskContractDraft } from "../model/decision.js";
 
 import * as projection from "../flow/create-planner-input.js";
-import type { PlanningState } from "../model/state.js";
+import type { PlanningState } from "../model/context.js";
 import { createCodexPlanner } from "./codex-planner.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));

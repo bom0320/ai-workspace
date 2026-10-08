@@ -5,7 +5,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { TaskContractDraft } from "../model/task-draft.js";
+import type { TaskContractDraft } from "../model/decision.js";
 
 import * as codex from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";

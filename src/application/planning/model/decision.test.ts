@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { planningDecisionSchema } from "./decision.js";
-import { taskContractDraftSchema } from "./task-draft.js";
+import { planningDecisionSchema, taskContractDraftSchema } from "./decision.js";
 
 const validTask = {
   objective: "Implement the goal",

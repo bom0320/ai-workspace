@@ -3,9 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
-import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningResult } from "../model/result.js";
-import type { PlanningState } from "../model/state.js";
+import type { PlanningLimits, PlanningResult } from "../model/result.js";
+import type { PlanningState } from "../model/context.js";
 import { createCodexPlanner } from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";
 import { runPlanningLoop, type Planner } from "./planning-loop.js";

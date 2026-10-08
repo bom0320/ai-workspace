@@ -1,5 +1,4 @@
-import type { PlannerInput } from "../model/input.js";
-import type { PlanningState } from "../model/state.js";
+import type { PlannerInput, PlanningState } from "../model/context.js";
 
 export function createPlannerInput(state: PlanningState): PlannerInput {
   return {

@@ -15,3 +15,5 @@ export type { PlanningResult } from "./model/result.js";
 export type { PlannerInput } from "./model/input.js";
 export { createPlannerInput } from "./flow/create-planner-input.js";
 export { planningDecisionSchema } from "./model/decision.js";
+export { createCodexPlanner } from "./planner/codex-planner.js";
+export type { CodexPlannerOptions } from "./planner/codex-planner.js";

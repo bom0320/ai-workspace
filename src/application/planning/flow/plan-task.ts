@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { GoalSpec } from "@/contracts/goal.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
@@ -21,6 +23,8 @@ export async function planTask({
   limits,
   planner,
 }: PlanTaskOptions): Promise<PlanningResult> {
+  const goalId = `goal-${randomUUID()}`;
+  const taskId = `task-${randomUUID()}`;
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   const repository = inspectRepository(repositoryRoot);
   const initialState: PlanningState = { goal, repository, inspectedFiles: [] };
@@ -29,5 +33,7 @@ export async function planTask({
     initialState,
     planner: planner ?? createCodexPlanner(),
     limits,
+    goalId,
+    taskId,
   });
 }

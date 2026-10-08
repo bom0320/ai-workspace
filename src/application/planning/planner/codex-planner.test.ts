@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import { runCommand } from "@/infrastructure/process/index.js";
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContractDraft } from "../model/task-draft.js";
 
 import * as projection from "../flow/create-planner-input.js";
 import type { PlanningState } from "../model/state.js";
@@ -24,8 +24,8 @@ const state: PlanningState = {
   },
   inspectedFiles: [{ path: "src/example.ts", content: "// Example" }],
 };
-const task: TaskContract = {
-  id: "task-001", goalId: "goal-001", objective: "Implement the goal",
+const task: TaskContractDraft = {
+  objective: "Implement the goal",
   targetRepository: "example", allowedPaths: ["src/example.ts"],
   forbiddenPaths: [], constraints: [], acceptanceCriteria: ["The goal is implemented"],
   verification: ["pnpm test"],
@@ -61,6 +61,10 @@ describe("createCodexPlanner", () => {
     expect(prompt).toContain("Do not include markdown fences");
     expect(prompt).toContain('"type":"inspect"');
     expect(prompt).toContain('"type":"complete"');
+    expect(prompt).toContain("TaskContractDraft");
+    expect(prompt).toContain("Do not generate id or goalId");
+    expect(prompt).not.toContain('"id":');
+    expect(prompt).not.toContain('"goalId":');
   });
 
   it("runs non-interactively with isolated cwd and disabled tools, then cleans up", async () => {
@@ -109,7 +113,7 @@ describe("createCodexPlanner", () => {
 
   it.each([
     { type: "banana" },
-    { type: "complete", task: { ...task, id: "" } },
+    { type: "complete", task: { ...task, objective: "" } },
     { type: "inspect", request: { paths: [""] } },
   ])("rejects schema-invalid output: %j", async (decision) => {
     runCommandMock.mockResolvedValue({ stdout: JSON.stringify(decision), stderr: "", exitCode: 0, timedOut: false });

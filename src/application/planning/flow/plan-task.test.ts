@@ -5,7 +5,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContractDraft } from "../model/task-draft.js";
 
 import * as codex from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";
@@ -18,8 +18,8 @@ const goal: GoalSpec = {
   targetRepository: "example",
   constraints: ["Keep changes scoped"],
 };
-const task: TaskContract = {
-  id: "task-001", goalId: "goal-001", objective: goal.objective,
+const task: TaskContractDraft = {
+  objective: goal.objective,
   targetRepository: goal.targetRepository, allowedPaths: ["example.ts"],
   forbiddenPaths: [], constraints: goal.constraints!,
   acceptanceCriteria: ["The goal is implemented"], verification: ["pnpm test"],
@@ -44,6 +44,24 @@ afterEach(() => {
 });
 
 describe("planTask", () => {
+  it("generates fresh Harness identifiers per planning invocation and preserves Human governance", async () => {
+    const root = createRepository();
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task: {
+      ...task, targetRepository: "ai-other", constraints: [],
+    } });
+    const first = await planTask({ goal, repositoryPath: root, limits, planner });
+    const second = await planTask({ goal, repositoryPath: root, limits, planner });
+    expect(first.status).toBe("completed");
+    expect(second.status).toBe("completed");
+    if (first.status === "completed" && second.status === "completed") {
+      expect(first.task.id).toMatch(/^task-[0-9a-f-]{36}$/);
+      expect(first.task.goalId).toMatch(/^goal-[0-9a-f-]{36}$/);
+      expect(first.task.id).not.toBe(second.task.id);
+      expect(first.task.goalId).not.toBe(second.task.goalId);
+      expect(first.task.constraints).toEqual(goal.constraints);
+      expect(first.task.targetRepository).toBe(goal.targetRepository);
+    }
+  });
   it("resolves the repository and passes its overview and unchanged goal to the injected planner", async () => {
     const root = createRepository();
     const repositoryPath = relative(process.cwd(), root);
@@ -64,7 +82,7 @@ describe("planTask", () => {
     expect(initialState.repository.repositoryName).toBe(basename(resolvedRoot));
     expect(initialState.repository.packageScripts).toEqual({ test: "vitest run" });
     expect(initialState.repository.instructions).toBe("Keep changes minimal");
-    expect(result).toEqual({ status: "completed", task, state: initialState, rounds: 1 });
+    expect(result).toEqual({ status: "completed", task: { ...task, id: expect.stringMatching(/^task-[0-9a-f-]{36}$/), goalId: expect.stringMatching(/^goal-[0-9a-f-]{36}$/) }, state: initialState, rounds: 1 });
     expect(goal).toEqual(before);
     expect(createPlanner).not.toHaveBeenCalled();
   });

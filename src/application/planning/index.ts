@@ -19,3 +19,6 @@ export { createCodexPlanner } from "./planner/codex-planner.js";
 export type { CodexPlannerOptions } from "./planner/codex-planner.js";
 export { planTask } from "./flow/plan-task.js";
 export type { PlanTaskOptions } from "./flow/plan-task.js";
+export { taskContractDraftSchema } from "./model/task-draft.js";
+export type { TaskContractDraft } from "./model/task-draft.js";
+export { finalizeTaskContract } from "./flow/finalize-task-contract.js";

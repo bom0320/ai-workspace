@@ -1,12 +1,11 @@
 import { resolve } from "node:path";
 import { ZodError } from "zod";
 
-import { taskContractSchema } from "@/contracts/task.js";
-
 import type { PlanningDecision } from "../model/decision.js";
 import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningResult } from "../model/result.js";
 import type { PlanningState } from "../model/state.js";
+import { finalizeTaskContract } from "./finalize-task-contract.js";
 import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
 
 export type Planner = (state: PlanningState) => Promise<PlanningDecision>;
@@ -15,10 +14,14 @@ export async function runPlanningLoop({
   initialState,
   planner,
   limits,
+  goalId,
+  taskId,
 }: {
   initialState: PlanningState;
   planner: Planner;
   limits: PlanningLimits;
+  goalId: string;
+  taskId: string;
 }): Promise<PlanningResult> {
   let state = initialState;
   let rounds = 0;
@@ -38,11 +41,11 @@ export async function runPlanningLoop({
 
     if (decision.type === "complete") {
       try {
-        const task = taskContractSchema.parse(decision.task);
+        const task = finalizeTaskContract({ draft: decision.task, goal: state.goal, goalId, taskId });
         return { status: "completed", task, state, rounds };
       } catch (error) {
         if (error instanceof ZodError) {
-          return fail("Planner returned an invalid TaskContract.");
+          return fail("Planner returned a task draft that could not be finalized.");
         }
         throw error;
       }

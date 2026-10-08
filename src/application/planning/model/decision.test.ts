@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { planningDecisionSchema } from "./decision.js";
+import { taskContractDraftSchema } from "./task-draft.js";
 
 const validTask = {
-  id: "task-001",
-  goalId: "goal-001",
   objective: "Implement the goal",
   targetRepository: "example",
   allowedPaths: ["src/cli.ts"],
@@ -15,6 +14,22 @@ const validTask = {
 };
 
 describe("planningDecisionSchema", () => {
+  it("accepts a Draft without id or goalId", () => {
+    expect(taskContractDraftSchema.parse(validTask)).toEqual(validTask);
+    expect(validTask).not.toHaveProperty("id");
+    expect(validTask).not.toHaveProperty("goalId");
+  });
+
+  it("strips supplied identifiers consistently with the existing Zod object policy", () => {
+    const rawTask = { ...validTask, id: "ai-id", goalId: "ai-goal" };
+    expect(taskContractDraftSchema.parse(rawTask)).toEqual(validTask);
+    expect(planningDecisionSchema.parse({ type: "complete", task: rawTask }))
+      .toEqual({ type: "complete", task: validTask });
+  });
+
+  it.each(["objective", "targetRepository"] as const)("rejects an empty Draft %s", (field) => {
+    expect(taskContractDraftSchema.safeParse({ ...validTask, [field]: "" }).success).toBe(false);
+  });
   it("parses a valid inspect decision", () => {
     const decision = { type: "inspect", request: { paths: ["src/cli.ts"] } };
     expect(planningDecisionSchema.parse(decision)).toEqual(decision);
@@ -40,9 +55,9 @@ describe("planningDecisionSchema", () => {
     }).success).toBe(false);
   });
 
-  it("rejects an invalid completed TaskContract", () => {
+  it("rejects an invalid completed TaskContractDraft", () => {
     expect(planningDecisionSchema.safeParse({
-      type: "complete", task: { ...validTask, id: "" },
+      type: "complete", task: { ...validTask, objective: "" },
     }).success).toBe(false);
   });
 });

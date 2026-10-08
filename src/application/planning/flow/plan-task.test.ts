@@ -10,7 +10,7 @@ import type { TaskDraft } from "../protocol/planner.js";
 import * as codex from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";
 import { planTask } from "./plan-task.js";
-import type { Planner } from "./planning-loop.js";
+import type { Planner } from "../protocol/planner.js";
 
 const temporaryDirectories: string[] = [];
 const goal: GoalSpec = {

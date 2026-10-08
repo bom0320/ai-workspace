@@ -10,7 +10,8 @@ import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningState } from "../model/state.js";
 import * as inspection from "./inspect-files.js";
 import * as finalization from "./finalize-task-contract.js";
-import { runPlanningLoop, type Planner } from "./planning-loop.js";
+import { runPlanningLoop } from "./planning-loop.js";
+import type { Planner } from "../protocol/planner.js";
 
 const temporaryDirectories: string[] = [];
 const limits: PlanningLimits = { maxRounds: 3, maxFilesPerRequest: 3, maxTotalFiles: 3 };

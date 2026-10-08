@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
+import type { PlanningState } from "../model/state.js";
+
 import type { InspectRequest, InspectedFile } from "./inspection.js";
 
 export type PlannerContext = {
@@ -39,3 +41,5 @@ export const plannerDecisionSchema = z.discriminatedUnion("type", [
 ]);
 
 export type PlannerDecision = z.infer<typeof plannerDecisionSchema>;
+
+export type Planner = (state: PlanningState) => Promise<PlannerDecision>;

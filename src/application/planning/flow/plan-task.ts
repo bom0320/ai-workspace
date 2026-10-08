@@ -8,7 +8,8 @@ import type { PlanningResult } from "../model/result.js";
 import type { PlanningState } from "../model/state.js";
 import { createCodexPlanner } from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspect-repository.js";
-import { runPlanningLoop, type Planner } from "./planning-loop.js";
+import { runPlanningLoop } from "./planning-loop.js";
+import type { Planner } from "../protocol/planner.js";
 
 export type PlanTaskOptions = {
   goal: GoalSpec;

@@ -3,13 +3,11 @@ import { ZodError } from "zod";
 
 import type { PlanningState } from "../model/state.js";
 import type { InspectRequest } from "../protocol/inspection.js";
-import type { PlannerDecision, TaskDraft } from "../protocol/planner.js";
+import type { Planner, TaskDraft } from "../protocol/planner.js";
 import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningResult } from "../model/result.js";
 import { finalizeTaskContract } from "./finalize-task-contract.js";
 import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
-
-export type Planner = (state: PlanningState) => Promise<PlannerDecision>;
 
 function hasValidLimits(limits: PlanningLimits): boolean {
   return Object.values(limits).every((value) => Number.isSafeInteger(value) && value >= 0);

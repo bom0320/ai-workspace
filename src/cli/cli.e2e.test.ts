@@ -240,6 +240,10 @@ function runScenario(scenario: Scenario): ScenarioResult {
     const storedResult = JSON.parse(
       readFileSync(join(runDirectory!, "result.json"), "utf8"),
     ) as ExecutionResult;
+    expect(storedResult.telemetry).toBeDefined();
+    expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.cleanupDurationMs).toBeGreaterThanOrEqual(0);
+    for (const duration of Object.values(storedResult.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
     expect(storedResult.passed).toBe(
       scenario === "success" || scenario === "worker-commit-allowed",
     );

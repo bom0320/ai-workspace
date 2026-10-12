@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runCodexWorker } from "../worker/codex-worker.js";
 import type { TaskContract } from "@/contracts/task.js";
@@ -71,10 +71,40 @@ beforeEach(() => {
 });
 
 describe("executeTask", async () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("records monotonic stage timing separately from evidence and persists the same telemetry", async () => {
+    let clock = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+    createExecutionRunMock.mockImplementation(() => { clock += 1; return "/runs/run-001"; });
+    createExecutionWorkspaceMock.mockImplementation(() => { clock += 2; return "/tmp/execution-workspace"; });
+    getExecutionBaseCommitMock.mockImplementation(() => { clock += 7; return "base"; });
+    runCodexWorkerMock.mockImplementation(async () => { clock += 3; return "complete"; });
+    runVerificationMock.mockImplementation(async () => { clock += 4; return { passed: true, commands: [] }; });
+    preserveExecutionChangesMock.mockImplementation(() => { clock += 6; });
+    removeExecutionWorkspaceMock.mockImplementation(() => { clock += 5; });
+    const result = await executeTask(task, "/repositories/example");
+    expect(result.telemetry).toEqual({
+      workspaceDurationMs: 2, workerDurationMs: 3, verificationDurationMs: 4,
+      cleanupDurationMs: 5, totalDurationMs: 28,
+    });
+    expect(result.evidence).not.toHaveProperty("telemetry");
+    expect(writeExecutionResultMock).toHaveBeenCalledWith("/runs/run-001", expect.objectContaining({ telemetry: result.telemetry }));
+  });
+
+  it("records attempted worker timing on failure and omits skipped verification", async () => {
+    runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
+    const result = await executeTask(task, "/repositories/example");
+    expect(result.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
+    expect(result.telemetry!.cleanupDurationMs).toBeGreaterThanOrEqual(0);
+    expect(result.telemetry!.verificationDurationMs).toBeUndefined();
+    for (const duration of Object.values(result.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
+  });
   it("returns complete evidence and scope after a successful ordered execution", async () => {
     const result = await executeTask(task, "/repositories/example");
 
     expect(result).toEqual({
+      telemetry: expect.any(Object),
       passed: true,
       evidence: {
         workerOutput: "Codex final output",
@@ -132,6 +162,7 @@ describe("executeTask", async () => {
     const result = await executeTask(task, "/repositories/example");
 
     expect(result).toEqual({
+      telemetry: expect.any(Object),
       passed: false,
       evidence: {},
       failures: [{ stage: "workspace", message: "worktree creation failed" }],

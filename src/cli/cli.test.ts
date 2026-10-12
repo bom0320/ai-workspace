@@ -36,6 +36,16 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("CLI approval boundary", () => {
+  it("shows planning, Human wait, execution stages and end-to-end total", async () => {
+    vi.mocked(approveTask).mockResolvedValue(true);
+    vi.mocked(executeTask).mockResolvedValue({ passed: true, evidence: {}, failures: [],
+      telemetry: { workspaceDurationMs: 800, workerDurationMs: 42700,
+        verificationDurationMs: 11300, cleanupDurationMs: 400, totalDurationMs: 55200 } });
+    expect(await runCli([".", "Clarify README"])).toBe(0);
+    expect(console.log).toHaveBeenCalledWith("Worker: 42.7s");
+    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Approval Wait: \d+\.\ds$/));
+    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Total: \d+\.\ds$/));
+  });
   it("asks for Goal input when arguments are absent", async () => {
     vi.mocked(askGoal).mockResolvedValue({ repositoryPath: ".", objective: "Interactive goal" });
     vi.mocked(approveTask).mockResolvedValue(true);

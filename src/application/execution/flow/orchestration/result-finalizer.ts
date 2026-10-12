@@ -11,6 +11,11 @@ export function finalizeExecutionResult(
   const result: ExecutionResult = {
     passed: state.failures.length === 0,
     evidence: state.evidence,
+    ...(state.telemetry === undefined ? {} : { telemetry: {
+      ...state.telemetry,
+      // Snapshot before persistence so returned and stored timing agree.
+      totalDurationMs: performance.now() - state.executionStartedAt!,
+    } }),
     ...(state.scope === undefined ? {} : { scope: state.scope }),
     failures: state.failures,
     artifacts,

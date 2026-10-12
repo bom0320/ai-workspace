@@ -1,0 +1,22 @@
+import type { ExecutionTelemetry } from "@/application/execution/index.js";
+
+export type HumanInteractionTiming = {
+  planningDurationMs?: number;
+  approvalWaitDurationMs?: number;
+};
+
+export function presentTiming(timing: HumanInteractionTiming & Partial<ExecutionTelemetry>): void {
+  console.log("\nTiming\n------");
+  const rows = [
+    ["Planning", timing.planningDurationMs],
+    ["Approval Wait", timing.approvalWaitDurationMs],
+    ["Workspace", timing.workspaceDurationMs],
+    ["Worker", timing.workerDurationMs],
+    ["Verification", timing.verificationDurationMs],
+    ["Cleanup", timing.cleanupDurationMs],
+    ["Total", timing.totalDurationMs],
+  ] as const;
+  for (const [label, duration] of rows) {
+    if (duration !== undefined) console.log(`${label}: ${(duration / 1_000).toFixed(1)}s`);
+  }
+}

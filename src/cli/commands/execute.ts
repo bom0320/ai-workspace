@@ -7,6 +7,7 @@ import {
   type TaskExecutionOptions,
 } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
+import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {
   const value = process.env[name];
@@ -54,7 +55,11 @@ export async function runExecutionCli(args: string[]): Promise<number> {
   return runExecuteCommand(task, repositoryPath);
 }
 
-export async function runExecuteCommand(task: TaskContract, repositoryPath: string): Promise<number> {
+export async function runExecuteCommand(
+  task: TaskContract,
+  repositoryPath: string,
+  timing?: HumanInteractionTiming & { startedAt: number },
+): Promise<number> {
   console.log("Task Contract: valid");
 
   let repositoryRoot;
@@ -151,6 +156,12 @@ export async function runExecuteCommand(task: TaskContract, repositoryPath: stri
     console.log(`Objective: ${task.objective}`);
   }
 
+  if (result.telemetry || timing) {
+    presentTiming({
+      ...result.telemetry,
+      ...timing,
+      ...(timing ? { totalDurationMs: performance.now() - timing.startedAt } : {}),
+    });
+  }
   return result.passed ? 0 : 1;
 }
-

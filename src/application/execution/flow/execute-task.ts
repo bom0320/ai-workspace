@@ -29,7 +29,10 @@ export async function executeTask(
   repositoryRoot: string,
   options: TaskExecutionOptions = {}
 ): Promise<ExecutionResult> {
+  const executionStartedAt = performance.now();
   const state: ExecutionState = {
+    executionStartedAt,
+    telemetry: { totalDurationMs: 0 },
     evidence: {},
     failures: [],
   };
@@ -43,6 +46,7 @@ export async function executeTask(
 
     return {
       passed: false,
+      telemetry: { totalDurationMs: performance.now() - executionStartedAt },
       evidence: state.evidence,
       failures: state.failures,
     };
@@ -53,14 +57,18 @@ export async function executeTask(
   };
 
   let workspaceRoot: string;
+  const workspaceStartedAt = performance.now();
 
   try {
     workspaceRoot = createExecutionWorkspace(repositoryRoot);
   } catch (error) {
+    state.telemetry!.workspaceDurationMs = performance.now() - workspaceStartedAt;
     addExecutionFailure(state, "workspace", error);
 
     return finalizeExecutionResult(state, artifacts);
   }
+
+  state.telemetry!.workspaceDurationMs = performance.now() - workspaceStartedAt;
 
   try {
     artifacts.baseCommit = getExecutionBaseCommit(workspaceRoot);
@@ -99,12 +107,15 @@ export async function executeTask(
   }
 
   if (changesPreserved) {
+    const cleanupStartedAt = performance.now();
     try {
       removeExecutionWorkspace(repositoryRoot, workspaceRoot);
 
       cleanupSucceeded = true;
     } catch (error) {
       addExecutionFailure(state, "cleanup", error);
+    } finally {
+      state.telemetry!.cleanupDurationMs = performance.now() - cleanupStartedAt;
     }
   }
 

@@ -50,6 +50,7 @@ export async function runWorkerStage(
   workspaceRoot: string,
   options: TaskExecutionOptions
 ): Promise<boolean> {
+  const startedAt = performance.now();
   try {
     state.evidence.workerOutput = await runCodexWorker(
       task,
@@ -61,6 +62,8 @@ export async function runWorkerStage(
   } catch (error) {
     addExecutionFailure(state, "worker", error);
     return false;
+  } finally {
+    if (state.telemetry) state.telemetry.workerDurationMs = performance.now() - startedAt;
   }
 }
 
@@ -106,6 +109,7 @@ export async function runVerificationStage(
   workspaceRoot: string,
   options: TaskExecutionOptions
 ): Promise<void> {
+  const startedAt = performance.now();
   try {
     state.evidence.verification = await runVerification(
       task.verification,
@@ -115,6 +119,8 @@ export async function runVerificationStage(
   } catch (error) {
     addExecutionFailure(state, "verification", error);
     return;
+  } finally {
+    if (state.telemetry) state.telemetry.verificationDurationMs = performance.now() - startedAt;
   }
 
   if (!state.evidence.verification.passed) {

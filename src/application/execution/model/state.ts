@@ -7,6 +7,8 @@ export type TaskExecutionOptions = {
 
 export type ExecutionState = {
   evidence: ExecutionResult["evidence"];
+  telemetry?: ExecutionResult["telemetry"];
+  executionStartedAt?: number;
   failures: ExecutionFailure[];
   scope?: ExecutionResult["scope"];
 };

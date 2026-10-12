@@ -7,6 +7,7 @@ import { runExecuteCommand, runExecutionCli } from "./commands/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
 import { askGoal } from "./prompts/ask-goal.js";
 import { presentTaskContract } from "./presenters/task-contract.js";
+import { presentTiming, type HumanInteractionTiming } from "./presenters/timing.js";
 
 function reportPlanning(result: PlanningResult): boolean {
   if (result.status === "failed") {
@@ -21,8 +22,10 @@ function reportPlanning(result: PlanningResult): boolean {
 }
 
 export async function runPlanningCli(args: string[]): Promise<number> {
+  const startedAt = performance.now();
   try {
     const result = await runPlanCommand({ repositoryPath: args[0] ?? "", objective: args[1] ?? "" });
+    console.log(`Planning Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`);
     if (!reportPlanning(result) || result.status !== "completed") return 1;
     presentTaskContract(result.task);
     return 0;
@@ -36,25 +39,38 @@ export async function runPlanningCli(args: string[]): Promise<number> {
 
 export async function runCli(args: string[]): Promise<number> {
   if (args[0] === "plan") return runPlanningCli(args.slice(1));
+  let startedAt: number | undefined;
+  const timing: HumanInteractionTiming = {};
   try {
     if (args[0] === "execute") return await runExecutionCli(args.slice(1));
     const input = args.length === 0
       ? await askGoal()
       : { repositoryPath: args[0] ?? "", objective: args[1] ?? "" };
+    startedAt = performance.now();
     console.log("Planning...");
     const result = await runPlanCommand(input);
-    if (!reportPlanning(result) || result.status !== "completed") return 1;
+    timing.planningDurationMs = performance.now() - startedAt;
+    const completed = reportPlanning(result);
+    console.log(`Planning Duration: ${(timing.planningDurationMs / 1_000).toFixed(1)}s`);
+    if (!completed || result.status !== "completed") {
+      presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
+      return 1;
+    }
+    const approvalStartedAt = performance.now();
     presentTaskContract(result.task);
     const approved = await approveTask();
+    timing.approvalWaitDurationMs = performance.now() - approvalStartedAt;
     if (!approved) {
       console.log("Task: rejected. Execution was not started.");
+      presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
       return 1;
     }
     console.log("Execution...");
-    return await runExecuteCommand(result.task, result.state.repository.repositoryRoot);
+    return await runExecuteCommand(result.task, result.state.repository.repositoryRoot, { ...timing, startedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`Error: ${message}`);
+    if (startedAt !== undefined) presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
     return 1;
   }
 }

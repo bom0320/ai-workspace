@@ -4,4 +4,5 @@ export type {
   ExecutionFailure,
   ExecutionFailureStage,
   ExecutionResult,
+  ExecutionTelemetry,
 } from "./model/result.js";

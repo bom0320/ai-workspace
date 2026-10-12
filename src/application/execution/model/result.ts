@@ -16,8 +16,17 @@ export type ExecutionFailure = {
   message: string;
 };
 
+export type ExecutionTelemetry = {
+  workspaceDurationMs?: number;
+  workerDurationMs?: number;
+  verificationDurationMs?: number;
+  cleanupDurationMs?: number;
+  totalDurationMs: number;
+};
+
 export type ExecutionResult = {
   passed: boolean;
+  telemetry?: ExecutionTelemetry;
   evidence: ExecutionEvidence;
   scope?: ScopeCheckResult;
   failures: ExecutionFailure[];

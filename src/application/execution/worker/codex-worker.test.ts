@@ -28,20 +28,47 @@ beforeEach(() => {
 describe("runCodexWorker", () => {
   it("records setup, actual process timing and output processing without changing stdout", async () => {
     const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
-    runCommandMock.mockResolvedValue({ stdout: "complete", stderr: "", exitCode: 0, timedOut: false, processDurationMs: 12 });
-    expect(await runCodexWorker(task, "/tmp/workspace", 1000, telemetry)).toBe("complete");
+
+    runCommandMock.mockResolvedValue({
+      stdout: "complete",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+      processDurationMs: 12,
+    });
+
+    expect(await runCodexWorker(task, "/tmp/workspace", 1000, telemetry)).toBe(
+      "complete"
+    );
+
     expect(telemetry.codexProcessDurationMs).toBe(12);
     expect(telemetry.workerSetupDurationMs).toBeGreaterThanOrEqual(0);
-    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
+    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(
+      0
+    );
   });
 
   it("retains process and output timing on process failure", async () => {
     const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
-    runCommandMock.mockResolvedValue({ stdout: "", stderr: "failure", exitCode: 1, timedOut: false, processDurationMs: 5 });
-    await expect(runCodexWorker(task, "/tmp/workspace", 1000, telemetry)).rejects.toThrow("failure");
+
+    runCommandMock.mockResolvedValue({
+      stdout: "",
+      stderr: "failure",
+      exitCode: 1,
+      timedOut: false,
+      processDurationMs: 5,
+    });
+
+    await expect(
+      runCodexWorker(task, "/tmp/workspace", 1000, telemetry)
+    ).rejects.toThrow("failure");
+
     expect(telemetry.codexProcessDurationMs).toBe(5);
-    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
+    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(
+      0
+    );
   });
+
   it("runs Codex in the workspace with TaskContract instructions", async () => {
     runCommandMock.mockResolvedValue({
       stdout: "Codex final output",
@@ -53,7 +80,7 @@ describe("runCodexWorker", () => {
     const output = await runCodexWorker(
       task,
       "/tmp/execution-workspace",
-      1_000,
+      1_000
     );
 
     expect(output).toBe("Codex final output");
@@ -63,21 +90,32 @@ describe("runCodexWorker", () => {
     const prompt = args[3];
 
     expect(command).toBe("codex");
-    expect(args.slice(0, 3)).toEqual([
-      "exec",
-      "--sandbox",
-      "workspace-write",
-    ]);
+    expect(args.slice(0, 3)).toEqual(["exec", "--sandbox", "workspace-write"]);
+
     expect(options).toEqual({
       cwd: "/tmp/execution-workspace",
       timeoutMs: 1_000,
     });
+
     expect(prompt).toContain(task.objective);
     expect(prompt).toContain(task.allowedPaths[0]);
     expect(prompt).toContain(task.forbiddenPaths[0]);
     expect(prompt).toContain(task.constraints[0]);
     expect(prompt).toContain(task.acceptanceCriteria[0]);
     expect(prompt).toContain(task.verification[0]);
+
+    expect(prompt).toContain(
+      "The Harness will execute the TaskContract verification commands after you finish."
+    );
+    expect(prompt).toContain(
+      "Do not run the listed verification commands yourself."
+    );
+    expect(prompt).toContain(
+      "Do not run full typecheck, test, build, or diff-check commands unless they are strictly required to diagnose a concrete implementation problem."
+    );
+    expect(prompt).toContain(
+      "Focus on inspecting only the files needed for the task, making the requested changes, and returning a concise summary."
+    );
   });
 
   it("preserves Codex stderr in a Worker error", async () => {
@@ -89,9 +127,9 @@ describe("runCodexWorker", () => {
     });
 
     await expect(
-      runCodexWorker(task, "/tmp/execution-workspace"),
+      runCodexWorker(task, "/tmp/execution-workspace")
     ).rejects.toThrow(
-      "Failed to run Codex worker: Codex authentication failed",
+      "Failed to run Codex worker: Codex authentication failed"
     );
   });
 
@@ -104,9 +142,9 @@ describe("runCodexWorker", () => {
     });
 
     await expect(
-      runCodexWorker(task, "/tmp/execution-workspace", 25),
+      runCodexWorker(task, "/tmp/execution-workspace", 25)
     ).rejects.toThrow(
-      "Failed to run Codex worker: Codex worker timed out after 25 ms.",
+      "Failed to run Codex worker: Codex worker timed out after 25 ms."
     );
   });
 });

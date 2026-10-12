@@ -269,6 +269,17 @@ AI Workspace는 이 경계를 유지하면서 실행과 검증을 자동화하�
 
 Human이 중요한 판단에 집중할 수 있도록 충분한 Evidence와 요약을 제공한다.
 
+
+### 4.9 Human Interface
+
+현재 Human Interface는 terminal-based CLI다. CLI는 Goal 입력, 생성된 TaskContract의
+Human Approval, 실행 결과 확인을 담당하는 adapter이며, 실제 Planning / Execution 로직은
+application layer의 `planTask()` / `executeTask()`에 유지한다.
+
+Human UI는 웹 화면에 한정되지 않는다. CLI에서 Web 등 다른 UI로 접점이 바뀌더라도
+application layer는 UI에 의존하거나 그 변경의 영향을 받지 않아야 한다.
+현재 구현과 향후 v0~v5 확장 방향은 [CLI and Human Interface](cli-and-human-interface.md)를 참조한다.
+
 ---
 
 ## 5. Core Components & Responsibility Boundaries

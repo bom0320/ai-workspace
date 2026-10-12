@@ -5,6 +5,7 @@ import { loadTaskContract } from "@/contracts/task-loader.js";
 import {
   executeTask,
   type TaskExecutionOptions,
+  type WorkerContext,
 } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
@@ -59,6 +60,7 @@ export async function runExecuteCommand(
   task: TaskContract,
   repositoryPath: string,
   timing?: HumanInteractionTiming & { startedAt: number },
+  workerContext?: WorkerContext,
 ): Promise<number> {
   console.log("Task Contract: valid");
 
@@ -76,6 +78,7 @@ export async function runExecuteCommand(
   console.log(`Repository Root: ${repositoryRoot}`);
 
   const executionOptions: TaskExecutionOptions = {};
+  if (workerContext) executionOptions.workerContext = workerContext;
   const workerTimeoutMs = timeoutFromEnvironment(
     "AI_WORKSPACE_WORKER_TIMEOUT_MS",
   );

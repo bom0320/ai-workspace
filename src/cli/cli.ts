@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { normalize, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { PlanningResult } from "@/application/planning/index.js";
@@ -66,7 +66,11 @@ export async function runCli(args: string[]): Promise<number> {
       return 1;
     }
     console.log("Execution...");
-    return await runExecuteCommand(result.task, result.state.repository.repositoryRoot, { ...timing, startedAt });
+    const allowedPaths = new Set(result.task.allowedPaths.map((path) => normalize(path)));
+    const workerContext = {
+      inspectedFiles: result.state.inspectedFiles.filter((file) => allowedPaths.has(normalize(file.path))),
+    };
+    return await runExecuteCommand(result.task, result.state.repository.repositoryRoot, { ...timing, startedAt }, workerContext);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`Error: ${message}`);

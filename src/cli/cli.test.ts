@@ -36,6 +36,16 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("CLI approval boundary", () => {
+  it("passes only inspected files matching allowed paths into Execution", async () => {
+    const inspectedFiles = [{ path: "README.md", content: "Existing introduction" }, { path: "package.json", content: "{}" }];
+    vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state: { ...state, inspectedFiles }, rounds: 1 });
+    vi.mocked(approveTask).mockResolvedValue(true);
+    expect(await runCli([".", "Clarify README"])).toBe(0);
+    expect(executeTask).toHaveBeenCalledWith(task, state.repository.repositoryRoot, {
+      workerContext: { inspectedFiles: [inspectedFiles[0]] },
+    });
+    expect(task).not.toHaveProperty("inspectedFiles");
+  });
   it("shows planning, Human wait, execution stages and end-to-end total", async () => {
     vi.mocked(approveTask).mockResolvedValue(true);
     vi.mocked(executeTask).mockResolvedValue({ passed: true, evidence: {}, failures: [],
@@ -72,7 +82,7 @@ describe("CLI approval boundary", () => {
     expect(askGoal).not.toHaveBeenCalled();
     approve(true);
     expect(await pending).toBe(0);
-    expect(executeTask).toHaveBeenCalledWith(task, state.repository.repositoryRoot, {});
+    expect(executeTask).toHaveBeenCalledWith(task, state.repository.repositoryRoot, { workerContext: { inspectedFiles: [] } });
     expect(vi.mocked(executeTask).mock.calls[0][0]).toBe(task);
   });
 

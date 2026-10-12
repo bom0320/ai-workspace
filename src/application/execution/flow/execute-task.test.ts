@@ -71,6 +71,12 @@ beforeEach(() => {
 });
 
 describe("executeTask", async () => {
+  it("passes warm-start context separately to Worker", async () => {
+    const workerContext = { inspectedFiles: [{ path: "src/example.ts", content: "Existing content" }] };
+    await executeTask(task, "/repositories/example", { workerContext });
+    expect(runCodexWorkerMock).toHaveBeenCalledWith(task, "/tmp/execution-workspace", undefined, expect.any(Object), workerContext);
+    expect(task).not.toHaveProperty("inspectedFiles");
+  });
   afterEach(() => { vi.restoreAllMocks(); });
 
   it("records monotonic stage timing separately from evidence and persists the same telemetry", async () => {
@@ -210,6 +216,7 @@ describe("executeTask", async () => {
       "/tmp/execution-workspace",
       25,
       expect.any(Object),
+      undefined,
     );
     expect(result.evidence.changedPaths).toEqual(["partial-change.txt"]);
     expect(result.failures).toEqual([

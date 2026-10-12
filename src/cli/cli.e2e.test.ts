@@ -463,6 +463,7 @@ async function runPlanningScenario(answer: string, interactive = false): Promise
       '    console.log(JSON.stringify({type:"complete",task:{objective:"Clarify introduction",targetRepository:"repository",allowedPaths:["README.md"],forbiddenPaths:[],constraints:[],acceptanceCriteria:["Clear introduction"],verification:[]}}));',
       '  }',
       '} else {',
+      '  if (!args.at(-1).includes("Original introduction")) throw new Error("Planning context did not reach Worker");',
       '  writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());',
       '  writeFileSync("README.md", "Clear introduction\\n");',
       '  console.log("Worker complete");',

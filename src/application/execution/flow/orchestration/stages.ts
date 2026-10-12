@@ -57,6 +57,7 @@ export async function runWorkerStage(
       workspaceRoot,
       options.workerTimeoutMs,
       state.telemetry,
+      options.workerContext,
     );
 
     return true;

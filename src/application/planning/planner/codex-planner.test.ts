@@ -42,6 +42,13 @@ beforeEach(() => {
 });
 
 describe("createCodexPlanner", () => {
+  it("prefers minimum-round completion without weakening inspection limits", async () => {
+    await createCodexPlanner()(state, limits);
+    const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
+    for (const rule of ["fewest planning rounds possible", "return complete immediately",
+      "Do not inspect additional files merely for completeness", "only when they are necessary",
+      "one focused inspect request", "within PlanningLimits"]) expect(prompt).toContain(rule);
+  });
   it("shows actual Harness limits and the remaining budget with priority rules", async () => {
     const currentState = { ...state, inspectedFiles: Array.from({ length: 8 }, (_, i) => ({ path: `file-${i}.ts`, content: "context" })) };
     await createCodexPlanner()(currentState, limits);

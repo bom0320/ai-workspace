@@ -11,6 +11,7 @@ import * as codex from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspection/inspect-repository.js";
 import { planTask } from "./plan-task.js";
 import type { Planner } from "../protocol/planner.js";
+import { createPlannerContext } from "./transformation/create-planner-context.js";
 
 const temporaryDirectories: string[] = [];
 const goal: GoalSpec = {
@@ -44,6 +45,67 @@ afterEach(() => {
 });
 
 describe("planTask", () => {
+  it.each(["README 좀 더 정확하게 수정해줘", "README.md를 수정해줘"])(
+    "supplies the explicitly named README before the first round: %s", async (objective) => {
+      const root = createRepository();
+      writeFileSync(join(root, "README.md"), "# Example\nAccurate project facts\n");
+      const planner = vi.fn<Planner>().mockImplementation(async (state, currentLimits) => {
+        const context = createPlannerContext(state, currentLimits);
+        expect(context.inspectedFiles).toEqual([{ path: "README.md", content: "# Example\nAccurate project facts\n" }]);
+        expect(context.repository.packageScripts).toEqual({ test: "vitest run" });
+        expect(context.repository.instructions).toBe("Keep changes minimal");
+        expect(context.remainingInspectionBudget).toBe(1);
+        expect(context.repository).not.toHaveProperty("repositoryRoot");
+        return { type: "complete", task };
+      });
+      const result = await planTask({ goal: { ...goal, objective }, repositoryPath: root, limits, planner });
+      expect(result.status).toBe("completed");
+      expect(result.rounds).toBe(1);
+    },
+  );
+
+  it("does not pre-inspect unmentioned files", async () => {
+    const root = createRepository();
+    writeFileSync(join(root, "README.md"), "Readme");
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
+    await planTask({ goal, repositoryPath: root, limits, planner });
+    expect(planner.mock.calls[0][0].inspectedFiles).toEqual([]);
+  });
+
+  it("does not match repository-external traversal or partial filenames", async () => {
+    const root = createRepository();
+    writeFileSync(join(root, "README.md"), "Readme");
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
+    await planTask({ goal: { ...goal, objective: "../README.md NOTREADME.md /etc/passwd" }, repositoryPath: root, limits, planner });
+    expect(planner.mock.calls[0][0].inspectedFiles).toEqual([]);
+  });
+
+  it("skips oversized files and ambiguous basenames", async () => {
+    const root = createRepository();
+    writeFileSync(join(root, "README.md"), "x".repeat(64 * 1024 + 1));
+    mkdirSync(join(root, "nested"));
+    writeFileSync(join(root, "nested", "example.ts"), "Ambiguous");
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
+    await planTask({ goal: { ...goal, objective: "README example.ts" }, repositoryPath: root, limits, planner });
+    expect(planner.mock.calls[0][0].inspectedFiles).toEqual([]);
+  });
+
+  it("counts initial inspection against the existing total budget and retains fail-fast enforcement", async () => {
+    const root = createRepository();
+    writeFileSync(join(root, "README.md"), "Readme");
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "inspect", request: { paths: ["example.ts"] } });
+    const result = await planTask({ goal: { ...goal, objective: "README" }, repositoryPath: root,
+      limits: { ...limits, maxTotalFiles: 1 }, planner });
+    expect(result).toMatchObject({ status: "failed", rounds: 1, reason: "Inspection request exceeds maxTotalFiles." });
+  });
+
+  it("skips optional seeding when exact matches exceed the initial request budget", async () => {
+    const root = createRepository();
+    const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
+    await planTask({ goal: { ...goal, objective: "example.ts package.json" }, repositoryPath: root,
+      limits: { ...limits, maxFilesPerRequest: 1 }, planner });
+    expect(planner.mock.calls[0][0].inspectedFiles).toEqual([]);
+  });
   it("generates fresh Harness identifiers per planning invocation and preserves Human governance", async () => {
     const root = createRepository();
     const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task: {

@@ -43,6 +43,11 @@ export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
       "Additional files can be requested in later planning rounds, within maxRounds.",
       "Avoid requesting files already present in inspectedFiles.",
       "Use the minimum repository context needed to produce a safe TaskDraft.",
+      "Prefer completing in the fewest planning rounds possible.",
+      "If the supplied context is already sufficient, return complete immediately.",
+      "Do not inspect additional files merely for completeness.",
+      "Request additional files only when they are necessary to produce a safe TaskDraft.",
+      "Prefer one focused inspect request over multiple incremental requests when it remains within PlanningLimits.",
       "PlannerContext:",
       JSON.stringify(input),
     ].join("\n");

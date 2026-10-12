@@ -8,6 +8,7 @@ import type { PlanningResult } from "../model/result.js";
 import type { PlanningState } from "../model/state.js";
 import { createCodexPlanner } from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspection/inspect-repository.js";
+import { inspectInitialFiles } from "./inspection/inspect-initial-files.js";
 import { runPlanningLoop } from "./orchestration/planning-loop.js";
 import type { Planner } from "../protocol/planner.js";
 
@@ -28,7 +29,11 @@ export async function planTask({
   const taskId = `task-${randomUUID()}`;
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   const repository = inspectRepository(repositoryRoot);
-  const initialState: PlanningState = { goal, repository, inspectedFiles: [] };
+  const initialState: PlanningState = {
+    goal,
+    repository,
+    inspectedFiles: inspectInitialFiles(repository, goal.objective, limits),
+  };
 
   return runPlanningLoop({
     initialState,

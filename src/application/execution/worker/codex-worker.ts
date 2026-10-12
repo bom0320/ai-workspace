@@ -8,11 +8,21 @@ export async function runCodexWorker(
   task: TaskContract,
   workspaceRoot: string,
   timeoutMs = DEFAULT_CODEX_WORKER_TIMEOUT_MS,
-  telemetry?: Pick<ExecutionTelemetry, "workerSetupDurationMs" | "codexProcessDurationMs" | "workerOutputProcessingDurationMs">,
+  telemetry?: Pick<
+    ExecutionTelemetry,
+    | "workerSetupDurationMs"
+    | "codexProcessDurationMs"
+    | "workerOutputProcessingDurationMs"
+  >
 ): Promise<string> {
   const setupStartedAt = performance.now();
   const prompt = [
     "Complete the following task within the provided repository workspace.",
+    "",
+    "The Harness will execute the TaskContract verification commands after you finish.",
+    "Do not run the listed verification commands yourself.",
+    "Do not run full typecheck, test, build, or diff-check commands unless they are strictly required to diagnose a concrete implementation problem.",
+    "Focus on inspecting only the files needed for the task, making the requested changes, and returning a concise summary.",
     "",
     "Objective:",
     task.objective,
@@ -32,19 +42,20 @@ export async function runCodexWorker(
       "- (none)",
     "",
     "Verification:",
-    task.verification.map((command) => `- ${command}`).join("\n") ||
-      "- (none)",
+    task.verification.map((command) => `- ${command}`).join("\n") || "- (none)",
   ].join("\n");
-
   const processCallStartedAt = performance.now();
-  if (telemetry) telemetry.workerSetupDurationMs = processCallStartedAt - setupStartedAt;
+  if (telemetry)
+    telemetry.workerSetupDurationMs = processCallStartedAt - setupStartedAt;
   const result = await runCommand(
     "codex",
     ["exec", "--sandbox", "workspace-write", prompt],
-    { cwd: workspaceRoot, timeoutMs },
+    { cwd: workspaceRoot, timeoutMs }
   );
 
-  if (telemetry) telemetry.codexProcessDurationMs = result.processDurationMs ?? (performance.now() - processCallStartedAt);
+  if (telemetry)
+    telemetry.codexProcessDurationMs =
+      result.processDurationMs ?? performance.now() - processCallStartedAt;
   const outputStartedAt = performance.now();
   try {
     if (result.timedOut) {
@@ -67,6 +78,8 @@ export async function runCodexWorker(
 
     return result.stdout;
   } finally {
-    if (telemetry) telemetry.workerOutputProcessingDurationMs = performance.now() - outputStartedAt;
+    if (telemetry)
+      telemetry.workerOutputProcessingDurationMs =
+        performance.now() - outputStartedAt;
   }
 }

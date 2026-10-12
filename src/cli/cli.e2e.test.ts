@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -426,7 +426,7 @@ describe("CLI end-to-end execution", () => {
   });
 });
 
-function runPlanningScenario(answer: string): void {
+async function runPlanningScenario(answer: string, interactive = false): Promise<void> {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
   const repositoryRoot = join(temporaryRoot, "repository");
   const bin = join(temporaryRoot, "bin");
@@ -461,11 +461,9 @@ function runPlanningScenario(answer: string): void {
       '}',
     ].join("\n"));
     chmodSync(fakeCodex, 0o755);
-    const cli = spawnSync(process.execPath, ["--import", tsxImport, cliPath, repositoryRoot, "Clarify introduction"], {
+    const args = ["--import", tsxImport, cliPath, ...(interactive ? [] : [repositoryRoot, "Clarify introduction"])];
+    const options = {
       cwd: temporaryRoot,
-      encoding: "utf8",
-      input: answer,
-      timeout: 30_000,
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
@@ -473,7 +471,39 @@ function runPlanningScenario(answer: string): void {
         E2E_WORKER_RECORD: workerRecord,
         E2E_PLANNER_RECORD: plannerRecord,
       },
-    });
+    };
+    const cli = interactive
+      ? await new Promise<{ stdout: string; stderr: string; status: number | null; signal: string | null; error?: Error }>((resolveResult, reject) => {
+        const child = spawn(process.execPath, args, options);
+        let stdout = "";
+        let stderr = "";
+        let repositorySent = false;
+        let goalSent = false;
+        let approvalSent = false;
+        const timer = setTimeout(() => { child.kill(); reject(new Error("Interactive CLI timed out")); }, 15_000);
+        child.stdout.on("data", (chunk) => {
+          stdout += chunk.toString();
+          if (!repositorySent && stdout.includes("Repository:\n>")) {
+            repositorySent = true;
+            child.stdin.write(` ${repositoryRoot} \n`);
+          }
+          if (!goalSent && stdout.includes("Goal:\n>")) {
+            goalSent = true;
+            child.stdin.write(" Clarify introduction \n");
+          }
+          if (!approvalSent && stdout.includes("Approve / Reject")) {
+            approvalSent = true;
+            child.stdin.end(answer);
+          }
+        });
+        child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+        child.once("error", (error) => { clearTimeout(timer); reject(error); });
+        child.once("close", (status, signal) => {
+          clearTimeout(timer);
+          resolveResult({ stdout, stderr, status, signal });
+        });
+      })
+      : spawnSync(process.execPath, args, { ...options, encoding: "utf8", input: answer, timeout: 30_000 });
     expect(cli.error).toBeUndefined();
     expect(cli.signal).toBeNull();
     expect(cli.stdout, cli.stderr).toContain("Planning: completed");
@@ -505,7 +535,8 @@ function runPlanningScenario(answer: string): void {
 }
 
 describe("CLI planning through approval and execution", () => {
-  it("executes the finalized task only after Approve", () => { runPlanningScenario("Approve\n"); });
-  it("does not execute after Reject", () => { runPlanningScenario("Reject\n"); });
-  it("does not execute on EOF", () => { runPlanningScenario(""); });
+  it("collects an interactive Goal and waits for approval before execution", async () => { await runPlanningScenario("Approve\n", true); });
+  it("executes the finalized task only after Approve", async () => { await runPlanningScenario("Approve\n"); });
+  it("does not execute after Reject", async () => { await runPlanningScenario("Reject\n"); });
+  it("does not execute on EOF", async () => { await runPlanningScenario(""); });
 });

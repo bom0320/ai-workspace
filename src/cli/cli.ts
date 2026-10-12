@@ -5,6 +5,8 @@ import type { PlanningResult } from "@/application/planning/index.js";
 import { runPlanCommand } from "./commands/plan.js";
 import { runExecuteCommand, runExecutionCli } from "./commands/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
+import { askGoal } from "./prompts/ask-goal.js";
+import { presentTaskContract } from "./presenters/task-contract.js";
 
 function reportPlanning(result: PlanningResult): boolean {
   if (result.status === "failed") {
@@ -20,10 +22,9 @@ function reportPlanning(result: PlanningResult): boolean {
 
 export async function runPlanningCli(args: string[]): Promise<number> {
   try {
-    const result = await runPlanCommand(args);
+    const result = await runPlanCommand({ repositoryPath: args[0] ?? "", objective: args[1] ?? "" });
     if (!reportPlanning(result) || result.status !== "completed") return 1;
-    console.log("\nTask Contract:");
-    console.log(JSON.stringify(result.task, null, 2));
+    presentTaskContract(result.task);
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -37,12 +38,19 @@ export async function runCli(args: string[]): Promise<number> {
   if (args[0] === "plan") return runPlanningCli(args.slice(1));
   try {
     if (args[0] === "execute") return await runExecutionCli(args.slice(1));
-    const result = await runPlanCommand(args);
+    const input = args.length === 0
+      ? await askGoal()
+      : { repositoryPath: args[0] ?? "", objective: args[1] ?? "" };
+    console.log("Planning...");
+    const result = await runPlanCommand(input);
     if (!reportPlanning(result) || result.status !== "completed") return 1;
-    if (!await approveTask(result.task)) {
+    presentTaskContract(result.task);
+    const approved = await approveTask();
+    if (!approved) {
       console.log("Task: rejected. Execution was not started.");
       return 1;
     }
+    console.log("Execution...");
     return await runExecuteCommand(result.task, result.state.repository.repositoryRoot);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

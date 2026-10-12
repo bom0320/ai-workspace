@@ -6,6 +6,7 @@ import { planTask, type PlanningState } from "@/application/planning/index.js";
 import { executeTask } from "@/application/execution/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 import { runPlanningCli } from "../cli.js";
+import { runPlanCommand } from "./plan.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
@@ -32,6 +33,11 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("Planning CLI", () => {
+  it("accepts GoalInput independently of argv and returns the application result", async () => {
+    const result = { status: "completed" as const, task, state, rounds: 2 };
+    planTaskMock.mockResolvedValue(result);
+    expect(await runPlanCommand({ repositoryPath: ".", objective: "Clarify README" })).toBe(result);
+  });
   it("rejects a missing repository path", async () => {
     expect(await runPlanningCli([])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Error: Repository path is required.");

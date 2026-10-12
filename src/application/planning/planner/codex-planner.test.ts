@@ -41,6 +41,16 @@ beforeEach(() => {
 });
 
 describe("createCodexPlanner", () => {
+  it("requires executable verification commands and explicitly prohibits prose", async () => {
+    await createCodexPlanner()(state);
+    const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
+    expect(prompt).toContain("Verification entries MUST be executable shell commands");
+    expect(prompt).toContain("runnable exactly as written");
+    expect(prompt).toContain("Do not put prose, explanations, or natural-language instructions");
+    for (const example of ["git diff --check", "pnpm typecheck", "pnpm test", "README 변경 내용을 검토한다", "git diff로 변경 내용을 확인한다", "git diff -- README.md로 변경 범위를 확인한다"]) {
+      expect(prompt).toContain(example);
+    }
+  });
   it("projects state into the prompt without repositoryRoot or internal paths", async () => {
     const createInput = vi.spyOn(projection, "createPlannerContext");
     const before = structuredClone(state);

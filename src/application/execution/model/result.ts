@@ -19,6 +19,9 @@ export type ExecutionFailure = {
 export type ExecutionTelemetry = {
   workspaceDurationMs?: number;
   workerDurationMs?: number;
+  workerSetupDurationMs?: number;
+  codexProcessDurationMs?: number;
+  workerOutputProcessingDurationMs?: number;
   verificationDurationMs?: number;
   cleanupDurationMs?: number;
   totalDurationMs: number;

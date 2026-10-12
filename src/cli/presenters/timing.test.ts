@@ -4,6 +4,15 @@ import { presentTiming } from "./timing.js";
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("presentTiming", () => {
+  it("shows Worker internal timing as nested rows", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    presentTiming({ workerDurationMs: 116622, workerSetupDurationMs: 120,
+      codexProcessDurationMs: 116240, workerOutputProcessingDurationMs: 262 });
+    expect(log).toHaveBeenCalledWith("Worker: 116.6s");
+    expect(log).toHaveBeenCalledWith("  - Setup: 0.1s");
+    expect(log).toHaveBeenCalledWith("  - Codex Process: 116.2s");
+    expect(log).toHaveBeenCalledWith("  - Output Processing: 0.3s");
+  });
   it("shows stage durations in seconds and distinguishes Human approval wait", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     presentTiming({ planningDurationMs: 18400, approvalWaitDurationMs: 6200,

@@ -55,7 +55,8 @@ export async function runWorkerStage(
     state.evidence.workerOutput = await runCodexWorker(
       task,
       workspaceRoot,
-      options.workerTimeoutMs
+      options.workerTimeoutMs,
+      state.telemetry,
     );
 
     return true;

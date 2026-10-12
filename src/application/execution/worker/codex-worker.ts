@@ -1,3 +1,4 @@
+import type { ExecutionTelemetry } from "../model/result.js";
 import type { TaskContract } from "@/contracts/task.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 
@@ -7,7 +8,9 @@ export async function runCodexWorker(
   task: TaskContract,
   workspaceRoot: string,
   timeoutMs = DEFAULT_CODEX_WORKER_TIMEOUT_MS,
+  telemetry?: Pick<ExecutionTelemetry, "workerSetupDurationMs" | "codexProcessDurationMs" | "workerOutputProcessingDurationMs">,
 ): Promise<string> {
+  const setupStartedAt = performance.now();
   const prompt = [
     "Complete the following task within the provided repository workspace.",
     "",
@@ -33,29 +36,37 @@ export async function runCodexWorker(
       "- (none)",
   ].join("\n");
 
+  const processCallStartedAt = performance.now();
+  if (telemetry) telemetry.workerSetupDurationMs = processCallStartedAt - setupStartedAt;
   const result = await runCommand(
     "codex",
     ["exec", "--sandbox", "workspace-write", prompt],
     { cwd: workspaceRoot, timeoutMs },
   );
 
-  if (result.timedOut) {
-    const error = new Error(`Codex worker timed out after ${timeoutMs} ms.`);
-    throw new Error(`Failed to run Codex worker: ${error.message}`, {
-      cause: error,
-    });
-  }
+  if (telemetry) telemetry.codexProcessDurationMs = result.processDurationMs ?? (performance.now() - processCallStartedAt);
+  const outputStartedAt = performance.now();
+  try {
+    if (result.timedOut) {
+      const error = new Error(`Codex worker timed out after ${timeoutMs} ms.`);
+      throw new Error(`Failed to run Codex worker: ${error.message}`, {
+        cause: error,
+      });
+    }
 
-  if (result.error || result.exitCode !== 0) {
-    const detail =
-      result.stderr.trim() ||
-      result.error?.message ||
-      `Codex exited with code ${result.exitCode ?? "unavailable"}.`;
-    const error = result.error ?? new Error(detail);
-    throw new Error(`Failed to run Codex worker: ${detail}`, {
-      cause: error,
-    });
-  }
+    if (result.error || result.exitCode !== 0) {
+      const detail =
+        result.stderr.trim() ||
+        result.error?.message ||
+        `Codex exited with code ${result.exitCode ?? "unavailable"}.`;
+      const error = result.error ?? new Error(detail);
+      throw new Error(`Failed to run Codex worker: ${detail}`, {
+        cause: error,
+      });
+    }
 
-  return result.stdout;
+    return result.stdout;
+  } finally {
+    if (telemetry) telemetry.workerOutputProcessingDurationMs = performance.now() - outputStartedAt;
+  }
 }

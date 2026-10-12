@@ -209,6 +209,7 @@ describe("executeTask", async () => {
       task,
       "/tmp/execution-workspace",
       25,
+      expect.any(Object),
     );
     expect(result.evidence.changedPaths).toEqual(["partial-change.txt"]);
     expect(result.failures).toEqual([

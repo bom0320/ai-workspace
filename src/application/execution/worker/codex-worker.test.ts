@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskContract } from "@/contracts/task.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import { runCodexWorker } from "./codex-worker.js";
+import type { ExecutionTelemetry } from "../model/result.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 
@@ -25,6 +26,22 @@ beforeEach(() => {
 });
 
 describe("runCodexWorker", () => {
+  it("records setup, actual process timing and output processing without changing stdout", async () => {
+    const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
+    runCommandMock.mockResolvedValue({ stdout: "complete", stderr: "", exitCode: 0, timedOut: false, processDurationMs: 12 });
+    expect(await runCodexWorker(task, "/tmp/workspace", 1000, telemetry)).toBe("complete");
+    expect(telemetry.codexProcessDurationMs).toBe(12);
+    expect(telemetry.workerSetupDurationMs).toBeGreaterThanOrEqual(0);
+    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("retains process and output timing on process failure", async () => {
+    const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
+    runCommandMock.mockResolvedValue({ stdout: "", stderr: "failure", exitCode: 1, timedOut: false, processDurationMs: 5 });
+    await expect(runCodexWorker(task, "/tmp/workspace", 1000, telemetry)).rejects.toThrow("failure");
+    expect(telemetry.codexProcessDurationMs).toBe(5);
+    expect(telemetry.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
+  });
   it("runs Codex in the workspace with TaskContract instructions", async () => {
     runCommandMock.mockResolvedValue({
       stdout: "Codex final output",

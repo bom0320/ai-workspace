@@ -242,6 +242,10 @@ function runScenario(scenario: Scenario): ScenarioResult {
     ) as ExecutionResult;
     expect(storedResult.telemetry).toBeDefined();
     expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.codexProcessDurationMs).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(storedResult.telemetry!.codexProcessDurationMs!);
+    expect(storedResult.telemetry!.workerSetupDurationMs).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
     expect(storedResult.telemetry!.cleanupDurationMs).toBeGreaterThanOrEqual(0);
     for (const duration of Object.values(storedResult.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
     expect(storedResult.passed).toBe(

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
+import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningState } from "../model/state.js";
 
 import type { InspectRequest, InspectedFile } from "./inspection.js";
@@ -16,6 +17,8 @@ export type PlannerContext = {
     instructions?: string;
   };
   inspectedFiles: InspectedFile[];
+  limits: PlanningLimits;
+  remainingInspectionBudget: number;
 };
 
 export const taskDraftSchema = taskContractSchema.omit({
@@ -42,4 +45,4 @@ export const plannerDecisionSchema = z.discriminatedUnion("type", [
 
 export type PlannerDecision = z.infer<typeof plannerDecisionSchema>;
 
-export type Planner = (state: PlanningState) => Promise<PlannerDecision>;
+export type Planner = (state: PlanningState, limits: PlanningLimits) => Promise<PlannerDecision>;

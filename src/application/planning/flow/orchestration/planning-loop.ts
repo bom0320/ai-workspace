@@ -93,7 +93,7 @@ export async function runPlanningLoop({
 
   while (rounds < limits.maxRounds) {
     rounds += 1;
-    const decision = await planner(state);
+    const decision = await planner(state, limits);
 
     if (decision.type === "complete") {
       return completePlanning(state, decision.task, goalId, taskId, rounds);

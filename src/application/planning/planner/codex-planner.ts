@@ -15,8 +15,8 @@ export type CodexPlannerOptions = {
 export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
   const timeoutMs = options.timeoutMs ?? 15 * 60 * 1_000;
 
-  return async (state) => {
-    const input = createPlannerContext(state);
+  return async (state, limits) => {
+    const input = createPlannerContext(state, limits);
     const prompt = [
       "You are a planning-only software agent.",
       "You must not edit files or execute repository commands.",
@@ -35,6 +35,14 @@ export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
       "Valid examples: git diff --check; pnpm typecheck; pnpm test. Only request scripts supported by the supplied repository facts.",
       "Invalid examples: README 변경 내용을 검토한다; git diff로 변경 내용을 확인한다; git diff -- README.md로 변경 범위를 확인한다.",
       "Return JSON only. Do not include markdown fences or explanations outside the JSON.",
+      `Planning limits: max rounds: ${limits.maxRounds}; max files per inspect request: ${limits.maxFilesPerRequest}; max total inspected files: ${limits.maxTotalFiles}.`,
+      `Already inspected: ${state.inspectedFiles.length}; remaining inspection budget: ${input.remainingInspectionBudget}.`,
+      "Never request more than maxFilesPerRequest paths in one inspect action.",
+      "Never exceed the remaining maxTotalFiles inspection budget.",
+      "If more repository context may be needed, request only the highest-priority files first.",
+      "Additional files can be requested in later planning rounds, within maxRounds.",
+      "Avoid requesting files already present in inspectedFiles.",
+      "Use the minimum repository context needed to produce a safe TaskDraft.",
       "PlannerContext:",
       JSON.stringify(input),
     ].join("\n");

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { PlanningState } from "../../model/state.js";
 import { createPlannerContext } from "./create-planner-context.js";
 
+const limits = { maxRounds: 4, maxFilesPerRequest: 5, maxTotalFiles: 12 };
+
 function createState(): PlanningState {
   return {
     goal: {
@@ -22,9 +24,17 @@ function createState(): PlanningState {
 }
 
 describe("createPlannerContext", () => {
+  it("recalculates remaining budget from the current state without mutating limits", () => {
+    const state = createState();
+    const budget = Object.freeze({ maxRounds: 4, maxFilesPerRequest: 5, maxTotalFiles: 2 });
+    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(1);
+    state.inspectedFiles.push({ path: "README.md", content: "read" });
+    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(0);
+    expect(createPlannerContext(state, budget).limits).toBe(budget);
+  });
   it("projects planning facts without exposing repositoryRoot", () => {
     const state = createState();
-    const input = createPlannerContext(state);
+    const input = createPlannerContext(state, limits);
 
     expect(input).toEqual({
       goal: state.goal,
@@ -35,6 +45,8 @@ describe("createPlannerContext", () => {
         instructions: state.repository.instructions,
       },
       inspectedFiles: state.inspectedFiles,
+      limits,
+      remainingInspectionBudget: 11,
     });
     expect(input.repository).not.toHaveProperty("repositoryRoot");
     expect(input).not.toHaveProperty("repositoryRoot");
@@ -44,7 +56,7 @@ describe("createPlannerContext", () => {
     const state = createState();
     delete state.repository.instructions;
 
-    expect(createPlannerContext(state).repository.instructions).toBeUndefined();
+    expect(createPlannerContext(state, limits).repository.instructions).toBeUndefined();
     expect(state.repository).not.toHaveProperty("instructions");
   });
 
@@ -58,7 +70,7 @@ describe("createPlannerContext", () => {
     Object.freeze(state.inspectedFiles);
     Object.freeze(state);
 
-    const input = createPlannerContext(state);
+    const input = createPlannerContext(state, limits);
 
     expect(input.goal).toBe(state.goal);
     expect(input.repository.fileTree).toBe(state.repository.fileTree);

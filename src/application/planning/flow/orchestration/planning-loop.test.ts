@@ -87,7 +87,7 @@ describe("runPlanningLoop", () => {
 
     expect(result).toEqual({ status: "completed", task: { ...task, id: "task-harness", goalId: "goal-harness" }, state: initialState, rounds: 1 });
     expect(planner).toHaveBeenCalledOnce();
-    expect(planner).toHaveBeenCalledWith(initialState);
+    expect(planner).toHaveBeenCalledWith(initialState, limits);
     if (result.status === "completed") {
       expect(result.task).not.toBe(task);
     }

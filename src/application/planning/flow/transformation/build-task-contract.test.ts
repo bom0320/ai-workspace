@@ -4,8 +4,8 @@ import { ZodError } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
-import type { TaskDraft } from "../protocol/planner.js";
-import { finalizeTaskContract } from "./finalize-task-contract.js";
+import type { TaskDraft } from "../../protocol/planner.js";
+import { buildTaskContract } from "./build-task-contract.js";
 
 const goal: GoalSpec = {
   objective: "Clarify the project description",
@@ -23,9 +23,9 @@ const draft: TaskDraft = {
 };
 const ids = { taskId: "task-harness", goalId: "goal-harness" };
 
-describe("finalizeTaskContract", () => {
+describe("buildTaskContract", () => {
   it("injects Harness identifiers and validates the final TaskContract", () => {
-    const task = finalizeTaskContract({ draft, goal, ...ids });
+    const task = buildTaskContract({ draft, goal, ...ids });
     expect(task.id).toBe(ids.taskId);
     expect(task.goalId).toBe(ids.goalId);
     expect(taskContractSchema.parse(task)).toEqual(task);
@@ -37,30 +37,30 @@ describe("finalizeTaskContract", () => {
   });
 
   it("preserves Human constraints before Draft constraints with stable deduplication", () => {
-    expect(finalizeTaskContract({ draft, goal, ...ids }).constraints).toEqual([
+    expect(buildTaskContract({ draft, goal, ...ids }).constraints).toEqual([
       "No new dependencies", "Keep changes scoped", "README.md only",
     ]);
   });
 
   it("preserves Human constraints even when the Draft omits all of them", () => {
-    expect(finalizeTaskContract({ draft: { ...draft, constraints: [] }, goal, ...ids }).constraints)
+    expect(buildTaskContract({ draft: { ...draft, constraints: [] }, goal, ...ids }).constraints)
       .toEqual(["No new dependencies", "Keep changes scoped"]);
   });
 
   it("uses only Draft constraints when the Goal has no constraints", () => {
     const { constraints: _constraints, ...withoutConstraints } = goal;
-    expect(finalizeTaskContract({ draft, goal: withoutConstraints, ...ids }).constraints)
+    expect(buildTaskContract({ draft, goal: withoutConstraints, ...ids }).constraints)
       .toEqual(["Keep changes scoped", "README.md only"]);
   });
 
   it("uses the Human repository even when the Draft requests a different repository", () => {
-    expect(finalizeTaskContract({ draft, goal, ...ids }).targetRepository).toBe(goal.targetRepository);
+    expect(buildTaskContract({ draft, goal, ...ids }).targetRepository).toBe(goal.targetRepository);
   });
 
   it("does not mutate either input", () => {
     const goalBefore = structuredClone(goal);
     const draftBefore = structuredClone(draft);
-    const task = finalizeTaskContract({ draft, goal, ...ids });
+    const task = buildTaskContract({ draft, goal, ...ids });
     expect(goal).toEqual(goalBefore);
     expect(draft).toEqual(draftBefore);
     expect(task.constraints).not.toBe(goal.constraints);
@@ -68,10 +68,10 @@ describe("finalizeTaskContract", () => {
   });
 
   it.each(["taskId", "goalId"] as const)("rejects an empty Harness %s", (field) => {
-    expect(() => finalizeTaskContract({ draft, goal, ...ids, [field]: "" })).toThrow(ZodError);
+    expect(() => buildTaskContract({ draft, goal, ...ids, [field]: "" })).toThrow(ZodError);
   });
 
   it("rejects an empty Draft objective", () => {
-    expect(() => finalizeTaskContract({ draft: { ...draft, objective: "" }, goal, ...ids })).toThrow(ZodError);
+    expect(() => buildTaskContract({ draft: { ...draft, objective: "" }, goal, ...ids })).toThrow(ZodError);
   });
 });

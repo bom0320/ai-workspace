@@ -6,7 +6,7 @@ import { ZodError } from "zod";
 import { runCommand } from "@/infrastructure/process/index.js";
 import type { TaskDraft } from "../protocol/planner.js";
 
-import * as projection from "../flow/create-planner-context.js";
+import * as projection from "../flow/transformation/create-planner-context.js";
 import type { PlanningState } from "../model/state.js";
 import { createCodexPlanner } from "./codex-planner.js";
 

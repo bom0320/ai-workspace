@@ -1,8 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
-import type { InspectRequest } from "../protocol/inspection.js";
-import type { InspectResult } from "../protocol/inspection.js";
+import type { InspectRequest } from "../../protocol/inspection.js";
+import type { InspectResult } from "../../protocol/inspection.js";
 
 export class InspectionRequestError extends Error {
   override name = "InspectionRequestError";

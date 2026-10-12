@@ -1,15 +1,15 @@
 import type { TaskContract } from "@/contracts/task.js";
 import { checkScope } from "@/services/scope/index.js";
 import { runVerification } from "@/services/verification/index.js";
-import { runCodexWorker } from "../worker/codex-worker.js";
+import { runCodexWorker } from "../../worker/codex-worker.js";
 import { collectChangedPaths } from "@/services/evidence/index.js";
 import type {
   ExecutionFailureStage,
-} from "../model/result.js";
+} from "../../model/result.js";
 import type {
   ExecutionState,
   TaskExecutionOptions,
-} from "../model/state.js";
+} from "../../model/state.js";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -4,14 +4,14 @@ import { join, sep } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskDraft } from "../protocol/planner.js";
+import type { TaskDraft } from "../../protocol/planner.js";
 
-import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningState } from "../model/state.js";
-import * as inspection from "./inspect-files.js";
-import * as finalization from "./finalize-task-contract.js";
+import type { PlanningLimits } from "../../model/limits.js";
+import type { PlanningState } from "../../model/state.js";
+import * as inspection from "../inspection/inspect-files.js";
+import * as finalization from "../transformation/build-task-contract.js";
 import { runPlanningLoop } from "./planning-loop.js";
-import type { Planner } from "../protocol/planner.js";
+import type { Planner } from "../../protocol/planner.js";
 
 const temporaryDirectories: string[] = [];
 const limits: PlanningLimits = { maxRounds: 3, maxFilesPerRequest: 3, maxTotalFiles: 3 };
@@ -67,7 +67,7 @@ describe("runPlanningLoop", () => {
 
   it("propagates unexpected finalization errors", async () => {
     const error = new Error("Unexpected finalization error");
-    vi.spyOn(finalization, "finalizeTaskContract").mockImplementation(() => { throw error; });
+    vi.spyOn(finalization, "buildTaskContract").mockImplementation(() => { throw error; });
     const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
     await expect(runPlanningLoop({ initialState: createState(), planner, limits, goalId: "goal-harness", taskId: "task-harness" }))
       .rejects.toBe(error);

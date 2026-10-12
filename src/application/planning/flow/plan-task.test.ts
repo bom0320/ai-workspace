@@ -8,7 +8,7 @@ import type { GoalSpec } from "@/contracts/goal.js";
 import type { TaskDraft } from "../protocol/planner.js";
 
 import * as codex from "../planner/codex-planner.js";
-import { inspectRepository } from "./inspect-repository.js";
+import { inspectRepository } from "./inspection/inspect-repository.js";
 import { planTask } from "./plan-task.js";
 import type { Planner } from "../protocol/planner.js";
 

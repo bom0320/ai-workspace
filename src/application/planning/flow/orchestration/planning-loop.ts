@@ -1,13 +1,13 @@
 import { resolve } from "node:path";
 import { ZodError } from "zod";
 
-import type { PlanningState } from "../model/state.js";
-import type { InspectRequest } from "../protocol/inspection.js";
-import type { Planner, TaskDraft } from "../protocol/planner.js";
-import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningResult } from "../model/result.js";
-import { finalizeTaskContract } from "./finalize-task-contract.js";
-import { inspectFiles, InspectionRequestError } from "./inspect-files.js";
+import type { PlanningState } from "../../model/state.js";
+import type { InspectRequest } from "../../protocol/inspection.js";
+import type { Planner, TaskDraft } from "../../protocol/planner.js";
+import type { PlanningLimits } from "../../model/limits.js";
+import type { PlanningResult } from "../../model/result.js";
+import { buildTaskContract } from "../transformation/build-task-contract.js";
+import { inspectFiles, InspectionRequestError } from "../inspection/inspect-files.js";
 
 function hasValidLimits(limits: PlanningLimits): boolean {
   return Object.values(limits).every((value) => Number.isSafeInteger(value) && value >= 0);
@@ -55,7 +55,7 @@ function completePlanning(
   rounds: number,
 ): PlanningResult {
   try {
-    const task = finalizeTaskContract({ draft, goal: state.goal, goalId, taskId });
+    const task = buildTaskContract({ draft, goal: state.goal, goalId, taskId });
     return { status: "completed", task, state, rounds };
   } catch (error) {
     if (error instanceof ZodError) {

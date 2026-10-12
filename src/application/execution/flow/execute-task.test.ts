@@ -14,7 +14,7 @@ import {
   removeExecutionWorkspace,
 } from "@/infrastructure/git/index.js";
 import { checkScope } from "@/services/scope/index.js";
-import { executeTask } from "./task-executor.js";
+import { executeTask } from "./execute-task.js";
 import { runVerification } from "@/services/verification/index.js";
 
 vi.mock("../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));

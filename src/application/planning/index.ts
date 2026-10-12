@@ -1,10 +1,10 @@
 export { planTask } from "./flow/plan-task.js";
 export type { PlanTaskOptions } from "./flow/plan-task.js";
-export { runPlanningLoop } from "./flow/planning-loop.js";
-export { inspectRepository } from "./flow/inspect-repository.js";
-export { inspectFiles } from "./flow/inspect-files.js";
-export { createPlannerContext } from "./flow/create-planner-context.js";
-export { finalizeTaskContract } from "./flow/finalize-task-contract.js";
+export { runPlanningLoop } from "./flow/orchestration/planning-loop.js";
+export { inspectRepository } from "./flow/inspection/inspect-repository.js";
+export { inspectFiles } from "./flow/inspection/inspect-files.js";
+export { createPlannerContext } from "./flow/transformation/create-planner-context.js";
+export { buildTaskContract } from "./flow/transformation/build-task-contract.js";
 export { createCodexPlanner } from "./planner/codex-planner.js";
 export type { CodexPlannerOptions } from "./planner/codex-planner.js";
 

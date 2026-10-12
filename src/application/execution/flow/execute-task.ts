@@ -8,7 +8,7 @@ import {
   getExecutionBaseCommit,
   preserveExecutionChanges,
 } from "@/services/artifacts/index.js";
-import { finalizeExecutionResult } from "./result-finalizer.js";
+import { finalizeExecutionResult } from "./orchestration/result-finalizer.js";
 import type { ExecutionResult } from "../model/result.js";
 import {
   addExecutionFailure,
@@ -16,7 +16,7 @@ import {
   runScopeStage,
   runVerificationStage,
   runWorkerStage,
-} from "./stages.js";
+} from "./orchestration/stages.js";
 import type {
   ExecutionState,
   TaskExecutionOptions,

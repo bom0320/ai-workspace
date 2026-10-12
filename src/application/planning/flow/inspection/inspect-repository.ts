@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 
-import type { RepositoryInfo } from "../model/state.js";
+import type { RepositoryInfo } from "../../model/state.js";
 
 function readOptionalFile(path: string): string | undefined {
   try {

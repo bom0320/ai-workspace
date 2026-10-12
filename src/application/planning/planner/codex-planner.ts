@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { runCommand } from "@/infrastructure/process/index.js";
 
-import { createPlannerContext } from "../flow/create-planner-context.js";
+import { createPlannerContext } from "../flow/transformation/create-planner-context.js";
 import type { Planner } from "../protocol/planner.js";
 import { plannerDecisionSchema } from "../protocol/planner.js";
 

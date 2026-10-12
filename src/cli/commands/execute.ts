@@ -1,8 +1,6 @@
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-
 import { ZodError } from "zod";
 
+import type { TaskContract } from "@/contracts/task.js";
 import { loadTaskContract } from "@/contracts/task-loader.js";
 import {
   executeTask,
@@ -21,7 +19,7 @@ function timeoutFromEnvironment(name: string): number | undefined {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined;
 }
 
-export async function runCli(args: string[]): Promise<number> {
+export async function runExecutionCli(args: string[]): Promise<number> {
   const taskPath = args[0];
   const repositoryPath = args[1];
 
@@ -53,6 +51,10 @@ export async function runCli(args: string[]): Promise<number> {
     return 1;
   }
 
+  return runExecuteCommand(task, repositoryPath);
+}
+
+export async function runExecuteCommand(task: TaskContract, repositoryPath: string): Promise<number> {
   console.log("Task Contract: valid");
 
   let repositoryRoot;
@@ -152,12 +154,3 @@ export async function runCli(args: string[]): Promise<number> {
   return result.passed ? 0 : 1;
 }
 
-const isEntryPoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
-
-if (isEntryPoint) {
-  runCli(process.argv.slice(2)).then((exitCode) => {
-    process.exitCode = exitCode;
-  });
-}

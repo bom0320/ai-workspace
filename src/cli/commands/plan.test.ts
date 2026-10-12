@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { planTask, type PlanningState } from "@/application/planning/index.js";
 import { executeTask } from "@/application/execution/index.js";
 import type { TaskContract } from "@/contracts/task.js";
-import { runPlanningCli } from "./planning-cli.js";
+import { runPlanningCli } from "../cli.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));

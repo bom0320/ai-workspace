@@ -6,7 +6,7 @@ import { loadTaskContract } from "@/contracts/task-loader.js";
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { executeTask } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
-import { runCli } from "./cli.js";
+import { runExecutionCli as runCli } from "./execute.js";
 
 vi.mock("@/contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));

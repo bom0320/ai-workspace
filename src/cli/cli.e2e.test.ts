@@ -18,8 +18,8 @@ import { describe, expect, it } from "vitest";
 
 import type { ExecutionResult } from "@/application/execution/index.js";
 
-const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cliPath = join(projectRoot, "src", "cli.ts");
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const cliPath = join(projectRoot, "src", "cli", "cli.ts");
 const tsxImport = pathToFileURL(
   createRequire(import.meta.url).resolve("tsx"),
 ).href;
@@ -187,7 +187,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
 
     const cli = spawnSync(
       process.execPath,
-      ["--import", tsxImport, cliPath, taskPath, repositoryRoot],
+      ["--import", tsxImport, cliPath, "execute", taskPath, repositoryRoot],
       {
         cwd: temporaryRoot,
         encoding: "utf8",
@@ -424,4 +424,88 @@ describe("CLI end-to-end execution", () => {
       violations: ["forbidden.txt"],
     });
   });
+});
+
+function runPlanningScenario(answer: string): void {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
+  const repositoryRoot = join(temporaryRoot, "repository");
+  const bin = join(temporaryRoot, "bin");
+  const workerRecord = join(temporaryRoot, "worker.txt");
+  const plannerRecord = join(temporaryRoot, "planner.txt");
+  try {
+    mkdirSync(repositoryRoot);
+    mkdirSync(bin);
+    git(repositoryRoot, ["init"]);
+    git(repositoryRoot, ["config", "user.name", "E2E"]);
+    git(repositoryRoot, ["config", "user.email", "e2e@example.invalid"]);
+    writeFileSync(join(repositoryRoot, "README.md"), "Original introduction\n");
+    git(repositoryRoot, ["add", "."]);
+    git(repositoryRoot, ["commit", "-m", "initial"]);
+    const fakeCodex = join(bin, "codex");
+    writeFileSync(fakeCodex, [
+      `#!${process.execPath}`,
+      'const { writeFileSync, appendFileSync } = require("node:fs");',
+      'const args = process.argv.slice(2);',
+      'if (args.includes("read-only")) {',
+      '  appendFileSync(process.env.E2E_PLANNER_RECORD, "round\\n");',
+      '  const input = JSON.parse(args.at(-1).split("PlannerContext:\\n")[1]);',
+      '  if (input.inspectedFiles.length === 0) {',
+      '    console.log(JSON.stringify({type:"inspect",request:{paths:["README.md"]}}));',
+      '  } else {',
+      '    console.log(JSON.stringify({type:"complete",task:{objective:"Clarify introduction",targetRepository:"repository",allowedPaths:["README.md"],forbiddenPaths:[],constraints:[],acceptanceCriteria:["Clear introduction"],verification:[]}}));',
+      '  }',
+      '} else {',
+      '  writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());',
+      '  writeFileSync("README.md", "Clear introduction\\n");',
+      '  console.log("Worker complete");',
+      '}',
+    ].join("\n"));
+    chmodSync(fakeCodex, 0o755);
+    const cli = spawnSync(process.execPath, ["--import", tsxImport, cliPath, repositoryRoot, "Clarify introduction"], {
+      cwd: temporaryRoot,
+      encoding: "utf8",
+      input: answer,
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+        TSX_TSCONFIG_PATH: join(projectRoot, "tsconfig.json"),
+        E2E_WORKER_RECORD: workerRecord,
+        E2E_PLANNER_RECORD: plannerRecord,
+      },
+    });
+    expect(cli.error).toBeUndefined();
+    expect(cli.signal).toBeNull();
+    expect(cli.stdout, cli.stderr).toContain("Planning: completed");
+    expect(cli.stdout).toContain("Rounds: 2");
+    expect(cli.stdout).toContain("Approve / Reject");
+    expect(readFileSync(plannerRecord, "utf8")).toBe("round\nround\n");
+    expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe("Original introduction\n");
+    if (answer.trim() === "Approve") {
+      expect(cli.status, cli.stderr).toBe(0);
+      expect(existsSync(workerRecord)).toBe(true);
+      const artifactsMatch = cli.stdout.match(/^Run Artifacts: (.+)$/m)!;
+      expect(artifactsMatch).not.toBeNull();
+      const storedTask = JSON.parse(readFileSync(join(artifactsMatch[1], "task.json"), "utf8"));
+      expect(storedTask.id).toMatch(/^task-/);
+      expect(cli.stdout).toContain(storedTask.id);
+      expect(existsSync(readFileSync(workerRecord, "utf8"))).toBe(false);
+    } else {
+      expect(cli.status).toBe(1);
+      expect(existsSync(workerRecord)).toBe(false);
+      expect(existsSync(join(temporaryRoot, ".ai-workspace"))).toBe(false);
+    }
+  } finally {
+    if (existsSync(workerRecord)) {
+      const workspace = readFileSync(workerRecord, "utf8");
+      if (existsSync(workspace)) git(repositoryRoot, ["worktree", "remove", "--force", workspace]);
+    }
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+describe("CLI planning through approval and execution", () => {
+  it("executes the finalized task only after Approve", () => { runPlanningScenario("Approve\n"); });
+  it("does not execute after Reject", () => { runPlanningScenario("Reject\n"); });
+  it("does not execute on EOF", () => { runPlanningScenario(""); });
 });

@@ -1,7 +1,8 @@
 # AI Workspace
 
-AI Workspace는 제한된 Task Contract를 Git Repository에서 안전하게 실행하고,
-변경과 검증 결과를 검토용으로 남기는 Node.js CLI 도구다.
+AI Workspace는 기존 AI coding agent가 실제 Git Repository에서 안전하고 검증 가능하게
+작업하도록 실행 범위, Context, Evidence, Human approval을 통제하는 Agent Harness다.
+현재 operator interface는 Node.js CLI로 제공된다.
 
 현재 v1은 자연어 Goal을 TaskContract로 만드는 Planning과 하나의 Codex Worker를
 격리된 Git worktree에서 실행하는 흐름을 제공한다. 기존 v0의 TaskContract JSON 실행도
@@ -10,7 +11,14 @@ binary patch 및 실행 결과 보존에 이어 Human Review와 승인 기반 Ap
 workspace Delete / Keep을 지원한다. CEO Agent, 멀티에이전트, 공유 메모리,
 자동 재시도, 자동 dependency 설치는 구현되어 있지 않다.
 
-자세한 구조와 설계 원칙은 [docs/architecture.md](docs/architecture.md)를 참고한다.
+문서는 다음 책임으로 나눈다.
+
+- [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
+- [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
+- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0 / v1과 이후 planned evolution
+- [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
+
+아래는 지금 사용할 수 있는 기능과 사용법이다.
 
 ## 사전 준비
 
@@ -111,39 +119,27 @@ Harness 자체 비용은 작았다. Worker 시간 감소 전체를 Fast Path만�
 
 ## Review와 Post-Execution Delivery
 
-Workspace lifecycle은 Execution lifecycle과 분리되어 있다.
+Execution 종료 후에도 workspace는 유지된다. Review는 항상 실행되며 workspace path,
+changed paths, 실제 diff, patch artifact 위치, 존재하는 Worker Result를 표시한다.
+`Continue / Abort`로 확인 완료 여부를 받고, Continue 및 Execution / Verification 성공과
+patch 보존이 확인된 경우에만 Delivery를 진행한다.
 
-```text
-create → execute → verify → preserve evidence → review → delivery → cleanup
-```
+| 단계 | Human 선택 | 현재 안전 조건 / 결과 |
+| --- | --- | --- |
+| Task Approval | Approve / Reject | Goal flow에서 Approve 전에는 Execution 없음 |
+| Review | Continue / Abort | Abort·Review 실패 시 Apply / Commit / Push 없음 |
+| Apply | Apply / Skip | Dirty 원본 차단. `git apply --check` 후 적용. Force / 3way / reset / stash 없음 |
+| Commit | Commit / Skip | 유효한 Conventional Commit 메시지 필요. changedPaths만 stage, 기존 staged 변경 차단 |
+| Push | Push / Skip | Detached HEAD 차단, delivery commit과 HEAD 일치 확인, 기존 remote upstream에만 일반 push |
+| Cleanup | Delete / Keep | Abort·Delivery 실패 후에도 별도 선택. Worktree만 Delete, artifacts는 유지 |
 
-Execution이 끝나도 worktree를 바로 제거하지 않는다. Review는 선택 여부를 묻지 않고
-항상 실행되며 Workspace path, Changed Paths, 실제 workspace diff, Patch artifact 위치,
-Worker Result가 있으면 그 내용을 자동으로 보여준다. Diff는 실행 시작 commit 기준으로
-Worker commit과 새 파일도 포함하며 64KiB로 출력이 제한된다. Worker output은 16KiB로
-제한되며 전체 변경은 살아 있는 workspace와 patch artifact에서 확인할 수 있다.
+Task Approval ≠ Change Review ≠ Apply Approval ≠ Commit Approval ≠ Push Approval ≠ Cleanup Decision.
+Commit Skip은 working tree 변경을, Push Skip·실패는 local commit을 유지한다.
+Cleanup Keep·실패나 Delivery 결과가 이미 성공한 Execution의 `passed`를 바꾸지 않는다.
+상세 interaction과 실제 CLI 파일 책임은 [CLI / Human interface](docs/cli-and-human-interface.md)를 참조한다.
 
-Review 이후 `Continue / Abort`를 받는다. Continue는 Delivery 진행을 허용하고,
-Abort는 원본 반영과 Commit / Push를 모두 건너뛴다. Execution·Verification 성공과 patch
-보존이 확인된 경우에만 Apply가 가능하다. Review 실패 시에도 Delivery를 진행하지 않는다.
-
-각 Human decision은 서로 다른 단계다.
-
-```text
-Task Approval ≠ Change Review ≠ Apply Approval
-              ≠ Commit Approval ≠ Push Approval ≠ Cleanup Decision
-```
-
-### Apply
-
-`Apply / Skip`을 받으며 verified `changes.patch`를 사용한다. 원본 Repository에
-staged·unstaged·untracked 변경이 있으면 차단한다. `git apply --check` 성공 후에만
-`git apply`를 실행하며 force, `--3way`, reset, stash fallback은 사용하지 않는다.
-
-### Commit
-
-Apply 성공 후 `Commit / Skip`을 받는다. Commit을 선택하면 메시지를 입력받고
-`type: subject` 또는 `type(scope): subject` 형식을 검사한다. 허용 type은 다음과 같다.
+Commit message는 다음 형태를 사용한다. Subject는 비어 있으면 안 되며 newline은 허용하지 않는다.
+Invalid message는 자동 보정하지 않고 Commit을 차단한다. Upstream 자동 생성과 force push는 하지 않는다.
 
 ```text
 feat: ...
@@ -154,26 +150,6 @@ perf: ...
 test: ...
 chore: ...
 ```
-
-Subject는 비어 있으면 안 되며 newline은 허용하지 않는다. Invalid message는 자동 보정하지
-않고 Commit을 차단한다. Execution의 `changedPaths`만 stage하며 `git add .`는 사용하지
-않는다. 기존 staged changes가 있으면 차단한다. Skip하면 적용된 변경을 working tree에 유지한다.
-
-### Push
-
-Commit 성공 후 `Push / Skip`을 받는다. Detached HEAD를 차단하고 현재 HEAD가 방금 생성한
-Delivery commit인지 확인한다. 기존 remote upstream이 확인된 경우에만 해당 branch에
-일반 push를 수행한다. Force push나 upstream 자동 생성은 하지 않는다.
-Skip하거나 Push가 실패하면 local commit은 유지된다.
-
-### Cleanup
-
-Review·Delivery가 끝나면 `Delete / Keep`을 받는다. Review Abort나 Delivery 실패 후에도
-별도로 결정한다. Delete는 execution worktree만 제거하고, Keep은 workspace를 유지한다.
-Artifacts는 어느 선택에서도 유지한다. Cleanup 실패 시 workspace 경로를 출력한다.
-
-Review Abort, Delivery Skip·실패, Cleanup Keep·실패는 이미 완료된 Execution의 `passed`를
-false로 바꾸지 않는다. ExecutionResult와 Review / Delivery / Cleanup 결과는 구분한다.
 
 ### 전체 흐름
 

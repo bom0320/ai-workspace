@@ -1,595 +1,201 @@
 # AI Workspace Architecture
 
-## 1. Goal
+## 1. Architecture Scope
 
-AI Workspace는 하나의 AI 모델에게 코딩을 맡기는 도구가 아니라,
+이 문서는 현재 코드의 구성과 책임 경계, 향후 목표 아키텍처를 구분한다.
+프로젝트의 North Star는 [Project Direction](project-direction.md), 단계별 계획은
+[Roadmap](roadmap.md), 실행 방법은 [README](../README.md), Human 조작은
+[CLI and Human Interface](cli-and-human-interface.md)를 참조한다.
 
-AI Agent가 실제 소프트웨어 개발 업무를 안전하고 반복 가능하게 수행하도록
+현재 구현은 이 repository에서 확인 가능한 v0 / v1 코드 기준이다. 브랜치명만으로
+미래 기능의 구현 여부를 판단하지 않는다. Target Architecture는 배치해야 할 코드 폴더나
+이미 존재하는 런타임을 의미하지 않는다.
 
-조직 운영과 Repository 실행 환경을 연결하는 개발 시스템이다.
+## 2. Current Architecture
 
-Human은 목표와 제약을 정의하고 중요한 의사결정을 승인한다.
-
-상위 Control Plane은 작업을 분석하고 필요한 Agent를 구성하며,
-
-업무를 분해하고 상태와 예산을 관리한다.
-
-하위 Repository Harness는 각 Repository의 규칙과 Task Contract를 기반으로
-
-코드를 조사하고 수정하고 검증하며 실행 결과를 Evidence로 반환한다.
-
----
-
-
-
-## 2. Core Principle
-
-### Workflow-first at the top
-
-상위 계층은 다음을 담당한다.
-
-- Intent Analysis
-- Task Analysis
-- Staffing
-- Coordination
-- Context Routing
-- Budget Management
-- Decision
-- Escalation
-- Executive Reporting
-
-### Repository-first at the bottom
-
-하위 계층은 다음을 담당한다.
-
-- Repository inspection
-- Repository-specific rules
-- Scoped implementation
-- Tool execution
-- Verification
-- Evidence collection
-
-핵심 원칙:
-
-> Horizontal Orchestration + Vertical Harness
-
-그리고:
-
-> Reliable Worker before Agent Team
-
-여러 Agent를 구성하기 전에
-
-단일 Worker가 Repository 안에서 안정적으로
-
-읽기 → 수정 → 검증 → 보고를 수행할 수 있어야 한다.
-
----
-
-
-
-## 3. System Boundary
-
-AI Workspace는 개별 프로젝트 Repository에 포함되지 않는다.
-
-각 Repository는 독립적으로 존재하며,
-
-AI Workspace가 외부에서 연결한다.
+현재 구현은 기존 Codex CLI를 Planning과 scoped execution 역할로 사용하는 Harness다.
+AI Workspace는 독립적인 대상 Git Repository에 연결하며, 대상 Repository가 이 시스템의
+코드나 조직 구조를 포함할 필요는 없다.
 
 ```text
-
-Human
-
-  ↓
-
-AI Workspace
-
-  ├─ Control Plane
-
-  ├─ Shared State
-
-  ├─ Agent Runtime
-
-  └─ Repository Harness
-
-       ↓
-
-       ├─ web-portfolio
-
-       ├─ hyoit-FE
-
-       ├─ Washer-Client-v2
-
-       └─ other repositories
+Terminal operator interface (CLI)
+  ├─ Goal input / Task Approval
+  ├─ application/planning → TaskContract
+  ├─ application/execution → ExecutionResult
+  └─ Review → Delivery → Workspace Cleanup
+           ↓
+Contracts / Scope / Verification / Evidence / Artifacts
+           ↓
+Git worktree / Process → Target Repository
 ```
 
----
+- Planning: GoalSpec, repository overview와 initial inspection, PlanningState,
+  Fast Path 또는 Codex Planner / Planning loop, TaskDraft, TaskContract.
+- Execution: isolated Git worktree, Codex Worker, scope check, verification,
+  execution evidence, artifacts, duration telemetry.
+- Human interaction: Task approval, 필수 Review, 승인 기반 Apply / Commit / Push,
+  별도 Delete / Keep cleanup.
 
-## 4. End-to-End Control Flow
+현재 Agent integration은 Codex이며 여러 provider의 registry나 generic Codex layer는 없다.
+CEO, Staffing, Coordinator runtime, Durable Shared State, 자동 retry/recovery, Specialist 협업은
+현재 구현이 아니다. 개별 실행 artifact를 조직의 공통 상태 저장소로 해석하지 않는다.
 
-AI Workspace의 제어 흐름은 Human의 Goal을 실행 가능한 작업으로 구체화하고,
-
-Repository에서 검증된 결과를 다시 의사결정 계층으로 전달하는 순환 구조다.
+## 3. Current End-to-End Flow
 
 ```text
-Human
-  → Goal
-  → CEO / Control Plane
-  → Intent & Task Analysis
-  → Staffing Proposal
-  → Approval Gate
-  → Task Contract
-  → Repository Worker
-  → Repository Rules + Relevant Context
-  → Execution
-  → Verification
-  → Evidence + Telemetry
-  → Shared State
-  → CEO Evaluation
-  → Executive Report
-  → Human
+Natural Language Goal
+↓
+Repository Inspection → Initial exact-match inspection
+↓
+Adaptive Planning
+├─ Conservative Fast Path → TaskDraft (0 rounds / no Planner call)
+└─ Codex Planner ↔ inspect / complete (Planning limits enforced)
+↓
+Harness buildTaskContract() → TaskContract
+↓
+Human Task Approval
+↓
+Isolated Git Worktree → Codex Worker
+↓
+Scope Enforcement → Verification → Final Scope Check
+↓
+Artifacts / Evidence → ExecutionResult (workspace remains alive)
+↓
+Human Review
+├─ Abort / failed → Delivery not attempted
+└─ Continue + successful Execution / Verification / preserved patch
+     ↓
+   Apply → Commit → Push (separate approvals; Skip/failure stops later steps)
+↓
+Workspace Cleanup: Delete / Keep
 ```
 
-이 흐름의 핵심 경계는 다음과 같다.
-
-> Workflow-first → Task Contract → Repository-first
-
-### 4.1 Goal
-
-Human은 수행할 Goal과 함께 Constraints, Budget, Approval Policy,
-
-Target Repository를 정의한다.
-
-Human은 개별 Agent의 세부 행동을 직접 micromanagement하지 않는다.
-
-대신 목표, 권한, 비용, 위험의 경계를 정하고 중요한 의사결정에 개입한다.
-
-### 4.2 Analysis
-
-CEO / Control Plane은 Goal을 Repository Worker에게 바로 전달하지 않는다.
-
-먼저 해결해야 할 문제와 작업 단위를 분석하고,
-
-필요한 역할, Repository Context, 위험, 불확실성을 식별한다.
-
-이 분석은 Goal을 실행 가능한 범위로 좁히고,
-
-필요한 승인과 검증 수준을 결정하는 기반이 된다.
-
-### 4.3 Staffing Proposal
-
-Control Plane은 분석 결과를 바탕으로 필요한 Agent 역할을 제안한다.
-
-Staffing Proposal에는 각 역할이 필요한 이유, 책임, 예상 비용,
-
-그리고 수행 범위가 포함된다.
-
-Approval Gate는 Human이 Goal에서 정의한 Approval Policy를 기준으로
-
-Staffing Proposal을 다음 중 하나로 판단하는 Governance 경계다.
-
-- 자동 승인 가능한 변경
-- Human approval이 필요한 변경
-- 수정 또는 거절이 필요한 변경
-
-작은 역할 추가는 자동 승인될 수 있지만,
-
-Budget 확대, 중요한 Staffing 변경, 위험도가 높은 작업은
-
-Approval Policy에 따라 Human approval을 요구할 수 있다.
-
-### 4.4 Task Contract
-
-Task Contract는 Workflow-first Control Plane과
-
-Repository-first Execution 사이의 공식 경계다.
-
-Task Contract에는 다음 항목이 포함된다.
-
-- Objective
-- Target Repository
-- Allowed Scope
-- Constraints
-- Acceptance Criteria
-- Verification Requirements
-
-Control Plane의 분석과 의사결정은 Task Contract를 통해
-
-Repository Worker가 수행할 수 있는 명확하고 제한된 작업으로 전달된다.
-
-### 4.5 Repository Execution
-
-Repository Worker는 Task Contract, Repository Rules,
-
-Relevant Repository Context만 받아 작업을 수행한다.
-
-Repository 전체를 무조건 Context에 넣지 않으며,
-
-현재 작업의 범위와 판단에 필요한 정보만 선택적으로 사용한다.
-
-Worker는 허용된 범위 안에서 Repository를 조사하고,
-
-변경을 수행하며, 검증 가능한 실행 결과를 만든다.
-
-### 4.6 Verification
-
-Agent의 자기 보고만으로는 Task의 완료를 판단하지 않는다.
-
-> Agent says "done" ≠ Task is actually done
-
-완료 여부는 작업 성격에 맞는 실제 실행 결과를 기반으로 판단한다.
-
-검증에는 다음과 같은 항목이 포함될 수 있다.
-
-- lint
-- typecheck
-- test
-- build
-- diff inspection
-
-Acceptance Criteria와 Verification Requirements를 충족했다는 Evidence가 있어야
-
-작업을 완료 상태로 평가할 수 있다.
-
-### 4.7 Result
-
-Repository Execution의 결과는 Evidence와 Telemetry로 구분한다.
-
-Evidence는 변경 내용, 명령 실행 결과, 테스트 결과, diff처럼
-
-Task의 성공 여부를 판단하는 직접적인 근거다.
-
-Telemetry는 소요 시간, 비용, 재시도 횟수, 실패 유형처럼
-
-실행 과정의 상태와 효율을 관찰하기 위한 운영 데이터다.
-
-두 결과는 Shared State에 반영되어 이후 판단과 작업의 공통 근거가 된다.
-
-CEO는 Shared State를 평가한 뒤 다음 행동 중 하나를 결정한다.
-
-- Complete
-- Retry
-- Re-plan
-- Reviewer Assignment
-- Human Escalation
-
-결정과 근거는 Executive Report로 정리되어 Human에게 전달된다.
-
-### 4.8 Human Boundary
-
-다음 결정은 자동화 계층에 위임하지 않고 Human의 권한으로 유지한다.
-
-- Goal 변경
-- 중요한 Constraint 변경
-- Approval Policy가 요구하는 Staffing 승인
-- Budget 확대
-- 위험한 작업 승인
-- 최종 Merge / Release 판단
-
-AI Workspace는 이 경계를 유지하면서 실행과 검증을 자동화하고,
-
-Human이 중요한 판단에 집중할 수 있도록 충분한 Evidence와 요약을 제공한다.
-
-
-### 4.9 Human Interface
-
-현재 Human Interface는 terminal-based CLI다. CLI는 Goal 입력, 생성된 TaskContract의
-Human Approval, 실행 결과 확인을 담당하는 adapter이며, 실제 Planning / Execution 로직은
-application layer의 `planTask()` / `executeTask()`에 유지한다.
-
-Human UI는 웹 화면에 한정되지 않는다. CLI에서 Web 등 다른 UI로 접점이 바뀌더라도
-application layer는 UI에 의존하거나 그 변경의 영향을 받지 않아야 한다.
-현재 구현과 향후 v0~v5 확장 방향은 [CLI and Human Interface](cli-and-human-interface.md)를 참조한다.
-
----
-
-## 5. Core Components & Responsibility Boundaries
-
-AI Workspace는 Governance, 조직적 의사결정, 실행 조율,
-
-Repository 작업, 검증, 상태 저장의 책임을 구분한다.
-
-각 구성요소는 자신의 경계 안에서 작업하며,
-
-다른 구성요소의 권한을 임의로 대체하지 않는다.
-
-### 5.1 Human / Governance
-
-Human은 조직의 Owner이자 Governance 주체다.
-
-책임:
-
-- Goal 정의
-- Constraints 정의
-- Budget과 Approval Policy 정의
-- 중요한 Staffing / Scope / Risk 변경 승인
-- 최종 Merge / Release 판단
-
-하지 않는 일:
-
-- 개별 Agent를 지속적으로 micromanagement
-- Worker에게 세부 구현 방법을 직접 지시
-- Shared State의 실행 상태를 직접 관리
-
-Human은 조직의 방향과 허용 경계를 소유하지만,
-
-일상적인 Agent 실행을 직접 조율하지 않는다.
-
-### 5.2 CEO / Control Plane
-
-CEO / Control Plane은 Human의 의도를 조직의 계획과 의사결정으로 변환한다.
-
-책임:
-
-- Human Intent 해석
-- Goal 분석
-- Task decomposition
-- Staffing Proposal 생성
-- Agent 간 Coordination
-- Context Routing 결정
-- Budget 관리
-- Shared State를 기반으로 다음 행동 결정
-- Complete / Retry / Re-plan / Escalation 판단
-- Executive Report 생성
-
-하지 않는 일:
-
-- 일반적인 Repository 구현 작업을 직접 수행
-- 모든 Repository 파일을 직접 읽고 수정
-- Verification 없이 Worker의 완료 보고를 신뢰
-- Human approval이 필요한 경계를 임의로 넘음
-
-CEO는 모든 코드를 직접 작성하는 "super coder"가 아니라,
-
-조직 운영과 의사결정을 소유하는 계층이다.
-
-### 5.3 Shared State
-
-Shared State는 Agent가 아니라 조직의 공통 상태 저장 계층이다.
-
-다음과 같이 현재 조직이 알아야 할 최소한의 사실과 결론을 유지한다.
-
-- Mission 상태
-- Task 상태
-- Decisions
-- Open Questions
-- Risks
-- Dependencies
-- Staffing 상태
-- Budget 상태
-- Evidence references
-- Agent status
-
-중요 원칙:
-
-> Shared State ≠ 모든 Agent의 대화 로그
-
-Shared State는 Agent의 긴 대화나 전체 reasoning을 저장하는 공간이 아니다.
-
-다른 Agent와 CEO가 다음 판단을 내리는 데 필요한
-
-정제된 상태, 결정, 참조만 유지한다.
-
-### 5.4 Coordinator / Orchestration
-
-Coordinator는 승인된 판단을 실제 Task 실행 흐름으로 조율한다.
-
-책임:
-
-- 승인된 Plan을 실제 Task 실행 순서로 조율
-- Task dependency 관리
-- Agent assignment 연결
-- Shared State와 실행 상태 동기화
-- 필요한 경우 CEO에게 Blocker / Conflict 전달
-
-하지 않는 일:
-
-- Human Goal 자체를 임의로 변경
-- Repository 구현을 직접 담당
-- Acceptance Criteria를 임의로 완화
-
-CEO가 "무엇을 왜 할지"를 판단하는 계층이라면,
-
-Coordinator는 승인된 판단을 "어떤 순서와 상태로 실행할지"
-
-조율하는 계층이다.
-
-### 5.5 Repository Worker
-
-Repository Worker는 하나의 제한된 Task를 수행하는 실행 주체다.
-
-책임:
-
-- Task Contract 이해
-- Repository Rules 확인
-- Relevant Repository Context 조사
-- 허용된 Scope 안에서 구현
-- Repository-specific tools 실행
-- 작업 결과와 필요한 정보를 반환
-
-하지 않는 일:
-
-- 자신의 Task Contract 범위를 임의로 확대
-- Staffing 변경
-- Human Goal 변경
-- unrelated refactoring
-- Verification 결과를 임의로 성공 처리
-
-Worker는 조직 전체를 운영하는 Agent가 아니라,
-
-주어진 Task Contract 경계 안에서 작업하는 실행 주체다.
-
-### 5.6 Repository Harness
-
-Repository Harness는 Worker가 Repository에서
-
-안전하고 반복 가능하게 작업하도록 통제하는 실행 환경이다.
-
-책임:
-
-- Repository Rules 제공
-- 작업 Scope 제한
-- Tool 접근 제공
-- Repository Context 접근
-- Verification command 실행
-- 실행 결과 수집
-- Evidence 생성 지원
+명시적 TaskContract JSON 실행은 Planning과 Task Approval을 거치지 않는 기존 v0 경로다.
+Goal 기반 경로는 `PlanningResult.task`를 메모리에서 Execution에 직접 전달하며 파일 저장·재로딩으로
+연결하지 않는다. Planning 실패나 Task Reject는 Execution을 시작하지 않는다.
+생성된 workspace는 실패한 실행에서도 확인·cleanup할 수 있으며 setup 실패는 경로가 없을 수 있다.
+
+## 4. Current Responsibility Boundaries
+
+| 소유자 | 현재 책임 | 경계 |
+| --- | --- | --- |
+| Human / CLI adapter | Goal 입력, Task approval, Review, Delivery와 Cleanup 선택, 결과 표시 | use-case core logic을 CLI로 이동하지 않는다 |
+| Planning application | Repository 조사, Planner protocol, loop limits, Fast Path, 계약 생성 | 파일 수정·Execution 호출을 하지 않는다 |
+| Codex Planner | 제공된 PlannerContext로 inspect / complete 결정 | 직접 Repository를 탐색하거나 수정하지 않도록 제한한다 |
+| Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository 사용, schema validation | AI가 시스템 ID나 Human 제약을 소유하지 않는다 |
+| Execution application | workspace 생성, Worker·scope·verification·evidence·artifact orchestration | 정상 종료 시 workspace를 제거하지 않는다 |
+| Codex Worker | TaskContract 범위의 수정, optional warm-start context 활용 | Task의 verification command는 Harness가 실행한다 |
+| Services | scope, verification, evidence, artifacts의 독립 capability | Worker 자기 보고를 성공 Evidence로 대체하지 않는다 |
+| Git / Process infrastructure | worktree, diff, apply·commit·push, process lifecycle | Human 승인과 workflow 결정을 소유하지 않는다 |
+
+Inspection paths는 조사 대상이며 TaskContract.allowedPaths는 수정 범위다. 둘은 자동 변환하거나
+같은 권한으로 취급하지 않는다. AI-facing PlannerContext에는 repositoryRoot를 포함하지 않는다.
+현재 파일 접근 정책은 일반-purpose symlink sandbox가 아니다. Scope enforcement도 변경 후
+탐지이며 모든 쓰기를 사전에 차단하는 정책은 아니다.
+
+Evidence는 diff, changed paths, verification command의 stdout/stderr·exit code 같은 관찰 사실이다.
+Telemetry는 duration 같은 운영 데이터이며 Evidence와 구분한다. `passed`는 실행 Scope와
+구성된 Verification의 통과이며 objective / acceptance criteria의 의미적 충족을 보장하지 않는다.
+별도 Verifier Agent가 acceptance criteria를 평가하는 구조는 아직 없다.
+
+Workspace는 실제 실행용 worktree, artifacts는 `task.json`, `base-commit.txt`, `changes.patch`,
+`result.json`의 영구 기록이다. ExecutionResult는 workspace.path를 포함하는 완료 시점 snapshot이다.
+Review / Delivery / Cleanup 결과는 Execution 성공과 별개이며 result.json에 후속 상태를 저장하지 않는다.
+CLI는 이후 cleanup duration을 표시하지만 Execution snapshot의 timing에는 이후 Human gate를 포함하지 않는다.
+
+## 5. Target Architecture
+
+> Planned architecture. Not implemented yet.
+
+다음은 조직적 협업의 목표 구조다. 현재 Planning / Execution 일부 책임이 토대가 되지만,
+이 plane들이 독립 컴포넌트로 모두 존재한다는 뜻은 아니다.
 
 ```text
-Worker
-  ↓
-Repository Harness
-  ↓
+Human Governance
+        ↓
+Control Plane
+        ↓
+Shared State / Evidence Plane
+        ↓
+Execution Plane
+        ↓
 Repository
 ```
 
-Repository Harness는 특정 Repository의 비즈니스 판단을 내리는 Agent가 아니라,
+- Human Governance: Goal, Approval, Review, Override, Escalation decision.
+- Control Plane (planned): Agent Selection, Authority Policy, Context Routing,
+  Conflict handling, Decision synthesis, CEO Governance.
+- Shared State / Evidence Plane (planned): Decisions, Claims, Evidence references,
+  Rounds, Failures, Recovery history, Agent status.
+- Execution Plane: Worktree, Worker, Scope, Verification, Patch, Evidence는 현재 구현과
+  직접 연결된다. 다중 Agent assignment나 조직적 recovery는 planned다.
 
-실행 범위와 접근을 통제하는 infrastructure layer다.
+상위는 workflow와 결정을, 하위는 Repository별 계약 실행을 소유한다.
+Workflow-first → TaskContract → Repository-first라는 기존 경계를 유지하며
+Reliable Worker before Agent Team을 따른다. 단계별 검증 질문은 [로드맵](roadmap.md)에 둔다.
 
-### 5.7 Verifier
+## 6. Target Responsibility Boundaries
 
-Verifier는 Worker의 자연어 자기 보고와 독립적으로
+이 절의 조직 역할과 flow는 모두 **planned**다. 현재 CLI와 단일 Worker에 같은 이름의
+상위 조직 runtime이 존재한다고 가정하지 않는다.
 
-실제 Evidence를 기준으로 작업 결과를 판단한다.
+### Human / CEO / Coordinator
 
-책임:
+Human은 Goal, Constraints, Budget, Approval Policy와 중요한 scope / risk 변경,
+최종 merge / release를 소유한다. 현재 GoalSpec은 objective, targetRepository,
+optional constraints이며 Budget·Approval Policy 모델이 구현됐다는 뜻은 아니다.
 
-- Acceptance Criteria 확인
-- lint / typecheck / test / build 등의 결과 확인
-- diff inspection
-- Evidence 평가
-- 실패 및 불충분한 Evidence 식별
+CEO / Control Plane은 Intent / Task Analysis, decomposition, 역할과 필요한 Context,
+위험·불확실성 판단, decision synthesis, escalation을 담당할 계획이다. CEO는 직접 모든
+Repository 코드를 작성하는 super coder가 아니라 governance 역할이다.
 
-논리적으로 Worker와 Verifier의 책임은 분리된다.
+Staffing Proposal은 필요한 역할의 이유, 책임, 예상 비용, 수행 범위를 제안한다.
+향후 Approval Policy에 따라 Staffing / Budget 변경의 승인 수준을 정하되 Human 권한을
+임의로 확대하거나 대체하지 않는다. 현재 staffing 또는 자동 승인 policy는 없다.
 
-다만 초기 v0에서는 동일한 runtime이나 Agent가
+Coordinator는 승인된 Plan의 순서, task dependency, agent assignment, 상태 동기화,
+Blocker / Conflict 전달을 조율하는 목표 역할이다. CEO의 판단이나 Human Goal을 바꾸지 않는다.
+이 구분을 이유로 현재 별도 Coordinator class나 application 계층을 만들지 않는다.
 
-두 역할을 수행할 수도 있다.
+### Shared State / Evidence Plane
 
-> Logical responsibility separation ≠ 처음부터 반드시 별도 Agent 프로세스
+> Shared State ≠ raw conversation log
 
-### 5.8 Executive Reporting
+공통 상태는 전체 reasoning이나 모든 대화를 저장하는 공간이 아니다. Decisions, Claims,
+Evidence references, Run / Round, Failures, Recovery history, Agent status와 함께
+필요한 Mission / Task 상태, Open Questions, Risks, Dependencies, Staffing / Budget 상태를
+구조화할 계획이다. 현재 단일 실행의 artifact persistence와 구분한다.
 
-CEO는 실행 로그 전체를 Human에게 그대로 전달하지 않는다.
+### Worker / Harness / Verifier
 
-Shared State, Decisions, Evidence, Risks를 기반으로
+Worker는 scoped execution을 소유하고 자신의 계약 범위를 확대하지 않는다.
+Harness는 Authority, Context 접근, Repository isolation, verification 실행과 Evidence 생성을
+통제한다. Harness는 개념적 통제 책임이며 `infrastructure/` 한 폴더만을 의미하지 않는다.
 
-Human이 판단하는 데 필요한 내용만 Executive Report로 정리한다.
+Verifier는 Claims와 독립적으로 실제 Evidence의 충분성과 acceptance criteria를 평가하는
+목표 역할이다. Logical responsibility separation은 반드시 별도 Agent process를 의미하지
+않는다. 현재는 Harness가 configured verification command를 실행하며 의미적 평가 Agent는 없다.
 
-Report에는 개념적으로 다음이 포함될 수 있다.
+### Executive Reporting and Responsibility Flow
 
-- 무엇을 요청했는가
-- 무엇을 수행했는가
-- 어떤 결정이 내려졌는가
-- 어떤 Evidence가 있는가
-- 어떤 Risk / Open Question이 남아 있는가
-- Human의 추가 판단이 필요한가
-
-### 5.9 Responsibility Flow
-
-```text
-Human
-  ↓ governance
-CEO / Control Plane
-  ↓ planning & decision
-Coordinator
-  ↓ Task Contract / assignment
-Repository Worker
-  ↓
-Repository Harness
-  ↓
-Repository
-  ↓
-Verifier / Evidence
-  ↓
-Shared State
-  ↓
-CEO
-  ↓
-Human
-```
-
-주요 책임 원칙은 다음과 같다.
-
-- Human owns governance.
-- CEO owns orchestration and decisions.
-- Worker owns scoped execution.
-- Harness controls execution.
-- Verifier evaluates evidence.
-- Shared State stores organizational truth.
-
-## 6. Source Architecture
-
-현재 코드는 다음의 source 구조를 사용한다.
+CEO는 장문의 실행 로그를 그대로 전달하지 않고 요청·수행 내용, Decisions, Evidence,
+Risks / Open Questions, Human 판단 필요 여부를 Executive Report로 요약할 계획이다.
+실패 후 Complete / Retry / Re-plan / Reviewer Assignment / Human Escalation 판단도 목표이며,
+현재 자동 retry/re-plan은 구현되어 있지 않다.
 
 ```text
-src/
-├── application/
-├── contracts/
-├── services/
-└── infrastructure/
+Human → CEO / Control Plane → Coordinator → TaskContract / assignment
+  → Worker + Repository Harness → Repository
+  → Verifier / Evidence → Shared State → CEO → Executive Report → Human
 ```
 
-- `application`: Planning, Execution처럼 사용자의 목적을 수행하는 use-case와 application logic
-- `contracts`: GoalSpec, TaskContract 등 특정 application 하나에 종속되지 않는 system-wide contract
-- `services`: Scope, Verification, Evidence, Artifact 등 독립 capability
-- `infrastructure`: Git, OS Process 등 기술적 실행 수단과 저수준 구현
+Human owns governance. CEO owns orchestration and decisions. Worker owns scoped execution.
+Harness controls execution. Verifier evaluates evidence. Shared State stores organizational truth.
+이 원칙들은 목표 책임 경계이며 현재 구현 여부는 2~4절을 따른다.
 
-### 6.1 Module Internal Structure
+## 7. Application Structure Convention
 
-모든 모듈에 동일한 하위 폴더 구조를 강제하지 않는다.
-
-현재 실행 모듈은 실행 흐름, 핵심 모델, Worker 역할 구현체를 분리한다.
-
-```text
-application/execution/
-├── flow/
-├── model/
-├── worker/
-└── index.ts
-```
-
-- `flow/`: Execution 과정에 직접 속하는 application logic
-- `model/`: Execution 모듈의 핵심 상태와 결과 모델
-- `worker/`: Execution Worker 역할 구현체
-- `index.ts`: 외부 public API
-
-`flow / model` 구조는 모든 모듈에 강제하지 않는다. 역할이 충분히 복잡해졌을 때만
-내부 구조를 분리하며, 단일 책임 모듈은 불필요하게 깊게 만들지 않는다.
-
-폴더 분리 기준은 타입의 존재 여부가 아니라 책임을 구조적으로 분리할 필요성이다.
-
-현재 services 계층은 독립 capability별로 다음과 같이 구성한다.
-
-```text
-services/
-├── scope/
-├── verification/
-├── evidence/
-└── artifacts/
-```
-
-- `scope/`: 변경 경로 정책 검사
-- `verification/`: verification command 실행
-- `evidence/`: 실행 중 관찰된 사실 수집
-- `artifacts/`: 실행 결과물 보존
-
-### 6.2 Import and Public API Boundaries
-
-- Cross-module imports use the `@/*` source alias and the target module's `index.ts`.
-- Same-module internal imports use relative paths.
-- 다른 모듈에 접근할 때는 해당 모듈의 `index.ts` public API를 사용한다.
-- 같은 모듈 내부에서는 구현 파일을 직접 import한다.
-- 모듈 내부에서 자기 모듈의 `index.ts`를 다시 import하지 않는다.
-- `index.ts`에는 외부에 필요한 API만 export하고 내부 helper를 무분별하게 노출하지 않는다.
-- 상위 mega barrel(`services/index.ts` 등)은 만들지 않는다.
-- Layer dependency와 module boundary가 코드 구조에서 드러나도록 유지한다.
-- circular dependency를 만들지 않는다.
-
-
-## 7. Source Architecture & Responsibility Rules
-
-앞의 시스템 책임 경계를 소스 코드 배치에 적용하는 기준은 다음과 같다.
+현재 application과 module의 소스 배치 기준은 다음과 같다.
 
 > Architecture is responsibility-first.
 
@@ -599,11 +205,11 @@ services/
 
 ### 7.1 Top-level Placement
 
-6절의 네 source 영역은 다음 기준으로 구분한다.
+Source 영역은 다음 기준으로 구분한다.
 
 - `application`: 사용자의 목적을 실제 workflow로 수행한다. 현재 Planning의
   `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`가 여기에 속한다.
-  두 use-case는 각각의 진입점을 가지며, 자동으로 연결된 하나의 실행 흐름을 의미하지 않는다.
+  두 use-case는 각각의 진입점을 가지며 CLI adapter가 Human gate를 통해 연결한다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec과 TaskContract의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
 - `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로
@@ -650,6 +256,7 @@ flow root에는 가능한 한 public use-case entry를 둔다.
 workflow의 순서와 진행 상태를 제어한다. 다음 단계 결정, 반복 제어, stage 진행,
 실패 누적, workflow 종료 처리가 여기에 속한다.
 현재 `planning-loop.ts`, `stages.ts`, `result-finalizer.ts`가 해당한다.
+Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유한다.
 
 #### Flow Implementation Grouping
 
@@ -659,11 +266,13 @@ flow의 책임이 늘어나면 세부 작업별로 한 단계의 하위 디렉�
 ```text
 flow/
 ├─ plan-task.ts
+├─ adaptive/
 ├─ orchestration/
 ├─ inspection/
 └─ transformation/
 ```
 
+- `adaptive`: 보수적인 trivial task 판정과 Fast Path draft 생성.
 - `inspection`: workflow 진행에 필요한 사실 수집.
   `inspectRepository`, `inspectFiles`가 Repository를 read-only로 조사한다.
 - `transformation`: workflow를 제어하지 않고 데이터 표현을 변환하거나 확정한다.
@@ -716,7 +325,9 @@ Codex Worker도 Execution의 Worker 역할 구현체이므로 Execution이 소�
 해당 use-case의 public boundary다. `planTask`, `executeTask`, PlanningResult,
 ExecutionResult 등 외부에 필요한 API를 제공한다.
 내부 파일 위치가 바뀌어도 외부 사용자가 그 배치에 직접 의존하지 않도록 한다.
-구체적인 import 규칙은 6.2절을 따른다.
+Cross-module은 `@/*` alias와 대상 module의 `index.ts`, same-module 내부는 상대경로를 사용한다.
+  현재 contracts는 개별 schema 파일에서 import한다. 자기 module의 index를 내부에서 다시 import하거나
+  상위 mega barrel을 만들지 않으며 public API에는 외부에 필요한 항목만 노출한다.
 
 ### 7.3 Codex Implementation Placement
 
@@ -771,10 +382,12 @@ Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이�
 
 ```text
 src/
+├─ cli/  # operator adapter; 세부 구조는 CLI 문서 참조
 ├─ application/
 │  ├─ planning/
 │  │  ├─ flow/
 │  │  │  ├─ plan-task.ts
+│  │  │  ├─ adaptive/
 │  │  │  ├─ orchestration/
 │  │  │  ├─ inspection/
 │  │  │  └─ transformation/
@@ -829,3 +442,18 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
    → infrastructure
 10. 미래에 재사용될 것 같다는 예상만 있는가?
     → 아직 추출하지 않는다
+
+## 8. Architectural Invariants
+
+- Architecture is responsibility-first. 기술·파일 수·구조적 대칭성보다 책임 소유권을 우선한다.
+- Agent는 교체 가능한 역할 구현체다. Harness의 가치와 특정 모델·CLI를 동일시하지 않는다.
+- Application은 UI를 모른다. CLI는 operator adapter이며 다른 UI로 바뀌어도 use-case 경계를 유지한다.
+- Planning과 Execution은 서로 직접 호출하지 않는다. 현재 연결과 Human gate는 CLI adapter에 있다.
+- Human Task Approval, Review, Apply, Commit, Push, Cleanup은 서로 다른 결정이다.
+- Apply는 Execution·Verification 성공과 patch 보존 확인 뒤에만 가능하다. Dirty repository를 차단하고
+  pre-check를 수행한다. Commit은 changedPaths만 stage하고 Push는 기존 upstream에만 수행한다.
+- Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
+- Evidence와 Telemetry, TaskContract와 file content, 내부 상태와 역할 간 protocol을 구분한다.
+- Scope / verification 통과를 자연어 요구 충족의 증명으로 과장하지 않는다.
+- 미래 Shared State / CEO / recovery 계획을 현재 구현 사실로 서술하지 않는다.
+- Runtime boundary는 Zod validation을 사용하며 현재 요청에 필요하지 않은 추상화를 만들지 않는다.

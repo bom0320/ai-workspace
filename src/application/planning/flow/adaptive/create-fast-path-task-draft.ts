@@ -42,6 +42,11 @@ function getTargetNames(filePath: string, fileTree: string[]): string[] {
 function mentionsTargetFile(objective: string, targetNames: string[]): boolean {
   const normalizedObjective = objective.replaceAll("\\", "/").toLowerCase();
 
+  // Parent-directory path components cannot identify a Fast Path target.
+  if (/(?:^|[\s/"'`([{])\.\.(?=\/)/.test(normalizedObjective)) {
+    return false;
+  }
+
   return targetNames.some((name) =>
     normalizedObjective.includes(name.toLowerCase())
   );

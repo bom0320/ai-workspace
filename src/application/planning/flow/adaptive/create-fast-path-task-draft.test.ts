@@ -27,7 +27,18 @@ function state(objective: string, filePath = "README.md"): PlanningState {
 
 describe("createFastPathTaskDraft", () => {
   it.each([
+    "../README.md의 문구를 수정해줘",
+    "../../README.md의 문구를 수정해줘",
+    "..\\README.md의 문구를 수정해줘",
+    "docs/../../README.md의 문구를 수정해줘",
+    '"../README.md"의 문구를 수정해줘',
+  ])("rejects parent-directory path components: %s", (objective) => {
+    expect(createFastPathTaskDraft(state(objective))).toBeUndefined();
+  });
+
+  it.each([
     "README.md의 소개 문구를 더 명확하게 수정해줘",
+    "README.md의 문구를 수정해줘",
     "README의 문구를 수정해줘",
     "README의 오타를 수정해줘",
     "README의 프로젝트 설명을 자연스럽게 다듬어줘",
@@ -97,6 +108,7 @@ describe("createFastPathTaskDraft", () => {
     const input = state("notes.txt의 오타를 수정해줘", "notes.txt");
 
     expect(createFastPathTaskDraft(input)?.allowedPaths).toEqual(["notes.txt"]);
+    expect(createFastPathTaskDraft(state("notes.txt의 문구를 수정해줘", "notes.txt"))?.allowedPaths).toEqual(["notes.txt"]);
   });
 
   it("never uses the fast path for source files", () => {

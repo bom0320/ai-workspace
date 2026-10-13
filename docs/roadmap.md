@@ -15,9 +15,6 @@
 | v4 | CEO Governance | Planned |
 | v5 | Evaluation | Planned |
 
-브랜치 이름이 `feat/v2-durable-execution`이어도 현재 코드에 Durable Shared State나
-Specialist 협업이 구현돼 있다는 뜻은 아니다.
-
 ## v0 — Safe Execution
 
 > Agent 하나에게 실제 Repository 작업을 안전하게 맡길 수 있는가?
@@ -41,10 +38,13 @@ TaskDraft → TaskContract 변환, Human Task Approval, Review / Delivery를 제
 
 ## Foundation — Durable Shared State
 
+> 이전 Round의 판단과 실행 결과를 보존하고 다음 Round가 필요한 상태를 활용할 수 있는가?
+
 상태: **Planned**. 별도 제품 목표가 아니라 멀티에이전트 협업을 위한 기반이다.
 
-Run / Round, Decision, Evidence, Failure, Recovery history를 유지해 다음 판단이
-이전 결과를 활용하게 만드는 것이 목적이다.
+Run / Round, Decision, Evidence, Failure, Outcome을 구조화된 공통 상태로 유지해
+다음 Round가 이전 판단과 실행 결과를 활용하게 만드는 것이 목적이다.
+향후 복구 판단이나 다음 Round의 입력으로 사용할 수 있는 기반을 마련한다.
 
 > Repository state can rollback.
 > Decision history should not disappear.
@@ -53,8 +53,14 @@ Verification 실패 후에도 이전 Agent 판단, 선택된 결정, 실행 결�
 다음 Round가 사용할 수 있어야 한다. 현재 artifact persistence는 개별 실행의 기록이며,
 이런 구조화된 공통 판단 이력이나 다음 Round 활용 flow를 구현한 것은 아니다.
 
-Process crash resume, database, queue, distributed execution 같은 거대한 durable runtime은
-현재 목표가 아니다. 위 원칙은 자동 rollback / retry를 구현하겠다는 뜻도 아니다.
+초기 Foundation 범위에는 process crash resume, database, queue, distributed execution,
+automatic rollback, automatic retry를 포함하지 않는다.
+
+### Exit Criteria
+
+- 하나의 Run 안에서 Round별 Decision / Evidence / Failure / Outcome을 구조적으로 보존할 수 있다.
+- 다음 Round가 이전 Round의 필요한 상태를 참조할 수 있다.
+- Repository rollback 여부와 관계없이 판단 이력은 유지된다.
 
 ## v2 — Independent Specialist Decisions
 
@@ -66,6 +72,13 @@ Shared repository snapshot, context isolation, authority isolation, structured A
 independent reasoning을 다룬다. Specialist는 서로의 답을 보지 않고 판단한다.
 전체 Repository나 모든 Agent의 대화 로그를 Context로 공유하는 방식은 목표가 아니다.
 
+### Exit Criteria
+
+- 동일한 repository snapshot을 기준으로 2개 이상의 Specialist가 독립적으로 판단할 수 있다.
+- Specialist는 다른 Specialist의 Decision을 보지 않고 판단한다.
+- 각 판단 결과가 공통 AgentDecision 구조로 저장된다.
+- Agent별 authority / context 경계가 명시된다.
+
 ## v3 — Conflict / Agreement
 
 > 두 Agent의 판단 차이를 긴 대화 로그가 아니라 구조화된 데이터로 표현할 수 있는가?
@@ -74,6 +87,11 @@ independent reasoning을 다룬다. Specialist는 서로의 답을 보지 않고
 
 Agreement, Conflict, Uncertainty, Trade-off를 표현하고 비교한다. 단순히 두 응답을
 나란히 출력하는 것보다, 어떤 판단이 어디에서 일치하거나 충돌하는지 기록하는 것이 핵심이다.
+
+### Exit Criteria
+
+- 여러 AgentDecision 간 Agreement / Conflict / Uncertainty / Trade-off를 구조화해 표현할 수 있다.
+- Raw response를 단순 나열하지 않고 판단 차이를 데이터로 비교할 수 있다.
 
 ## v4 — CEO Governance
 
@@ -84,6 +102,12 @@ Agreement, Conflict, Uncertainty, Trade-off를 표현하고 비교한다. 단순
 Decision synthesis, evidence-based recommendation, failure history, escalation,
 Executive Report를 다룬다. CEO는 super coder가 아니라 governance 역할이며,
 Human의 승인·override·merge/release 권한을 대체하지 않는다.
+
+### Exit Criteria
+
+- 여러 Decision과 Evidence를 기반으로 하나의 recommendation을 만들 수 있다.
+- Recommendation의 근거를 원래 Decision / Evidence까지 추적할 수 있다.
+- Human approval / override / merge / release authority는 유지된다.
 
 ## v5 — Evaluation
 
@@ -98,3 +122,9 @@ precision, latency, token/cost, retries, conflict detection, Human intervention,
 현재는 duration telemetry가 있으며 위 항목 전체의 수집·비교가 구현된 것은 아니다.
 측정하지 않은 비용 절감률이나 생산성 수치를 주장하지 않는다. Multi-Agent가 항상
 Single Agent보다 낫다고 가정하지 않으며, 기존 README E2E 기록도 협업 효과의 증거가 아니다.
+
+### Exit Criteria
+
+- Single Agent와 Governed Multi-Agent를 동일한 조건에서 비교할 수 있다.
+- Success rate, verification pass rate, scope violation, latency, token/cost 등 핵심 metric을 실제 데이터로 수집할 수 있다.
+- Multi-Agent의 이득과 비용을 함께 평가할 수 있다.

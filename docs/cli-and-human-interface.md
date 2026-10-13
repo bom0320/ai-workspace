@@ -1,6 +1,6 @@
 # CLI and Human Interface
 
-이 문서는 사람이 현재 Harness를 어떻게 관찰하고 조작하는지 설명한다.
+이 문서는 사람이 현재 Development Governance Harness를 어떻게 관찰하고 조작하는지 설명한다.
 실행 준비·TaskContract 예시·artifact 사용법은 [README](../README.md), 내부 책임 경계는
 [Architecture](architecture.md), 미래 단계는 [Roadmap](roadmap.md)에 둔다.
 
@@ -10,7 +10,8 @@
 
 CLI는 Goal 입력, TaskContract 표시, Approval, Review, Apply / Commit / Push,
 Cleanup decision, telemetry / result 출력을 담당한다. Harness를 사람이 관찰하고 통제하는
-adapter이며 Planning / Execution / Governance의 core logic을 소유하는 새로운 상위 계층은 아니다.
+operator/debug adapter이자 Human decision surface다. Agent orchestration product를 목표로 하지
+않으며 Planning / Execution / Governance의 core logic을 소유하는 새로운 상위 계층은 아니다.
 현재 Human gate와 후속 stage 연결은 CLI가 담당하고, 계약·실행·Git 안전 검사는 각 모듈에 남긴다.
 
 ```text
@@ -77,7 +78,7 @@ Goal
 않으며 허용된 Conventional Commit 형태를 충족해야 한다. 자세한 Delivery 안전 조건과
 메시지 예시는 [README](../README.md#review와-post-execution-delivery)를 따른다.
 
-Review는 “Review할지”를 묻는 선택 단계가 아니다. Execution 종료 후 workspace가 살아 있는
+이 문서와 CLI의 `Review`는 Change Review를 뜻한다. “Review할지”를 묻는 선택 단계가 아니다. Execution 종료 후 workspace가 살아 있는
 상태에서 diff를 자동 출력하고, 확인 완료 여부만 Continue / Abort로 받는다. Diff 출력은 64KiB,
 Worker output은 16KiB로 제한한다. 전체 변경은 표시된 workspace나 patch artifact에서 확인한다.
 Review에 필요한 workspace / base commit이 없거나 diff 조회에 실패하면 Delivery를 차단한다.
@@ -155,5 +156,5 @@ UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한�
 Human 권한을 새 interface가 우회하지 않아야 한다.
 
 Revise, re-plan, 복잡한 approval policy, fancy TUI는 현재 제공하지 않는다.
-Specialist / Conflict / CEO / Evaluation의 발전 계획은 이 문서에 반복하지 않고
-[Roadmap](roadmap.md)에 둔다.
+Governed Independent Decisions / Decision Comparison / Explainable Synthesis / Evaluation의
+검증 계획은 이 문서에 반복하지 않고 [Roadmap](roadmap.md)에 둔다.

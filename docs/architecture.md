@@ -8,12 +8,13 @@
 [CLI and Human Interface](cli-and-human-interface.md)를 참조한다.
 
 현재 구현은 이 repository에서 확인 가능한 v0 / v1 코드 기준이다. 브랜치명만으로
-미래 기능의 구현 여부를 판단하지 않는다. Target Architecture는 배치해야 할 코드 폴더나
+미래 기능의 구현 여부를 판단하지 않는다. Target Responsibility Model은 배치해야 할 코드 폴더나
 이미 존재하는 런타임을 의미하지 않는다.
 
 ## 2. Current Architecture
 
-현재 구현은 기존 Codex CLI를 Planning과 scoped execution 역할로 사용하는 Harness다.
+현재 구현은 기존 Codex CLI를 Planning과 scoped execution 역할로 사용하는
+Development Governance Harness다. Runtime 구현은 교체 가능하지만 현재 integration은 Codex뿐이다.
 AI Workspace는 독립적인 대상 Git Repository에 연결하며, 대상 Repository가 이 시스템의
 코드나 조직 구조를 포함할 필요는 없다.
 
@@ -36,9 +37,11 @@ Git worktree / Process → Target Repository
 - Human interaction: Task approval, 필수 Review, 승인 기반 Apply / Commit / Push,
   별도 Delete / Keep cleanup.
 
-현재 Agent integration은 Codex이며 여러 provider의 registry나 generic Codex layer는 없다.
-CEO, Staffing, Coordinator runtime, Durable Shared State, 자동 retry/recovery, Specialist 협업은
-현재 구현이 아니다. 개별 실행 artifact를 조직의 공통 상태 저장소로 해석하지 않는다.
+현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod다. Codex CLI는 외부 실행 도구이며
+package dependency로 포함되어 있지 않다. 여러 provider의 registry나 generic Codex layer는 없다.
+AgentDecision / RepositorySnapshot domain model, Specialist 협업, decision comparison / synthesis,
+Human override / escalation 이력, 자동 retry / crash resume는 현재 구현이 아니다.
+개별 실행 artifact를 governance records 전체나 durable workflow state로 해석하지 않는다.
 
 ## 3. Current End-to-End Flow
 
@@ -91,11 +94,14 @@ Goal 기반 경로는 `PlanningResult.task`를 메모리에서 Execution에 직�
 Inspection paths는 조사 대상이며 TaskContract.allowedPaths는 수정 범위다. 둘은 자동 변환하거나
 같은 권한으로 취급하지 않는다. AI-facing PlannerContext에는 repositoryRoot를 포함하지 않는다.
 현재 파일 접근 정책은 일반-purpose symlink sandbox가 아니다. Scope enforcement도 변경 후
-탐지이며 모든 쓰기를 사전에 차단하는 정책은 아니다.
+탐지이며 모든 쓰기를 사전에 차단하는 정책은 아니다. allowedPaths / forbiddenPaths는 정확한
+문자열 일치이며 glob이나 directory prefix가 아니다. forbiddenPaths에 포함된 경로는
+allowedPaths에도 포함되어 있더라도 위반이다.
 
 Evidence는 diff, changed paths, verification command의 stdout/stderr·exit code 같은 관찰 사실이다.
 Telemetry는 duration 같은 운영 데이터이며 Evidence와 구분한다. `passed`는 실행 Scope와
 구성된 Verification의 통과이며 objective / acceptance criteria의 의미적 충족을 보장하지 않는다.
+Zod는 runtime boundary의 구조를 검증하며 의미적 정확성을 보장하지 않는다.
 별도 Verifier Agent가 acceptance criteria를 평가하는 구조는 아직 없다.
 
 Workspace는 실제 실행용 worktree, artifacts는 `task.json`, `base-commit.txt`, `changes.patch`,
@@ -103,95 +109,95 @@ Workspace는 실제 실행용 worktree, artifacts는 `task.json`, `base-commit.t
 Review / Delivery / Cleanup 결과는 Execution 성공과 별개이며 result.json에 후속 상태를 저장하지 않는다.
 CLI는 이후 cleanup duration을 표시하지만 Execution snapshot의 timing에는 이후 Human gate를 포함하지 않는다.
 
-## 5. Target Architecture
+## 5. Target Responsibility Model
 
-> Planned architecture. Not implemented yet.
-
-다음은 조직적 협업의 목표 구조다. 현재 Planning / Execution 일부 책임이 토대가 되지만,
-이 plane들이 독립 컴포넌트로 모두 존재한다는 뜻은 아니다.
+이 절은 **미래 책임 모델**이며 독립 plane, 조직 Agent 또는 새 폴더를 구현하라는 명세가 아니다.
+Ownership과 Build vs Adopt의 canonical 기준은 [Project Direction](project-direction.md#project-ownership-boundary)에 둔다.
 
 ```text
-Human Governance
-        ↓
-Control Plane
-        ↓
-Shared State / Evidence Plane
-        ↓
-Execution Plane
-        ↓
-Repository
+Human — Goal / constraints / approval / review / override
+   ↕ Human decision surface (현재 CLI)
+Development Governance — AI Workspace-owned semantics
+   ├─ Contract / Authority / Context policy
+   ├─ Repository consistency / Decision / Evidence provenance
+   ├─ Scope / Verification / Comparison / Synthesis
+   └─ Approval / Escalation / Decision traceability
+   ├─ 실행 위임 → Agent Runtime / Orchestration (현재 Codex CLI)
+   └─ 관찰·검증 → Execution Infrastructure (현재 Git / Process)
+                         ↓
+                     Repository
+   ↑ Decision / Repository observation / Verification result
 ```
 
-- Human Governance: Goal, Approval, Review, Override, Escalation decision.
-- Control Plane (planned): Agent Selection, Authority Policy, Context Routing,
-  Conflict handling, Decision synthesis, CEO Governance.
-- Shared State / Evidence Plane (planned): Decisions, Claims, Evidence references,
-  Rounds, Failures, Recovery history, Agent status.
-- Execution Plane: Worktree, Worker, Scope, Verification, Patch, Evidence는 현재 구현과
-  직접 연결된다. 다중 Agent assignment나 조직적 recovery는 planned다.
+화살표는 책임과 정보 흐름이다. Runtime과 Infrastructure는 단순 직렬 계층이 아니다.
+현재 Planning / Execution application과 services가 일부 governance 책임을 구현하며,
+CLI가 Human gate를 연결한다. 나머지 책임은 검증 질문이 생길 때 점진적으로 추가한다.
 
-상위는 workflow와 결정을, 하위는 Repository별 계약 실행을 소유한다.
-Workflow-first → TaskContract → Repository-first라는 기존 경계를 유지하며
-Reliable Worker before Agent Team을 따른다. 단계별 검증 질문은 [로드맵](roadmap.md)에 둔다.
+### Governance와 replaceable runtime
 
-## 6. Target Responsibility Boundaries
+AI Workspace는 계약·권한·Context·Evidence 인정 기준·검증 결과의 의미·Human gate를 소유한다.
+Agent runtime은 주어진 역할과 실행 조건 아래 판단이나 작업을 수행한다. Workflow graph,
+scheduling, parallel execution, message transport, checkpoint / durable resume가 필요해지면
+[Build vs Adopt](project-direction.md#build-vs-adopt)에 따라 기존 기술을 먼저 평가한다.
+현재 작은 use-case orchestration을 범용 workflow engine으로 키우지 않는다.
 
-이 절의 조직 역할과 flow는 모두 **planned**다. 현재 CLI와 단일 Worker에 같은 이름의
-상위 조직 runtime이 존재한다고 가정하지 않는다.
+Runtime implementation은 replaceable이다. 다만 현재 여러 runtime이 지원된다는 뜻은 아니다.
+External framework adoption은 필요한 경우 외에는 framework-specific run/session/step 개념을
+core domain으로 누출시키지 않아야 한다. 외부 ID를 provenance와 연결할 수 있지만 별도 domain
+모델이 필요한 이유를 검증해야 한다. 실제 두 번째 implementation 또는 실제 중복 책임이 생기기
+전에는 infrastructure abstraction이나 provider registry를 만들지 않는다.
 
-### Human / CEO / Coordinator
+## 6. Future Domain Models and Boundaries
 
-Human은 Goal, Constraints, Budget, Approval Policy와 중요한 scope / risk 변경,
-최종 merge / release를 소유한다. 현재 GoalSpec은 objective, targetRepository,
-optional constraints이며 Budget·Approval Policy 모델이 구현됐다는 뜻은 아니다.
+다음은 **미구현 제안과 채택 조건**이다. 이름이 존재한다는 이유로 모델이나 runtime을 유지하지 않는다.
+단계별 검증 질문과 exit criteria는 [Roadmap](roadmap.md)에 둔다.
 
-CEO / Control Plane은 Intent / Task Analysis, decomposition, 역할과 필요한 Context,
-위험·불확실성 판단, decision synthesis, escalation을 담당할 계획이다. CEO는 직접 모든
-Repository 코드를 작성하는 super coder가 아니라 governance 역할이다.
+| 개념 | 개발 도메인 의미 / 판단 | 제외하거나 위임할 범위 |
+| --- | --- | --- |
+| RepositorySnapshot | Decision의 실제 repository provenance. 동일 비교 단위의 기준 commit과 관찰 상태를 식별하고 consistency를 확인 | generic checkpoint와 동일시하지 않는다. 현재 base-commit.txt만으로 전체 비교 조건을 증명하지 않는다 |
+| AgentDecision | recommendation / evidence references / risk / uncertainty를 담는 structured decision record로 유지 | raw response나 현재 PlannerDecision의 이름 변경으로 대체하지 않는다 |
+| DecisionRound | 동일 RepositorySnapshot을 기준으로 생성한 독립 Decision들의 비교 단위가 실제로 필요할 때만 채택 | 단순 workflow step / 반복 횟수라면 runtime에 맡긴다 |
+| DecisionRun | Goal → Decision / Evidence → Human governance result의 audit lifecycle이 실제로 필요할 때만 채택 | framework run/session ID를 복제하는 수준이면 만들지 않는다 |
+| Governance records | Decision records, Evidence references, repository provenance, Human governance history의 의미와 연결을 소유 | generic Durable Shared State / memory / checkpoint engine을 구현하는 목표로 삼지 않는다 |
+| Decision synthesis | Evidence 기반 종합, conflict / trade-off 표현, explainable recommendation과 escalation | CEO / Coordinator / Staffing을 필수 별도 Agent나 조직 runtime으로 고정하지 않는다 |
 
-Staffing Proposal은 필요한 역할의 이유, 책임, 예상 비용, 수행 범위를 제안한다.
-향후 Approval Policy에 따라 Staffing / Budget 변경의 승인 수준을 정하되 Human 권한을
-임의로 확대하거나 대체하지 않는다. 현재 staffing 또는 자동 승인 policy는 없다.
+### Repository consistency / Context / Specialist authority
 
-Coordinator는 승인된 Plan의 순서, task dependency, agent assignment, 상태 동기화,
-Blocker / Conflict 전달을 조율하는 목표 역할이다. CEO의 판단이나 Human Goal을 바꾸지 않는다.
-이 구분을 이유로 현재 별도 Coordinator class나 application 계층을 만들지 않는다.
+같은 비교 단위의 Specialist는 동일 commit과 명시된 Context / authority 조건 아래 판단해야 한다.
+Dirty state, 관찰 이후 변경, 제공 파일의 출처가 비교 가능성에 미치는 영향을 기록하고 확인한다.
+현재 Planning inspection은 원본 작업 디렉터리에서 읽고 Execution worktree는 HEAD에서 생성한다.
+따라서 현재 inspection / warm-start만으로 동일 Snapshot 기준 판단이 보장된다고 쓰지 않는다.
+Worker에게도 workspace가 실제 변경의 source of truth이며 필요할 때 상태를 재확인하도록 안내한다.
 
-### Shared State / Evidence Plane
+Reviewer는 Repository write authority를 갖지 않아야 한다. Specialist independence는 서로의
+Decision을 보기 전에 판단한다는 조건이며 process 수나 병렬 scheduling 자체가 성공 기준은 아니다.
+이 정책의 enforcement 방법은 실제 runtime 선택과 함께 검증한다.
 
-> Shared State ≠ raw conversation log
+### Evidence / Verification / Comparison / Synthesis
 
-공통 상태는 전체 reasoning이나 모든 대화를 저장하는 공간이 아니다. Decisions, Claims,
-Evidence references, Run / Round, Failures, Recovery history, Agent status와 함께
-필요한 Mission / Task 상태, Open Questions, Risks, Dependencies, Staffing / Budget 상태를
-구조화할 계획이다. 현재 단일 실행의 artifact persistence와 구분한다.
+Worker는 scoped execution을 수행하며 자신의 계약을 확대하지 않는다. Harness의 통제 책임은
+application / services / runtime configuration에 걸쳐 있으며 infrastructure 한 폴더를 뜻하지 않는다.
+Verification의 실행 수단과 Evidence의 충분성을 판단하는 책임을 구분한다. 후자는 반드시 별도
+Verifier Agent process를 요구하지 않으며, 현재 configured command 통과보다 넓은 미래 책임이다.
 
-### Worker / Harness / Verifier
+Decision의 Evidence reference는 실제 repository observation 또는 verification 결과까지 연결한다.
+Agreement / Conflict / Trade-off 비교는 같은 문제와 비교 조건을 명시하고 incompatible recommendation,
+evidence 해석, trade-off를 식별한다. 최종 recommendation도 원래 Decision / Evidence / Verification으로
+추적 가능해야 한다. 종합은 deterministic function, 하나의 LLM call, framework supervisor, 별도 Agent
+중 실제 요구와 평가 결과로 선택한다. 역할명 자체를 architecture commitment로 만들지 않는다.
 
-Worker는 scoped execution을 소유하고 자신의 계약 범위를 확대하지 않는다.
-Harness는 Authority, Context 접근, Repository isolation, verification 실행과 Evidence 생성을
-통제한다. Harness는 개념적 통제 책임이며 `infrastructure/` 한 폴더만을 의미하지 않는다.
+### Human governance records / Recovery boundary
 
-Verifier는 Claims와 독립적으로 실제 Evidence의 충분성과 acceptance criteria를 평가하는
-목표 역할이다. Logical responsibility separation은 반드시 별도 Agent process를 의미하지
-않는다. 현재는 Harness가 configured verification command를 실행하며 의미적 평가 Agent는 없다.
+Task Approval, Change Review, Apply, Commit, Push, Cleanup을 서로 다른 권한으로 유지한다.
+미래 approve / override / reject / escalation의 대상, 이유, 권한과 결과를 기록할 필요는 있지만,
+현재 result.json에는 후속 Human 결정 이력이 없다. 저장 형식과 backend는 아직 결정하지 않았다.
+Repository 변경이 되돌려져도 판단 근거와 Human 이력의 추적 가능성은 유지해야 한다.
 
-### Executive Reporting and Responsibility Flow
-
-CEO는 장문의 실행 로그를 그대로 전달하지 않고 요청·수행 내용, Decisions, Evidence,
-Risks / Open Questions, Human 판단 필요 여부를 Executive Report로 요약할 계획이다.
-실패 후 Complete / Retry / Re-plan / Reviewer Assignment / Human Escalation 판단도 목표이며,
-현재 자동 retry/re-plan은 구현되어 있지 않다.
-
-```text
-Human → CEO / Control Plane → Coordinator → TaskContract / assignment
-  → Worker + Repository Harness → Repository
-  → Verifier / Evidence → Shared State → CEO → Executive Report → Human
-```
-
-Human owns governance. CEO owns orchestration and decisions. Worker owns scoped execution.
-Harness controls execution. Verifier evaluates evidence. Shared State stores organizational truth.
-이 원칙들은 목표 책임 경계이며 현재 구현 여부는 2~4절을 따른다.
+Process crash recovery, durable scheduling, resumable workflow는 별도 범용 실행 문제다.
+필요할 때 Temporal / Restate / framework checkpoint 같은 기존 기술을 평가한다.
+실패 Evidence를 보존하는 현재 동작이나 timeout 종료 처리를 crash resume로 설명하지 않는다.
+자동 retry / rollback / re-plan과 Human escalation policy도 현재 기능이 아니며, 실패 처리 runtime을
+먼저 만드는 것이 목표가 아니다.
 
 ## 7. Application Structure Convention
 
@@ -202,6 +208,8 @@ Harness controls execution. Verifier evaluates evidence. Shared State stores org
 폴더는 사용 기술, 파일 수, 구조적 대칭성, 막연한 미래 재사용 가능성으로 나누지 않는다.
 어떤 use-case가 책임을 소유하는지, 그 과정에서 어떤 역할을 하는지,
 독립 capability인지, 외부 기술을 다루는 구현 세부사항인지 판단한다.
+Build vs Adopt도 같은 책임 기준을 따른다. Governance semantics와 외부 실행 메커니즘의
+경계를 먼저 확인하며, 후보 framework를 도입하기 위해 폴더나 interface를 미리 만들지 않는다.
 
 ### 7.1 Top-level Placement
 
@@ -455,5 +463,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
 - Evidence와 Telemetry, TaskContract와 file content, 내부 상태와 역할 간 protocol을 구분한다.
 - Scope / verification 통과를 자연어 요구 충족의 증명으로 과장하지 않는다.
-- 미래 Shared State / CEO / recovery 계획을 현재 구현 사실로 서술하지 않는다.
+- 미래 governance records / Specialist / comparison / synthesis를 현재 구현 사실로 서술하지 않는다.
+- Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.
+- 실제 domain 의미 없는 Run / Round 복제나 CEO / Coordinator 역할명을 구현 약속으로 만들지 않는다.
 - Runtime boundary는 Zod validation을 사용하며 현재 요청에 필요하지 않은 추상화를 만들지 않는다.

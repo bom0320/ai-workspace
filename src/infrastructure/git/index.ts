@@ -3,3 +3,4 @@ export {
   removeExecutionWorkspace,
 } from "./execution-workspace.js";
 export { resolveRepositoryRoot } from "./repository.js";
+export { applyPatch, isRepositoryClean, PatchApplyError } from "./patch.js";

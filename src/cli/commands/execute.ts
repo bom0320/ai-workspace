@@ -10,6 +10,8 @@ import {
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
 
+import { runApplyCommand } from "./apply.js";
+
 function timeoutFromEnvironment(name: string): number | undefined {
   const value = process.env[name];
 
@@ -158,6 +160,8 @@ export async function runExecuteCommand(
     console.log(`Repository: ${task.targetRepository}`);
     console.log(`Objective: ${task.objective}`);
   }
+
+  await runApplyCommand(repositoryRoot, result);
 
   if (result.telemetry || timing) {
     presentTiming({

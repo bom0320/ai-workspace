@@ -434,7 +434,7 @@ describe("CLI end-to-end execution", () => {
   });
 });
 
-async function runPlanningScenario(answer: string, interactive = false): Promise<void> {
+async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string): Promise<void> {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
   const repositoryRoot = join(temporaryRoot, "repository");
   const bin = join(temporaryRoot, "bin");
@@ -489,6 +489,7 @@ async function runPlanningScenario(answer: string, interactive = false): Promise
         let repositorySent = false;
         let goalSent = false;
         let approvalSent = false;
+        let applySent = false;
         const timer = setTimeout(() => { child.kill(); reject(new Error("Interactive CLI timed out")); }, 15_000);
         child.stdout.on("data", (chunk) => {
           stdout += chunk.toString();
@@ -502,7 +503,12 @@ async function runPlanningScenario(answer: string, interactive = false): Promise
           }
           if (!approvalSent && stdout.includes("Approve / Reject")) {
             approvalSent = true;
-            child.stdin.end(answer);
+            if (applyAnswer === undefined) child.stdin.end(answer);
+            else child.stdin.write(answer);
+          }
+          if (!applySent && stdout.includes("Apply / Skip") && applyAnswer !== undefined) {
+            applySent = true;
+            child.stdin.end(`${applyAnswer}\n`);
           }
         });
         child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
@@ -519,7 +525,7 @@ async function runPlanningScenario(answer: string, interactive = false): Promise
     expect(cli.stdout).toContain("Rounds: 2");
     expect(cli.stdout).toContain("Approve / Reject");
     expect(readFileSync(plannerRecord, "utf8")).toBe("round\nround\n");
-    expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe("Original introduction\n");
+    expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe(applyAnswer === "Apply" ? "Clear introduction\n" : "Original introduction\n");
     if (answer.trim() === "Approve") {
       expect(cli.status, cli.stderr).toBe(0);
       expect(existsSync(workerRecord)).toBe(true);
@@ -544,6 +550,8 @@ async function runPlanningScenario(answer: string, interactive = false): Promise
 }
 
 describe("CLI planning through approval and execution", () => {
+  it("applies verified changes after a separate Apply decision", async () => { await runPlanningScenario("Approve\n", true, "Apply"); });
+  it("preserves artifacts without applying after Skip", async () => { await runPlanningScenario("Approve\n", true, "Skip"); });
   it("collects an interactive Goal and waits for approval before execution", async () => { await runPlanningScenario("Approve\n", true); });
   it("executes the finalized task only after Approve", async () => { await runPlanningScenario("Approve\n"); });
   it("does not execute after Reject", async () => { await runPlanningScenario("Reject\n"); });

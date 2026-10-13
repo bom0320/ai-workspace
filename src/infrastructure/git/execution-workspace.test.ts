@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -71,6 +72,41 @@ afterEach(() => {
 });
 
 describe("createExecutionWorkspace", () => {
+  it("links installed dependencies, honors directory ignore rules, and preserves originals on cleanup", () => {
+    const repository = createGitRepository();
+    const dependencies = join(repository, "node_modules");
+    mkdirSync(join(dependencies, "example"), { recursive: true });
+    writeFileSync(join(dependencies, "example", "index.js"), "module.exports = 42;\n");
+    writeFileSync(join(repository, ".gitignore"), "node_modules/\n");
+    execFileSync("git", ["-C", repository, "add", ".gitignore"]);
+    execFileSync("git", ["-C", repository, "commit", "--quiet", "-m", "ignore dependencies"]);
+    const before = execFileSync("git", ["-C", repository, "status", "--porcelain"], { encoding: "utf8" });
+    workspacePath = createExecutionWorkspace(repository);
+    expect(readFileSync(join(workspacePath, "node_modules", "example", "index.js"), "utf8")).toBe("module.exports = 42;\n");
+    expect(execFileSync(process.execPath, ["-e", "process.stdout.write(String(require('example')))"], {
+      cwd: workspacePath, encoding: "utf8",
+    })).toBe("42");
+    expect(execFileSync("git", ["-C", workspacePath, "status", "--porcelain"], { encoding: "utf8" })).toBe("");
+    removeExecutionWorkspace(repository, workspacePath);
+    expect(existsSync(workspacePath)).toBe(false);
+    expect(readFileSync(join(dependencies, "example", "index.js"), "utf8")).toBe("module.exports = 42;\n");
+    expect(execFileSync("git", ["-C", repository, "status", "--porcelain"], { encoding: "utf8" })).toBe(before);
+  });
+
+  it("keeps existing behavior when no dependencies are installed", () => {
+    const repository = createGitRepository();
+    workspacePath = createExecutionWorkspace(repository);
+    expect(existsSync(join(workspacePath, "node_modules"))).toBe(false);
+  });
+
+  it("reports dependency setup failure and removes the failed worktree registration", () => {
+    const repository = createGitRepository();
+    writeFileSync(join(repository, "node_modules"), "not a directory");
+    const before = execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], { encoding: "utf8" });
+    expect(() => createExecutionWorkspace(repository)).toThrow("Failed to link execution workspace dependencies");
+    expect(execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], { encoding: "utf8" })).toBe(before);
+    expect(readFileSync(join(repository, "node_modules"), "utf8")).toBe("not a directory");
+  });
   it("creates a detached Git worktree from the repository HEAD", () => {
     const repository = createGitRepository();
 

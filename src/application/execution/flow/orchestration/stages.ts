@@ -1,0 +1,134 @@
+import type { TaskContract } from "@/contracts/task.js";
+import { checkScope } from "@/services/scope/index.js";
+import { runVerification } from "@/services/verification/index.js";
+import { runCodexWorker } from "../../worker/codex-worker.js";
+import { collectChangedPaths } from "@/services/evidence/index.js";
+import type {
+  ExecutionFailureStage,
+} from "../../model/result.js";
+import type {
+  ExecutionState,
+  TaskExecutionOptions,
+} from "../../model/state.js";
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function addExecutionFailure(
+  state: ExecutionState,
+  stage: ExecutionFailureStage,
+  error: unknown
+): void {
+  state.failures.push({
+    stage,
+    message: errorMessage(error),
+  });
+}
+
+export function collectChangedPathsEvidence(
+  state: ExecutionState,
+  workspaceRoot: string,
+  baseCommit: string
+): boolean {
+  try {
+    state.evidence.changedPaths = collectChangedPaths(
+      workspaceRoot,
+      baseCommit
+    );
+
+    return true;
+  } catch (error) {
+    addExecutionFailure(state, "evidence", error);
+    return false;
+  }
+}
+
+export async function runWorkerStage(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  options: TaskExecutionOptions
+): Promise<boolean> {
+  const startedAt = performance.now();
+  try {
+    state.evidence.workerOutput = await runCodexWorker(
+      task,
+      workspaceRoot,
+      options.workerTimeoutMs,
+      state.telemetry,
+      options.workerContext,
+    );
+
+    return true;
+  } catch (error) {
+    addExecutionFailure(state, "worker", error);
+    return false;
+  } finally {
+    if (state.telemetry) state.telemetry.workerDurationMs = performance.now() - startedAt;
+  }
+}
+
+export function runScopeStage(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  baseCommit: string
+): boolean {
+  if (!collectChangedPathsEvidence(state, workspaceRoot, baseCommit)) {
+    return false;
+  }
+
+  const scope = checkScope(
+    state.evidence.changedPaths ?? [],
+    task.allowedPaths,
+    task.forbiddenPaths
+  );
+
+  state.scope = scope;
+
+  if (scope.passed) {
+    return true;
+  }
+
+  const alreadyRecorded = state.failures.some(
+    (failure) => failure.stage === "scope"
+  );
+
+  if (!alreadyRecorded) {
+    state.failures.push({
+      stage: "scope",
+      message: `Scope violations: ${scope.violations.join(", ")}`,
+    });
+  }
+
+  return false;
+}
+
+export async function runVerificationStage(
+  task: TaskContract,
+  state: ExecutionState,
+  workspaceRoot: string,
+  options: TaskExecutionOptions
+): Promise<void> {
+  const startedAt = performance.now();
+  try {
+    state.evidence.verification = await runVerification(
+      task.verification,
+      workspaceRoot,
+      options.verificationTimeoutMs
+    );
+  } catch (error) {
+    addExecutionFailure(state, "verification", error);
+    return;
+  } finally {
+    if (state.telemetry) state.telemetry.verificationDurationMs = performance.now() - startedAt;
+  }
+
+  if (!state.evidence.verification.passed) {
+    state.failures.push({
+      stage: "verification",
+      message: "Verification failed.",
+    });
+  }
+}

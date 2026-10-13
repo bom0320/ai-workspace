@@ -269,6 +269,17 @@ AI Workspace는 이 경계를 유지하면서 실행과 검증을 자동화하�
 
 Human이 중요한 판단에 집중할 수 있도록 충분한 Evidence와 요약을 제공한다.
 
+
+### 4.9 Human Interface
+
+현재 Human Interface는 terminal-based CLI다. CLI는 Goal 입력, 생성된 TaskContract의
+Human Approval, 실행 결과 확인을 담당하는 adapter이며, 실제 Planning / Execution 로직은
+application layer의 `planTask()` / `executeTask()`에 유지한다.
+
+Human UI는 웹 화면에 한정되지 않는다. CLI에서 Web 등 다른 UI로 접점이 바뀌더라도
+application layer는 UI에 의존하거나 그 변경의 영향을 받지 않아야 한다.
+현재 구현과 향후 v0~v5 확장 방향은 [CLI and Human Interface](cli-and-human-interface.md)를 참조한다.
+
 ---
 
 ## 5. Core Components & Responsibility Boundaries
@@ -509,36 +520,38 @@ Human
 
 ## 6. Source Architecture
 
-현재 v0 코드는 다음의 계층 구조를 사용한다.
+현재 코드는 다음의 source 구조를 사용한다.
 
 ```text
 src/
 ├── application/
+├── contracts/
 ├── services/
-├── infrastructure/
-└── contracts/
+└── infrastructure/
 ```
 
-- `application`: use case, execution flow, orchestration, 실행 순서와 상태 전이 조율
-- `services`: Worker, Scope, Verification, Evidence, Artifact 등 application이 사용하는 기능 단위
-- `infrastructure`: Git, OS Process 등 외부 시스템과 저수준 실행 구현
-- `contracts`: TaskContract runtime validation schema와 schema에서 파생된 타입
+- `application`: Planning, Execution처럼 사용자의 목적을 수행하는 use-case와 application logic
+- `contracts`: GoalSpec, TaskContract 등 특정 application 하나에 종속되지 않는 system-wide contract
+- `services`: Scope, Verification, Evidence, Artifact 등 독립 capability
+- `infrastructure`: Git, OS Process 등 기술적 실행 수단과 저수준 구현
 
 ### 6.1 Module Internal Structure
 
 모든 모듈에 동일한 하위 폴더 구조를 강제하지 않는다.
 
-현재 실행 모듈은 다음처럼 실행 흐름과 핵심 모델을 분리한다.
+현재 실행 모듈은 실행 흐름, 핵심 모델, Worker 역할 구현체를 분리한다.
 
 ```text
 application/execution/
 ├── flow/
 ├── model/
+├── worker/
 └── index.ts
 ```
 
-- `flow/`: 실행 흐름과 orchestration
-- `model/`: execution 모듈의 핵심 상태와 결과 모델
+- `flow/`: Execution 과정에 직접 속하는 application logic
+- `model/`: Execution 모듈의 핵심 상태와 결과 모델
+- `worker/`: Execution Worker 역할 구현체
 - `index.ts`: 외부 public API
 
 `flow / model` 구조는 모든 모듈에 강제하지 않는다. 역할이 충분히 복잡해졌을 때만
@@ -546,18 +559,16 @@ application/execution/
 
 폴더 분리 기준은 타입의 존재 여부가 아니라 책임을 구조적으로 분리할 필요성이다.
 
-현재 services 계층은 역할별로 다음과 같이 구성한다.
+현재 services 계층은 독립 capability별로 다음과 같이 구성한다.
 
 ```text
 services/
-├── worker/
 ├── scope/
 ├── verification/
 ├── evidence/
 └── artifacts/
 ```
 
-- `worker/`: Codex Worker 실행
 - `scope/`: 변경 경로 정책 검사
 - `verification/`: verification command 실행
 - `evidence/`: 실행 중 관찰된 사실 수집
@@ -574,3 +585,247 @@ services/
 - 상위 mega barrel(`services/index.ts` 등)은 만들지 않는다.
 - Layer dependency와 module boundary가 코드 구조에서 드러나도록 유지한다.
 - circular dependency를 만들지 않는다.
+
+
+## 7. Source Architecture & Responsibility Rules
+
+앞의 시스템 책임 경계를 소스 코드 배치에 적용하는 기준은 다음과 같다.
+
+> Architecture is responsibility-first.
+
+폴더는 사용 기술, 파일 수, 구조적 대칭성, 막연한 미래 재사용 가능성으로 나누지 않는다.
+어떤 use-case가 책임을 소유하는지, 그 과정에서 어떤 역할을 하는지,
+독립 capability인지, 외부 기술을 다루는 구현 세부사항인지 판단한다.
+
+### 7.1 Top-level Placement
+
+6절의 네 source 영역은 다음 기준으로 구분한다.
+
+- `application`: 사용자의 목적을 실제 workflow로 수행한다. 현재 Planning의
+  `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`가 여기에 속한다.
+  두 use-case는 각각의 진입점을 가지며, 자동으로 연결된 하나의 실행 흐름을 의미하지 않는다.
+- `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
+  현재 GoalSpec과 TaskContract의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
+- `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로
+  의미가 있는 기능을 둔다. 단순히 실제 작업을 수행한다는 이유만으로 service가 되지 않는다.
+- `infrastructure`: Git, Process, filesystem 접근 등 기술적 실행 수단을 다룬다.
+  기술을 사용하는 모든 코드가 이곳에 속하는 것은 아니다. Planning/Execution 전용 판단을
+  포함하는 구현은 그 application에 남긴다.
+
+### 7.2 Application Internal Responsibilities
+
+```text
+application/
+└─ <use-case>/
+   ├─ flow/
+   ├─ model/
+   ├─ protocol/   # 명확한 component boundary가 있을 때
+   ├─ <role>/     # 명확한 application 역할이 있을 때
+   └─ index.ts
+```
+
+현재 use-case는 `planning`과 `execution`이다. 모든 application에 위 폴더를 미리 만들거나
+같은 파일 수와 폴더 모양을 강제하지 않는다. 같은 책임 분류 기준을 적용하는 것이 중요하다.
+
+#### flow
+
+> `flow` = 해당 use-case가 실제로 진행되는 과정의 application logic
+
+flow는 orchestration만 담는 폴더가 아니다. 다음 과정에 직접 속하는 logic을 포함한다.
+
+```text
+Planning:
+Goal → Repository 조사 → Planner 판단 → 추가 inspection → TaskDraft → TaskContract
+
+Execution:
+TaskContract → workspace 생성 → Worker 실행 → scope 검사
+             → verification → artifacts → ExecutionResult
+```
+
+flow root에는 가능한 한 public use-case entry를 둔다.
+현재 `planning/flow/plan-task.ts`와 `execution/flow/execute-task.ts`가 해당한다.
+
+#### flow/orchestration
+
+workflow의 순서와 진행 상태를 제어한다. 다음 단계 결정, 반복 제어, stage 진행,
+실패 누적, workflow 종료 처리가 여기에 속한다.
+현재 `planning-loop.ts`, `stages.ts`, `result-finalizer.ts`가 해당한다.
+
+#### Flow Implementation Grouping
+
+flow의 책임이 늘어나면 세부 작업별로 한 단계의 하위 디렉터리를 둘 수 있다.
+현재 Planning은 다음처럼 구분한다.
+
+```text
+flow/
+├─ plan-task.ts
+├─ orchestration/
+├─ inspection/
+└─ transformation/
+```
+
+- `inspection`: workflow 진행에 필요한 사실 수집.
+  `inspectRepository`, `inspectFiles`가 Repository를 read-only로 조사한다.
+- `transformation`: workflow를 제어하지 않고 데이터 표현을 변환하거나 확정한다.
+  `createPlannerContext`는 AI-facing projection을 만들고,
+  `buildTaskContract`는 Draft에 Harness 식별자와 Human 제약을 반영한다.
+
+`inspection`, `transformation`은 flow 내부의 implementation grouping이다.
+`model`, `protocol`과 같은 application 최상위 분류가 아니므로,
+단순히 별도 책임이라는 이유로 `planning/inspection`, `planning/transformation`처럼
+use-case root로 올리지 않는다. 분류 축을 일관되게 유지한다.
+
+#### model
+
+해당 use-case가 소유하는 상태, 설정, 결과를 둔다.
+Planning의 PlanningState, PlanningLimits, PlanningResult, RepositoryInfo와
+Execution의 ExecutionState, ExecutionResult가 해당한다.
+
+> model ≠ 모든 타입을 넣는 곳
+
+system-wide contract는 `contracts`, 역할 간 message contract는 `protocol`에 둔다.
+
+#### protocol
+
+컴포넌트나 역할 사이에서 주고받는 구조화된 message contract를 둔다.
+Planning에는 PlannerContext, PlannerDecision, InspectRequest, InspectResult, TaskDraft가 있다.
+
+```text
+Harness → PlannerContext → Planner
+Planner → PlannerDecision → Harness
+Planner → InspectRequest → Harness inspectFiles() → InspectResult → PlanningState update
+```
+
+PlanningResult는 Planning use-case의 최종 결과이고,
+PlannerDecision은 Planner ↔ Harness 사이의 communication contract다.
+이 둘을 같은 책임으로 분류하지 않는다.
+protocol은 항상 필요한 폴더가 아니며, 명확한 component boundary가 있을 때만 둔다.
+
+#### Role Folder
+
+명확한 application 역할의 구현체를 둔다.
+현재 `planning/planner/codex-planner.ts`와 `execution/worker/codex-worker.ts`가 해당한다.
+
+Codex Planner는 Codex 기술을 사용하기 때문에 planner에 있는 것이 아니라,
+Planning의 Planner 역할을 구현하기 때문에 그곳에 있다.
+Codex Worker도 Execution의 Worker 역할 구현체이므로 Execution이 소유한다.
+기술보다 역할 소유권을 우선한다.
+
+#### index.ts
+
+해당 use-case의 public boundary다. `planTask`, `executeTask`, PlanningResult,
+ExecutionResult 등 외부에 필요한 API를 제공한다.
+내부 파일 위치가 바뀌어도 외부 사용자가 그 배치에 직접 의존하지 않도록 한다.
+구체적인 import 규칙은 6.2절을 따른다.
+
+### 7.3 Codex Implementation Placement
+
+```text
+Planner ≠ Codex      Planner can use Codex
+Worker ≠ Codex       Worker can use Codex
+```
+
+역할을 구현하는 코드는 각 application의 planner/worker에 둔다.
+Planner와 Worker에 실제 공통 실행 책임이 생길 때에만,
+`codex exec`, sandbox, timeout, stdout/stderr 수집, process error handling,
+config 같은 기술적 메커니즘을 `infrastructure/codex/`로 추출할 수 있다.
+현재 이 모듈은 구현되어 있지 않으며, 사용 기술이 같다는 이유만으로 만들지 않는다.
+
+```text
+Planning 개념을 안다       → application/planning
+Execution 개념을 안다      → application/execution
+Codex 실행 방법만 안다     → infrastructure
+```
+
+### 7.4 Services Promotion
+
+> 해당 use-case를 떠나도 독립 capability로 의미가 있는가?
+
+그렇다면 services 후보가 된다. 현재 scope 검사, verification 실행,
+artifact 저장, evidence 수집이 여기에 속한다.
+
+반면 `PlanningState → PlannerContext`, `TaskDraft → TaskContract`처럼
+Planning 전용 언어를 강하게 아는 변환은 Planning flow 내부에 둔다.
+다른 곳에서도 쓸 것 같다는 예상만으로 service나 abstraction을 먼저 추출하지 않는다.
+
+### 7.5 Finalizer Responsibility
+
+workflow가 끝난다는 이유만으로 finalizer를 만들지 않는다.
+
+> 종료 처리 자체가 독립 책임일 정도로 복잡한가?
+
+Execution의 `finalizeExecutionResult`는 state 조립, passed 계산,
+evidence/scope/failures와 artifacts 반영, result persistence 시도,
+report failure 처리, 최종 ExecutionResult 반환을 담당한다.
+따라서 workflow 종료 orchestration으로서 독립 책임이 있다.
+
+Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이터 변환과 정책 강제이며,
+구조적 대칭성을 위해 `finalizePlanningResult` 같은 abstraction을 추가하지 않는다.
+
+> 구조적 대칭성보다 실제 책임을 우선한다.
+
+### 7.6 Current Source Layout
+
+현재 브랜치의 주요 배치는 다음과 같다. 테스트는 구현 파일과 함께 배치되며,
+아래 예시에서는 CLI entry와 세부 파일을 생략한다.
+
+```text
+src/
+├─ application/
+│  ├─ planning/
+│  │  ├─ flow/
+│  │  │  ├─ plan-task.ts
+│  │  │  ├─ orchestration/
+│  │  │  ├─ inspection/
+│  │  │  └─ transformation/
+│  │  ├─ model/
+│  │  ├─ protocol/
+│  │  ├─ planner/
+│  │  └─ index.ts
+│  └─ execution/
+│     ├─ flow/
+│     │  ├─ execute-task.ts
+│     │  └─ orchestration/
+│     ├─ model/
+│     ├─ worker/
+│     └─ index.ts
+├─ contracts/
+├─ services/
+│  ├─ artifacts/
+│  ├─ evidence/
+│  ├─ scope/
+│  └─ verification/
+└─ infrastructure/
+   ├─ git/
+   └─ process/
+```
+
+Execution의 일부 단계는 이미 services의 독립 capability로 분리되어 있다.
+Planning의 inspection과 transformation은 아직 Planning flow와 강하게 결합되어 있다.
+따라서 두 application의 구조가 대칭이 아니거나 Planning flow가 더 커 보이는 것은 문제가 아니다.
+맞춰야 하는 것은 파일 개수, 폴더 개수, 모양이 아니라 책임을 판단하는 기준이다.
+
+### 7.7 Placement Checklist
+
+새 기능이나 리팩토링의 파일 배치는 다음 질문으로 판단한다.
+
+1. 어떤 use-case가 이 코드를 소유하는가?
+   → planning / execution / system-wide
+2. 해당 use-case가 진행되는 과정에 직접 속하는가?
+   → flow
+3. 흐름의 순서와 상태를 제어하는가?
+   → flow/orchestration
+4. flow 안의 특정 작업 단계인가?
+   → flow/<responsibility>
+5. use-case 전체가 소유하는 상태/설정/결과인가?
+   → model
+6. 역할 또는 컴포넌트 사이 message contract인가?
+   → protocol
+7. 명확한 역할 구현체인가?
+   → planner / worker
+8. 다른 use-case에서도 독립 capability로 의미가 있는가?
+   → services
+9. Git / Process / Codex CLI 같은 기술적 실행 방법인가?
+   → infrastructure
+10. 미래에 재사용될 것 같다는 예상만 있는가?
+    → 아직 추출하지 않는다

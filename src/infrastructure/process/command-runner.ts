@@ -5,6 +5,7 @@ export type CommandResult = {
   stderr: string;
   exitCode: number | null;
   timedOut: boolean;
+  processDurationMs?: number;
   error?: Error;
 };
 
@@ -28,6 +29,9 @@ export function runCommand(
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
+    let processStartedAt: number | undefined;
+    let processDurationMs: number | undefined;
+    child.once("spawn", () => { processStartedAt = performance.now(); });
     let stdout = "";
     let stderr = "";
     let spawnError: Error | undefined;
@@ -71,6 +75,7 @@ export function runCommand(
         stderr,
         exitCode,
         timedOut,
+        ...(processDurationMs === undefined ? {} : { processDurationMs }),
         ...(spawnError === undefined ? {} : { error: spawnError }),
       });
     };
@@ -85,6 +90,7 @@ export function runCommand(
       spawnError = error;
     });
     child.once("close", (code) => {
+      if (processStartedAt !== undefined) processDurationMs = performance.now() - processStartedAt;
       exitCode = code;
       closed = true;
       finish();

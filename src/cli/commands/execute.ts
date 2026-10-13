@@ -1,0 +1,190 @@
+import { ZodError } from "zod";
+
+import type { TaskContract } from "@/contracts/task.js";
+import { loadTaskContract } from "@/contracts/task-loader.js";
+import {
+  executeTask,
+  type TaskExecutionOptions,
+  type WorkerContext,
+} from "@/application/execution/index.js";
+import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
+import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
+
+import { runReviewStage } from "./review/review.js";
+import { runWorkspaceCleanup } from "./cleanup/workspace-cleanup.js";
+import { runPostExecutionDelivery } from "./delivery/delivery.js";
+
+function timeoutFromEnvironment(name: string): number | undefined {
+  const value = process.env[name];
+
+  if (value === undefined) {
+    return;
+  }
+
+  const timeoutMs = Number(value);
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined;
+}
+
+export async function runExecutionCli(args: string[]): Promise<number> {
+  const taskPath = args[0];
+  const repositoryPath = args[1];
+
+  if (!taskPath) {
+    console.error("Error: Task file path is required.");
+    return 1;
+  }
+
+  if (!repositoryPath) {
+    console.error("Error: Repository path is required.");
+    return 1;
+  }
+
+  let task;
+
+  try {
+    task = loadTaskContract(taskPath);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      console.error("Error: Task file contains malformed JSON.");
+    } else if (error instanceof ZodError) {
+      console.error("Error: TaskContract validation failed.");
+    } else if (error instanceof Error && "code" in error) {
+      console.error(`Error: Unable to read task file: ${taskPath}`);
+    } else {
+      console.error("Error: Unable to load TaskContract.");
+    }
+
+    return 1;
+  }
+
+  return runExecuteCommand(task, repositoryPath);
+}
+
+export async function runExecuteCommand(
+  task: TaskContract,
+  repositoryPath: string,
+  timing?: HumanInteractionTiming & { startedAt: number },
+  workerContext?: WorkerContext,
+): Promise<number> {
+  console.log("Task Contract: valid");
+
+  let repositoryRoot;
+
+  try {
+    repositoryRoot = resolveRepositoryRoot(repositoryPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+
+    console.error(`Error: Repository resolution failed: ${message}`);
+    return 1;
+  }
+
+  console.log(`Repository Root: ${repositoryRoot}`);
+
+  const executionOptions: TaskExecutionOptions = {};
+  if (workerContext) executionOptions.workerContext = workerContext;
+  const workerTimeoutMs = timeoutFromEnvironment(
+    "AI_WORKSPACE_WORKER_TIMEOUT_MS",
+  );
+  const verificationTimeoutMs = timeoutFromEnvironment(
+    "AI_WORKSPACE_VERIFICATION_TIMEOUT_MS",
+  );
+
+  if (workerTimeoutMs !== undefined) {
+    executionOptions.workerTimeoutMs = workerTimeoutMs;
+  }
+  if (verificationTimeoutMs !== undefined) {
+    executionOptions.verificationTimeoutMs = verificationTimeoutMs;
+  }
+
+  const result = await executeTask(task, repositoryRoot, executionOptions);
+
+  if (result.artifacts) {
+    console.log(`Run Artifacts: ${result.artifacts.directory}`);
+  }
+
+  if (result.retainedWorkspace) {
+    console.error(`Execution Workspace retained: ${result.retainedWorkspace}`);
+  }
+
+  if (result.evidence.workerOutput !== undefined) {
+    console.log("Codex Worker: complete");
+  }
+
+  if (result.scope && !result.scope.passed) {
+    console.error("Scope: failed");
+
+    for (const path of result.scope.violations) {
+      console.error(`Scope violation: ${path}`);
+    }
+  }
+
+  if (result.evidence.verification) {
+    if (result.evidence.verification.passed) {
+      console.log("Verification: passed");
+    } else {
+      console.error("Verification: failed");
+
+      for (const command of result.evidence.verification.commands.filter(
+        (command) => !command.passed,
+      )) {
+        console.error(
+          `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
+        );
+      }
+    }
+  }
+
+  for (const failure of result.failures) {
+    if (
+      failure.stage === "scope" ||
+      (failure.stage === "verification" && result.evidence.verification)
+    ) {
+      continue;
+    }
+
+    const labels = {
+      workspace: "Execution Workspace creation",
+      worker: "Codex Worker",
+      evidence: "Execution Evidence collection",
+      verification: "Verification",
+      cleanup: "Execution Workspace cleanup",
+      preservation: "Execution result preservation",
+      report: "Final execution report",
+    } as const;
+
+    console.error(`Error: ${labels[failure.stage]} failed: ${failure.message}`);
+  }
+
+  if (result.passed) {
+    console.log(`Changed Paths: ${result.evidence.changedPaths?.length ?? 0}`);
+    console.log(`ID: ${task.id}`);
+    console.log(`Repository: ${task.targetRepository}`);
+    console.log(`Objective: ${task.objective}`);
+  }
+
+  let cleanupDurationMs: number | undefined;
+  try {
+    if (result.workspace) {
+      const review = await runReviewStage(result);
+      if (review.status === "continued" && result.passed && result.evidence.verification?.passed) {
+        await runPostExecutionDelivery({ repositoryRoot, executionResult: result });
+      } else {
+        console.log(`Review: ${review.status}\nDelivery was not attempted.`);
+      }
+    }
+  } finally {
+    const cleanup = await runWorkspaceCleanup(repositoryRoot, result);
+    if ("durationMs" in cleanup) cleanupDurationMs = cleanup.durationMs;
+  }
+
+  if (result.telemetry || timing) {
+    presentTiming({
+      ...result.telemetry,
+      ...(cleanupDurationMs === undefined ? {} : { cleanupDurationMs }),
+      ...timing,
+      ...(timing ? { totalDurationMs: performance.now() - timing.startedAt } : {}),
+    });
+  }
+  return result.passed ? 0 : 1;
+}

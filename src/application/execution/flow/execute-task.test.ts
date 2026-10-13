@@ -92,7 +92,7 @@ describe("executeTask", async () => {
     const result = await executeTask(task, "/repositories/example");
     expect(result.telemetry).toEqual({
       workspaceDurationMs: 2, workerDurationMs: 3, verificationDurationMs: 4,
-      cleanupDurationMs: 5, totalDurationMs: 28,
+      totalDurationMs: 23,
     });
     expect(result.evidence).not.toHaveProperty("telemetry");
     expect(writeExecutionResultMock).toHaveBeenCalledWith("/runs/run-001", expect.objectContaining({ telemetry: result.telemetry }));
@@ -102,7 +102,7 @@ describe("executeTask", async () => {
     runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
     const result = await executeTask(task, "/repositories/example");
     expect(result.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
-    expect(result.telemetry!.cleanupDurationMs).toBeGreaterThanOrEqual(0);
+    expect(result.telemetry!.cleanupDurationMs).toBeUndefined();
     expect(result.telemetry!.verificationDurationMs).toBeUndefined();
     for (const duration of Object.values(result.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
   });
@@ -110,6 +110,7 @@ describe("executeTask", async () => {
     const result = await executeTask(task, "/repositories/example");
 
     expect(result).toEqual({
+      workspace: { path: "/tmp/execution-workspace" },
       telemetry: expect.any(Object),
       passed: true,
       evidence: {
@@ -143,11 +144,9 @@ describe("executeTask", async () => {
       preserveExecutionChangesMock.mock.invocationCallOrder[0],
     );
     expect(preserveExecutionChangesMock.mock.invocationCallOrder[0]).toBeLessThan(
-      removeExecutionWorkspaceMock.mock.invocationCallOrder[0],
-    );
-    expect(removeExecutionWorkspaceMock.mock.invocationCallOrder[0]).toBeLessThan(
       writeExecutionResultMock.mock.invocationCallOrder[0],
     );
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
     expect(collectChangedPathsMock).toHaveBeenNthCalledWith(
       1,
       "/tmp/execution-workspace",
@@ -179,7 +178,7 @@ describe("executeTask", async () => {
     expect(writeExecutionResultMock).toHaveBeenCalledOnce();
   });
 
-  it("records Worker failure, skips later stages, and cleans up", async () => {
+  it("records Worker failure, skips later stages, and retains workspace", async () => {
     runCodexWorkerMock.mockImplementation(() => {
       throw new Error("worker failed");
     });
@@ -196,7 +195,7 @@ describe("executeTask", async () => {
     );
     expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("keeps Worker timeout and records paths changed before timeout", async () => {
@@ -257,7 +256,7 @@ describe("executeTask", async () => {
     ]);
     expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("preserves Evidence and scope while skipping Verification on a Scope failure", async () => {
@@ -281,7 +280,7 @@ describe("executeTask", async () => {
       { stage: "scope", message: "Scope violations: README.md" },
     ]);
     expect(runVerificationMock).not.toHaveBeenCalled();
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("preserves failed Verification as Evidence", async () => {
@@ -307,7 +306,7 @@ describe("executeTask", async () => {
     expect(result.failures).toEqual([
       { stage: "verification", message: "Verification failed." },
     ]);
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("preserves prior Evidence and scope when Verification throws", async () => {
@@ -326,82 +325,38 @@ describe("executeTask", async () => {
     expect(result.failures).toEqual([
       { stage: "verification", message: "verification runner failed" },
     ]);
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
-  it("preserves Verification and both failures when Verification and cleanup fail", async () => {
-    const verification = {
-      passed: false,
-      commands: [
-        {
-          command: "pnpm test",
-          passed: false,
-          exitCode: 1,
-          stdout: "",
-          stderr: "tests failed",
-        },
-      ],
-    };
+  it("keeps failed Verification and its workspace available for review", async () => {
+    const verification = { passed: false, commands: [] };
     runVerificationMock.mockResolvedValue(verification);
-    removeExecutionWorkspaceMock.mockImplementation(() => {
-      throw new Error("cleanup failed");
-    });
-
     const result = await executeTask(task, "/repositories/example");
-
     expect(result.passed).toBe(false);
     expect(result.evidence.verification).toBe(verification);
-    expect(result.failures).toEqual([
-      { stage: "verification", message: "Verification failed." },
-      { stage: "cleanup", message: "cleanup failed" },
-    ]);
-    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
+    expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
+    expect(result.failures).toEqual([{ stage: "verification", message: "Verification failed." }]);
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
-  it("turns cleanup failure into a failed result while preserving Evidence", async () => {
-    removeExecutionWorkspaceMock.mockImplementation(() => {
-      throw new Error("worktree removal failed");
-    });
-
+  it("does not let cleanup errors affect successful execution", async () => {
+    removeExecutionWorkspaceMock.mockImplementation(() => { throw new Error("removal failed"); });
     const result = await executeTask(task, "/repositories/example");
-
-    expect(result.passed).toBe(false);
+    expect(result.passed).toBe(true);
+    expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
     expect(result.evidence.workerOutput).toBe("Codex final output");
-    expect(result.evidence.changedPaths).toEqual(["src/example.ts"]);
-    expect(result.evidence.verification?.passed).toBe(true);
-    expect(result.failures).toEqual([
-      { stage: "cleanup", message: "worktree removal failed" },
-    ]);
-    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
-    expect(writeExecutionResultMock).toHaveBeenCalledWith(
-      "/runs/run-001",
-      expect.objectContaining({
-        passed: false,
-        failures: [
-          { stage: "cleanup", message: "worktree removal failed" },
-        ],
-        retainedWorkspace: "/tmp/execution-workspace",
-      }),
-    );
+    expect(result.failures).toEqual([]);
+    expect(writeExecutionResultMock).toHaveBeenCalledWith("/runs/run-001", expect.objectContaining({ passed: true, workspace: result.workspace }));
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
-  it("preserves both Worker and cleanup failures", async () => {
-    runCodexWorkerMock.mockImplementation(() => {
-      throw new Error("worker failed");
-    });
-    removeExecutionWorkspaceMock.mockImplementation(() => {
-      throw new Error("cleanup failed");
-    });
-
+  it("preserves Worker failure without attempting workspace cleanup", async () => {
+    runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
+    removeExecutionWorkspaceMock.mockImplementation(() => { throw new Error("cleanup failed"); });
     const result = await executeTask(task, "/repositories/example");
-
-    expect(result.passed).toBe(false);
-    expect(result.failures).toEqual([
-      { stage: "worker", message: "worker failed" },
-      { stage: "cleanup", message: "cleanup failed" },
-    ]);
-    expect(result.retainedWorkspace).toBe("/tmp/execution-workspace");
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(result.failures).toEqual([{ stage: "worker", message: "worker failed" }]);
+    expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("fails final Scope when Verification creates a forbidden file", async () => {
@@ -494,6 +449,6 @@ describe("executeTask", async () => {
       { stage: "worker", message: "worker failed" },
       { stage: "report", message: "result storage failed" },
     ]);
-    expect(removeExecutionWorkspaceMock).toHaveBeenCalledOnce();
+    expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 });

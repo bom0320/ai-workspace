@@ -1,7 +1,6 @@
 import type { TaskContract } from "@/contracts/task.js";
 import {
   createExecutionWorkspace,
-  removeExecutionWorkspace,
 } from "@/infrastructure/git/index.js";
 import {
   createExecutionRun,
@@ -95,32 +94,11 @@ export async function executeTask(
     runScopeStage(task, state, workspaceRoot, baseCommit);
   }
 
-  let changesPreserved = false;
-  let cleanupSucceeded = false;
-
   try {
     preserveExecutionChanges(workspaceRoot, runDirectory, baseCommit);
-
-    changesPreserved = true;
   } catch (error) {
     addExecutionFailure(state, "preservation", error);
   }
 
-  if (changesPreserved) {
-    const cleanupStartedAt = performance.now();
-    try {
-      removeExecutionWorkspace(repositoryRoot, workspaceRoot);
-
-      cleanupSucceeded = true;
-    } catch (error) {
-      addExecutionFailure(state, "cleanup", error);
-    } finally {
-      state.telemetry!.cleanupDurationMs = performance.now() - cleanupStartedAt;
-    }
-  }
-
-  const retainedWorkspace =
-    changesPreserved && cleanupSucceeded ? undefined : workspaceRoot;
-
-  return finalizeExecutionResult(state, artifacts, retainedWorkspace);
+  return finalizeExecutionResult(state, artifacts, workspaceRoot);
 }

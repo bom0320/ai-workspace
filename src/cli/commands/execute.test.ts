@@ -6,8 +6,14 @@ import { loadTaskContract } from "@/contracts/task-loader.js";
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { executeTask } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
+import { runReviewStage } from "./review/review.js";
+import { runWorkspaceCleanup } from "./cleanup/workspace-cleanup.js";
+import { runPostExecutionDelivery } from "./delivery/delivery.js";
 import { runExecutionCli as runCli } from "./execute.js";
 
+vi.mock("./review/review.js", () => ({ runReviewStage: vi.fn() }));
+vi.mock("./cleanup/workspace-cleanup.js", () => ({ runWorkspaceCleanup: vi.fn() }));
+vi.mock("./delivery/delivery.js", () => ({ runPostExecutionDelivery: vi.fn() }));
 vi.mock("@/contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({
@@ -54,6 +60,9 @@ beforeEach(() => {
   loadTaskContractMock.mockReturnValue(task);
   resolveRepositoryRootMock.mockReturnValue("/repositories/example");
   executeTaskMock.mockResolvedValue(successfulResult);
+  vi.mocked(runReviewStage).mockResolvedValue({ status: "continued" });
+  vi.mocked(runWorkspaceCleanup).mockResolvedValue({ status: "kept" });
+  vi.mocked(runPostExecutionDelivery).mockResolvedValue({ apply: { status: "skipped" } });
 });
 
 afterEach(() => {
@@ -248,4 +257,27 @@ describe("CLI", async () => {
       "Error: Final execution report failed: result storage failed",
     );
   });
+});
+
+it.each(["continued", "aborted", "failed"] as const)("gates delivery on review %s and always cleans up", async (status) => {
+  const result = { ...successfulResult, workspace: { path: "/tmp/workspace" } };
+  executeTaskMock.mockResolvedValue(result);
+  vi.mocked(runReviewStage).mockResolvedValue(status === "failed" ? { status, reason: "diff failed" } : { status });
+  expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
+  if (status === "continued") expect(runPostExecutionDelivery).toHaveBeenCalledWith({ repositoryRoot: "/repositories/example", executionResult: result });
+  else expect(runPostExecutionDelivery).not.toHaveBeenCalled();
+  expect(runWorkspaceCleanup).toHaveBeenCalledWith("/repositories/example", result);
+  expect(result.passed).toBe(true);
+});
+it("preserves successful Execution after Delivery and Cleanup failures", async () => {
+  const result = { ...successfulResult, workspace: { path: "/tmp/workspace" } };
+  executeTaskMock.mockResolvedValue(result);
+  vi.mocked(runPostExecutionDelivery).mockResolvedValue({ apply: { status: "applied" }, commit: { status: "committed", commitSha: "sha" }, push: { status: "failed", reason: "remote failed" } });
+  vi.mocked(runWorkspaceCleanup).mockResolvedValue({ status: "failed", reason: "cleanup failed", durationMs: 1 });
+  expect(await runCli(["task.json", "/repositories/example"])).toBe(0); expect(result.passed).toBe(true); expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
+});
+it("asks cleanup even when delivery unexpectedly throws", async () => {
+  executeTaskMock.mockResolvedValue({ ...successfulResult, workspace: { path: "/tmp/workspace" } });
+  vi.mocked(runPostExecutionDelivery).mockRejectedValueOnce(new Error("unexpected delivery error"));
+  await expect(runCli(["task.json", "/repositories/example"])).rejects.toThrow("unexpected delivery error"); expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
 });

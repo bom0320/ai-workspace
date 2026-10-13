@@ -19,7 +19,10 @@ export function finalizeExecutionResult(
     ...(state.scope === undefined ? {} : { scope: state.scope }),
     failures: state.failures,
     artifacts,
-    ...(retainedWorkspace === undefined ? {} : { retainedWorkspace }),
+    ...(retainedWorkspace === undefined ? {} : {
+      workspace: { path: retainedWorkspace },
+      ...(state.failures.length > 0 ? { retainedWorkspace } : {}),
+    }),
   };
 
   try {

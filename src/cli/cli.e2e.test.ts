@@ -246,7 +246,8 @@ function runScenario(scenario: Scenario): ScenarioResult {
     expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(storedResult.telemetry!.codexProcessDurationMs!);
     expect(storedResult.telemetry!.workerSetupDurationMs).toBeGreaterThanOrEqual(0);
     expect(storedResult.telemetry!.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
-    expect(storedResult.telemetry!.cleanupDurationMs).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.cleanupDurationMs).toBeUndefined();
+    expect(realpathSync(storedResult.workspace!.path)).toBe(realpathSync(workspaceRoot));
     for (const duration of Object.values(storedResult.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
     expect(storedResult.passed).toBe(
       scenario === "success" || scenario === "worker-commit-allowed",
@@ -272,10 +273,8 @@ function runScenario(scenario: Scenario): ScenarioResult {
       originalForbidden
     );
     expect(git(repositoryRoot, ["status", "--porcelain"])).toBe(originalStatus);
-    expect(git(repositoryRoot, ["worktree", "list", "--porcelain"])).toBe(
-      originalWorktrees
-    );
-    expect(existsSync(workspaceRoot)).toBe(false);
+    expect(git(repositoryRoot, ["worktree", "list", "--porcelain"])).toContain(originalWorktrees.trim());
+    expect(existsSync(workspaceRoot)).toBe(true);
     expect(existsSync(runDirectory!)).toBe(true);
 
     if (
@@ -434,7 +433,7 @@ describe("CLI end-to-end execution", () => {
   });
 });
 
-async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string, delivery = false): Promise<void> {
+async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string, delivery = false, reviewAnswer = "Continue", cleanupAnswer = "Delete"): Promise<void> {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
   const repositoryRoot = join(temporaryRoot, "repository");
   const bin = join(temporaryRoot, "bin");
@@ -495,6 +494,8 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
         let repositorySent = false;
         let goalSent = false;
         let approvalSent = false;
+        let reviewSent = false;
+        let cleanupSent = false;
         let applySent = false;
         let commitSent = false;
         let messageSent = false;
@@ -512,17 +513,26 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
           }
           if (!approvalSent && stdout.includes("Approve / Reject")) {
             approvalSent = true;
-            if (applyAnswer === undefined) child.stdin.end(answer);
-            else child.stdin.write(answer);
+            child.stdin.write(answer);
           }
-          if (!applySent && stdout.includes("Apply / Skip") && applyAnswer !== undefined) {
+          if (!reviewSent && stdout.includes("Continue / Abort")) {
+            reviewSent = true;
+            const workspace = readFileSync(workerRecord, "utf8");
+            expect(existsSync(workspace)).toBe(true);
+            expect(readFileSync(join(workspace, "README.md"), "utf8")).toBe("Clear introduction\n");
+            child.stdin.write(`${reviewAnswer}\n`);
+          }
+          if (!cleanupSent && stdout.includes("Delete / Keep")) {
+            cleanupSent = true;
+            child.stdin.end(`${cleanupAnswer}\n`);
+          }
+          if (!applySent && stdout.includes("Apply / Skip")) {
             applySent = true;
-            if (delivery) child.stdin.write(`${applyAnswer}\n`);
-            else child.stdin.end(`${applyAnswer}\n`);
+            child.stdin.write(`${applyAnswer ?? "Skip"}\n`);
           }
-          if (delivery && !commitSent && stdout.includes("Commit / Skip")) {
+          if (!commitSent && stdout.includes("Commit / Skip")) {
             commitSent = true;
-            child.stdin.write("Commit\n");
+            child.stdin.write(delivery ? "Commit\n" : "Skip\n");
           }
           if (delivery && !messageSent && stdout.includes("Commit message:")) {
             messageSent = true;
@@ -530,7 +540,7 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
           }
           if (delivery && !pushSent && stdout.includes("Push / Skip")) {
             pushSent = true;
-            child.stdin.end("Push\n");
+            child.stdin.write("Push\n");
           }
         });
         child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
@@ -565,7 +575,16 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
       const storedTask = JSON.parse(readFileSync(join(artifactsMatch[1], "task.json"), "utf8"));
       expect(storedTask.id).toMatch(/^task-/);
       expect(cli.stdout).toContain(storedTask.id);
-      expect(existsSync(readFileSync(workerRecord, "utf8"))).toBe(false);
+      expect(existsSync(readFileSync(workerRecord, "utf8"))).toBe(interactive ? cleanupAnswer === "Keep" : true);
+      expect(cli.stdout).toContain("Review\n------");
+      expect(cli.stdout).toContain("diff --git a/README.md b/README.md");
+      if (reviewAnswer === "Abort") {
+        expect(cli.stdout).toContain("Delivery was not attempted.");
+        expect(cli.stdout).not.toContain("Apply / Skip");
+        expect(cli.stdout).not.toContain("Commit / Skip");
+        expect(cli.stdout).not.toContain("Push / Skip");
+      }
+      expect(existsSync(join(artifactsMatch[1], "changes.patch"))).toBe(true);
     } else {
       expect(cli.status).toBe(1);
       expect(existsSync(workerRecord)).toBe(false);
@@ -581,6 +600,8 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
 }
 
 describe("CLI planning through approval and execution", () => {
+  it("aborts review and keeps the workspace without delivery", async () => { await runPlanningScenario("Approve\n", true, undefined, false, "Abort", "Keep"); });
+  it("aborts review and deletes the workspace without delivery", async () => { await runPlanningScenario("Approve\n", true, undefined, false, "Abort", "Delete"); });
   it("connects Goal through Approve, Apply, Commit message and Push to a bare remote", async () => { await runPlanningScenario("Approve\n", true, "Apply", true); });
   it("applies verified changes after a separate Apply decision", async () => { await runPlanningScenario("Approve\n", true, "Apply"); });
   it("preserves artifacts without applying after Skip", async () => { await runPlanningScenario("Approve\n", true, "Skip"); });

@@ -37,5 +37,6 @@ export type ExecutionResult = {
     directory: string;
     baseCommit?: string;
   };
+  workspace?: { path: string };
   retainedWorkspace?: string;
 };

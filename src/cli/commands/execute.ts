@@ -10,6 +10,8 @@ import {
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
 
+import { runReviewStage } from "./review/review.js";
+import { runWorkspaceCleanup } from "./cleanup/workspace-cleanup.js";
 import { runPostExecutionDelivery } from "./delivery/delivery.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {
@@ -161,11 +163,25 @@ export async function runExecuteCommand(
     console.log(`Objective: ${task.objective}`);
   }
 
-  await runPostExecutionDelivery({ repositoryRoot, executionResult: result });
+  let cleanupDurationMs: number | undefined;
+  try {
+    if (result.workspace) {
+      const review = await runReviewStage(result);
+      if (review.status === "continued" && result.passed && result.evidence.verification?.passed) {
+        await runPostExecutionDelivery({ repositoryRoot, executionResult: result });
+      } else {
+        console.log(`Review: ${review.status}\nDelivery was not attempted.`);
+      }
+    }
+  } finally {
+    const cleanup = await runWorkspaceCleanup(repositoryRoot, result);
+    if ("durationMs" in cleanup) cleanupDurationMs = cleanup.durationMs;
+  }
 
   if (result.telemetry || timing) {
     presentTiming({
       ...result.telemetry,
+      ...(cleanupDurationMs === undefined ? {} : { cleanupDurationMs }),
       ...timing,
       ...(timing ? { totalDurationMs: performance.now() - timing.startedAt } : {}),
     });

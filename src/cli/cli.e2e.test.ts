@@ -434,7 +434,7 @@ describe("CLI end-to-end execution", () => {
   });
 });
 
-async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string): Promise<void> {
+async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string, delivery = false): Promise<void> {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
   const repositoryRoot = join(temporaryRoot, "repository");
   const bin = join(temporaryRoot, "bin");
@@ -449,6 +449,12 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
     writeFileSync(join(repositoryRoot, "README.md"), "Original introduction\n");
     git(repositoryRoot, ["add", "."]);
     git(repositoryRoot, ["commit", "-m", "initial"]);
+    if (delivery) {
+      const remote = join(temporaryRoot, "remote.git");
+      git(repositoryRoot, ["init", "--bare", remote]);
+      git(repositoryRoot, ["remote", "add", "origin", remote]);
+      git(repositoryRoot, ["push", "--set-upstream", "origin", "HEAD"]);
+    }
     const fakeCodex = join(bin, "codex");
     writeFileSync(fakeCodex, [
       `#!${process.execPath}`,
@@ -490,6 +496,9 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
         let goalSent = false;
         let approvalSent = false;
         let applySent = false;
+        let commitSent = false;
+        let messageSent = false;
+        let pushSent = false;
         const timer = setTimeout(() => { child.kill(); reject(new Error("Interactive CLI timed out")); }, 15_000);
         child.stdout.on("data", (chunk) => {
           stdout += chunk.toString();
@@ -508,7 +517,20 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
           }
           if (!applySent && stdout.includes("Apply / Skip") && applyAnswer !== undefined) {
             applySent = true;
-            child.stdin.end(`${applyAnswer}\n`);
+            if (delivery) child.stdin.write(`${applyAnswer}\n`);
+            else child.stdin.end(`${applyAnswer}\n`);
+          }
+          if (delivery && !commitSent && stdout.includes("Commit / Skip")) {
+            commitSent = true;
+            child.stdin.write("Commit\n");
+          }
+          if (delivery && !messageSent && stdout.includes("Commit message:")) {
+            messageSent = true;
+            child.stdin.write("docs: clarify README introduction\n");
+          }
+          if (delivery && !pushSent && stdout.includes("Push / Skip")) {
+            pushSent = true;
+            child.stdin.end("Push\n");
           }
         });
         child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
@@ -526,6 +548,15 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
     expect(cli.stdout).toContain("Approve / Reject");
     expect(readFileSync(plannerRecord, "utf8")).toBe("round\nround\n");
     expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe(applyAnswer === "Apply" ? "Clear introduction\n" : "Original introduction\n");
+    if (delivery) {
+      expect(cli.stdout, cli.stderr).toContain("Commit created:");
+      expect(cli.stdout, cli.stderr).toContain("Push complete.");
+      expect(git(repositoryRoot, ["status", "--porcelain"])).toBe("");
+      expect(git(repositoryRoot, ["rev-parse", "HEAD"]).trim()).toBe(git(repositoryRoot, ["rev-parse", "@{upstream}"]).trim());
+      expect(git(repositoryRoot, ["log", "-1", "--format=%s"]).trim()).toBe("docs: clarify README introduction");
+      const branch = git(repositoryRoot, ["symbolic-ref", "--short", "HEAD"]).trim();
+      expect(git(repositoryRoot, ["--git-dir", join(temporaryRoot, "remote.git"), "rev-parse", `refs/heads/${branch}`]).trim()).toBe(git(repositoryRoot, ["rev-parse", "HEAD"]).trim());
+    }
     if (answer.trim() === "Approve") {
       expect(cli.status, cli.stderr).toBe(0);
       expect(existsSync(workerRecord)).toBe(true);
@@ -550,6 +581,7 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
 }
 
 describe("CLI planning through approval and execution", () => {
+  it("connects Goal through Approve, Apply, Commit message and Push to a bare remote", async () => { await runPlanningScenario("Approve\n", true, "Apply", true); });
   it("applies verified changes after a separate Apply decision", async () => { await runPlanningScenario("Approve\n", true, "Apply"); });
   it("preserves artifacts without applying after Skip", async () => { await runPlanningScenario("Approve\n", true, "Skip"); });
   it("collects an interactive Goal and waits for approval before execution", async () => { await runPlanningScenario("Approve\n", true); });

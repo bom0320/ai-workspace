@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { applyPatch, PatchApplyError } from "@/infrastructure/git/index.js";
-import { approveApply } from "../prompts/apply-changes.js";
+import { approveApply } from "../../prompts/apply-changes.js";
 
 export type ApplyResult =
   | { status: "applied" }

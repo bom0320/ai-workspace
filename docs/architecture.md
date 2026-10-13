@@ -133,6 +133,12 @@ Development Governance — AI Workspace-owned semantics
 현재 Planning / Execution application과 services가 일부 governance 책임을 구현하며,
 CLI가 Human gate를 연결한다. 나머지 책임은 검증 질문이 생길 때 점진적으로 추가한다.
 
+Human과 AI Workspace, Agent Runtime, Git / Process infrastructure, Repository의 연결이
+Agent Development Environment(ADE)를 구성한다. 그 환경의 governance semantics는 AI Workspace가
+소유하며 실행 mechanism은 기존 runtime과 도구를 활용한다. ADE는 이 책임들의 결합을 설명하는
+관점이며 새로운 ADE / Platform layer나 폴더를 요구하지 않는다. 정의와 현재·미래 범위는
+[Project Direction](project-direction.md#ade와-development-governance)을 따른다.
+
 ### Governance와 replaceable runtime
 
 AI Workspace는 계약·권한·Context·Evidence 인정 기준·검증 결과의 의미·Human gate를 소유한다.

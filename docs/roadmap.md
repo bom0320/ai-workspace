@@ -4,6 +4,9 @@
 [Project Direction](project-direction.md), 현재 구현과 domain model 채택 조건은
 [Architecture](architecture.md), 사용법은 [README](../README.md)에 둔다.
 버전은 검증 질문을 구분하며 미래 runtime이나 조직 Agent의 구현 약속이 아니다.
+이 roadmap은 더 좋은 generic Agent Framework를 만드는 계획이 아니라 Human과 AI Coding Agent가
+함께 개발하는 Agent Development Environment(ADE)의 governance capabilities를 검증하는 계획이다.
+ADE 관점은 기존 단계의 목적을 설명하며 별도 단계나 플랫폼 구현을 추가하지 않는다.
 
 | 단계 | 검증 주제 | 상태 |
 | --- | --- | --- |

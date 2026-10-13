@@ -7,18 +7,81 @@
 
 ## What AI Workspace is
 
-> AI Workspace는 기존 AI Coding Agent / Agent Runtime 위에서 개발 Agent의 행동과 판단을
-> 개발 도메인의 규칙으로 통제하고, 실제 Repository Evidence를 기반으로 Human이
-> 신뢰 가능한 결정을 내리도록 돕는 Development Governance Harness다.
+> AI Workspace는 개발자와 AI Coding Agent가 실제 Repository에서 함께 일하기 위한
+> Agent Development Environment(ADE)이자 Development Governance Harness다.
+> 기성 Coding Agent의 개발 능력을 다시 만드는 대신 개발자와 팀의 작업 방식·권한·검증 규칙을
+> 코드화하여, Agent가 어떤 환경과 규칙 아래 개발해야 하는지를 정의한다.
+> 기존 AI Coding Agent / Agent Runtime 위에서 개발 행동과 판단을 통제하고, 실제 Repository
+> Evidence를 기반으로 Human이 신뢰 가능한 결정을 내리도록 돕는 것이 그 Harness의 책임이다.
 
-Agent를 더 많이 실행하는 것보다 Agent의 개발 행동과 판단을 더 신뢰할 수 있게 만드는 것이 목적이다.
-Agent Framework / Runtime이 Agent를 어떻게 실행할지 다룬다면, AI Workspace는 무엇을 허용하고,
-무엇을 Evidence로 인정하며, 어떤 조건에서 Human에게 결정을 넘길지 정의한다.
+핵심 질문은 “Agent가 코딩을 할 수 있는가?”가 아니라 “Agent가 내가 원하는 개발 방식과 규칙 아래에서
+일할 수 있는가?”다. 기존 Coding Agent가 제공하는 개발 능력과 통제 mechanism을 활용하되,
+어떤 파일을 수정할지, 어떤 Repository 상태에서 작업할지, 무엇을 검증하고 Evidence로 인정할지,
+누가 Apply / Commit / Push를 승인할지는 개발자와 팀의 policy로 명시해야 한다.
 
-현재 v0 / v1의 TaskContract, 격리된 Git worktree, Scope / Verification / Evidence와
-Human approval은 이 방향의 기반이다. Planning의 가치는 새로운 planning engine 자체가 아니라,
-Human Goal을 바로 실행 권한으로 바꾸지 않고 명시적인 계약과 승인 경계를 만든다는 데 있다.
+```text
+Coding Agent = 실제 개발 작업을 수행하는 주체
+AI Workspace = Agent가 일하는 작업 환경 + 규칙 + 안전장치
+
+범용 Agent 기능 → 기존 기술 활용
+개발 Agent에 특화된 규칙 → AI Workspace가 직접 설계
+```
+
+ADE를 만든다는 것은 환경의 모든 기술을 직접 구현한다는 뜻이 아니다. 기존 runtime과 도구를 이용해
+개발 환경을 구성하고 그 안의 개발 도메인 규칙을 소유한다. 이 구분이 아래 Build vs Adopt의 기준이다.
+
+### ADE와 Development Governance
+
+ADE는 Agent가 어디에서, 어떤 Context와 도구를 가지고 Human과 개발하는지를 다룬다.
+Development Governance는 그 환경에서 무엇을 허용하고, 무엇을 Evidence로 인정하며,
+언제 Human에게 판단과 권한을 넘길지를 정의한다. AI Workspace에서는 이 둘이 결합되어 있다.
+
+```text
+AI Workspace
+├─ Agent Development Environment (ADE)
+│  └─ Human과 AI Coding Agent가 실제 Repository에서 함께 일하는 환경
+└─ Development Governance
+   └─ 그 환경의 Authority / Context / Evidence / Verification / Human Approval 규칙
+```
+
+AI Workspace는 이 ADE 안에서 Software Development에 특화된 Governance Policy와
+Decision Assurance를 소유한다. 여기서 Decision Assurance는 실제 Repository Evidence와 검증의
+범위·한계를 드러내고 Human이 판단 근거를 추적할 수 있도록 하는 책임이며, 판단의 정확성을 보장한다는
+뜻은 아니다. Agent를 더 많이 실행하는 것보다 개발 행동과 판단을 더 신뢰할 수 있게 만드는 것이 목적이다.
+
+### 현재 구현이 표현하는 개발 방식
+
+현재 v0 / v1은 다음과 같이 “AI Coding Agent와 나는 어떤 방식으로 함께 개발할 것인가?”를
+시스템화한 Personal Development Harness이며 Custom ADE의 기반이다.
+
+| 현재 구현 | 개발 환경과 규칙으로서의 의미 |
+| --- | --- |
+| TaskContract | Goal flow에서 자연어 Goal을 바로 실행하지 않고 명시적 계약과 Human Task Approval을 거친다. 명시적 JSON execute는 별도 입력 경로다 |
+| Git worktree isolation | Worker가 원본 작업 디렉터리 대신 HEAD 기반 격리 worktree에서 작업한다. 원본 반영은 별도 Apply 승인으로 진행한다 |
+| Scope Enforcement | allowedPaths / forbiddenPaths로 변경 범위를 정의하고 실제 changed paths로 실행 후 위반을 탐지한다. 쓰기 전 차단은 아니다 |
+| Verification | Agent의 자기 보고보다 Harness가 실행한 command 결과를 근거로 삼는다. 자연어 acceptance criteria 전체의 충족 증명은 아니다 |
+| Evidence / Artifacts | changes.patch, changed paths, verification result와 base commit을 보존해 사람이 실제 변경과 근거를 검토할 수 있게 한다 |
+| Human Governance | Task Approval, Change Review, Apply, Commit, Push, Cleanup을 서로 다른 결정으로 분리한다 |
+| Fast Path | 확실한 단일 textual edit는 불필요한 Planner 호출을 피한다. 모호한 작업은 Planner로 fallback한다 |
+
+Planning의 가치는 범용 planning engine 자체보다 실행 권한을 넘기기 전 explicit contract boundary를
+만드는 데 있다. 현재 interface는 Node.js CLI, Agent integration은 Codex CLI이며 별도 GUI ADE나
+여러 runtime 지원을 의미하지 않는다. Specialist authority와 Decision comparison / synthesis는 미래 범위다.
 Reliable Worker before Agent Team을 유지하며, 여러 Agent의 필요성과 효과는 평가로 판단한다.
+
+### 개인 환경에서 팀 환경으로
+
+현재는 개인/팀 개발자가 AI Coding Agent와 원하는 방식으로 일할 수 있는 ADE와 Development
+Governance Harness를 지향한다. 팀 공통 정책 배포나 Self-service Development Environment는 아직
+구현되어 있지 않다. 향후 정책과 환경을 일반화해 여러 개발자에게 제공한다면 다음으로 확장될 수 있다.
+
+```text
+Personal ADE → Team AI Development Environment → Internal AI Development Platform
+                                               → Platform Engineering 성격 강화
+```
+
+이는 조건부 확장 가능성이며 현재 프로젝트를 Platform Engineering 제품이나 완성된 ADE Platform으로
+규정하지 않는다. 팀 환경 확장도 실제 요구와 검증 질문이 생길 때 판단한다.
 
 ## What AI Workspace is NOT
 

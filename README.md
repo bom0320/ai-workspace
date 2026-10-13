@@ -1,8 +1,8 @@
 # AI Workspace
 
-AI Workspace는 기존 AI coding agent가 실제 Git Repository에서 안전하고 검증 가능하게
-작업하도록 개발 도메인의 실행 범위, Context, Evidence, Human approval을 통제하는
-Development Governance Harness다.
+AI Workspace는 개발자와 기존 AI Coding Agent가 실제 Git Repository에서 함께 일하기 위한
+Agent Development Environment(ADE)이자 Development Governance Harness다. 개발자와 팀의
+작업 방식·권한·검증 규칙을 코드화하여 실행 범위, Context, Evidence, Human approval을 통제한다.
 현재 operator interface는 Node.js CLI로 제공된다.
 
 현재 v1은 자연어 Goal을 TaskContract로 만드는 Planning과 하나의 Codex Worker를

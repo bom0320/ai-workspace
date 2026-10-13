@@ -45,6 +45,38 @@ afterEach(() => {
 });
 
 describe("planTask", () => {
+  it.each(["README.md의 소개 문구를 더 명확하게 수정해줘", "README의 문구를 수정해줘", "README의 오타를 수정해줘"])(
+    "completes trivial tasks without calling any Planner: %s", async (objective) => {
+      const root = createRepository();
+      writeFileSync(join(root, "README.md"), "Introduction");
+      const planner = vi.fn<Planner>();
+      const factory = vi.spyOn(codex, "createCodexPlanner");
+      for (const injected of [planner, undefined]) {
+        const result = await planTask({ goal: { ...goal, objective }, repositoryPath: root, limits, planner: injected });
+        expect(result).toMatchObject({ status: "completed", rounds: 0, task: {
+          allowedPaths: ["README.md"], verification: ["git diff --check"],
+          id: expect.stringMatching(/^task-/), goalId: expect.stringMatching(/^goal-/),
+          constraints: expect.arrayContaining(goal.constraints!),
+        } });
+      }
+      expect(planner).not.toHaveBeenCalled();
+      expect(factory).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["README 구조를 리팩토링하고 코드 예제를 추가해줘", "example.ts의 로직을 수정해줘",
+    "README.md와 package.json의 문구를 수정해줘", "README.md를 삭제해줘"])(
+    "uses the existing Planner for non-trivial requests: %s", async (objective) => {
+      const root = createRepository();
+      writeFileSync(join(root, "README.md"), "Introduction");
+      const planner = vi.fn<Planner>().mockResolvedValue({ type: "complete", task });
+      const factory = vi.spyOn(codex, "createCodexPlanner").mockReturnValue(planner);
+      const result = await planTask({ goal: { ...goal, objective }, repositoryPath: root, limits });
+      expect(result.rounds).toBe(1);
+      expect(factory).toHaveBeenCalledOnce();
+      expect(planner).toHaveBeenCalledOnce();
+    },
+  );
   it.each(["README 좀 더 정확하게 수정해줘", "README.md를 수정해줘"])(
     "supplies the explicitly named README before the first round: %s", async (objective) => {
       const root = createRepository();

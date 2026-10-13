@@ -11,6 +11,8 @@ import { inspectRepository } from "./inspection/inspect-repository.js";
 import { inspectInitialFiles } from "./inspection/inspect-initial-files.js";
 import { runPlanningLoop } from "./orchestration/planning-loop.js";
 import type { Planner } from "../protocol/planner.js";
+import { createFastPathTaskDraft } from "./adaptive/create-fast-path-task-draft.js";
+import { buildTaskContract } from "./transformation/build-task-contract.js";
 
 export type PlanTaskOptions = {
   goal: GoalSpec;
@@ -34,6 +36,17 @@ export async function planTask({
     repository,
     inspectedFiles: inspectInitialFiles(repository, goal.objective, limits),
   };
+
+  const fastPathDraft = createFastPathTaskDraft(initialState);
+  if (fastPathDraft) {
+    const task = buildTaskContract({
+      draft: fastPathDraft,
+      goal,
+      goalId,
+      taskId,
+    });
+    return { status: "completed", task, state: initialState, rounds: 0 };
+  }
 
   return runPlanningLoop({
     initialState,

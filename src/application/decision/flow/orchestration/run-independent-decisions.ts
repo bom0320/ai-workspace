@@ -1,16 +1,16 @@
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { InspectedFile } from "@/contracts/inspected-file.js";
 
-import type { RepositorySnapshot } from "../model/snapshot.js";
-import type { SpecialistDefinition } from "../model/specialist.js";
-import type { SpecialistContext } from "../protocol/context.js";
-import type { AgentDecision } from "../protocol/decision.js";
+import type { RepositorySnapshot } from "../../model/snapshot.js";
+import type { SpecialistDefinition } from "../../model/specialist.js";
+import type { SpecialistContext } from "../../protocol/context.js";
+import type { AgentDecision } from "../../protocol/decision.js";
 import {
   runCodexSpecialist,
   type CodexSpecialistOptions,
-} from "../specialist/codex-specialist.js";
-import { assertRepositoryMatchesSnapshot } from "./repository-snapshot.js";
-import { validateDecisionEvidence } from "./validate-evidence.js";
+} from "../../specialist/codex-specialist.js";
+import { assertRepositoryMatchesSnapshot } from "../context/repository-snapshot.js";
+import { validateDecisionEvidence } from "../validation/validate-evidence.js";
 
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;

@@ -1,5 +1,5 @@
-import type { SpecialistContext } from "../protocol/context.js";
-import type { AgentDecision } from "../protocol/decision.js";
+import type { SpecialistContext } from "../../protocol/context.js";
+import type { AgentDecision } from "../../protocol/decision.js";
 
 export function validateDecisionEvidence(
   context: SpecialistContext,

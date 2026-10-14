@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { SpecialistContext } from "../protocol/context.js";
-import type { AgentDecision, EvidenceReference } from "../protocol/decision.js";
+import type { SpecialistContext } from "../../protocol/context.js";
+import type { AgentDecision, EvidenceReference } from "../../protocol/decision.js";
 import { validateDecisionEvidence } from "./validate-evidence.js";
 
 const context: SpecialistContext = {

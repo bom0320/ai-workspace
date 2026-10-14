@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
 
-import type { RepositorySnapshot } from "../model/snapshot.js";
-import type { AgentDecision } from "../protocol/decision.js";
-import { runCodexSpecialist } from "../specialist/codex-specialist.js";
-import { assertRepositoryMatchesSnapshot } from "./repository-snapshot.js";
-import { validateDecisionEvidence } from "./validate-evidence.js";
+import type { RepositorySnapshot } from "../../model/snapshot.js";
+import type { AgentDecision } from "../../protocol/decision.js";
+import { runCodexSpecialist } from "../../specialist/codex-specialist.js";
+import { assertRepositoryMatchesSnapshot } from "../context/repository-snapshot.js";
+import { validateDecisionEvidence } from "../validation/validate-evidence.js";
 import {
   runIndependentDecisions,
   type IndependentDecisionInput,
 } from "./run-independent-decisions.js";
 
-vi.mock("../specialist/codex-specialist.js", () => ({ runCodexSpecialist: vi.fn() }));
-vi.mock("./repository-snapshot.js", () => ({ assertRepositoryMatchesSnapshot: vi.fn() }));
-vi.mock("./validate-evidence.js", () => ({ validateDecisionEvidence: vi.fn() }));
+vi.mock("../../specialist/codex-specialist.js", () => ({ runCodexSpecialist: vi.fn() }));
+vi.mock("../context/repository-snapshot.js", () => ({ assertRepositoryMatchesSnapshot: vi.fn() }));
+vi.mock("../validation/validate-evidence.js", () => ({ validateDecisionEvidence: vi.fn() }));
 
 const runSpecialistMock = vi.mocked(runCodexSpecialist);
 const assertSnapshotMock = vi.mocked(assertRepositoryMatchesSnapshot);

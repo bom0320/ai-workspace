@@ -12,7 +12,7 @@ export type {
 export {
   captureRepositorySnapshot,
   assertRepositoryMatchesSnapshot,
-} from "./flow/repository-snapshot.js";
+} from "./flow/context/repository-snapshot.js";
 export {
   runCodexSpecialist,
   type CodexSpecialistOptions,
@@ -20,6 +20,11 @@ export {
 export {
   runIndependentDecisions,
   type IndependentDecisionInput,
-} from "./flow/run-independent-decisions.js";
-export { validateDecisionEvidence } from "./flow/validate-evidence.js";
-export { loadSnapshotFiles } from "./flow/load-snapshot-files.js";
+} from "./flow/orchestration/run-independent-decisions.js";
+export { validateDecisionEvidence } from "./flow/validation/validate-evidence.js";
+export { loadSnapshotFiles } from "./flow/context/load-snapshot-files.js";
+export {
+  runDecision,
+  type RunDecisionInput,
+  type RunDecisionResult,
+} from "./flow/run-decision.js";

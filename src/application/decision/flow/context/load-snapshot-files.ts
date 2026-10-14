@@ -3,7 +3,7 @@ import { isAbsolute, win32 } from "node:path";
 import type { InspectedFile } from "@/contracts/inspected-file.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 
-import type { RepositorySnapshot } from "../model/snapshot.js";
+import type { RepositorySnapshot } from "../../model/snapshot.js";
 
 export function loadSnapshotFiles(
   snapshot: RepositorySnapshot,

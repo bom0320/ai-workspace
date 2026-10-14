@@ -17,3 +17,7 @@ export {
   runCodexSpecialist,
   type CodexSpecialistOptions,
 } from "./specialist/codex-specialist.js";
+export {
+  runIndependentDecisions,
+  type IndependentDecisionInput,
+} from "./flow/run-independent-decisions.js";

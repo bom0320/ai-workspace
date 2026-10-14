@@ -3,6 +3,8 @@ import { pathToFileURL } from "node:url";
 
 import type { PlanningResult } from "@/application/planning/index.js";
 import { runPlanCommand } from "./commands/plan.js";
+import { runDecisionCommand } from "./commands/decision.js";
+import { presentDecisions } from "./presenters/decisions.js";
 import { runExecuteCommand, runExecutionCli } from "./commands/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
 import { askGoal } from "./prompts/ask-goal.js";
@@ -37,7 +39,24 @@ export async function runPlanningCli(args: string[]): Promise<number> {
   }
 }
 
+export async function runDecisionCli(args: string[]): Promise<number> {
+  const startedAt = performance.now();
+  try {
+    console.log("Decision...");
+    const result = await runDecisionCommand({
+      repositoryPath: args[0] ?? "", objective: args[1] ?? "", filePaths: args.slice(2),
+    });
+    presentDecisions(result.snapshot, result.decisions);
+    console.log(`Decision Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`);
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+    return 1;
+  }
+}
+
 export async function runCli(args: string[]): Promise<number> {
+  if (args[0] === "decision") return runDecisionCli(args.slice(1));
   if (args[0] === "plan") return runPlanningCli(args.slice(1));
   let startedAt: number | undefined;
   const timing: HumanInteractionTiming = {};

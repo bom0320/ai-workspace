@@ -22,3 +22,4 @@ export {
   type IndependentDecisionInput,
 } from "./flow/run-independent-decisions.js";
 export { validateDecisionEvidence } from "./flow/validate-evidence.js";
+export { loadSnapshotFiles } from "./flow/load-snapshot-files.js";

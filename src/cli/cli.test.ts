@@ -7,12 +7,16 @@ import type { TaskContract } from "@/contracts/task.js";
 import { approveTask } from "./prompts/approve-task.js";
 import { askGoal } from "./prompts/ask-goal.js";
 import { runCli } from "./cli.js";
+import { runDecisionCommand } from "./commands/decision.js";
+import { presentDecisions } from "./presenters/decisions.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({ resolveRepositoryRoot: vi.fn() }));
 vi.mock("./prompts/approve-task.js", () => ({ approveTask: vi.fn() }));
 vi.mock("./prompts/ask-goal.js", () => ({ askGoal: vi.fn() }));
+vi.mock("./commands/decision.js", () => ({ runDecisionCommand: vi.fn() }));
+vi.mock("./presenters/decisions.js", () => ({ presentDecisions: vi.fn() }));
 
 const task: TaskContract = {
   id: "task-human", goalId: "goal-human", objective: "Clarify README",
@@ -36,6 +40,37 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("CLI approval boundary", () => {
+  it("routes decision independently of Planning, Approval and Execution", async () => {
+    const snapshot = { repositoryRoot: "/repositories/example", commitSha: "abc123" };
+    vi.mocked(runDecisionCommand).mockResolvedValue({ snapshot, decisions: [] });
+    expect(await runCli(["decision", "/repositories/example", "Review UI", "src/button.tsx", "README.md"])).toBe(0);
+    expect(runDecisionCommand).toHaveBeenCalledWith({
+      repositoryPath: "/repositories/example", objective: "Review UI", filePaths: ["src/button.tsx", "README.md"],
+    });
+    expect(presentDecisions).toHaveBeenCalledWith(snapshot, []);
+    expect(console.log).toHaveBeenCalledWith("Decision...");
+    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Decision Duration: \d+\.\ds$/));
+    expect(planTask).not.toHaveBeenCalled();
+    expect(executeTask).not.toHaveBeenCalled();
+    expect(approveTask).not.toHaveBeenCalled();
+    expect(askGoal).not.toHaveBeenCalled();
+  });
+
+  it("reports decision failure with exit code 1 and no partial presentation", async () => {
+    vi.mocked(runDecisionCommand).mockRejectedValue(new Error("Evidence validation failed"));
+    expect(await runCli(["decision", ".", "Review UI", "README.md"])).toBe(1);
+    expect(console.error).toHaveBeenCalledWith("Error: Evidence validation failed");
+    expect(presentDecisions).not.toHaveBeenCalled();
+    expect(planTask).not.toHaveBeenCalled();
+    expect(executeTask).not.toHaveBeenCalled();
+  });
+
+  it("passes missing decision arguments to command validation", async () => {
+    vi.mocked(runDecisionCommand).mockRejectedValue(new Error("Repository path is required."));
+    expect(await runCli(["decision"])).toBe(1);
+    expect(runDecisionCommand).toHaveBeenCalledWith({ repositoryPath: "", objective: "", filePaths: [] });
+    expect(console.error).toHaveBeenCalledWith("Error: Repository path is required.");
+  });
   it("passes only inspected files matching allowed paths into Execution", async () => {
     const inspectedFiles = [{ path: "README.md", content: "Existing introduction" }, { path: "package.json", content: "{}" }];
     vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state: { ...state, inspectedFiles }, rounds: 1 });

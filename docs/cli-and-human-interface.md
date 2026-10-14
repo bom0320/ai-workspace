@@ -8,7 +8,7 @@
 
 > CLI is an operator/debug interface for the Harness, not the core product value.
 
-CLI는 Goal 입력, TaskContract 표시, Approval, Review, Apply / Commit / Push,
+CLI는 workflow 선택, Goal / 명시적 Context 입력, TaskContract / Decision 표시, Approval, Review, Apply / Commit / Push,
 Cleanup decision, telemetry / result 출력을 담당한다. Harness를 사람이 관찰하고 통제하는
 operator/debug adapter이자 Human decision surface다. Agent orchestration product를 목표로 하지
 않으며 Planning / Execution / Governance의 core logic을 소유하는 새로운 상위 계층은 아니다.
@@ -28,25 +28,62 @@ Fancy TUI나 Web UI 자체가 현재 프로젝트의 핵심 가치는 아니다.
 현재 script는 `TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts`다.
 
 ```sh
-# Repository path와 Goal을 interactive input으로 받기
+# 인자 없음: workflow 선택 메뉴
 pnpm dev
 
-# 같은 Goal flow에 argument로 입력 전달
+# selector 없이 direct Plan & Execute
 pnpm dev . "README.md의 소개 문구를 더 명확하게 수정해줘"
 
-# Planning 결과만 확인; Execution과 후속 Human gate 없음
+# Planning only
 pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 
-# 기존 v0 경로: 사람이 작성한 TaskContract JSON으로 Execution 시작
+# 독립 Decision, 명시적 Context files
+pnpm decision . "Evaluate the current decision architecture" \
+  src/application/decision/flow/run-decision.ts \
+  src/application/decision/model/authority.ts
+
+# 기존 TaskContract JSON Execution
 pnpm dev execute tasks/example.json .
 ```
 
-Goal path / objective는 trim하고 빈 값을 허용하지 않는다. Goal 기반 flow는 Planning 실패나
-Task Reject 시 Execution을 시작하지 않는다. 완료된 `PlanningResult.task`는 파일로 저장했다가
-읽는 우회 없이 Execution에 전달한다. 명시적 `execute` 경로는 Planning / Task Approval을
-거치지 않지만 Execution 이후 Review / Delivery / Cleanup은 동일하게 연결된다.
+### Interactive entry
+
+Selector는 `args.length === 0`일 때만 표시된다. 명시적 command와 direct Goal 인자는 메뉴를 거치지 않는다.
+
+```text
+AI Workspace
+
+Select workflow:
+
+1. Plan & Execute
+2. Plan only
+3. Decision
+4. Execute existing task
+
+>
+```
+
+숫자 1–4를 받으며 다른 입력은 `Please enter 1, 2, 3, or 4.`를 출력하고 재시도한다.
+유효한 선택 전 EOF는 오류와 exit 1이다. 선택별 입력과 실행은 다음과 같다.
+
+| 선택 | 입력 | 실행 / Human 접점 |
+| --- | --- | --- |
+| Plan & Execute | Repository → Goal | Planning → TaskContract → Task Approval → Execution → Review / Delivery / Cleanup |
+| Plan only | Repository → Goal | Planning과 TaskContract 표시 후 종료. Approval / Execution 없음 |
+| Decision | Repository → Decision Goal → Context Files | 독립 판단과 검증 후 Decision 표시. Action governance gate 없음 |
+| Execute existing task | Task path → Repository | 기존 JSON loader와 Execution → Review / Delivery / Cleanup. Planning / Task Approval 없음 |
+
+Plan 두 경로는 같은 `askGoal()`을 사용하고 title은 selector만 출력한다. Interactive 입력은 trim하며
+빈 Repository / Goal / Task path를 다시 묻는다. 필요한 값이 끝나기 전 EOF는 해당 prompt의 명확한 오류다.
+명시적 argument의 빈 Repository / objective도 거부하지만 입력 값을 interactive하게 다시 묻지는 않는다.
+
+Goal 기반 흐름은 Planning 실패나 Task Reject 시 Execution을 시작하지 않는다.
+PlanningResult.task는 파일 저장·재로딩 없이 메모리에서 Execution에 전달한다.
+`execute`는 task path / repository path 순서로 기존 TaskContract JSON을 읽으며 새 format은 없다.
 
 ## 3. 현재 Human Interaction Flow
+
+### Goal-based Action Governance
 
 ```text
 Goal
@@ -88,6 +125,57 @@ Review Abort, Apply·Commit·Push Skip/실패, Cleanup Keep/실패는 이미 성
 실패로 바꾸지 않는다. Cleanup 실패 시 경로를 출력하고 artifact는 삭제하지 않는다.
 현재 result.json은 Execution snapshot이며 후속 Human 결정 이력 저장소는 아니다.
 
+### Decision flow
+
+```text
+Repository:
+> .
+
+Decision Goal:
+> Evaluate the current decision architecture
+
+Context Files
+Enter one repository-relative file path per line.
+Submit an empty line when finished.
+
+> src/application/decision/flow/run-decision.ts
+> src/application/decision/model/authority.ts
+>
+```
+
+Context files는 한 줄에 한 경로, 최소 1개가 필요하다. 파일 0개에서 빈 줄을 입력하면
+`At least one context file is required.`를 출력하고 계속 입력받는다. 하나 이상 입력 후 빈 줄로 제출한다.
+파일 목록 순서는 유지하며 path 검증은 prompt가 아닌 application에서 수행한다.
+
+대상은 commit이 있는 clean Git Repository여야 한다. 수정·staged·untracked 변경은 capture를 막는다.
+기존 Git clean 기준이므로 ignored 파일 전체 검사나 완전한 sandbox를 뜻하지 않는다.
+명시적 파일은 repository-relative text path여야 하며 빈 path / absolute path / `..` traversal은 거부한다.
+존재하지 않는 파일, directory, binary / invalid UTF-8 입력도 실패한다. 파일은 Snapshot commit에서 읽으며
+전체 Repository를 자동 조사하거나 역할별로 파일을 자동 선택하지 않는다.
+
+```text
+Decision...
+Snapshot: <commitSha>
+Specialists: 2
+
+[Frontend Specialist]
+Recommendation / Evidence / Risks / Uncertainty
+
+[UX Specialist]
+Recommendation / Evidence / Risks / Uncertainty
+
+Decision Duration: X.Xs
+```
+
+두 Specialist는 독립적으로 순차 실행한다. CLI는 모든 Decision이 반환·검증된 뒤 Snapshot과 결과를
+출력하므로 실행 중에는 `Decision...`만 보일 수 있다. Evidence path와 optional line range를 표시하며
+각 목록이 비어 있으면 `(none)`을 표시한다. 결과를 비교하거나 최종 recommendation으로 합성하지 않는다.
+
+성공은 exit 0이다. Snapshot drift, Codex timeout/process 실패, JSON/schema 오류, Evidence invariant 위반은
+`Error: ...`와 exit 1이며 partial Decision을 표시하지 않는다. Specialist 기본 timeout은 각 15분이고
+현재 Decision CLI의 별도 timeout override는 없다. Decision 결과는 저장하지 않으며 Task Approval,
+Review / Apply / Commit / Push / Cleanup을 진행하지 않는다. 실제 E2E 기록은 [README](../README.md#v2-실제-e2e-기록)에 둔다.
+
 ## 4. 현재 CLI 파일 책임
 
 테스트는 구현 파일과 함께 배치하며 아래에서는 생략한다.
@@ -97,6 +185,7 @@ src/cli/
 ├─ cli.ts
 ├─ commands/
 │  ├─ plan.ts
+│  ├─ decision.ts
 │  ├─ execute.ts
 │  ├─ delivery/
 │  │  ├─ delivery.ts
@@ -108,7 +197,10 @@ src/cli/
 │  └─ cleanup/
 │     └─ workspace-cleanup.ts
 ├─ prompts/
+│  ├─ select-workflow.ts
 │  ├─ ask-goal.ts
+│  ├─ ask-decision.ts
+│  ├─ ask-execution.ts
 │  ├─ approve-task.ts
 │  ├─ apply-changes.ts
 │  ├─ delivery.ts
@@ -116,23 +208,31 @@ src/cli/
 │  └─ cleanup.ts
 └─ presenters/
    ├─ task-contract.ts
+   ├─ decisions.ts
    └─ timing.ts
 ```
 
-- `cli.ts`: interactive / argument / plan / execute 진입 경로와 Goal-based terminal flow 연결.
+- `cli.ts`: interactive selector와 explicit plan / decision / execute / direct Goal routing.
+  Planning / Decision은 입력 기반 helper를 interactive / explicit 경로가 재사용하며 string[]로
+  재직렬화하지 않는다. Execute 선택은 기존 runExecutionCli의 task / repository 인자로 연결한다.
 - `commands/plan.ts`: GoalSpec 생성·검증, `planTask()` 호출, PlanningResult 반환.
+- `commands/decision.ts`: `runDecision()`에 입력을 위임하고 결과 반환. Snapshot / Goal / 파일 loading /
+  Specialist 구성은 application entry의 책임이며 CLI에서 재조립하지 않는다.
 - `commands/execute.ts`: `executeTask()` 호출과 결과 출력, Review → Delivery → Cleanup 연결.
 - `commands/review/`: 변경 presentation과 Review completion gate.
 - `commands/delivery/`: Apply 성공 후 Commit, Commit 성공 후 Push의 승인·결과 연결.
 - `commands/cleanup/`: Delete / Keep 결정에 따라 infrastructure의 worktree 제거 호출.
 - `prompts/`: Human input / decision. `approve-task.ts`는 승인 입력만 담당한다.
-- `presenters/`: TaskContract와 timing을 보여주며 입력·승인 판단을 하지 않는다.
+- `presenters/`: TaskContract, 개별 Decision과 timing을 보여주며 입력·승인 판단을 하지 않는다.
 
 현재 Review와 Execution 결과 presentation 일부는 해당 command에 있다. 모든 출력을
 새 presenter로 추출하거나 구현되지 않은 파일을 미리 나열하지 않는다.
 Git command는 CLI에 직접 넣지 않고 `infrastructure/git` API를 사용한다.
 
 ## 5. 관찰할 결과와 Timing
+
+아래 stage timing은 Action flow 기준이다. Decision은 위의 Decision Duration만 표시하며 별도 tracing
+backend나 전체 telemetry framework 통합은 없다. Interactive input 대기 시간은 Decision Duration 밖이다.
 
 CLI는 Worker 완료, Scope / Verification 결과, changed paths, run artifact 경로를 출력한다.
 Timing에는 Planning, Approval Wait, Workspace, Worker와 내부 setup / Codex process /
@@ -150,11 +250,11 @@ CLI → Application
 Application → CLI를 모름
 ```
 
-`planTask()` / `executeTask()`의 실제 use-case logic은 application에 유지한다.
+`planTask()` / `executeTask()` / `runDecision()`의 실제 use-case logic은 application에 유지한다.
 UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한다. 향후 Web UI / API adapter는
 같은 application logic을 사용할 수 있지만 현재 구현된 인터페이스는 아니다.
 Human 권한을 새 interface가 우회하지 않아야 한다.
 
 Revise, re-plan, 복잡한 approval policy, fancy TUI는 현재 제공하지 않는다.
-Governed Independent Decisions / Decision Comparison / Explainable Synthesis / Evaluation의
-검증 계획은 이 문서에 반복하지 않고 [Roadmap](roadmap.md)에 둔다.
+현재 Governed Independent Decision 이후의 Comparison / Explainable Synthesis / Evaluation은
+[Roadmap](roadmap.md)에 두며 이 문서에서 미래 UI나 Agent 역할로 확정하지 않는다.

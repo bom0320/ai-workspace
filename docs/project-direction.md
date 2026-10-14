@@ -1,23 +1,20 @@
 # AI Workspace Project Direction
 
-이 문서는 AI Workspace의 North Star와 ownership boundary, 설계 판단 기준의 canonical source다.
-현재 사용법은 [README](../README.md), 실제 구현과 책임 배치는 [Architecture](architecture.md),
-검증 단계는 [Roadmap](roadmap.md), Human 접점은 [CLI / Human Interface](cli-and-human-interface.md)에 둔다.
-아래 원칙과 미래 domain model이 모두 구현됐다는 뜻은 아니다.
+이 문서는 North Star, Governance Ownership, Make vs Adopt, 설계 판단 기준과 외부 기술 도입 원칙의
+canonical source다. 현재 사용법과 관찰 기록은 [README](../README.md), 구현 구조는
+[Architecture](architecture.md), 다음 검증 질문은 [Roadmap](roadmap.md), Human 조작은
+[CLI / Human Interface](cli-and-human-interface.md)에 둔다. 미래 원칙을 현재 기능으로 해석하지 않는다.
 
 ## What AI Workspace is
 
 > AI Workspace는 개발자와 AI Coding Agent가 실제 Repository에서 함께 일하기 위한
 > Agent Development Environment(ADE)이자 Development Governance Harness다.
 > 기성 Coding Agent의 개발 능력을 다시 만드는 대신 개발자와 팀의 작업 방식·권한·검증 규칙을
-> 코드화하여, Agent가 어떤 환경과 규칙 아래 개발해야 하는지를 정의한다.
-> 기존 AI Coding Agent / Agent Runtime 위에서 개발 행동과 판단을 통제하고, 실제 Repository
-> Evidence를 기반으로 Human이 신뢰 가능한 결정을 내리도록 돕는 것이 그 Harness의 책임이다.
+> 코드화한다. 실제 Repository Evidence를 기반으로 Human이 판단 근거와 한계를 확인하도록 돕는다.
 
 핵심 질문은 “Agent가 코딩을 할 수 있는가?”가 아니라 “Agent가 내가 원하는 개발 방식과 규칙 아래에서
-일할 수 있는가?”다. 기존 Coding Agent가 제공하는 개발 능력과 통제 mechanism을 활용하되,
-어떤 파일을 수정할지, 어떤 Repository 상태에서 작업할지, 무엇을 검증하고 Evidence로 인정할지,
-누가 Apply / Commit / Push를 승인할지는 개발자와 팀의 policy로 명시해야 한다.
+일할 수 있는가?”다. 기존 Coding Agent의 능력과 통제 mechanism을 활용하되, 수정 범위·Repository
+기준 상태·필수 검증·Evidence 인정 기준·Apply / Commit / Push 권한은 개발자와 팀의 policy로 명시한다.
 
 ```text
 Coding Agent = 실제 개발 작업을 수행하는 주체
@@ -27,14 +24,11 @@ AI Workspace = Agent가 일하는 작업 환경 + 규칙 + 안전장치
 개발 Agent에 특화된 규칙 → AI Workspace가 직접 설계
 ```
 
-ADE를 만든다는 것은 환경의 모든 기술을 직접 구현한다는 뜻이 아니다. 기존 runtime과 도구를 이용해
-개발 환경을 구성하고 그 안의 개발 도메인 규칙을 소유한다. 이 구분이 아래 Build vs Adopt의 기준이다.
-
 ### ADE와 Development Governance
 
 ADE는 Agent가 어디에서, 어떤 Context와 도구를 가지고 Human과 개발하는지를 다룬다.
 Development Governance는 그 환경에서 무엇을 허용하고, 무엇을 Evidence로 인정하며,
-언제 Human에게 판단과 권한을 넘길지를 정의한다. AI Workspace에서는 이 둘이 결합되어 있다.
+언제 Human에게 판단과 권한을 넘길지 정의한다. AI Workspace에서는 이 둘이 결합되어 있다.
 
 ```text
 AI Workspace
@@ -44,203 +38,211 @@ AI Workspace
    └─ 그 환경의 Authority / Context / Evidence / Verification / Human Approval 규칙
 ```
 
-AI Workspace는 이 ADE 안에서 Software Development에 특화된 Governance Policy와
-Decision Assurance를 소유한다. 여기서 Decision Assurance는 실제 Repository Evidence와 검증의
-범위·한계를 드러내고 Human이 판단 근거를 추적할 수 있도록 하는 책임이며, 판단의 정확성을 보장한다는
-뜻은 아니다. Agent를 더 많이 실행하는 것보다 개발 행동과 판단을 더 신뢰할 수 있게 만드는 것이 목적이다.
+AI Workspace가 소유하는 Decision Assurance는 근거와 검증의 범위·한계를 드러내고 판단을 추적하도록
+돕는 책임이다. 결정의 정확성을 보장한다는 뜻은 아니다. Agent 수보다 개발 행동과 판단의 신뢰 근거를
+우선하며 Reliable Worker before Agent Team을 유지한다.
 
-### 현재 구현이 표현하는 개발 방식
+### 현재 구현과 확장 범위
 
-현재 v0 / v1은 다음과 같이 “AI Coding Agent와 나는 어떤 방식으로 함께 개발할 것인가?”를
-시스템화한 Personal Development Harness이며 Custom ADE의 기반이다.
+현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision이 구현되어 있다.
+TaskContract와 승인 경계는 실행할 행동을, Snapshot / Context / Authority / AgentDecision과 Evidence
+검증은 독립 판단의 조건을 명시한다. Planning 자체보다 실행 권한을 넘기기 전 explicit contract
+boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture.md#2-current-architecture)에 둔다.
 
-| 현재 구현 | 개발 환경과 규칙으로서의 의미 |
-| --- | --- |
-| TaskContract | Goal flow에서 자연어 Goal을 바로 실행하지 않고 명시적 계약과 Human Task Approval을 거친다. 명시적 JSON execute는 별도 입력 경로다 |
-| Git worktree isolation | Worker가 원본 작업 디렉터리 대신 HEAD 기반 격리 worktree에서 작업한다. 원본 반영은 별도 Apply 승인으로 진행한다 |
-| Scope Enforcement | allowedPaths / forbiddenPaths로 변경 범위를 정의하고 실제 changed paths로 실행 후 위반을 탐지한다. 쓰기 전 차단은 아니다 |
-| Verification | Agent의 자기 보고보다 Harness가 실행한 command 결과를 근거로 삼는다. 자연어 acceptance criteria 전체의 충족 증명은 아니다 |
-| Evidence / Artifacts | changes.patch, changed paths, verification result와 base commit을 보존해 사람이 실제 변경과 근거를 검토할 수 있게 한다 |
-| Human Governance | Task Approval, Change Review, Apply, Commit, Push, Cleanup을 서로 다른 결정으로 분리한다 |
-| Fast Path | 확실한 단일 textual edit는 불필요한 Planner 호출을 피한다. 모호한 작업은 Planner로 fallback한다 |
+현재 interface는 Node.js CLI이고 Agent integration은 외부 Codex CLI 하나다. 별도 GUI ADE,
+여러 provider 지원, Decision comparison / synthesis, Human governance history는 현재 기능이 아니다.
 
-Planning의 가치는 범용 planning engine 자체보다 실행 권한을 넘기기 전 explicit contract boundary를
-만드는 데 있다. 현재 interface는 Node.js CLI, Agent integration은 Codex CLI이며 별도 GUI ADE나
-여러 runtime 지원을 의미하지 않는다. Specialist authority와 Decision comparison / synthesis는 미래 범위다.
-Reliable Worker before Agent Team을 유지하며, 여러 Agent의 필요성과 효과는 평가로 판단한다.
-
-### 개인 환경에서 팀 환경으로
-
-현재는 개인/팀 개발자가 AI Coding Agent와 원하는 방식으로 일할 수 있는 ADE와 Development
-Governance Harness를 지향한다. 팀 공통 정책 배포나 Self-service Development Environment는 아직
-구현되어 있지 않다. 향후 정책과 환경을 일반화해 여러 개발자에게 제공한다면 다음으로 확장될 수 있다.
-
-```text
-Personal ADE → Team AI Development Environment → Internal AI Development Platform
-                                               → Platform Engineering 성격 강화
-```
-
-이는 조건부 확장 가능성이며 현재 프로젝트를 Platform Engineering 제품이나 완성된 ADE Platform으로
-규정하지 않는다. 팀 환경 확장도 실제 요구와 검증 질문이 생길 때 판단한다.
+현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
+방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
+향후 실제 요구에 따라 Personal ADE → Team AI Development Environment → Internal AI Development
+Platform으로 일반화된다면 Platform Engineering 성격이 강화될 수 있다. 현재 완성된 ADE Platform이나
+Platform Engineering 제품으로 규정하지 않는다.
 
 ## What AI Workspace is NOT
 
 - 새로운 Coding Agent, 모델, Devin/Cursor clone
-- 범용 Multi-Agent Framework, workflow engine, scheduler, message transport
-- 범용 memory, checkpoint/resume, durable execution 또는 policy engine
-- tracing platform, generic tool protocol, terminal multiplexer, Agent process UI
-- multi-agent chat demo, personality framework, CLI / TUI 자체를 목표로 하는 제품
+- 범용 Agent loop / workflow engine / Multi-Agent Framework / scheduler
+- 범용 retry / guardrail / authorization engine / tracing backend
+- 범용 memory / checkpoint / resume / durable execution / message transport
+- generic tool protocol / terminal multiplexer / Agent process UI
+- Agent personality framework, consensus chat 또는 CLI / TUI 자체를 목표로 하는 제품
 
-CLI는 governance의 operator/debug adapter와 Human decision surface다.
-Runtime이나 UI의 풍부함이 governance의 정확성과 효과를 대신하지 않는다.
+현재 작은 application loop, process timeout, artifact 보존을 범용 엔진으로 확장하는 것이 목표는 아니다.
+CLI는 operator/debug interface와 Human decision surface이며 core Governance Domain을 소유하지 않는다.
 
 ## Project Ownership Boundary
 
-### AI Workspace가 소유하는 개발 도메인 의미
+### AI Workspace가 직접 소유하는 의미
 
-| 영역 | 프로젝트가 정의하고 검증할 책임 | 현재 구현 / 미래 범위 |
-| --- | --- | --- |
-| Contract / Authority | TaskContract, Repository execution boundary, allowedPaths / forbiddenPaths와 Scope 의미 | v0/v1 구현. Specialist authority policy는 미래 |
-| Isolation / Provenance | Repository isolation policy, RepositorySnapshot과 repository consistency rule | worktree와 base commit 기록은 구현. 비교 판단용 Snapshot은 미래 |
-| Context | 조사 Context와 수정 권한의 구분, 역할·Task별 Context policy | inspection policy와 제한된 warm-start 구현. Specialist별 정책은 미래 |
-| Decision / Evidence | AgentDecision schema, Evidence semantics / provenance, Verification 의미 | 실행 Evidence와 command verification 구현. Decision과 Evidence reference는 미래 |
-| Comparison / Synthesis | Agreement / Conflict / Trade-off / uncertainty, 근거를 추적할 수 있는 recommendation | 미래 |
-| Human Governance | approval / override / escalation 의미, 권한 분리, decision traceability | 현재 Task Approval / Review / Delivery / Cleanup. override·escalation·이력 모델은 미래 |
-| Evaluation | Single-Agent와 Governed Multi-Agent를 비교하는 조건과 판단 기준 | duration telemetry 구현. 비교 평가는 미래 |
+TaskContract, Repository execution boundary와 isolation / consistency rule, Context policy,
+Specialist authority, Decision schema, Evidence semantics / provenance, Verification / Scope semantics,
+Agreement / Conflict / Trade-off, Human approval / override / reject / escalation, decision traceability와
+Single-Agent vs Governed Multi-Agent evaluation criteria는 프로젝트의 개발 도메인 책임이다.
+이 목록에는 현재 구현과 미래 책임이 섞여 있으므로 구현 여부는 [모델 상태](architecture.md#6-current-and-conditional-domain-models)를 따른다.
 
-이 표는 ownership의 범위이며 미래 모델의 이름이나 필드를 확정한 구현 명세가 아니다.
-AgentDecision은 자유 형식 답변이 아니라 recommendation, evidence references, risk, uncertainty를
-후속 governance에 사용할 수 있는 structured decision record로 정의할 계획이다.
-현재 PlannerDecision은 inspect / complete protocol이며 이 AgentDecision과 다른 개념이다.
+구체적인 governance rule은 다음과 같다.
 
-### 기본적으로 직접 만들지 않는 범용 기능
+- 같은 비교 단위의 Specialist는 같은 Repository commit SHA를 기준으로 판단한다.
+- Specialist의 Evidence는 실제 supplied Context 안에 존재해야 한다.
+- Reviewer / read-only Specialist에는 Repository write authority를 부여하지 않는다.
+- Conflict는 단순 문장·opinion 차이가 아닌 **evidence-backed disagreement**여야 한다.
+- 최종 recommendation은 원래 AgentDecision / Evidence / Verification까지 추적 가능해야 한다.
+- Human approval / override / reject는 서로 다른 권한과 의미이며 대상과 효과를 명시해야 한다.
 
-Generic agent runtime, workflow graph, multi-agent scheduling / parallel execution, message passing,
-generic memory, checkpoint engine, durable workflow execution, tracing backend, generic authorization /
-policy engine, tool protocol, terminal multiplexer는 기존 기술을 먼저 평가한다.
-현재의 작은 Planning loop, process timeout, artifact persistence는 필요한 실행 흐름을 연결하는
-구현이며, 이를 범용 엔진으로 확장하는 것을 목표로 삼지 않는다.
+마지막 세 항목의 comparison / synthesis / 확장된 Human governance는 미래 책임이다.
+현재 v2 Evidence 존재·범위 검증이 이 책임 전체를 구현한 것은 아니다.
 
-외부 기술이 실행을 맡더라도 허용 권한, Evidence 인정 기준, repository consistency,
-Human gate의 의미는 프로젝트가 소유한다. 저장·전송·스케줄링 메커니즘과 저장되는 기록의
-개발 도메인 의미를 구분한다.
+### 범용 메커니즘과의 경계
+
+실행·저장·전송·관찰의 generic mechanism은 필요할 때 기존 기술을 먼저 평가한다.
+AI Workspace는 governance semantics와 use-case의 순서·상태 제어를 소유하고, 외부 capability를
+격리해 조합한다. 이를 위해 조직 역할, generic scheduler, retry engine, shared memory를 선행 구현하지 않는다.
 
 ## Build vs Adopt
+
+이 문서의 **Make vs Adopt**는 다음 Build vs Adopt 원칙을 뜻한다.
 
 > Build domain semantics. Adopt commodity infrastructure.
 >
 > Adopt when the problem exists, not because the tool exists.
+>
+> Keep governance ownership in the Harness.
 
-개발 도메인 규칙은 직접 설계·구현한다. 범용 runtime / infrastructure 문제는 기존 기술을 먼저
-평가한다. 도입이 governance 의미를 보존하는지 확인하고, 현재 필요하지 않은 framework를
-미리 추가하지 않는다. 직접 구현이 필요한 경우에도 기존 기술이 충족하지 못하는 경계나
-검증할 연구 질문, 최소 범위를 기록한다.
+Framework/SDK를 코어 orchestration의 주체로 먼저 도입하지 않는다. Harness가 Domain Language와
+상태 제어를 정의한 뒤 범용 기능을 Library / Framework / Runtime / Infrastructure로 격리해 조합한다.
+향후 외부 runtime이 실행 구조 일부를 맡더라도 Authority, Context, Evidence, Conflict, Human approval의
+의미를 대신 정의해서는 안 된다.
 
-### Existing Framework / Runtime / Tool과의 관계
+순서는 Make vs Adopt 경계 정리 → v3 Domain 설계 → v3 구현 / E2E → 필요한 runtime spike 평가 →
+v4부터 가치가 확인된 runtime의 선택적 채택이다. 모든 기술을 직접 만든 뒤 framework를 붙이는 전략도,
+처음부터 framework의 domain model에 AI Workspace를 맞추는 전략도 아니다. 현재 필요한 commodity
+capability는 v3 중에도 library로 활용할 수 있다.
 
-AI Workspace는 외부 기술을 경쟁 대상으로 삼지 않는 development governance layer다.
-다음은 책임과 위임 관계이며 현재 dependency graph나 필수 stack이 아니다.
+### Library vs Framework / Runtime
 
-```text
-Human: Goal / constraints / approvals / review
-                    ↕
-AI Workspace: development governance semantics
-       ├─ 실행 위임 → Agent Framework / Runtime
-       └─ 관찰·검증 → Execution Infrastructure → Repository
-                    ↑
-             Decision / Evidence
-```
+| 구분 | 실행 흐름의 소유권 | 도입 판단 |
+| --- | --- | --- |
+| Library | Harness가 흐름을 계속 소유하며 필요한 capability만 호출 | 현재 필요가 생기면 기존 구현을 우선 평가해 사용 가능 |
+| Framework / Runtime | Agent loop, workflow state, handoff, pause / resume 등 실행 구조 일부를 맡을 수 있음 | ownership과 실행 모델의 영향을 별도 architecture decision과 spike로 검증 |
+| Infrastructure / Tool | 저장·관찰·policy evaluation·protocol·process 관찰 등의 수단 제공 | 실제 요구와 운영 부담, domain 경계 보존 여부로 선택 |
 
-Framework는 workflow와 실행 구조, library는 특정 capability, infrastructure는 지속 실행·저장·관찰의
-운영 기반, tool은 protocol이나 개발자 작업 수단을 제공할 수 있다. 구분보다 실제 책임을 기준으로
-선택하며, framework의 run/step을 domain model로 그대로 복제하지 않는다.
+현재 Zod는 runtime schema validation library로 사용한다. Serialization / logging utility,
+tracing instrumentation, retry utility, concurrency primitive도 필요가 생기면 평가할 library 예다.
+이 목록이 현재 retry / concurrency 기능을 제공한다는 뜻은 아니다.
 
-| 실제 문제가 생겼을 때 평가할 범용 책임 | 후보 기술 예시 — 미도입 |
-| --- | --- |
-| Orchestration / workflow | LangGraph / Agent Framework |
-| Agent runtime / guardrails / HITL | OpenAI Agents SDK |
-| Policy evaluation | OPA |
-| Durable execution / crash recovery | Temporal / Restate / framework checkpoint 기능 |
-| Observability | OpenTelemetry / LangSmith |
-| Tool interoperability | MCP |
-| Developer process observation | tmux 등 |
+OpenAI Agents SDK는 단순 schema library가 아닌 Agent Runtime / Framework **평가 후보**다.
+Pydantic AI 역시 단순 validation library로 분류하지 않으며 현재 TypeScript stack에 도입할 계획은 없다.
+현재 사용하는 schema library는 Zod다.
 
-후보는 비교 출발점일 뿐 채택 결정이나 기능 보장이 아니다. LangGraph의 workflow, OPA의 generic
-policy evaluation, Temporal의 durable execution, LangSmith의 tracing, tmux/Orca의 Agent process UI를
-자체 제품 목표로 재구현하지 않는다. 후보의 적합성은 실제 요구가 생길 때 다시 조사한다.
+### 외부 기술과의 관계 및 도입 시점
 
-현재 stack은 Node.js, TypeScript, pnpm, tsx, Vitest, Zod이며 Agent integration은 외부 Codex CLI다.
-위 후보 framework / infrastructure는 package.json과 현재 코드에 도입되어 있지 않다.
+현재 stack은 Node.js, TypeScript, pnpm, tsx, Vitest, Zod와 외부 Codex CLI다.
+OpenAI Agents SDK, OPA, Temporal, Restate, LangGraph, CrewAI, LangSmith는 현재 코드나
+production dependency에 도입되어 있지 않다. 아래는 **채택 확정이 아닌 평가 시점과 후보**다.
+
+| 범용 책임 | 현재 판단 | 평가가 필요한 조건 / 후보 |
+| --- | --- | --- |
+| Agent Runtime / Guardrails | 도입 보류 | tool-enabled Specialist 또는 종합·조율 역할이 실제로 필요할 때. v3 이후 OpenAI Agents SDK spike 등으로 평가하며 CEO / Coordinator Agent를 전제하지 않음 |
+| Tracing / Observability | 현재 duration telemetry로 충분 | v3 이후 Specialist / Comparison / 제한된 Re-query 등 흐름이 복잡해질 때. 가장 빠른 외부 infrastructure 도입 후보이며 instrumentation과 backend를 구분. OpenTelemetry / LangSmith 등 평가 가능 |
+| Generic policy evaluation | 현재 별도 engine 불필요 | Role × Action × Resource 권한 규칙이 동적이고 복잡해질 때 OPA 등 평가 |
+| Durable workflow execution | 현재 요구에서는 확실히 불필요 | 장시간 Human approval, process/server restart 후 resume, multi-hour / multi-day workflow, durable scheduling / step retry / checkpoint가 실제 요구가 될 때 Temporal / Restate 등 평가 |
+| Workflow / orchestration framework | 현재 도입·재작성 계획 없음 | 범용 실행 구조가 실제 문제일 때 LangGraph / Agent Framework / CrewAI 등 비교 가능 |
+| Tool interoperability / process observation | 필요 시 검토 | MCP / tmux 등 도구를 활용할 수 있으나 자체 generic protocol이나 process UI를 제품 목표로 삼지 않음 |
+
+AI Workspace는 이 기술들과 경쟁하는 범용 플랫폼을 만들지 않는다. 후보의 구체적 기능과 적합성은
+실제 spike 시점에 조사한다. [Runtime Framework Evaluation](roadmap.md#runtime-framework-evaluation)의
+진입·평가 조건을 통과하기 전에는 특정 runtime을 필수 dependency로 고정하지 않는다.
+
+OPA가 필요해져도 “UX Specialist는 Repository write 불가”라는 Domain Rule은 AI Workspace가 정의한다.
+OPA는 그 규칙의 representation / evaluation mechanism이 될 수 있고 runtime은 결과에 따라 action을
+deny해야 한다. Engine 도입이 policy semantics나 실제 enforcement를 대신하지 않는다.
+
+Agent RunState resume와 전체 Workflow durable execution도 구분한다. 개별 Agent 상태를 재개하는 것과
+여러 단계·Human 대기·실패 후 재시작을 지속 실행하는 것은 다른 책임이다. 현재 CLI 실행, timeout 종료,
+Execution artifact preservation을 durable execution이라고 부르지 않는다.
 
 ## Core Governance Principles
 
 ### 1. Authority & Boundary
 
-읽기·수정·실행 권한은 명시하고, runtime이 제공하는 통제 수단과 Harness의 검사를 구분한다.
-현재 allowedPaths / forbiddenPaths는 Repository 상대 파일 경로의 정확한 문자열 일치다.
-Scope Enforcement는 Worker 이후와 Verification 이후 실제 changed paths로 위반을 탐지하며,
-파일 쓰기를 사전에 막는 완전한 sandbox가 아니다.
+권한 선언, runtime 통제 수단, Harness의 사후 검사를 구분한다. 현재 allowedPaths / forbiddenPaths는
+Repository 상대 파일 경로의 정확한 문자열 일치다. Execution Scope Enforcement는 Worker와 Verification
+이후 changed paths로 위반을 탐지하며 write-before prevention이나 완전한 sandbox가 아니다.
 
-미래 Reviewer 역할에는 Repository write authority를 부여하지 않는다. 이 규칙은 prompt의
-역할 설명만으로 충족됐다고 보지 않고 runtime 권한 설정과 실제 관찰로 확인해야 한다.
+현재 Codex Specialist는 `read`와 `shellExecution: false`만 지원한다. 이 read는 제공 Context를 읽는 권한이며
+target Repository filesystem 전체를 탐색하는 권한이 아니다. Reviewer / read-only 역할에 write 권한을
+부여하지 않는 원칙은 향후 runtime에서도 선언과 실제 enforcement를 함께 검증해야 한다.
 
 ### 2. Right Agent × Right Context
 
-역할과 Task에 필요한 Context와 그 출처를 명시한다. Inspection 대상과 수정 허용 경로는 다른
-권한이다. 현재 repository inspection과 제한된 Worker warm-start는 기반이며 완전한
-role-aware context routing은 구현되어 있지 않다.
+Context의 범위·출처와 수정 권한을 구분한다. v2는 clean RepositorySnapshot을 capture하고 해당 commit의
+Git blob을 읽으며, 모든 Specialist에 같은 Goal / commit SHA와 명시적 files를 제공한다. 다른 Specialist의
+Decision을 Context에 넣지 않는다. 순차 실행이며 자동 Context selection이나 parallel execution은 없다.
 
-미래 같은 비교 단위의 Specialist는 동일 Repository commit을 기준으로 판단해야 한다.
-Commit만 같아도 dirty files나 제공 Context가 다르면 같은 조건이 아닐 수 있으므로,
-RepositorySnapshot에는 비교에 영향을 주는 실제 상태와 Context provenance를 연결해야 한다.
-실행 중 기준이 바뀌면 서로 비교 가능한 판단인지 다시 확인한다.
+Snapshot assert는 호출 시점의 HEAD / clean 상태 검사다. Repository lock이나 실행 중 모든 순간의
+무변경 증명은 아니다. Snapshot의 provenance와 Specialist에게 제공한 Context가 무엇인지 함께 이해해야 한다.
 
 ### 3. Evidence over Claims
 
 > Agent says "done" is not success evidence.
 
-실제 Repository observation, diff, changed paths, verification command 결과와 exit code를
-판단 근거로 삼는다. Worker output도 보존하지만 그 안의 주장을 관찰 사실과 동일시하지 않는다.
-Decision이 사용한 Evidence는 실제 observation 또는 verification 결과까지 추적 가능해야 한다.
+실행에서는 실제 diff / changed paths / verification command 결과를 근거로 삼는다. v2 Decision에서는
+supplied Context에 대한 Evidence path exact match와 line 조건·범위를 확인한다. Worker output이나
+Evidence description의 주장을 관찰 사실과 동일시하지 않는다.
 
-Zod schema validation은 structural validity를 검사하며 semantic correctness나 hallucination 방지를
-보장하지 않는다. 현재 `passed`는 실행 실패 없이 Scope와 구성된 Verification을 통과한 결과이지,
-자연어 objective / acceptance criteria 전체의 충족 증명이 아니다.
+Schema validation은 structural validity이며 semantic correctness나 hallucination 방지를 보장하지 않는다.
+Evidence 존재·범위 검증도 description의 진실성이나 recommendation의 논리적 타당성을 증명하지 않는다.
+Execution의 `passed`는 Scope와 구성된 Verification 및 실행 실패 여부에 관한 결과이며 자연어
+objective / acceptance criteria 전체 충족의 증명이 아니다.
 
 ### 4. Explainable Governance
 
-미래 Agreement / Conflict / Trade-off는 동일 문제에 대한 recommendation과 Evidence를 비교하는
-모델이다. Conflict는 문장 표현의 차이가 아니라 incompatible recommendation, evidence 해석,
-또는 trade-off가 존재하는 경우로 정의한다. 비교 조건과 uncertainty를 함께 남긴다.
+v3에서 Agreement / Conflict / Trade-off / uncertainty의 의미를 설계한다. 서로 다른 Concern이나 표현
+차이를 Conflict로 취급하지 않고 Evidence에 근거한 disagreement인지 확인해야 한다. 근거 부족과 비교
+불가능성도 표시해야 한다. 현재 v2는 독립 Decision을 표시할 뿐 비교·합의·종합하지 않는다.
 
-최종 recommendation은 원래 AgentDecision / Evidence / Verification까지 추적 가능해야 한다.
-종합 책임의 구현은 deterministic function, 하나의 LLM call, framework supervisor, 별도 Agent 중
-나중에 선택한다. CEO라는 역할명을 architecture commitment로 삼지 않는다.
-현재 Review는 실제 변경과 Worker output을 보여주며 이 종합 기능은 구현되어 있지 않다.
+v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
+종합 책임의 구현 방식은 runtime 평가 이후 선택하며 CEO라는 이름을 architecture commitment로 삼지 않는다.
 
 ### 5. Human Governance
 
-Human Task Approval, Change Review, Apply, Commit, Push, Cleanup은 서로 다른 권한이다.
-Task 승인이나 Review Continue가 후속 Git 작업의 포괄 승인이 되지 않는다. 현재 명시적
-TaskContract JSON 실행은 Planning / Task Approval을 거치지 않는 별도 입력 경로다.
+Task Approval, Change Review, Apply, Commit, Push, Cleanup은 서로 다른 결정이다.
+Task 승인이나 Review Continue는 후속 Git 작업의 포괄 승인이 아니다. 명시적 TaskContract JSON execute는
+Planning / Task Approval을 거치지 않는 별도 경로다. v2 Decision은 변경 전달이나 승인 flow와 연결되지 않는다.
 
-미래 scope / authority 변경, 위험·불확실성·Evidence 부족에 대한 escalation 조건과
-Human approve / override / reject의 대상과 효과를 명시해야 한다. Human 결정과 근거를
-추적할 governance records가 필요하며, 현재 result.json은 후속 Human 이력 저장소가 아니다.
-Merge / release 권한을 자동 부여하는 계획도 아니다.
+향후 approval / override / reject / escalation의 대상·권한·이유·효과를 구분해야 한다.
+Human governance history와 장기 audit lifecycle은 미구현이며 현재 result.json은 후속 Human 이력 저장소가 아니다.
 
 ## Design Decision Filter
 
-새 기능을 구현하거나 기술을 도입하기 전에 다음을 묻는다.
+앞으로 새 기능과 기술 선택에는 다음 **세 질문을 공통 판단 기준**으로 사용한다.
 
-1. 이것은 AI Workspace의 개발 도메인 규칙인가?
-2. 아니면 범용 Agent runtime / infrastructure 문제인가?
-3. 기존 framework / library / tool이 이미 해결하는가?
-4. 기존 기술을 사용하면 AI Workspace의 governance 의미를 잃는가?
-5. 직접 구현해야만 검증하고 싶은 연구 질문이 존재하는가?
-6. 어떤 권한·Context·Repository·Evidence·Human 경계를 강화하고, 실제 결과로 어떻게 검증할 것인가?
-7. 현재 구현 사실, 미래 제안, 기술 선택을 구분했는가? Single-Agent 대비 이득과 비용을 평가할 수 있는가?
+### Question 1 — Domain Concept인가?
 
-현재 요구에 필요한 최소 실행 흐름부터 끝까지 검증한다. 미래 재사용, 조직 역할명, 구조적 대칭성만으로
-계층·상태 모델·abstraction을 만들지 않는다. Recovery와 generic orchestration 자체를 핵심 자산으로
-단정하지 않고, 도메인 기록과 범용 실행 메커니즘을 분리한다.
+AI Workspace의 정체성이나 Development Governance 의미와 직접 연결되는가?
+Same comparison unit → same commit SHA, Conflict → evidence-backed disagreement,
+Reviewer → write authority 없음, Evidence → supplied Context / Repository observation 연결이 예다.
+
+**그렇다면 AI Workspace가 직접 설계하고 구현한다.** 외부 기술로 실행해도 domain semantics는 넘기지 않는다.
+
+### Question 2 — Commodity Technical Problem인가?
+
+Agent Domain과 무관하게 대부분의 Software System에서 반복되는 범용 기술 문제인가?
+Schema validation, serialization, retry, logging, tracing instrumentation, concurrency limit, timeout이 예다.
+
+**그렇다면 기존 Library / Infrastructure를 먼저 평가한다.** 현재 요구에 필요한 capability만 사용하며
+도구가 있다는 이유로 기능을 추가하지 않는다. 직접 구현이 필요하면 기존 기술의 부족한 경계나
+검증할 연구 질문과 최소 범위를 기록한다.
+
+### Question 3 — Execution Model을 바꾸는가?
+
+Agent가 실행되고 멈추고 상태를 저장·재개하는 프로그램의 근본 실행 구조가 바뀌는가?
+Agent loop, handoff, workflow state, pause / resume, checkpoint, durable execution, long-lived HITL이 예다.
+
+**그렇다면 Framework / Runtime architecture decision으로 별도 평가한다.** 작은 spike에서 Harness control,
+Context isolation과 coupling을 확인한다. 두 번째 runtime 구현의 실제 필요 전에는 generic SpecialistRunner,
+provider registry, runtime abstraction layer를 미리 만들지 않는다.
+
+세 질문은 배타적 분류가 아니다. Domain Rule을 library로 평가하거나 runtime으로 실행할 때도 의미의
+소유권과 실행 모델의 영향을 각각 판단한다. 실제 결과로 검증할 수 있는 현재 최소 흐름부터 완성하며,
+미래 재사용·역할명·폴더 대칭성만으로 abstraction을 만들지 않는다.

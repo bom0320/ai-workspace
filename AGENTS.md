@@ -2,9 +2,9 @@
 
 ## 1. Project Purpose
 
-이 프로젝트는 여러 Repository를 대상으로 AI Agent의 조직 운영과 안전한 Repository 실행을 연결하는 AI Development Workspace다.
+이 프로젝트는 개발자와 AI Coding Agent가 실제 Repository에서 함께 일하기 위한 ADE이자 Development Governance Harness다. North Star와 Make vs Adopt의 기준은 [Project Direction](docs/project-direction.md)에 둔다.
 
-현재는 v0 단계이며, 다음 원칙을 따른다.
+현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision이 구현되어 있으며 다음 원칙을 따른다.
 
 > Reliable Worker before Agent Team
 
@@ -33,26 +33,27 @@
 
 ## 4. Architecture Boundaries
 
-`docs/architecture.md`가 정의하는 planned architecture의 책임 경계는 다음과 같다.
+현재 책임과 future / conditional model은 [Architecture](docs/architecture.md)를 따른다.
 
-- Human owns governance.
-- CEO owns orchestration and decisions.
-- Worker owns scoped execution.
-- Harness controls execution.
-- Verifier evaluates evidence.
-- Shared State stores organizational truth.
+- Human은 승인과 최종 governance 결정을 소유한다.
+- Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
+- Worker는 scoped execution, Specialist는 supplied Context의 독립 판단을 수행한다.
+- Git / Process 및 교체 가능한 runtime은 기술적 실행 수단이다.
+- Comparison / Synthesis / Human governance history는 미구현이며 CEO / Coordinator / DecisionRun / DecisionRound를 필수 구현으로 전제하지 않는다.
 
-현재 코드에는 이 구성요소들이 모두 구현되어 있지 않다. 존재하지 않는 계층이나 동작을 구현된 기능처럼 가정하거나 문서화하지 않는다. 현재 구현된 시스템 contract는 TaskContract이며, 나머지 planned architecture는 실제 요구가 생길 때 점진적으로 구현한다.
+현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 
 ## 5. Repository Structure
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
-- `src/cli.ts`: 현재 CLI entry point
+- `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
 - `src/contracts/`: runtime-validated contract와 TaskContract loader
+- `src/application/planning/`: Goal-to-Task Planning use-case와 public API
+- `src/application/decision/`: 독립 Decision use-case와 public API; flow/context, orchestration, validation은 실제 책임별 grouping
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델
-- `src/services/worker/`: 제한된 Task를 수행하는 Worker integration
+- `src/application/execution/worker/`: 제한된 Task를 수행하는 Worker integration
 - `src/services/scope/`: 변경 경로 Scope 정책 검사
 - `src/services/verification/`: verification command 실행
 - `src/services/artifacts/`: 실행 디렉터리, patch, 결과 persistence

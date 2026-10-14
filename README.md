@@ -5,18 +5,23 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
 작업 방식·권한·검증 규칙을 코드화하여 실행 범위, Context, Evidence, Human approval을 통제한다.
 현재 operator interface는 Node.js CLI로 제공된다.
 
-현재 v1은 자연어 Goal을 TaskContract로 만드는 Planning과 하나의 Codex Worker를
-격리된 Git worktree에서 실행하는 흐름을 제공한다. 기존 v0의 TaskContract JSON 실행도
-유지한다. Repository 조사, Adaptive Planning, 경로 범위 검사, 검증 명령 실행,
-binary patch 및 실행 결과 보존에 이어 Human Review와 승인 기반 Apply / Commit / Push,
-workspace Delete / Keep을 지원한다. CEO Agent, 멀티에이전트, 공유 메모리,
-자동 재시도, 자동 dependency 설치는 구현되어 있지 않다.
+현재 다음 흐름이 구현되어 있다.
+
+- **v0 — Safe Execution**: TaskContract JSON을 isolated Git worktree에서 실행하고 Scope / Verification /
+  Evidence와 binary patch·결과를 보존한다. Human Review와 승인 기반 Apply / Commit / Push, Delete / Keep을 제공한다.
+- **v1 — Goal-to-Task Planning**: 자연어 Goal을 repository inspection과 Adaptive Planning으로
+  TaskContract로 변환하고, Human Task Approval 뒤 단일 Codex Worker로 실행한다.
+- **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
+  Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
+
+Agent discussion / comparison / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
+미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
 
 문서는 다음 책임으로 나눈다.
 
 - [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
 - [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
-- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0 / v1과 이후 planned evolution
+- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0 / v1 / v2와 이후 검증 단계
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
 범용 Agent Framework를 대체하는 것이 목표는 아니다. 향후 필요한 runtime / infrastructure는
@@ -44,8 +49,25 @@ pnpm install
 pnpm dev
 ```
 
-인자 없이 실행하면 Repository path와 Goal을 terminal에서 입력받는다.
-인자로 전달하거나 Planning 결과만 확인할 수도 있다.
+인자 없이 실행하면 workflow를 선택한다. 제목은 한 번만 표시한다.
+
+```text
+AI Workspace
+
+Select workflow:
+
+1. Plan & Execute
+2. Plan only
+3. Decision
+4. Execute existing task
+
+>
+```
+
+Plan & Execute / Plan only는 Repository와 Goal을, Decision은 Repository / Decision Goal /
+Context Files를 입력받는다. Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
+Execute existing task는 Task path와 Repository를 입력받는다.
+인자를 직접 전달하면 selector를 거치지 않는다.
 
 ```sh
 pnpm dev . "README.md의 소개 문구를 더 명확하게 수정해줘"
@@ -60,6 +82,47 @@ pnpm dev execute ./tasks/example.json /absolute/path/to/target-repository
 
 Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행된다.
 원본 작업 디렉터리 반영은 실행 후 별도의 Apply 승인으로만 진행한다.
+
+## Decision quick example
+
+Clean Repository와 명시적 repository-relative UTF-8 text 파일이 필요하다.
+
+```sh
+pnpm decision . \
+  "Evaluate the current decision architecture" \
+  src/application/decision/flow/run-decision.ts \
+  src/application/decision/flow/orchestration/run-independent-decisions.ts
+```
+
+Snapshot capture 후 해당 commit의 Git blob에서만 파일 내용을 읽는다. 빈 경로·absolute path·`..`
+traversal, 없는 파일·directory·binary/invalid UTF-8 입력은 거부한다. Dirty Repository나 실행 전후
+Snapshot drift, runtime / schema / Evidence 오류가 있으면 전체 명령이 실패하고 partial result를 표시하지 않는다.
+
+Frontend / UX Specialist는 같은 Goal / commit과 같은 선택 파일을 각각 받고 순차 실행한다.
+`read` authority는 supplied Context 읽기이며 전체 target filesystem 접근이 아니다.
+다른 Specialist의 Decision을 전달하지 않고 Harness가 specialistId를 주입한다.
+Evidence는 제공 파일의 exact path와 line 조건·범위를 검사한다. Schema / Evidence 검증 통과가
+recommendation의 의미적 정확성을 보장하지는 않는다.
+
+출력은 Snapshot, 각 Specialist의 Recommendation / Evidence / Risks / Uncertainty와 Decision Duration이다.
+Comparison / synthesis / persistence나 Planning·Execution 자동 연결은 없다. 이 명령은 Repository 변경,
+Task Approval / Review / Apply / Commit / Push / Cleanup flow를 실행하지 않는다.
+상세 입력·오류·출력은 [CLI / Human interface](docs/cli-and-human-interface.md#decision-flow)를 따른다.
+
+### v2 실제 E2E 기록
+
+제공된 단일 실제 interactive Codex 실행에서 관찰된 기록이다. 이번 문서 수정에서 재측정한 수치나
+반복 benchmark, 성능 보장이 아니다.
+
+| 항목 | Observed run |
+| --- | --- |
+| 경로 | pnpm dev → Decision → Repository: . → Decision Goal → 5 Context files → Frontend → UX → Decision output |
+| Snapshot | `2d92c683e3f96329559b62c4a32b56a54b70c5b7` |
+| Decision Duration | 80.3s |
+
+이 실행은 Same Goal / Same Snapshot / Limited Context / Read-only Authority / Independent Decisions /
+Structured AgentDecision / Evidence Validation / CLI integration / Actual Codex execution이 연결됨을 확인했다.
+다른 작업·모델·환경에서의 성공률, 판단 품질이나 Multi-Agent 우위를 입증하지 않는다.
 
 ## Adaptive Planning / Fast Path
 
@@ -156,7 +219,7 @@ test: ...
 chore: ...
 ```
 
-### 전체 흐름
+### Goal-based Action Governance 흐름
 
 ```text
 Natural Language Goal
@@ -217,13 +280,13 @@ Task Approval을 Reject하면 Execution을 시작하지 않는다. Scope·Verifi
 
 `allowedPaths`와 `forbiddenPaths`는 Repository 상대 경로의 정확한 문자열 일치만
 지원한다. glob, 정규식, directory prefix는 지원하지 않는다. 예를 들어 `src/`는
-`src/cli.ts`를 허용하지 않는다.
+`src/cli/cli.ts`를 허용하지 않는다.
 
 범위 검사는 파일 쓰기를 사전에 차단하는 기능이 아니다. Worker와 Verification 실행
 후 시작 commit 대비 실제 변경 경로를 수집해 위반을 탐지한다. 위반한 변경도 결과
 patch에는 남을 수 있으므로 사람이 반드시 검토해야 한다.
 
-## 실행 결과
+## Execution 실행 결과
 
 기본 결과 위치는 CLI를 실행한 디렉터리 아래다.
 
@@ -268,9 +331,13 @@ CLI에서도 명시적 Apply 승인 없이는 적용하지 않는다. patch는 W
 ## Timeout
 
 - Codex Worker 기본 timeout: 15분
+- Codex Specialist 기본 timeout: 각 15분 (현재 Decision CLI에는 override 입력 없음)
 - 각 Verification command 기본 timeout: 5분
 
-CLI에서 millisecond 단위로 override하려면
+아래 환경변수와 patch / cleanup 설명은 Execution에 한정한다. Specialist 실패는 Decision 전체를
+reject하며 임시 cwd를 제거하고, Decision patch나 artifact를 만들지 않는다.
+
+Execution CLI에서 millisecond 단위로 override하려면
 `AI_WORKSPACE_WORKER_TIMEOUT_MS`와 `AI_WORKSPACE_VERIFICATION_TIMEOUT_MS` 환경변수를
 사용한다. 테스트와 직접 API 사용에서도 짧은 timeout을 주입할 수 있다. timeout 시 일반
 실패와 구분되는 메시지를 기록하고, macOS/Linux에서는 독립 process group에 SIGTERM을
@@ -285,7 +352,7 @@ tree 전체 종료가 동일하게 보장되지 않는다.
 - ignored 파일, 빈 디렉터리, Worker commit history는 patch에 보존하지 않는다.
 - 실행 환경 준비, dependency 설치, `.env`와 secret 전달은 자동화하지 않는다.
 - retry, rollback, 승인 없는 patch 적용·commit·push, 자동 merge는 수행하지 않는다.
-- E2E 테스트는 PATH에 가짜 `codex` 실행 파일을 제공한다. 실제 Codex 인증, 모델 동작,
+- 자동 E2E 테스트는 PATH에 가짜 `codex` 실행 파일을 제공한다. 실제 Codex 인증, 모델 동작,
   네트워크, prompt 준수, 실제 프로젝트의 build 환경을 검증하는 테스트가 아니다.
 - 첫 실제 적용에서는 버려도 되는 branch와 Repository 복제본으로 Task scope, 검증 명령,
   timeout, patch 적용 가능성을 먼저 확인해야 한다.

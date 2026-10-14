@@ -1,163 +1,196 @@
 # AI Workspace Roadmap
 
-이 문서는 다음에 무엇을 검증할지 기록한다. North Star와 ownership / Build vs Adopt 기준은
-[Project Direction](project-direction.md), 현재 구현과 domain model 채택 조건은
-[Architecture](architecture.md), 사용법은 [README](../README.md)에 둔다.
-버전은 검증 질문을 구분하며 미래 runtime이나 조직 Agent의 구현 약속이 아니다.
-이 roadmap은 더 좋은 generic Agent Framework를 만드는 계획이 아니라 Human과 AI Coding Agent가
-함께 개발하는 Agent Development Environment(ADE)의 governance capabilities를 검증하는 계획이다.
-ADE 관점은 기존 단계의 목적을 설명하며 별도 단계나 플랫폼 구현을 추가하지 않는다.
+이 문서는 다음에 무엇을 검증할지 기록한다. North Star와 Make vs Adopt의 판단 기준은
+[Project Direction](project-direction.md), 현재 구현과 모델은 [Architecture](architecture.md),
+실행 방법과 관찰 기록은 [README](../README.md)에 둔다. 범용 Agent Framework 자체를 만드는 계획이
+아니라 Human과 AI Coding Agent가 함께 개발하는 ADE의 governance capabilities를 검증하는 계획이다.
 
 | 단계 | 검증 주제 | 상태 |
 | --- | --- | --- |
 | v0 | Safe Execution | Implemented |
 | v1 | Goal-to-Task Planning | Implemented |
-| Foundation | Governance Decision Records | Planned |
-| v2 | Governed Independent Decisions | Planned |
-| v3 | Decision Comparison | Planned |
-| v4 | Explainable Synthesis / Human Governance | Planned |
+| v2 | Governed Independent Decision | Implemented |
+| v3 | Agreement / Conflict — Structured Decision Comparison | Next / Planned |
+| Architecture checkpoint | Runtime Framework Evaluation | Planned, v3 구현 / E2E 이후·v4 구현 방식 선택 전 |
+| v4 | CEO Governance / Explainable Synthesis / Human Governance | Planned, 별도 CEO Agent는 미확정 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
 
 > Agent에게 실제 Repository 변경을 맡기면서 Human이 정한 행동 경계를 시스템이 강제할 수 있는가?
 
-상태: **Implemented**. Development action governance의 기반이다.
+상태: **Implemented**.
 
-TaskContract, isolated Git worktree, Scope Enforcement, Verification, Evidence와 artifact preservation을
-제공한다. Agent의 자기 보고만으로 성공을 판단하지 않고 실제 변경과 명령 결과를 보존한다.
-명시적 TaskContract JSON 실행 경로는 v1에서도 유지한다.
-
-여기서 Scope Enforcement는 파일 쓰기 전 차단이 아니라 시작 commit 대비 실제 changed paths에
-대한 위반 탐지다. Worker 이후 Scope가 통과하면 Verification을 실행하고 이후 Scope를 다시 검사한다.
-`passed`는 실행 실패 없이 Scope와 구성된 Verification을 통과한 결과이며 자연어 acceptance criteria
-전체를 증명하지 않는다. 격리·검증·artifact 보존의 상세 한계는 [README](../README.md#v0--v1의-판단-범위와-제한)를 따른다.
+TaskContract, isolated Git worktree, Scope Enforcement, Verification, Evidence와 artifact preservation이
+Development action governance의 기반이다. 명시적 TaskContract JSON 실행은 이후 버전에서도 유지한다.
+Scope는 Worker / Verification 후 실제 changed paths의 위반 탐지이며 쓰기 전 차단이 아니다.
+Verification 통과도 자연어 acceptance criteria 전체의 증명은 아니다.
+상세 한계는 [README](../README.md#v0--v1의-판단-범위와-제한)를 따른다.
 
 ## v1 — Goal-to-Task Planning
 
-> Human Goal을 바로 실행하지 않고 명시적이고 검증 가능한 TaskContract로 변환한 뒤 Human approval을 거칠 수 있는가?
+> Human Goal을 바로 실행하지 않고 명시적 계약으로 변환한 뒤 Human approval을 거칠 수 있는가?
 
-상태: **Implemented**. 실행 권한을 넘기기 전 explicit contract boundary를 만든다.
+상태: **Implemented**.
 
-GoalSpec, repository inspection, adaptive planning / conservative Fast Path, Codex Planner와 Planning loop,
+GoalSpec, repository inspection, adaptive planning / Fast Path, Codex Planner와 Planning loop,
 TaskDraft → TaskContract, Human constraints preservation, Human Task Approval을 제공한다.
-Harness가 ID와 Goal의 targetRepository를 확정하고 Human constraints를 보존한다.
-Zod validation은 계약의 structural validity이며 semantic correctness 보장은 아니다.
+Planning 자체보다 실행 전 explicit contract boundary가 핵심이다. Zod는 structural validity를 검증한다.
+Goal flow의 Task Approval과 실행 후 Review / Apply / Commit / Push / Cleanup을 구분한다.
+명시적 JSON execute는 Planning / Task Approval을 거치지 않는 별도 경로다.
 
-확실한 단일 textual edit는 0-round Fast Path를 사용하고 나머지는 Planner로 fallback한다.
-Goal flow는 승인 전 실행하지 않으며 명시적 JSON execute 경로는 별도 Task Approval을 거치지 않는다.
-실행 후 Change Review / Apply / Commit / Push / Cleanup은 서로 다른 결정으로 제공된다.
-Planning 자체를 범용 planning engine의 차별점으로 과장하지 않는다.
+## v2 — Governed Independent Decision
 
-## Foundation — Governance Decision Records
+> 동일 RepositorySnapshot과 Goal, 제한된 Context / authority 아래 Specialist들의 독립 판단을 구조화하고 근거를 확인할 수 있는가?
 
-> 판단의 Repository 기준, Evidence와 Human 결정 근거를 실행 로그와 구분하여 추적할 수 있는가?
+상태: **Implemented**. 실제 interactive Codex E2E도 확인되었으며 단일 관찰 기록은
+[README의 v2 E2E](../README.md#v2-실제-e2e-기록)에만 둔다.
 
-상태: **Planned**. 범용 Durable Shared State를 자체 구현하는 단계가 아니다.
+RepositorySnapshot, commit 기반 Context loading, SpecialistDefinition / Authority / Context,
+Zod 기반 AgentDecision / EvidenceReference와 Codex Specialist runtime이 구현되었다.
+`runDecision()`은 명시적 파일과 Frontend / UX 역할을 구성하고 `runIndependentDecisions()`로 연결한다.
+현재 CLI는 두 Specialist를 순차 실행하며 같은 Goal / commit과 supplied files를 제공한다.
 
-우선 필요한 것은 repository provenance, structured AgentDecision, Evidence references,
-Human governance history다. 현재 base commit / patch / result.json은 출발점이지만 Decision 모델이나
-후속 Human 이력 저장소는 아니다. 저장되는 개발 도메인 의미와 generic persistence mechanism을 구분한다.
+### 확인된 조건과 한계
 
-### Exit Criteria
+- Clean Repository에서 Snapshot을 capture하고 해당 commit의 Git blob에서 Context를 읽는다.
+- 각 Specialist 실행 전후 Snapshot을 assert하며 다른 Specialist의 Decision을 Context에 넣지 않는다.
+- Runtime은 read-only / context-only authority와 제한된 capability 설정으로 실행한다.
+- Harness가 Specialist identity를 주입하고 strict JSON schema 및 supplied Context의 Evidence path / line을 검증한다.
+- 실패 시 이후 실행을 중단하며 partial result를 반환하지 않는다. 결과는 터미널에 표시한다.
+- Same Goal / Same Snapshot / Limited Context / Read-only Authority / Independent Decisions /
+  Structured AgentDecision / Validated Evidence / CLI integration이 연결되었다.
 
-- RepositorySnapshot이 기준 commit과 비교에 영향을 주는 실제 상태·Context 출처를 식별할 수 있다.
-- AgentDecision의 recommendation / evidence references / risk / uncertainty를 구조화할 수 있다.
-- Evidence reference가 실제 repository observation 또는 verification 결과까지 이어진다.
-- Human 결정의 대상·권한·이유·결과를 추적하며 Repository rollback과 판단 이력 보존을 구분한다.
-- DecisionRound / DecisionRun은 각각 비교 단위 / audit lifecycle의 고유 의미가 필요할 때만 채택한다.
-  단순 runtime step / session ID의 복제라면 만들지 않는다.
+현재 Comparison / Synthesis, 병렬 실행, 자동 Context selection, discussion, Decision persistence는 없다.
+Snapshot assert는 시점 검사이며 lock이 아니고 Evidence 존재 검증은 판단 정확성 검증이 아니다.
+정확한 runtime 경계는 [Architecture](architecture.md#4-current-responsibility-boundaries)에 둔다.
 
-저장 형식·backend·ID 설계는 미정이다. Database, generic memory, queue, scheduler,
-checkpoint / crash resume, automatic retry / rollback을 선행 구현하지 않는다.
+## Cross-cutting Foundation
 
-## v2 — Governed Independent Decisions
+기존 별도 Planned Foundation의 Repository provenance, AgentDecision, EvidenceReference와 Context /
+Authority 기반은 **v0–v2를 통해 부분적으로 확립**되었으므로 v2 앞의 별도 단계로 두지 않는다.
+Execution artifacts와 메모리상의 Decision 결과를 장기 governance record 저장소로 혼동하지 않는다.
 
-> 동일 Repository state와 명시된 Context / authority 조건 아래 여러 Specialist의 판단을 독립적이고 추적 가능한 record로 만들 수 있는가?
+Human governance history, long-lived governance records는 아직 미구현이다. DecisionRound는 같은 Snapshot
+아래 Decision을 묶는 고유 비교 단위가 실제로 필요할 때, DecisionRun은 Goal부터 Human governance
+결과까지의 고유 audit lifecycle이 필요할 때만 검토한다. Framework run/session/step의 복제라면 만들지 않는다.
+이름·schema·저장 backend를 미래 구현 약속으로 확정하지 않는다.
 
-상태: **Planned**. Multi-agent scheduling이나 parallel execution 자체는 목표가 아니다.
+## v3 — Agreement / Conflict — Structured Decision Comparison
 
-같은 비교 단위의 Specialist가 같은 RepositorySnapshot을 기준으로 판단하고, 서로의 Decision을
-보기 전에 독립 record를 생성하는 조건을 검증한다. Context는 역할과 Task에 필요한 범위로 제공하고
-출처를 기록한다. 전체 대화 로그의 공유를 협업 기반으로 삼지 않는다.
+> Independent AgentDecision[]을 근거 중심으로 비교하여 Agreement / Conflict / Trade-off / Uncertainty를 표현할 수 있는가?
 
-### Exit Criteria
+상태: **Next / Planned**. Multi-Agent 실행 자체보다 비교의 Domain Language가 과제다.
 
-- 2개 이상의 Specialist 판단이 동일 commit과 비교 가능한 실제 Repository state에 연결된다.
-- 각 역할의 Context / authority 조건과 독립 판단 여부를 확인할 수 있다.
-- Reviewer 역할에는 Repository write authority가 없다. Prompt 설명과 실제 enforcement를 구분한다.
-- 각 결과가 AgentDecision으로 기록되고 Evidence provenance와 uncertainty를 추적할 수 있다.
-- 순차 실행으로도 domain 조건을 검증할 수 있다. 병렬 scheduling이 필요하면 기존 기술을 먼저 평가한다.
+```text
+Independent AgentDecision[]
+           ↓
+Structured Comparison
+├─ Agreement
+├─ Conflict
+├─ Trade-off
+└─ Uncertainty
+```
 
-Specialist 수, 역할 목록, runtime과 호출 방식은 미정이며 별도 Coordinator 구현을 전제하지 않는다.
+### 먼저 답할 Domain 질문
 
-## v3 — Decision Comparison
+- Agreement는 어떤 동일 문제·판단·Evidence 조건에서 성립하는가?
+- Conflict는 어떤 조건에서 성립하며 표현 차이와 실제 판단 충돌을 어떻게 구분하는가?
+- 서로 다른 Concern을 말하는 Decision은 충돌인가, 비교 대상이 다른가?
+- Evidence가 다르면 어떻게 비교하고 근거의 차이를 드러내는가?
+- Evidence 부족은 Conflict 대신 Uncertainty로 표시해야 하는가?
+- Trade-off를 어떤 구조로 표현하고 비교 불가능한 Decision을 어떻게 표시하는가?
 
-> 동일 문제의 독립 Decision들을 Evidence 기준으로 비교하여 Agreement / Conflict / Trade-off / uncertainty를 설명할 수 있는가?
-
-상태: **Planned**.
-
-Conflict는 단순 문장 차이가 아니라 incompatible recommendation, evidence 해석 또는 trade-off의
-충돌이다. 비교 조건이 다른 Decision이나 근거 부족을 억지로 합의·충돌로 분류하지 않는다.
-
-### Exit Criteria
-
-- Agreement / Conflict / Trade-off / uncertainty가 원래 Decision과 비교 대상 문제에 연결된다.
-- Evidence의 출처·검증 범위·충분성 차이를 표현하고 비교 불가능한 조건을 표시할 수 있다.
-- Raw response 나열보다 Human 판단에 필요한 차이를 설명할 수 있다.
-- 알려진 충돌과 표현만 다른 사례로 분류의 유용성과 오류를 확인한다.
-
-## v4 — Explainable Synthesis / Human Governance
-
-> 여러 Decision과 Evidence를 종합한 recommendation의 근거와 Human 판단이 필요한 이유를 설명할 수 있는가?
-
-상태: **Planned**. CEO Agent 구현 자체를 성공 기준으로 삼지 않는다.
-
-Evidence 기반 recommendation, conflict / trade-off, unresolved uncertainty, escalation과
-Human approve / override / reject를 다룬다. 종합 책임은 필요하지만 구현은 deterministic function,
-하나의 LLM call, framework supervisor, 별도 Agent 중 나중에 선택한다.
+> Conflict는 단순 textual disagreement가 아니라 evidence-backed disagreement여야 한다.
 
 ### Exit Criteria
 
-- Recommendation이 원래 AgentDecision / Evidence / Verification까지 추적 가능하다.
-- 해결되지 않은 conflict, 근거 부족, scope / authority 변경 등 Human escalation 조건을 설명한다.
-- Human approve / override / reject의 대상과 이유를 기록하고 후속 권한과 구분한다.
-- 기존 Task Approval / Change Review / Apply / Commit / Push의 권한 분리를 보존한다.
-- Human merge / release authority를 대체하지 않으며 구현 방식의 이득과 비용을 확인한다.
+- 비교 단위·Concern·근거와 조건을 명시하고 Agreement / Conflict / Trade-off / Uncertainty의 의미를 검증한다.
+- 비교 결과가 원래 Decision과 Evidence로 이어지고, 근거 부족·비교 불가능성을 표시한다.
+- 알려진 실제 충돌, 표현만 다른 판단, 서로 다른 Concern, 불충분한 Evidence 사례로 유용성과 오류를 확인한다.
+- 현재 독립 판단 입력에서 구조화된 비교 출력까지 E2E로 확인한다.
 
-CEO / Staffing / Control Plane / Coordinator를 독립 조직 runtime으로 구현하는 목표는 두지 않는다.
+Agreement / Conflict / Trade-off schema와 ComparisonResult라는 이름은 아직 미확정이다.
+CEO / Coordinator, free-form discussion, shared memory, consensus chat, generic graph runtime,
+automatic conflict resolution, unbounded re-query, OPA / Temporal 도입이나 LangGraph / CrewAI 재작성은
+v3 구현 목표로 확정하지 않는다. 필요 범위를 Domain 설계에서 먼저 정한다.
+
+## Runtime Framework Evaluation
+
+상태: **향후 architecture checkpoint**. 별도 제품 version이나 현재 구현 작업이 아니다.
+
+Make vs Adopt 경계 정리 → v3 Domain 설계 → v3 구현 / E2E → 작은 runtime spike →
+v4부터 가치가 확인된 runtime의 선택적 채택 순서를 따른다.
+
+> v3까지 AI Workspace의 Domain Language를 확정하고, v4부터 범용 Agent Runtime 문제가 실제로
+> 등장하는 시점에 Framework를 평가·도입한다.
+
+실행 모델을 맡길 구체적인 요구가 있어야 채택한다. 모든 범용 기술을 직접 만든 뒤 붙이는 전략도,
+처음부터 framework의 domain model에 맞추는 전략도 아니다. 필요한 library는 v3 중에도 평가·사용할 수 있다.
+공통 판단 기준은 [Design Decision Filter](project-direction.md#design-decision-filter)를 따른다.
+
+예를 들어 향후 `spike/agents-sdk-runtime` 같은 격리된 실험에서 현재 `runCodexSpecialist()`와 같은
+Domain Input / Output 책임을 가진 Agents SDK prototype을 비교할 수 있다. 이 branch나 prototype은
+아직 만들지 않았고 OpenAI Agents SDK를 채택한 것도 아니다.
+
+### 평가 기준
+
+- Harness control ownership과 Domain Input / Output 보존
+- Context isolation, structured output, tool governance와 guardrails
+- Tracing, HITL과 실제 workflow 요구 충족 여부
+- Framework coupling, runtime complexity, performance, maintainability
+
+가치가 확인되지 않으면 현재 구현을 유지한다. 두 번째 runtime의 실제 필요 전에는 generic
+SpecialistRunner interface, provider registry, runtime abstraction layer를 만들지 않는다.
+기술별 평가 시점은 [도입 원칙](project-direction.md#외부-기술과의-관계-및-도입-시점)에 둔다.
+
+## v4 — CEO Governance / Explainable Synthesis / Human Governance
+
+> Comparison 결과로 설명 가능한 recommendation을 만들고 Human이 판단할 대상과 이유를 드러낼 수 있는가?
+
+상태: **Planned**. CEO Governance는 종합 책임을 가리키며 별도 CEO Agent 구현이 성공 기준은 아니다.
+
+```text
+Decision Comparison
+→ Evidence-backed recommendation
+→ Unresolved conflict / trade-off / uncertainty 표시
+→ 필요한 Human escalation
+→ approve / override / reject
+```
+
+### Exit Criteria
+
+- Recommendation이 원래 AgentDecision / Evidence / 관련 Verification까지 추적 가능하다.
+- 해결되지 않은 충돌, 근거 부족, scope / authority 변경 등 escalation 조건을 설명한다.
+- Approve / override / reject의 대상·권한·이유·결과를 구분한다.
+- 기존 Task Approval / Change Review / Apply / Commit / Push의 권한 분리와 Human merge / release 권한을 보존한다.
+
+구현은 deterministic function, single LLM call, Agents SDK runtime, framework supervisor, 별도 CEO Agent
+중 미정이다. v3 이후 평가 결과와 tool guardrail / HITL 등의 실제 요구로 선택한다.
+Coordinator나 Staffing을 독립 조직 runtime으로 만드는 약속도 아니다.
 
 ## v5 — Evaluation
 
-> 어떤 작업과 조건에서 Governed Multi-Agent가 Single-Agent 대비 판단 품질과 Human 신뢰에 기여하며, 그 비용은 무엇인가?
+> 어떤 조건에서 Governed Multi-Agent가 Single-Agent 대비 판단 품질과 Human 신뢰에 기여하며, 비용은 무엇인가?
 
 상태: **Planned**. Multi-Agent 우위를 가정하지 않는다.
 
-동일한 Repository 기준, Goal, Context / authority 조건, verification과 평가 기준을 명시한다.
-Agent 수 외에 모델·Context·예산이 달라지는 경우 그 차이를 기록하고 효과를 혼동하지 않는다.
+동일 Repository 기준, Goal, Context / authority, verification과 평가 조건을 명시한다.
+Agent 수 외에 모델·Context·예산이 다르면 차이를 기록하고 효과를 혼동하지 않는다.
 
 ### Exit Criteria
 
-- Single-Agent와 Governed Multi-Agent를 재현 가능한 비교 조건 아래 평가할 수 있다.
-- Quality / acceptance 충족 평가, verification pass rate, scope violation, 변경 범위의 적절성을 구분한다.
-- Latency, token-cost, Human intervention과 conflict detection value를 실제 데이터로 평가한다.
-- 충돌을 더 많이 보고하는 것만으로 성공을 판단하지 않고 유용한 발견과 오탐의 비용을 확인한다.
-- 이득이 없거나 비용이 더 큰 조건도 기록해 Single-Agent 유지 여부를 판단할 수 있다.
+- 재현 가능한 조건 아래 Single-Agent와 Governed Multi-Agent를 비교한다.
+- Quality / acceptance 충족, verification pass rate, scope violation과 변경 범위의 적절성을 구분한다.
+- Latency / token-cost / Human intervention / conflict detection value를 실제 데이터로 평가한다.
+- 충돌 보고 수보다 유용한 발견과 오탐의 비용을 확인하고 이득이 없는 조건도 기록한다.
 
-현재 duration telemetry와 README의 관찰된 E2E 기록은 있지만 이 비교 평가 전체는 미구현이다.
-README 수치를 Multi-Agent 효과나 일반적인 생산성 보장의 증거로 사용하지 않는다.
+현재 duration telemetry와 단일 E2E 관찰은 있지만 이 비교 평가 전체는 미구현이다.
+E2E 수치를 협업 우위나 생산성 보장의 증거로 사용하지 않는다.
 
-## Cross-cutting Adoption Checkpoint
+## Later — Requirement-driven Infrastructure
 
-각 단계에서 generic infrastructure 필요가 생기면 custom implementation 전에
-[Design Decision Filter](project-direction.md#design-decision-filter)를 적용한다.
-
-- 현재 막힌 검증 질문과 필요한 범용 capability를 먼저 기록한다.
-- 기존 framework / library / infrastructure / tool 후보가 domain boundary를 보존하는지 평가한다.
-- Framework의 run / step / checkpoint를 그대로 domain model로 복제하지 않는다.
-- 실제 요구가 없으면 도입을 미룬다. 직접 구현은 고유한 governance 의미나 연구 질문을 근거로 제한한다.
-- Process crash recovery / durable scheduling / resumable workflow가 필요해지면 기존 실행 기반을 평가한다.
-  Governance records의 보존을 generic durable execution engine 구축으로 확대하지 않는다.
-
-후보 기술 목록은 Project Direction에서만 관리한다. 특정 vendor, 저장소, runtime, supervisor 방식은
-현재 필수 dependency가 아니며 이번 roadmap으로 채택하지 않는다.
+OPA는 authority 규칙의 동적 복잡성이 증가할 때, Temporal / Restate는 장기 HITL, crash recovery,
+durable scheduling / retry / checkpoint 요구가 생길 때만 평가한다. 현재 도입하지 않는다.
+메모리상 Agent 상태 재개와 전체 workflow durability를 구분하며, domain records 보존을 generic durable
+engine 구축으로 확대하지 않는다. Ownership과 시점은 Project Direction을 기준으로 판단한다.

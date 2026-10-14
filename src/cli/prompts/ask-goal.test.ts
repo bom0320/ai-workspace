@@ -22,7 +22,7 @@ describe("askGoal", () => {
   it("reads and trims repository and objective input", async () => {
     const close = supplyLines([" . ", " Clarify README "]);
     expect(await askGoal()).toEqual({ repositoryPath: ".", objective: "Clarify README" });
-    expect(console.log).toHaveBeenCalledWith("AI Workspace");
+    expect(console.log).not.toHaveBeenCalledWith("AI Workspace");
     expect(console.log).toHaveBeenCalledWith("Repository:\n> ");
     expect(console.log).toHaveBeenCalledWith("Goal:\n> ");
     expect(close).toHaveBeenCalledOnce();

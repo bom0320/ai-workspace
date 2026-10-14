@@ -491,6 +491,7 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
         const child = spawn(process.execPath, args, options);
         let stdout = "";
         let stderr = "";
+        let workflowSent = false;
         let repositorySent = false;
         let goalSent = false;
         let approvalSent = false;
@@ -503,6 +504,10 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
         const timer = setTimeout(() => { child.kill(); reject(new Error("Interactive CLI timed out")); }, 15_000);
         child.stdout.on("data", (chunk) => {
           stdout += chunk.toString();
+          if (!workflowSent && stdout.includes("4. Execute existing task")) {
+            workflowSent = true;
+            child.stdin.write("1\n");
+          }
           if (!repositorySent && stdout.includes("Repository:\n>")) {
             repositorySent = true;
             child.stdin.write(` ${repositoryRoot} \n`);

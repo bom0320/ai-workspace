@@ -6,7 +6,6 @@ export type GoalInput = {
 };
 
 export async function askGoal(): Promise<GoalInput> {
-  console.log("AI Workspace");
   const reader = createInterface({ input: process.stdin, output: process.stdout });
   const lines = reader[Symbol.asyncIterator]();
   async function readRequired(label: string): Promise<string> {

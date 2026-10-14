@@ -4,6 +4,11 @@ export type {
   SpecialistAuthority,
 } from "./model/authority.js";
 export type { SpecialistDefinition } from "./model/specialist.js";
+export type { SpecialistContext } from "./protocol/context.js";
+export type {
+  AgentDecision,
+  EvidenceReference,
+} from "./protocol/decision.js";
 export {
   captureRepositorySnapshot,
   assertRepositoryMatchesSnapshot,

@@ -6,6 +6,7 @@ import type { RepositorySnapshot } from "../model/snapshot.js";
 import type { AgentDecision } from "../protocol/decision.js";
 import { runCodexSpecialist } from "../specialist/codex-specialist.js";
 import { assertRepositoryMatchesSnapshot } from "./repository-snapshot.js";
+import { validateDecisionEvidence } from "./validate-evidence.js";
 import {
   runIndependentDecisions,
   type IndependentDecisionInput,
@@ -13,9 +14,11 @@ import {
 
 vi.mock("../specialist/codex-specialist.js", () => ({ runCodexSpecialist: vi.fn() }));
 vi.mock("./repository-snapshot.js", () => ({ assertRepositoryMatchesSnapshot: vi.fn() }));
+vi.mock("./validate-evidence.js", () => ({ validateDecisionEvidence: vi.fn() }));
 
 const runSpecialistMock = vi.mocked(runCodexSpecialist);
 const assertSnapshotMock = vi.mocked(assertRepositoryMatchesSnapshot);
+const validateEvidenceMock = vi.mocked(validateDecisionEvidence);
 const snapshot: RepositorySnapshot = { repositoryRoot: "/repositories/example", commitSha: "abc123" };
 const goal: GoalSpec = { objective: "Evaluate this UI change", targetRepository: "example" };
 const inputs: IndependentDecisionInput[] = [
@@ -41,6 +44,7 @@ const decisions: AgentDecision[] = inputs.map(({ specialist }) => ({
 }));
 
 beforeEach(() => {
+  validateEvidenceMock.mockReset();
   assertSnapshotMock.mockReset();
   runSpecialistMock.mockReset();
   runSpecialistMock.mockResolvedValueOnce(decisions[0]).mockResolvedValueOnce(decisions[1]);
@@ -81,9 +85,10 @@ describe("runIndependentDecisions", () => {
     expect({ snapshot, goal, inputs }).toEqual(before);
   });
 
-  it("validates Snapshot before and after every Specialist", async () => {
+  it("validates Snapshot before and after every Specialist, then validates Evidence", async () => {
     const events: string[] = [];
     assertSnapshotMock.mockImplementation(() => { events.push("assert"); });
+    validateEvidenceMock.mockImplementation((_context, decision) => { events.push(`evidence:${decision.specialistId}`); });
     runSpecialistMock.mockReset();
     runSpecialistMock.mockImplementation(async (specialist) => {
       events.push(specialist.id);
@@ -92,7 +97,7 @@ describe("runIndependentDecisions", () => {
 
     await runIndependentDecisions(snapshot, goal, inputs);
 
-    expect(events).toEqual(["assert", "frontend", "assert", "assert", "ux", "assert"]);
+    expect(events).toEqual(["assert", "frontend", "assert", "evidence:frontend", "assert", "ux", "assert", "evidence:ux"]);
     expect(assertSnapshotMock).toHaveBeenCalledTimes(4);
     for (const [actualSnapshot] of assertSnapshotMock.mock.calls) expect(actualSnapshot).toBe(snapshot);
   });
@@ -121,6 +126,7 @@ describe("runIndependentDecisions", () => {
     await expect(runIndependentDecisions(snapshot, goal, inputs)).rejects.toBe(error);
     expect(runSpecialistMock).toHaveBeenCalledTimes(1);
     expect(assertSnapshotMock).toHaveBeenCalledTimes(2);
+    expect(validateEvidenceMock).not.toHaveBeenCalled();
   });
 
   it("stops before the next Specialist if its pre-run Snapshot check fails", async () => {
@@ -164,6 +170,36 @@ describe("runIndependentDecisions", () => {
     const options = { timeoutMs: 1234 };
     await runIndependentDecisions(snapshot, goal, inputs, options);
     for (const call of runSpecialistMock.mock.calls) expect(call[2]).toBe(options);
+  });
+
+  it("validates each Decision against the exact Context supplied to its Specialist", async () => {
+    await runIndependentDecisions(snapshot, goal, inputs);
+
+    expect(validateEvidenceMock).toHaveBeenCalledTimes(2);
+    for (const [index, [context, decision]] of validateEvidenceMock.mock.calls.entries()) {
+      expect(context).toBe(runSpecialistMock.mock.calls[index][1]);
+      expect(decision).toBe(decisions[index]);
+    }
+  });
+
+  it("stops before the next Specialist when Evidence validation fails", async () => {
+    const error = new Error("Evidence path was not supplied to the Specialist");
+    validateEvidenceMock.mockImplementationOnce(() => { throw error; });
+
+    await expect(runIndependentDecisions(snapshot, goal, inputs)).rejects.toBe(error);
+    expect(runSpecialistMock).toHaveBeenCalledTimes(1);
+    expect(assertSnapshotMock).toHaveBeenCalledTimes(2);
+    expect(validateEvidenceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects without partial results or later execution after an earlier valid Decision", async () => {
+    const error = new Error("Evidence lineEnd exceeds file line count");
+    validateEvidenceMock.mockImplementationOnce(() => {}).mockImplementationOnce(() => { throw error; });
+    const third = { ...inputs[0], specialist: { ...inputs[0].specialist, id: "third" } };
+
+    await expect(runIndependentDecisions(snapshot, goal, [...inputs, third])).rejects.toBe(error);
+    expect(runSpecialistMock).toHaveBeenCalledTimes(2);
+    expect(validateEvidenceMock).toHaveBeenCalledTimes(2);
   });
 
   it("uses empty default options", async () => {

@@ -21,3 +21,4 @@ export {
   runIndependentDecisions,
   type IndependentDecisionInput,
 } from "./flow/run-independent-decisions.js";
+export { validateDecisionEvidence } from "./flow/validate-evidence.js";

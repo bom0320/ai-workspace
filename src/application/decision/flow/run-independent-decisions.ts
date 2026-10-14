@@ -10,6 +10,7 @@ import {
   type CodexSpecialistOptions,
 } from "../specialist/codex-specialist.js";
 import { assertRepositoryMatchesSnapshot } from "./repository-snapshot.js";
+import { validateDecisionEvidence } from "./validate-evidence.js";
 
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;
@@ -40,6 +41,7 @@ export async function runIndependentDecisions(
     assertRepositoryMatchesSnapshot(snapshot);
     const decision = await runCodexSpecialist(input.specialist, context, options);
     assertRepositoryMatchesSnapshot(snapshot);
+    validateDecisionEvidence(context, decision);
     decisions.push(decision);
   }
   return decisions;

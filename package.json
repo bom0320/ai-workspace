@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts",
     "plan": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts plan",
+    "decision": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts decision",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

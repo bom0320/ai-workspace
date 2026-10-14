@@ -13,3 +13,7 @@ export {
   captureRepositorySnapshot,
   assertRepositoryMatchesSnapshot,
 } from "./flow/repository-snapshot.js";
+export {
+  runCodexSpecialist,
+  type CodexSpecialistOptions,
+} from "./specialist/codex-specialist.js";

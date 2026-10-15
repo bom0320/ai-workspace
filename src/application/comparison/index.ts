@@ -12,3 +12,7 @@ export {
   type ComparisonPayload,
 } from "./protocol/comparison.js";
 export { validateComparisonReferences } from "./flow/validation/validate-references.js";
+export {
+  runCodexComparator,
+  type CodexComparatorOptions,
+} from "./comparator/codex-comparator.js";

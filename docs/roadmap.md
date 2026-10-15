@@ -10,7 +10,7 @@
 | v0 | Safe Execution | Implemented |
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
-| v3 | Agreement / Conflict — Structured Decision Comparison | Next / Planned |
+| v3 | Agreement / Conflict — Structured Decision Comparison | Next / Domain Model v0 시작, 실행 흐름은 Planned |
 | Architecture checkpoint | Runtime Framework Evaluation | Planned, v3 구현 / E2E 이후·v4 구현 방식 선택 전 |
 | v4 | CEO Governance / Explainable Synthesis / Human Governance | Planned, 별도 CEO Agent는 미확정 |
 | v5 | Evaluation | Planned |
@@ -80,16 +80,14 @@ Human governance history, long-lived governance records는 아직 미구현이�
 
 > Independent AgentDecision[]을 근거 중심으로 비교하여 Agreement / Conflict / Trade-off / Uncertainty를 표현할 수 있는가?
 
-상태: **Next / Planned**. Multi-Agent 실행 자체보다 비교의 Domain Language가 과제다.
+상태: **Next / Domain Model v0 시작**. 실행 흐름은 Planned이며 Multi-Agent 실행 자체보다 비교의 Domain Language가 과제다.
 
 ```text
 Independent AgentDecision[]
            ↓
 Structured Comparison
-├─ Agreement
-├─ Conflict
-├─ Trade-off
-└─ Uncertainty
+├─ Findings: Agreement / Conflict / Trade-off
+└─ Gaps: Uncertainty / Limitation / Separate Concern
 ```
 
 ### 먼저 답할 Domain 질문
@@ -110,7 +108,9 @@ Structured Comparison
 - 알려진 실제 충돌, 표현만 다른 판단, 서로 다른 Concern, 불충분한 Evidence 사례로 유용성과 오류를 확인한다.
 - 현재 독립 판단 입력에서 구조화된 비교 출력까지 E2E로 확인한다.
 
-Agreement / Conflict / Trade-off schema와 ComparisonResult라는 이름은 아직 미확정이다.
+Comparison Domain Model v0의 type-only 구조를 추가했다. ComparisonResult는 findings와 gaps를 분리하고,
+Position은 specialistId와 원본 Decision의 evidenceIndexes를 참조한다. Concern은 string이며
+Comparator / runtime / Zod schema / reference validation / flow / CLI는 아직 미구현이다.
 CEO / Coordinator, free-form discussion, shared memory, consensus chat, generic graph runtime,
 automatic conflict resolution, unbounded re-query, OPA / Temporal 도입이나 LangGraph / CrewAI 재작성은
 v3 구현 목표로 확정하지 않는다. 필요 범위를 Domain 설계에서 먼저 정한다.

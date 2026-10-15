@@ -195,7 +195,7 @@ framework run/session/step이 core model에 불필요하게 누출되어서는 �
 | SpecialistDefinition / SpecialistAuthority | Current | model/specialist.ts / authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
-| Agreement / Conflict / Trade-off / comparison result | Future, v3 | 의미와 schema·이름은 Domain 설계에서 검증. Conflict는 evidence-backed disagreement |
+| ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Domain Model v0, type-only | application/comparison/model/comparison.ts. Finding은 agreement / conflict / trade-off, Gap은 uncertainty / limitation / separate-concern. Concern은 string, Position은 specialistId와 원본 Decision의 evidenceIndexes로 참조. Comparator / schema / validation / flow는 미구현 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
 | Synthesis / CEO / Coordinator | Future / Conditional | 종합·escalation 책임과 별도 Agent 구현 여부를 구분. Runtime 평가 후 선택 |
@@ -416,6 +416,10 @@ Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이�
 src/
 ├─ cli/  # operator adapter; 세부 구조는 CLI 문서 참조
 ├─ application/
+│  ├─ comparison/  # Domain Model v0만 존재; 실행 use-case는 미구현
+│  │  ├─ model/
+│  │  │  └─ comparison.ts
+│  │  └─ index.ts
 │  ├─ planning/
 │  │  ├─ flow/
 │  │  │  ├─ plan-task.ts

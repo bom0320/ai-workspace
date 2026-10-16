@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 
-import { goalSpecSchema } from "@/contracts/goal.js";
+import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
 
 import type { AgentDecision } from "../protocol/decision.js";
 import type { RepositorySnapshot } from "../model/snapshot.js";
@@ -16,6 +16,7 @@ export type RunDecisionInput = {
 };
 
 export type RunDecisionResult = {
+  goal: GoalSpec;
   snapshot: RepositorySnapshot;
   decisions: AgentDecision[];
 };
@@ -44,5 +45,5 @@ export async function runDecision({ repositoryPath, objective, filePaths }: RunD
     { specialist: frontendSpecialist, files },
     { specialist: uxSpecialist, files },
   ]);
-  return { snapshot, decisions };
+  return { goal, snapshot, decisions };
 }

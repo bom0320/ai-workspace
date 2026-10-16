@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(selectWorkflow).mockResolvedValue("plan-execute");
   vi.mocked(runExecutionCli).mockResolvedValue(0);
-  vi.mocked(runDecisionCommand).mockResolvedValue({ snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" }, decisions: [] });
+  vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" }, decisions: [] });
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state, rounds: 2 });
@@ -57,7 +57,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 describe("CLI approval boundary", () => {
   it("routes decision independently of Planning, Approval and Execution", async () => {
     const snapshot = { repositoryRoot: "/repositories/example", commitSha: "abc123" };
-    vi.mocked(runDecisionCommand).mockResolvedValue({ snapshot, decisions: [] });
+    vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot, decisions: [] });
     expect(await runCli(["decision", "/repositories/example", "Review UI", "src/button.tsx", "README.md"])).toBe(0);
     expect(runDecisionCommand).toHaveBeenCalledWith({
       repositoryPath: "/repositories/example", objective: "Review UI", filePaths: ["src/button.tsx", "README.md"],

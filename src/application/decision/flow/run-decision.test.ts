@@ -38,11 +38,15 @@ describe("runDecision", () => {
     expect(captureRepositorySnapshot).not.toHaveBeenCalled();
   });
   it("captures the Snapshot, loads explicit files, creates a shared Goal and delegates the two read-only roles", async () => {
-    expect(await runDecision(input)).toEqual({ snapshot, decisions });
+    const result = await runDecision(input);
+    expect(result).toEqual({ goal: { objective: input.objective, targetRepository: "example" }, snapshot, decisions });
     expect(captureRepositorySnapshot).toHaveBeenCalledWith(input.repositoryPath);
     expect(loadSnapshotFiles).toHaveBeenCalledWith(snapshot, input.filePaths);
     expect(runIndependentDecisions).toHaveBeenCalledOnce();
     const [actualSnapshot, goal, inputs] = vi.mocked(runIndependentDecisions).mock.calls[0];
+    expect(result.goal).toBe(goal);
+    expect(result.snapshot).toBe(snapshot);
+    expect(result.decisions).toBe(decisions);
     expect(actualSnapshot).toBe(snapshot);
     expect(goal).toEqual({ objective: input.objective, targetRepository: "example" });
     expect(inputs.map(({ specialist }) => specialist)).toEqual([

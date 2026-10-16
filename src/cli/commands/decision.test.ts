@@ -11,7 +11,7 @@ beforeEach(() => { vi.mocked(runDecision).mockReset(); });
 
 describe("runDecisionCommand", () => {
   it("delegates unchanged input and returns the application result", async () => {
-    const result = { snapshot: { repositoryRoot: input.repositoryPath, commitSha: "abc123" }, decisions: [] };
+    const result = { goal: { objective: input.objective, targetRepository: "example" }, snapshot: { repositoryRoot: input.repositoryPath, commitSha: "abc123" }, decisions: [] };
     vi.mocked(runDecision).mockResolvedValue(result);
     expect(await runDecisionCommand(input)).toBe(result);
     expect(runDecision).toHaveBeenCalledOnce();

@@ -4,7 +4,6 @@ import type { AgentDecision } from "../protocol/decision.js";
 import { captureRepositorySnapshot } from "./context/repository-snapshot.js";
 import { loadSnapshotFiles } from "./context/load-snapshot-files.js";
 import { runIndependentDecisions } from "./orchestration/run-independent-decisions.js";
-
 import { runDecision } from "./run-decision.js";
 
 vi.mock("./context/repository-snapshot.js", () => ({ captureRepositorySnapshot: vi.fn() }));

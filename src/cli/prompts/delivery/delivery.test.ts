@@ -1,5 +1,7 @@
 import { createInterface } from "node:readline";
+
 import { afterEach, expect, it, vi } from "vitest";
+
 import { approveCommit, askCommitMessage, approvePush } from "./delivery.js";
 vi.mock("node:readline", () => ({ createInterface: vi.fn() }));
 afterEach(() => vi.restoreAllMocks());

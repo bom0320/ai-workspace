@@ -1,5 +1,6 @@
 import { pushCurrentBranch, PushBlockedError } from "@/infrastructure/git/index.js";
-import { approvePush } from "../../prompts/delivery/delivery.js";
+
+import { approvePush } from "../../prompts/delivery/index.js";
 
 export type PushResult =
   | { status: "pushed" | "skipped" }

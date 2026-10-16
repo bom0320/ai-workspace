@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+
 import { presentComparison } from "./comparison.js";
 
 afterEach(() => { vi.restoreAllMocks(); });

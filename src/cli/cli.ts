@@ -3,17 +3,16 @@ import { pathToFileURL } from "node:url";
 
 import type { RunDecisionInput } from "@/application/decision/index.js";
 import type { PlanningResult } from "@/application/planning/index.js";
-import { runPlanCommand } from "./commands/plan/plan.js";
-import { runDecisionCommand } from "./commands/decision/decision.js";
-import { presentDecisions } from "./presenters/decision/decisions.js";
-import { presentComparison } from "./presenters/decision/comparison.js";
-import { runExecuteCommand, runExecutionCli } from "./commands/execute/execute.js";
-import { approveTask } from "./prompts/workflow/approve-task.js";
-import { askGoal, type GoalInput } from "./prompts/planning/ask-goal.js";
-import { askDecision } from "./prompts/decision/ask-decision.js";
-import { askExecution } from "./prompts/execution/ask-execution.js";
-import { selectWorkflow } from "./prompts/workflow/select-workflow.js";
-import { presentTaskContract } from "./presenters/planning/task-contract.js";
+
+import { runPlanCommand } from "./commands/plan/index.js";
+import { runDecisionCommand } from "./commands/decision/index.js";
+import { presentDecisions, presentComparison } from "./presenters/decision/index.js";
+import { runExecuteCommand, runExecutionCli } from "./commands/execute/index.js";
+import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
+import { askGoal, type GoalInput } from "./prompts/planning/index.js";
+import { askDecision } from "./prompts/decision/index.js";
+import { askExecution } from "./prompts/execution/index.js";
+import { presentTaskContract } from "./presenters/planning/index.js";
 import { presentTiming, type HumanInteractionTiming } from "./presenters/timing.js";
 
 function reportPlanning(result: PlanningResult): boolean {

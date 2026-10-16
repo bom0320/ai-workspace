@@ -3,7 +3,6 @@ import {
   type RunDecisionInput,
   type RunDecisionResult,
 } from "@/application/decision/index.js";
-
 import { compareDecisions, type ComparisonResult } from "@/application/comparison/index.js";
 
 export type DecisionCommandResult = RunDecisionResult & {

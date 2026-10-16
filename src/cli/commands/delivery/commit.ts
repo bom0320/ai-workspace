@@ -1,5 +1,6 @@
 import { stagePaths, commitChanges } from "@/infrastructure/git/index.js";
-import { approveCommit, askCommitMessage } from "../../prompts/delivery/delivery.js";
+
+import { approveCommit, askCommitMessage } from "../../prompts/delivery/index.js";
 
 export type CommitResult =
   | { status: "committed"; commitSha: string }

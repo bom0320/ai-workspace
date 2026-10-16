@@ -1,3 +1,6 @@
+export { compareDecisions } from "./flow/compare-decisions.js";
+export type { CodexComparatorOptions } from "./comparator/codex-comparator.js";
+export type { ComparisonContext } from "./protocol/context.js";
 export type {
   ComparisonRelation,
   ComparisonGapKind,
@@ -6,14 +9,3 @@ export type {
   ComparisonGap,
   ComparisonResult,
 } from "./model/comparison.js";
-export type { ComparisonContext } from "./protocol/context.js";
-export {
-  comparisonPayloadSchema,
-  type ComparisonPayload,
-} from "./protocol/comparison.js";
-export { validateComparisonReferences } from "./flow/validation/validate-references.js";
-export {
-  runCodexComparator,
-  type CodexComparatorOptions,
-} from "./comparator/codex-comparator.js";
-export { compareDecisions } from "./flow/compare-decisions.js";

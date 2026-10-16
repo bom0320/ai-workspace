@@ -1,5 +1,7 @@
 import { createInterface } from "node:readline";
+
 import { afterEach, expect, it, vi } from "vitest";
+
 import { completeReview } from "./review.js";
 vi.mock("node:readline", () => ({ createInterface: vi.fn() }));
 afterEach(() => vi.restoreAllMocks());

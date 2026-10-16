@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { presentTiming } from "./timing.js";
 
 afterEach(() => { vi.restoreAllMocks(); });

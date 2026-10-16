@@ -2,13 +2,14 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 import type { ExecutionResult } from "@/application/execution/index.js";
-import { approveApply } from "../../prompts/delivery/apply-changes.js";
-import { approveCommit, askCommitMessage, approvePush } from "../../prompts/delivery/delivery.js";
+
+import { approveApply, approveCommit, askCommitMessage, approvePush } from "../../prompts/delivery/index.js";
 import { runPostExecutionDelivery } from "./delivery.js";
-vi.mock("../../prompts/delivery/apply-changes.js", () => ({ approveApply: vi.fn() }));
-vi.mock("../../prompts/delivery/delivery.js", () => ({ approveCommit: vi.fn(), askCommitMessage: vi.fn(), approvePush: vi.fn() }));
+vi.mock("../../prompts/delivery/index.js", () => ({ approveApply: vi.fn(), approveCommit: vi.fn(), askCommitMessage: vi.fn(), approvePush: vi.fn() }));
 let root: string;
 let artifacts: string;
 let execution: ExecutionResult;

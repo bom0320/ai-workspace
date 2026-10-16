@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it } from "vitest";
+
 import { getWorkspaceDiff } from "./workspace-diff.js";
 let root: string;
 let base: string;

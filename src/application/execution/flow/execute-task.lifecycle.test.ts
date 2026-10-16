@@ -2,10 +2,13 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, expect, it, vi } from "vitest";
+
 import type { TaskContract } from "@/contracts/task.js";
 import { createExecutionRun } from "@/services/artifacts/index.js";
 import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
+
 import { executeTask } from "./execute-task.js";
 vi.mock("../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn(async (_task, workspace: string) => {
   writeFileSync(join(workspace, "README.md"), "Worker updated introduction\n"); return "Updated introduction";

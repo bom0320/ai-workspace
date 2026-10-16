@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runCodexWorker } from "../worker/codex-worker.js";
 import type { TaskContract } from "@/contracts/task.js";
 import {
   createExecutionRun,
@@ -14,8 +13,10 @@ import {
   removeExecutionWorkspace,
 } from "@/infrastructure/git/index.js";
 import { checkScope } from "@/services/scope/index.js";
-import { executeTask } from "./execute-task.js";
 import { runVerification } from "@/services/verification/index.js";
+
+import { runCodexWorker } from "../worker/codex-worker.js";
+import { executeTask } from "./execute-task.js";
 
 vi.mock("../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
 vi.mock("@/services/artifacts/index.js", () => ({

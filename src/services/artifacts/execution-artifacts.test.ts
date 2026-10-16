@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { TaskContract } from "@/contracts/task.js";
+
 import {
   createExecutionRun,
   getExecutionBaseCommit,

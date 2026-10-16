@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runDecision, type RunDecisionResult } from "@/application/decision/index.js";
 import { compareDecisions, type ComparisonResult } from "@/application/comparison/index.js";
+
 import { runDecisionCommand } from "./decision.js";
 
 vi.mock("@/application/decision/index.js", () => ({ runDecision: vi.fn() }));

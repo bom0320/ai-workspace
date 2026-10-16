@@ -2,7 +2,8 @@ import { basename, resolve } from "node:path";
 
 import { planTask, type PlanningResult } from "@/application/planning/index.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
-import type { GoalInput } from "../../prompts/planning/ask-goal.js";
+
+import type { GoalInput } from "../../prompts/planning/index.js";
 
 export function runPlanCommand({ repositoryPath, objective }: GoalInput): Promise<PlanningResult> {
   if (!repositoryPath?.trim()) {

@@ -2,11 +2,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 import type { ExecutionResult } from "@/application/execution/index.js";
-import { approveApply } from "../../prompts/delivery/apply-changes.js";
+
+import { approveApply } from "../../prompts/delivery/index.js";
 import { runApplyCommand } from "./apply.js";
-vi.mock("../../prompts/delivery/apply-changes.js", () => ({ approveApply: vi.fn() }));
+vi.mock("../../prompts/delivery/index.js", () => ({ approveApply: vi.fn() }));
 let root: string;
 let artifacts: string;
 let result: ExecutionResult;

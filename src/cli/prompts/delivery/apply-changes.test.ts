@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { approveApply } from "./apply-changes.js";

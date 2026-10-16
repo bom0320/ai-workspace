@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TaskContract } from "@/contracts/task.js";
+
 import { presentTaskContract } from "./task-contract.js";
 
 afterEach(() => { vi.restoreAllMocks(); });

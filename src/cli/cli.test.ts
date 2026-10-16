@@ -4,31 +4,28 @@ import { planTask, type PlanningState } from "@/application/planning/index.js";
 import { executeTask } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import type { TaskContract } from "@/contracts/task.js";
-import { approveTask } from "./prompts/workflow/approve-task.js";
-import { askGoal } from "./prompts/planning/ask-goal.js";
+
+import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
+import { askGoal } from "./prompts/planning/index.js";
 import { runCli } from "./cli.js";
-import { selectWorkflow } from "./prompts/workflow/select-workflow.js";
-import { askDecision } from "./prompts/decision/ask-decision.js";
-import { askExecution } from "./prompts/execution/ask-execution.js";
-import { runExecutionCli } from "./commands/execute/execute.js";
-import { runDecisionCommand } from "./commands/decision/decision.js";
-import { presentDecisions } from "./presenters/decision/decisions.js";
-import { presentComparison } from "./presenters/decision/comparison.js";
+import { askDecision } from "./prompts/decision/index.js";
+import { askExecution } from "./prompts/execution/index.js";
+import { runExecutionCli } from "./commands/execute/index.js";
+import { runDecisionCommand } from "./commands/decision/index.js";
+import { presentDecisions, presentComparison } from "./presenters/decision/index.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({ resolveRepositoryRoot: vi.fn() }));
-vi.mock("./prompts/workflow/approve-task.js", () => ({ approveTask: vi.fn() }));
-vi.mock("./prompts/planning/ask-goal.js", () => ({ askGoal: vi.fn() }));
-vi.mock("./commands/decision/decision.js", () => ({ runDecisionCommand: vi.fn() }));
-vi.mock("./presenters/decision/decisions.js", () => ({ presentDecisions: vi.fn() }));
-vi.mock("./presenters/decision/comparison.js", () => ({ presentComparison: vi.fn() }));
+vi.mock("./prompts/workflow/index.js", () => ({ approveTask: vi.fn(), selectWorkflow: vi.fn() }));
+vi.mock("./prompts/planning/index.js", () => ({ askGoal: vi.fn() }));
+vi.mock("./commands/decision/index.js", () => ({ runDecisionCommand: vi.fn() }));
+vi.mock("./presenters/decision/index.js", () => ({ presentDecisions: vi.fn(), presentComparison: vi.fn() }));
 
-vi.mock("./prompts/workflow/select-workflow.js", () => ({ selectWorkflow: vi.fn() }));
-vi.mock("./prompts/decision/ask-decision.js", () => ({ askDecision: vi.fn() }));
-vi.mock("./prompts/execution/ask-execution.js", () => ({ askExecution: vi.fn() }));
-vi.mock("./commands/execute/execute.js", async () => ({
-  ...await vi.importActual<typeof import("./commands/execute/execute.js")>("./commands/execute/execute.js"),
+vi.mock("./prompts/decision/index.js", () => ({ askDecision: vi.fn() }));
+vi.mock("./prompts/execution/index.js", () => ({ askExecution: vi.fn() }));
+vi.mock("./commands/execute/index.js", async () => ({
+  ...await vi.importActual<typeof import("./commands/execute/index.js")>("./commands/execute/index.js"),
   runExecutionCli: vi.fn(),
 }));
 

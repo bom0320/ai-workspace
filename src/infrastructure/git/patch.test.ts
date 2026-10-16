@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it } from "vitest";
+
 import { applyPatch, isRepositoryClean, PatchApplyError } from "./patch.js";
 
 let root: string;

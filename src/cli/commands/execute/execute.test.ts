@@ -3,17 +3,17 @@ import { ZodError } from "zod";
 
 import type { TaskContract } from "@/contracts/task.js";
 import { loadTaskContract } from "@/contracts/task-loader.js";
-import type { ExecutionResult } from "@/application/execution/index.js";
-import { executeTask } from "@/application/execution/index.js";
+import { type ExecutionResult, executeTask } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
-import { runReviewStage } from "../review/review.js";
-import { runWorkspaceCleanup } from "../cleanup/workspace-cleanup.js";
-import { runPostExecutionDelivery } from "../delivery/delivery.js";
+
+import { runReviewStage } from "../review/index.js";
+import { runWorkspaceCleanup } from "../cleanup/index.js";
+import { runPostExecutionDelivery } from "../delivery/index.js";
 import { runExecutionCli as runCli } from "./execute.js";
 
-vi.mock("../review/review.js", () => ({ runReviewStage: vi.fn() }));
-vi.mock("../cleanup/workspace-cleanup.js", () => ({ runWorkspaceCleanup: vi.fn() }));
-vi.mock("../delivery/delivery.js", () => ({ runPostExecutionDelivery: vi.fn() }));
+vi.mock("../review/index.js", () => ({ runReviewStage: vi.fn() }));
+vi.mock("../cleanup/index.js", () => ({ runWorkspaceCleanup: vi.fn() }));
+vi.mock("../delivery/index.js", () => ({ runPostExecutionDelivery: vi.fn() }));
 vi.mock("@/contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({

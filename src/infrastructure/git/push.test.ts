@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it } from "vitest";
+
 import { getCurrentBranch, pushCurrentBranch } from "./push.js";
 let temporaryRoot: string;
 let root: string;

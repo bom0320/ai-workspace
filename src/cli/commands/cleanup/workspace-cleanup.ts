@@ -1,6 +1,7 @@
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
-import { approveWorkspaceDeletion } from "../../prompts/cleanup/cleanup.js";
+
+import { approveWorkspaceDeletion } from "../../prompts/cleanup/index.js";
 
 export type WorkspaceCleanupResult =
   | { status: "deleted"; durationMs: number }

@@ -200,18 +200,27 @@ src/cli/
 │  └─ cleanup/
 │     └─ workspace-cleanup.ts
 ├─ prompts/
-│  ├─ select-workflow.ts
-│  ├─ ask-goal.ts
-│  ├─ ask-decision.ts
-│  ├─ ask-execution.ts
+│  ├─ decision/
+│  │  └─ ask-decision.ts
+│  ├─ planning/
+│  │  └─ ask-goal.ts
+│  ├─ execution/
+│  │  └─ ask-execution.ts
+│  ├─ cleanup/
+│  │  └─ cleanup.ts
+│  ├─ delivery/
+│  │  └─ delivery.ts
+│  ├─ review/
+│  │  └─ review.ts
 │  ├─ approve-task.ts
 │  ├─ apply-changes.ts
-│  ├─ delivery.ts
-│  ├─ review.ts
-│  └─ cleanup.ts
+│  └─ select-workflow.ts
 └─ presenters/
-   ├─ task-contract.ts
-   ├─ decisions.ts
+   ├─ decision/
+   │  ├─ decisions.ts
+   │  └─ comparison.ts
+   ├─ planning/
+   │  └─ task-contract.ts
    └─ timing.ts
 ```
 

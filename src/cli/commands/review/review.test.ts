@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { getWorkspaceDiff } from "@/infrastructure/git/index.js";
-import { completeReview } from "../../prompts/review.js";
+import { completeReview } from "../../prompts/review/review.js";
 import { runReviewStage } from "./review.js";
 vi.mock("@/infrastructure/git/index.js", () => ({ getWorkspaceDiff: vi.fn() }));
-vi.mock("../../prompts/review.js", () => ({ completeReview: vi.fn() }));
+vi.mock("../../prompts/review/review.js", () => ({ completeReview: vi.fn() }));
 let execution: ExecutionResult;
 beforeEach(() => {
   vi.resetAllMocks(); vi.spyOn(console, "log").mockImplementation(() => {});

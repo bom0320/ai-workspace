@@ -5,15 +5,15 @@ import type { RunDecisionInput } from "@/application/decision/index.js";
 import type { PlanningResult } from "@/application/planning/index.js";
 import { runPlanCommand } from "./commands/plan/plan.js";
 import { runDecisionCommand } from "./commands/decision/decision.js";
-import { presentDecisions } from "./presenters/decisions.js";
-import { presentComparison } from "./presenters/comparison.js";
+import { presentDecisions } from "./presenters/decision/decisions.js";
+import { presentComparison } from "./presenters/decision/comparison.js";
 import { runExecuteCommand, runExecutionCli } from "./commands/execute/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
-import { askGoal, type GoalInput } from "./prompts/ask-goal.js";
-import { askDecision } from "./prompts/ask-decision.js";
-import { askExecution } from "./prompts/ask-execution.js";
+import { askGoal, type GoalInput } from "./prompts/planning/ask-goal.js";
+import { askDecision } from "./prompts/decision/ask-decision.js";
+import { askExecution } from "./prompts/execution/ask-execution.js";
 import { selectWorkflow } from "./prompts/select-workflow.js";
-import { presentTaskContract } from "./presenters/task-contract.js";
+import { presentTaskContract } from "./presenters/planning/task-contract.js";
 import { presentTiming, type HumanInteractionTiming } from "./presenters/timing.js";
 
 function reportPlanning(result: PlanningResult): boolean {

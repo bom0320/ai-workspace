@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ExecutionResult } from "@/application/execution/index.js";
 import { createExecutionWorkspace, removeExecutionWorkspace } from "@/infrastructure/git/index.js";
-import { approveWorkspaceDeletion } from "../../prompts/cleanup.js";
+import { approveWorkspaceDeletion } from "../../prompts/cleanup/cleanup.js";
 import { runWorkspaceCleanup } from "./workspace-cleanup.js";
-vi.mock("../../prompts/cleanup.js", () => ({ approveWorkspaceDeletion: vi.fn() }));
+vi.mock("../../prompts/cleanup/cleanup.js", () => ({ approveWorkspaceDeletion: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/infrastructure/git/index.js")>();
   return { ...actual, removeExecutionWorkspace: vi.fn(actual.removeExecutionWorkspace) };

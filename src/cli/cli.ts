@@ -8,11 +8,11 @@ import { runDecisionCommand } from "./commands/decision/decision.js";
 import { presentDecisions } from "./presenters/decision/decisions.js";
 import { presentComparison } from "./presenters/decision/comparison.js";
 import { runExecuteCommand, runExecutionCli } from "./commands/execute/execute.js";
-import { approveTask } from "./prompts/approve-task.js";
+import { approveTask } from "./prompts/workflow/approve-task.js";
 import { askGoal, type GoalInput } from "./prompts/planning/ask-goal.js";
 import { askDecision } from "./prompts/decision/ask-decision.js";
 import { askExecution } from "./prompts/execution/ask-execution.js";
-import { selectWorkflow } from "./prompts/select-workflow.js";
+import { selectWorkflow } from "./prompts/workflow/select-workflow.js";
 import { presentTaskContract } from "./presenters/planning/task-contract.js";
 import { presentTiming, type HumanInteractionTiming } from "./presenters/timing.js";
 

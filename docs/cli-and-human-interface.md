@@ -209,12 +209,13 @@ src/cli/
 │  ├─ cleanup/
 │  │  └─ cleanup.ts
 │  ├─ delivery/
+│  │  ├─ apply-changes.ts
 │  │  └─ delivery.ts
 │  ├─ review/
 │  │  └─ review.ts
-│  ├─ approve-task.ts
-│  ├─ apply-changes.ts
-│  └─ select-workflow.ts
+│  └─ workflow/
+│     ├─ approve-task.ts
+│     └─ select-workflow.ts
 └─ presenters/
    ├─ decision/
    │  ├─ decisions.ts
@@ -234,7 +235,8 @@ src/cli/
 - `commands/review/`: 변경 presentation과 Review completion gate.
 - `commands/delivery/`: Apply 성공 후 Commit, Commit 성공 후 Push의 승인·결과 연결.
 - `commands/cleanup/`: Delete / Keep 결정에 따라 infrastructure의 worktree 제거 호출.
-- `prompts/`: Human input / decision. `approve-task.ts`는 승인 입력만 담당한다.
+- `prompts/<feature>/`: 해당 CLI feature가 소유하는 입력·상호작용. Delivery는 Apply / Commit / Push를 포함한다.
+- `prompts/workflow/`: workflow 선택과 Plan → Execute 사이 Human Task Approval. 승인 입력은 실행 로직을 소유하지 않는다.
 - `presenters/`: TaskContract, 개별 Decision과 timing을 보여주며 입력·승인 판단을 하지 않는다.
 
 현재 Review와 Execution 결과 presentation 일부는 해당 command에 있다. 모든 출력을

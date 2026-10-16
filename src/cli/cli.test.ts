@@ -13,6 +13,7 @@ import { askExecution } from "./prompts/ask-execution.js";
 import { runExecutionCli } from "./commands/execute.js";
 import { runDecisionCommand } from "./commands/decision.js";
 import { presentDecisions } from "./presenters/decisions.js";
+import { presentComparison } from "./presenters/comparison.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
@@ -21,6 +22,7 @@ vi.mock("./prompts/approve-task.js", () => ({ approveTask: vi.fn() }));
 vi.mock("./prompts/ask-goal.js", () => ({ askGoal: vi.fn() }));
 vi.mock("./commands/decision.js", () => ({ runDecisionCommand: vi.fn() }));
 vi.mock("./presenters/decisions.js", () => ({ presentDecisions: vi.fn() }));
+vi.mock("./presenters/comparison.js", () => ({ presentComparison: vi.fn() }));
 
 vi.mock("./prompts/select-workflow.js", () => ({ selectWorkflow: vi.fn() }));
 vi.mock("./prompts/ask-decision.js", () => ({ askDecision: vi.fn() }));
@@ -45,7 +47,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(selectWorkflow).mockResolvedValue("plan-execute");
   vi.mocked(runExecutionCli).mockResolvedValue(0);
-  vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" }, decisions: [] });
+  vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" }, decisions: [], comparison: { findings: [], gaps: [] } });
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state, rounds: 2 });
@@ -57,12 +59,14 @@ afterEach(() => { vi.restoreAllMocks(); });
 describe("CLI approval boundary", () => {
   it("routes decision independently of Planning, Approval and Execution", async () => {
     const snapshot = { repositoryRoot: "/repositories/example", commitSha: "abc123" };
-    vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot, decisions: [] });
+    vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot, decisions: [], comparison: { findings: [], gaps: [] } });
     expect(await runCli(["decision", "/repositories/example", "Review UI", "src/button.tsx", "README.md"])).toBe(0);
     expect(runDecisionCommand).toHaveBeenCalledWith({
       repositoryPath: "/repositories/example", objective: "Review UI", filePaths: ["src/button.tsx", "README.md"],
     });
     expect(presentDecisions).toHaveBeenCalledWith(snapshot, []);
+    expect(presentComparison).toHaveBeenCalledWith({ findings: [], gaps: [] });
+    expect(vi.mocked(presentDecisions).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(presentComparison).mock.invocationCallOrder[0]);
     expect(console.log).toHaveBeenCalledWith("Decision...");
     expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Decision Duration: \d+\.\ds$/));
     expect(planTask).not.toHaveBeenCalled();
@@ -71,11 +75,12 @@ describe("CLI approval boundary", () => {
     expect(askGoal).not.toHaveBeenCalled();
   });
 
-  it("reports decision failure with exit code 1 and no partial presentation", async () => {
-    vi.mocked(runDecisionCommand).mockRejectedValue(new Error("Evidence validation failed"));
+  it.each(["Evidence validation failed", "Comparison reference validation failed"])("reports command failure without partial presentation: %s", async (message) => {
+    vi.mocked(runDecisionCommand).mockRejectedValue(new Error(message));
     expect(await runCli(["decision", ".", "Review UI", "README.md"])).toBe(1);
-    expect(console.error).toHaveBeenCalledWith("Error: Evidence validation failed");
+    expect(console.error).toHaveBeenCalledWith(`Error: ${message}`);
     expect(presentDecisions).not.toHaveBeenCalled();
+    expect(presentComparison).not.toHaveBeenCalled();
     expect(planTask).not.toHaveBeenCalled();
     expect(executeTask).not.toHaveBeenCalled();
   });
@@ -188,6 +193,7 @@ describe("interactive workflow routing", () => {
     expect(askDecision).toHaveBeenCalledOnce();
     expect(vi.mocked(runDecisionCommand).mock.calls[0][0]).toBe(input);
     expect(presentDecisions).toHaveBeenCalledOnce();
+    expect(presentComparison).toHaveBeenCalledOnce();
     expect(askGoal).not.toHaveBeenCalled();
     expect(planTask).not.toHaveBeenCalled();
     expect(approveTask).not.toHaveBeenCalled();

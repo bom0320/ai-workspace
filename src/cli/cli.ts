@@ -6,6 +6,7 @@ import type { PlanningResult } from "@/application/planning/index.js";
 import { runPlanCommand } from "./commands/plan.js";
 import { runDecisionCommand } from "./commands/decision.js";
 import { presentDecisions } from "./presenters/decisions.js";
+import { presentComparison } from "./presenters/comparison.js";
 import { runExecuteCommand, runExecutionCli } from "./commands/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
 import { askGoal, type GoalInput } from "./prompts/ask-goal.js";
@@ -59,6 +60,7 @@ async function executeDecisionInput(input: RunDecisionInput): Promise<number> {
     console.log("Decision...");
     const result = await runDecisionCommand(input);
     presentDecisions(result.snapshot, result.decisions);
+    presentComparison(result.comparison);
     console.log(`Decision Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`);
     return 0;
   } catch (error) {

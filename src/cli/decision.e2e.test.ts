@@ -32,6 +32,12 @@ async function runScenario(scenario: "success" | "invalid-evidence" | "dirty", i
       `#!${process.execPath}`,
       'const { appendFileSync } = require("node:fs");',
       'const prompt = process.argv.at(-1);',
+      'if (prompt.includes("ComparisonContext:\\n")) {',
+      '  const context = JSON.parse(prompt.split("ComparisonContext:\\n")[1]);',
+      '  appendFileSync(process.env.DECISION_E2E_RECORD, JSON.stringify({ cwd: process.cwd(), context, role: "Comparator", prompt }) + "\\n");',
+      '  console.log(JSON.stringify({ findings: [], gaps: [] }));',
+      '  process.exit(0);',
+      '}',
       'const context = JSON.parse(prompt.split("SpecialistContext:\\n")[1]);',
       'const specialist = JSON.parse(prompt.split("Specialist role and objective:\\n")[1].split("\\nSpecialistContext:")[0]);',
       'appendFileSync(process.env.DECISION_E2E_RECORD, JSON.stringify({ cwd: process.cwd(), context, role: specialist.role, prompt }) + "\\n");',
@@ -98,8 +104,12 @@ it("runs the real decision CLI through two independent Specialists and validated
   expect(result.stdout).toContain("[UX Specialist]");
   expect(result.stdout).toContain("button.tsx:1");
   expect(result.stdout).toContain("Decision Duration:");
-  expect(result.calls.map((call) => call.role)).toEqual(["Frontend Specialist", "UX Specialist"]);
-  for (const call of result.calls) {
+  expect(result.stdout).toContain("Comparison: no material relationships found.");
+  expect(result.calls[2].context.repositoryCommitSha).toBe(result.head);
+  expect(result.calls[2].context.decisions.map((decision: { specialistId: string }) => decision.specialistId)).toEqual(["frontend", "ux"]);
+  expect(result.calls[2].context).not.toHaveProperty("files");
+  expect(result.calls.map((call) => call.role)).toEqual(["Frontend Specialist", "UX Specialist", "Comparator"]);
+  for (const call of result.calls.slice(0, 2)) {
     expect(call.context).toEqual({ goal: { objective: "Evaluate the button", targetRepository: "repository" },
       repositoryCommitSha: result.head, files: [{ path: "button.tsx", content: "// committed button\n" }] });
   }
@@ -135,6 +145,6 @@ it("selects Decision from the interactive menu, collects Context and prints both
   expect(result.stdout).toContain("Context Files");
   expect(result.stdout).toContain("[Frontend Specialist]");
   expect(result.stdout).toContain("[UX Specialist]");
-  expect(result.calls.map((call) => call.role)).toEqual(["Frontend Specialist", "UX Specialist"]);
+  expect(result.calls.map((call) => call.role)).toEqual(["Frontend Specialist", "UX Specialist", "Comparator"]);
   expect(result.statusAfter).toBe("");
 }, 30_000);

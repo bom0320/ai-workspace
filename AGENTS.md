@@ -4,7 +4,7 @@
 
 이 프로젝트는 개발자와 AI Coding Agent가 실제 Repository에서 함께 일하기 위한 ADE이자 Development Governance Harness다. North Star와 Make vs Adopt의 기준은 [Project Direction](docs/project-direction.md)에 둔다.
 
-현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision이 구현되어 있으며 다음 원칙을 따른다.
+현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision, v3 Structured Decision Comparison이 구현되어 있으며 다음 원칙을 따른다.
 
 > Reliable Worker before Agent Team
 
@@ -39,7 +39,7 @@
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - Worker는 scoped execution, Specialist는 supplied Context의 독립 판단을 수행한다.
 - Git / Process 및 교체 가능한 runtime은 기술적 실행 수단이다.
-- Comparison / Synthesis / Human governance history는 미구현이며 CEO / Coordinator / DecisionRun / DecisionRound를 필수 구현으로 전제하지 않는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 CEO / Coordinator / DecisionRun / DecisionRound를 필수 구현으로 전제하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 
@@ -50,6 +50,7 @@
 - `src/contracts/`: runtime-validated contract와 TaskContract loader
 - `src/application/planning/`: Goal-to-Task Planning use-case와 public API
 - `src/application/decision/`: 독립 Decision use-case와 public API; flow/context, orchestration, validation은 실제 책임별 grouping
+- `src/application/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; Decision 실행과의 조합은 CLI command가 담당
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델

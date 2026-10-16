@@ -7,19 +7,20 @@
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
-현재 구현은 이 브랜치의 v0 / v1 / v2 코드 기준이다. Future responsibility는 현재 runtime이나
+현재 구현은 이 브랜치의 v0 / v1 / v2 / v3 코드 기준이다. Future responsibility는 현재 runtime이나
 추가할 폴더의 명세가 아니며, 특정 framework/runtime 도입을 확정하지 않는다.
 
 ## 2. Current Architecture
 
-현재는 Codex CLI를 Planner / Worker / decision-only Specialist로 사용하는 Development Governance Harness다.
+현재는 Codex CLI를 Planner / Worker / decision-only Specialist / Comparator로 사용하는 Development Governance Harness다.
 독립적인 대상 Git Repository에 연결하며, 대상이 이 시스템의 코드나 조직 구조를 포함할 필요는 없다.
 
 ```text
 CLI: workflow selection / explicit arguments / Human gates / presentation
   ├─ application/planning → TaskContract
   ├─ application/execution → ExecutionResult → Review / Delivery / Cleanup
-  └─ application/decision → { snapshot, decisions: AgentDecision[] }
+  ├─ application/decision → { goal, snapshot, decisions: AgentDecision[] }
+  └─ application/comparison → ComparisonResult
            ↓
 Contracts / application policies / Scope / Verification / Evidence / Artifacts
            ↓
@@ -31,13 +32,15 @@ Codex role implementations / Git and Process infrastructure → Target Repositor
 - Execution: detached Git worktree, Codex Worker, Scope / Verification / Evidence / artifacts와 duration telemetry.
 - Decision: clean RepositorySnapshot, commit의 explicit files, Frontend / UX 구성,
   순차 독립 실행, JSON schema / Evidence invariant 검증, 결과 반환.
+- Comparison: supplied AgentDecision[]의 Concern별 관계를 strict JSON으로 구조화하고 source reference 검증.
 - CLI: 인자 없는 workflow selector, 명시적 plan / decision / execute, Task Approval과
   Review / Apply / Commit / Push / Cleanup 및 결과 presentation.
 
 현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod다. Codex CLI는 외부 실행 도구이며
 package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 generic
-runtime layer는 없다. Comparison / synthesis / Agent discussion / Coordinator / Human governance history /
-automatic retry / crash resume는 미구현이다. Decision 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
+runtime layer는 없다. Synthesis / Agent discussion / CEO / Coordinator / Human governance history /
+automatic retry / crash resume는 미구현이다. Decision / Comparison 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
+Decision과 Comparison은 독립 application capability이고 두 use-case의 실행 조합은 CLI command가 담당한다.
 
 ## 3. Current End-to-End Flows
 
@@ -75,8 +78,12 @@ Repository path + Decision Goal + explicit file paths
    │                    → schema / identity → Snapshot assert → Evidence validation
    └─ UX Context       → Snapshot assert → Codex Specialist
                         → schema / identity → Snapshot assert → Evidence validation
-→ { snapshot, decisions: AgentDecision[] }
-→ Human-readable presentation
+→ { goal, snapshot, decisions: AgentDecision[] }
+→ CLI runDecisionCommand가 실제 Goal / Snapshot SHA / 원본 Decision 배열로 ComparisonContext 조립
+→ compareDecisions()
+   → preconditions → Codex Comparator → strict JSON protocol → Reference Validation
+→ ComparisonResult
+→ Decision + Comparison presentation
 ```
 
 각 Context는 같은 Goal / repositoryCommitSha와 해당 Specialist의 files만 담고 repositoryRoot나
@@ -84,14 +91,17 @@ Repository path + Decision Goal + explicit file paths
 하위 independent flow는 Specialist별 files를 받을 수 있다. 현재 순차 실행이며 자동 파일 선택은 없다.
 
 오류는 fail-fast로 전파하며 다음 Specialist를 실행하거나 partial result를 반환하지 않는다.
-Decision은 Planning / Execution에 자동 연결되지 않고 Comparison / Synthesis / Review / Git Delivery를
-수행하지 않는다. 결과를 배열로 수집하는 것은 Decision persistence가 아니다.
+`runDecision()`은 Decision 생성까지만 수행하며 Comparison을 import하거나 호출하지 않는다.
+CLI command가 `compareDecisions()`를 호출하고 두 결과를 표시한다. Comparison은 source Decision만
+입력으로 사용하며 `runDecision()` 실행이나 Snapshot recapture를 하지 않는다.
+Planning / Execution 자동 연결, Synthesis / Review / Git Delivery와 결과 persistence는 없다.
+Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 표시하지 않는다.
 
 ## 4. Current Responsibility Boundaries
 
 | 소유자 | 현재 책임 | 경계 |
 | --- | --- | --- |
-| Human / CLI adapter | workflow·입력, Task Approval, Review / Delivery / Cleanup, 결과 표시 | core use-case 조립을 소유하지 않음 |
+| Human / CLI adapter | workflow·입력, Task Approval, Review / Delivery / Cleanup, 결과 표시 | application 내부 flow / Domain 검증을 소유하지 않음 |
 | Planning application / Codex Planner | 조사·limits·계약 생성 / supplied PlannerContext로 inspect 또는 complete | inspection은 수정 권한이 아니며 Planner는 별도 cwd·제한된 도구 설정으로 실행 |
 | Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository, Zod validation | AI가 시스템 ID나 Human 제약을 소유하지 않음 |
 | Execution application / Codex Worker | workspace와 Worker / Scope / Verification / artifacts 연결 / scoped 수정 | 정상 종료 때 workspace를 지우지 않으며 verification command는 Harness가 실행 |
@@ -99,6 +109,9 @@ Decision은 Planning / Execution에 자동 연결되지 않고 Comparison / Synt
 | Decision Context flow | Snapshot capture/assert, commit 기준 파일 loading | working tree에서 Context를 임의로 읽거나 자동 탐색하지 않음 |
 | Decision orchestration / validation | 순차 독립 실행, Snapshot 전후 검사, Evidence exact path / line invariant | Agent끼리 판단 전달·비교·종합하지 않음 |
 | Codex Specialist | 제한된 Context로 판단, strict JSON parsing과 schema, Harness identity 주입 | Context와 Evidence의 일치 검증은 flow가 담당 |
+| CLI Decision command | runDecision → compareDecisions 조합, 동일 Goal / SHA / Decision 배열 전달 | 두 application 내부의 검증을 중복하지 않음; 별도 domain workflow layer가 아님 |
+| Comparison application / compareDecisions | preconditions, Comparator 호출, Reference Validation, ComparisonResult 반환 | Decision 실행·Repository inspection·final recommendation·Conflict 해결을 소유하지 않음 |
+| Codex Comparator | supplied ComparisonContext에서 Concern별 Position 관계를 JSON protocol로 구조화 | repository files / tools 미제공, Specialist 재호출·winner·resolution·synthesis 없음 |
 | Services | Scope, Verification, execution evidence와 artifact 보존 | 자기 보고를 성공 Evidence로 대체하지 않음 |
 | Git / Process infrastructure | HEAD / commit blob, worktree·diff·Delivery 명령, process timeout / lifecycle | Domain의 권한 의미와 Human 결정을 정의하지 않음 |
 
@@ -156,6 +169,32 @@ allowedPaths / forbiddenPaths는 정확한 문자열 일치다. Forbidden은 all
 Zod는 structural validity이며 `passed`도 자연어 objective / acceptance criteria의 의미적 충족을 보장하지 않는다.
 별도 semantic Verifier Agent는 없다.
 
+### Comparison runtime / validation boundary
+
+`compareDecisions()`는 Decision 최소 2개, source specialistId unique, non-empty commit SHA를 요구한다.
+Goal을 재생성하거나 Git commit 존재 여부를 다시 조사하지 않는다.
+`runCodexComparator()`에 전달하는 ComparisonContext는 GoalSpec / repositoryCommitSha / AgentDecision[]뿐이다.
+RepositoryRoot, InspectedFile[], working tree는 제공하지 않는다. Temporary cwd에서 read-only / ephemeral,
+approval never와 shell / web / multi-agent / memory 등 capability 비활성화 설정으로 실행한다.
+이는 현재 runtime 설정과 prompt 정책이며 보편적인 filesystem 격리 보장으로 확대하지 않는다.
+
+Comparator stdout은 trim → JSON.parse → strict `comparisonPayloadSchema` 순서로 검증한다.
+Malformed JSON을 복구하지 않고 timeout / process / protocol 실패를 전파하며 cwd는 항상 cleanup한다.
+기본 timeout은 15분이고 CLI에 별도 override 입력은 없다.
+Runtime이 반환하는 ComparisonPayload는 아직 source reference 검증 전이다.
+
+Flow의 `validateComparisonReferences()`가 실제 source Specialist, Finding 최소 2 Position과
+Specialist 중복 금지, Position의 evidence index 범위·중복, Gap 최소 1 Specialist와 존재·중복을 확인한다.
+그 뒤 같은 payload를 ComparisonResult로 반환한다. Evidence index는 각 원본 Decision.evidence의
+0-based 참조이며 빈 index 배열은 허용한다. Concern / relation / Gap 의미는
+[Roadmap의 v3](roadmap.md#v3--agreement--conflict--structured-decision-comparison)에 둔다.
+
+Reference integrity는 statement의 원본 충실성, relation / rationale의 정확성, Evidence 충분성이나
+판단의 진실성 검증이 아니다. Comparator는 새 Evidence / 최종 recommendation / resolution을
+생성하지 않도록 지시받지만, Harness가 출력 문장의 의미를 증명하는 것은 아니다.
+Automated CLI E2E는 deterministic fake Codex로 wiring / isolation / propagation을 확인하며
+실제 모델의 Comparison 품질 benchmark나 반복 Real Codex 평가가 아니다.
+
 ### Execution artifacts / Human gate / Telemetry
 
 Workspace는 실행용 worktree이고 artifacts는 task.json / base-commit.txt / changes.patch / result.json이다.
@@ -164,19 +203,19 @@ Cleanup은 workspace만 대상으로 하고 artifacts는 유지한다. Artifact 
 
 Human gate와 Delivery는 실행 성공과 별개다. Duration telemetry는 운영 데이터이며 Evidence와 구분한다.
 CLI의 Goal flow Total은 이후 Human 대기를 포함할 수 있지만 Execution snapshot timing은 포함하지 않는다.
-Decision Duration은 input 완료 후 실행·표시 구간의 전체 시간이며 개별 Specialist tracing backend는 없다.
+Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구간의 전체 시간이며 개별 runtime tracing backend는 없다.
 
 ## 5. Target Responsibility Model
 
-현재 책임 위에 향후 Comparison / Synthesis / Human escalation을 추가하는 모델이다.
+현재 Decision / Comparison 책임 위에 향후 Synthesis / Human escalation을 추가하는 모델이다.
 독립 plane, 별도 CEO / Coordinator 또는 ADE layer를 만들라는 명세가 아니다.
 
 ```text
 Human ↔ CLI / Human decision surface
               ↓
 AI Workspace Governance: Contract / Authority / Context / Decision / Evidence
-              ├─ 현재: Planning / Execution / Independent Decision
-              ├─ 향후: Comparison / Synthesis / Human escalation
+              ├─ 현재: Planning / Execution / Independent Decision / Structured Comparison
+              ├─ 향후: Synthesis / Human escalation
               └─ 실행 위임 → Replaceable runtime + Git / Process infrastructure → Repository
 ```
 
@@ -195,7 +234,9 @@ framework run/session/step이 core model에 불필요하게 누출되어서는 �
 | SpecialistDefinition / SpecialistAuthority | Current | model/specialist.ts / authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
-| ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Domain Model v0, type-only | application/comparison/model/comparison.ts. Finding은 agreement / conflict / trade-off, Gap은 uncertainty / limitation / separate-concern. Concern은 string, Position은 specialistId와 원본 Decision의 evidenceIndexes로 참조. Comparator / schema / validation / flow는 미구현 |
+| ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
+| ComparisonContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / AgentDecision[]만 포함 |
+| ComparisonPayload | Current | protocol/comparison.ts의 strict Zod schema와 inferred type. Comparator output의 구조 검증을 통과한 상태; Reference Validation 뒤 같은 shape를 ComparisonResult로 반환 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
 | Synthesis / CEO / Coordinator | Future / Conditional | 종합·escalation 책임과 별도 Agent 구현 여부를 구분. Runtime 평가 후 선택 |
@@ -315,7 +356,7 @@ Decision도 같은 기준으로 `flow/context`에 Snapshot capture/assert와 com
 해당 use-case가 소유하는 상태, 설정, 결과를 둔다.
 Planning의 PlanningState, PlanningLimits, PlanningResult, RepositoryInfo와
 Execution의 ExecutionState, ExecutionResult, Decision의 RepositorySnapshot / SpecialistDefinition /
-SpecialistAuthority가 해당한다. 현재 RunDecisionInput / RunDecisionResult는 작은 use-case entry에
+SpecialistAuthority가 해당한다. RunDecisionResult는 실제 사용된 GoalSpec도 반환한다. 현재 RunDecisionInput / RunDecisionResult는 작은 use-case entry에
 함께 선언되어 있으며 구조적 대칭만을 위해 model 파일로 분리하지 않는다.
 
 > model ≠ 모든 타입을 넣는 곳
@@ -327,6 +368,7 @@ system-wide contract는 `contracts`, 역할 간 message contract는 `protocol`�
 컴포넌트나 역할 사이에서 주고받는 구조화된 message contract를 둔다.
 Planning에는 PlannerContext, PlannerDecision, InspectRequest, InspectResult, TaskDraft가 있다.
 Decision에는 SpecialistContext, AgentDecision, EvidenceReference와 Decision Zod schema가 있다.
+Comparison에는 ComparisonContext와 strict ComparisonPayload schema가 있다.
 
 ```text
 Harness → PlannerContext → Planner
@@ -410,14 +452,23 @@ Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이�
 ### 7.6 Current Source Layout
 
 현재 브랜치의 주요 배치는 다음과 같다. 테스트는 구현 파일과 함께 배치되며,
-아래 예시에서는 CLI entry와 세부 파일을 생략한다.
+아래 예시에서는 CLI 세부 구조와 일부 파일을 생략한다.
 
 ```text
 src/
 ├─ cli/  # operator adapter; 세부 구조는 CLI 문서 참조
 ├─ application/
-│  ├─ comparison/  # Domain Model v0만 존재; 실행 use-case는 미구현
+│  ├─ comparison/
+│  │  ├─ comparator/
+│  │  │  └─ codex-comparator.ts
+│  │  ├─ flow/
+│  │  │  ├─ compare-decisions.ts
+│  │  │  └─ validation/
+│  │  │     └─ validate-references.ts
 │  │  ├─ model/
+│  │  │  └─ comparison.ts
+│  │  ├─ protocol/
+│  │  │  ├─ context.ts
 │  │  │  └─ comparison.ts
 │  │  └─ index.ts
 │  ├─ planning/
@@ -511,7 +562,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
 - Evidence와 Telemetry, TaskContract와 file content, 내부 상태와 역할 간 protocol을 구분한다.
 - Scope / verification 통과를 자연어 요구 충족의 증명으로 과장하지 않는다.
-- v2의 독립 Specialist 실행과 미래 comparison / synthesis / Human governance history를 구분한다.
+- v2 독립 Decision 생성과 v3 Structured Comparison은 별도 use-case이며 CLI가 조합한다. Synthesis / Human governance history는 미구현이다.
 - Decision Context는 Snapshot commit의 explicit files이며 다른 Specialist의 Decision을 포함하지 않는다.
 - Schema 및 Evidence path / line 검증을 Decision의 의미적 정확성 보장으로 과장하지 않는다.
 - Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.

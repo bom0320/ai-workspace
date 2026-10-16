@@ -10,8 +10,8 @@
 | v0 | Safe Execution | Implemented |
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
-| v3 | Agreement / Conflict — Structured Decision Comparison | Next / Domain Model v0 시작, 실행 흐름은 Planned |
-| Architecture checkpoint | Runtime Framework Evaluation | Planned, v3 구현 / E2E 이후·v4 구현 방식 선택 전 |
+| v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
+| Architecture checkpoint | Runtime Framework Evaluation | Next / Planned checkpoint, v3 이후·v4 구현 방식 선택 전 |
 | v4 | CEO Governance / Explainable Synthesis / Human Governance | Planned, 별도 CEO Agent는 미확정 |
 | v5 | Evaluation | Planned |
 
@@ -61,7 +61,8 @@ Zod 기반 AgentDecision / EvidenceReference와 Codex Specialist runtime이 구�
 - Same Goal / Same Snapshot / Limited Context / Read-only Authority / Independent Decisions /
   Structured AgentDecision / Validated Evidence / CLI integration이 연결되었다.
 
-현재 Comparison / Synthesis, 병렬 실행, 자동 Context selection, discussion, Decision persistence는 없다.
+v2 use-case 자체는 Comparison / Synthesis를 수행하지 않는다. 현재 Decision CLI는 v3 Comparison까지
+연결하며 병렬 실행, 자동 Context selection, discussion, Decision persistence는 없다.
 Snapshot assert는 시점 검사이며 lock이 아니고 Evidence 존재 검증은 판단 정확성 검증이 아니다.
 정확한 runtime 경계는 [Architecture](architecture.md#4-current-responsibility-boundaries)에 둔다.
 
@@ -80,53 +81,110 @@ Human governance history, long-lived governance records는 아직 미구현이�
 
 > Independent AgentDecision[]을 근거 중심으로 비교하여 Agreement / Conflict / Trade-off / Uncertainty를 표현할 수 있는가?
 
-상태: **Next / Domain Model v0 시작**. 실행 흐름은 Planned이며 Multi-Agent 실행 자체보다 비교의 Domain Language가 과제다.
+상태: **Implemented**. Domain / protocol, isolated Codex Comparator, Reference Validation,
+`compareDecisions()`, CLI command composition과 presentation이 구현되었다.
 
 ```text
 Independent AgentDecision[]
            ↓
-Structured Comparison
+ComparisonContext
+           ↓
+Codex Comparator
+           ↓
+ComparisonPayload (strict Zod protocol validation)
+           ↓
+Reference Validation
+           ↓
+ComparisonResult
 ├─ Findings: Agreement / Conflict / Trade-off
 └─ Gaps: Uncertainty / Limitation / Separate Concern
 ```
 
-### 먼저 답할 Domain 질문
+### 구현된 비교 의미
 
-- Agreement는 어떤 동일 문제·판단·Evidence 조건에서 성립하는가?
-- Conflict는 어떤 조건에서 성립하며 표현 차이와 실제 판단 충돌을 어떻게 구분하는가?
-- 서로 다른 Concern을 말하는 Decision은 충돌인가, 비교 대상이 다른가?
-- Evidence가 다르면 어떻게 비교하고 근거의 차이를 드러내는가?
-- Evidence 부족은 Conflict 대신 Uncertainty로 표시해야 하는가?
-- Trade-off를 어떤 구조로 표현하고 비교 불가능한 Decision을 어떻게 표시하는가?
+비교 단위는 Decision 전체가 아닌 구체적인 공통 쟁점인 **Concern**이다. Concern은 현재 string이며
+Concern → Specialist별 Position → relation으로 표현한다. 하나의 Decision pair에서 여러 Finding이
+나올 수 있고, Decision 쌍 전체에 하나의 라벨을 붙이지 않는다.
+
+- **agreement**: 같은 Concern의 Position들이 양립하며 같은 방향을 지지하거나 서로 강화한다.
+- **conflict**: 같은 Concern과 관련 조건 아래 Position들을 동시에 받아들일 수 없다.
+- **trade-off**: 양쪽 Position이 타당하지만 한쪽 이득이 다른 비용 / risk 증가와 연결되어 우선순위 판단이 필요하다.
+
+단순 문장 차이나 의견 차이만으로 Conflict / Trade-off를 만들지 않도록 prompt에 명시한다.
 
 > Conflict는 단순 textual disagreement가 아니라 evidence-backed disagreement여야 한다.
 
-### Exit Criteria
+관계를 확정할 수 없거나 직접 비교할 수 없으면 Finding과 분리된 Gap으로 나타낸다.
 
-- 비교 단위·Concern·근거와 조건을 명시하고 Agreement / Conflict / Trade-off / Uncertainty의 의미를 검증한다.
-- 비교 결과가 원래 Decision과 Evidence로 이어지고, 근거 부족·비교 불가능성을 표시한다.
-- 알려진 실제 충돌, 표현만 다른 판단, 서로 다른 Concern, 불충분한 Evidence 사례로 유용성과 오류를 확인한다.
-- 현재 독립 판단 입력에서 구조화된 비교 출력까지 E2E로 확인한다.
+- **uncertainty**: 현재 Decision / Evidence만으로 사실이나 관계를 충분히 확정할 수 없다.
+- **limitation**: 유효한 입력이지만 제공된 Context / Decision의 범위 때문에 비교 범위가 제한된다.
+- **separate-concern**: 같은 Goal 아래 서로 다른 문제를 다뤄 직접적인 비교 관계가 없다.
 
-Comparison Domain Model v0의 type-only 구조를 추가했다. ComparisonResult는 findings와 gaps를 분리하고,
-Position은 specialistId와 원본 Decision의 evidenceIndexes를 참조한다. Concern은 string이며
-Comparator / runtime / Zod schema / reference validation / flow / CLI는 아직 미구현이다.
-CEO / Coordinator, free-form discussion, shared memory, consensus chat, generic graph runtime,
-automatic conflict resolution, unbounded re-query, OPA / Temporal 도입이나 LangGraph / CrewAI 재작성은
-v3 구현 목표로 확정하지 않는다. 필요 범위를 Domain 설계에서 먼저 정한다.
+Sparse output이 의도된 behavior다. 모든 문장을 억지 Finding / Gap으로 만들지 않으며,
+의미 있는 관계가 없다면 findings와 gaps가 모두 빈 배열이어도 유효하다.
+이 의미는 Domain / protocol과 Comparator prompt에 표현되어 있으나 모델의 분류 정확도가 입증된 것은 아니다.
+
+### Provenance와 검증 범위
+
+ComparisonPosition은 `specialistId / statement / evidenceIndexes`를 가진다.
+Evidence 내용을 복제하지 않고 해당 Specialist의 원본 `AgentDecision.evidence[]`를 0-based로 참조한다.
+
+Harness는 Protocol Validation 뒤 다음 reference invariant를 확인한다.
+
+- Finding은 최소 2 Position이며 각 Specialist가 실제 source Decision에 존재하고 중복되지 않는다.
+- Evidence index는 해당 Decision 범위 안에 있고 같은 Position에서 중복되지 않는다.
+- Evidence index 배열 자체는 비어 있을 수 있다. 존재하지 않는 index는 허용하지 않는다.
+- Gap은 최소 1개의 실제 Specialist를 참조하며 중복 ID를 허용하지 않는다.
+
+이는 참조 무결성 검증이다. Statement의 의미적 충실성, relation / rationale의 실제 정확성,
+Evidence의 충분성과 판단의 진실성을 증명하지 않는다.
+
+### Comparator boundary와 CLI 연결
+
+Codex Comparator에는 GoalSpec / repositoryCommitSha / AgentDecision[]만 전달한다.
+RepositoryRoot, repository files / working tree, shell / web / tools나 외부 Context는 제공하지 않는다.
+Target Repository 밖 temporary cwd, read-only sandbox와 capability 비활성화 설정으로 실행하고 cleanup한다.
+새 product / engineering decision이나 Evidence를 만들거나 Specialist를 재호출하지 않으며,
+winner / final recommendation / Conflict resolution을 생성하지 않도록 제한한다.
+
+`runDecision()`과 `compareDecisions()`는 독립 application capability다.
+CLI의 `runDecisionCommand()`가 실제 Goal 객체, Snapshot SHA, 원본 AgentDecision[]을 그대로 전달해
+조합한다. Comparison application은 Decision 실행이나 Repository 재조사를 소유하지 않는다.
+
+### 자동 검증과 남은 한계
+
+현재 automated Decision CLI E2E는 explicit / interactive 경로에서
+Frontend Specialist → UX Specialist → Comparator → Comparison presentation을 검증한다.
+동일 commit SHA, 원본 Decision 전달 구조, Comparator Context의 files 부재,
+Specialist 간 Decision isolation, Repository unchanged와 잘못된 Evidence에서 fail-fast를 확인한다.
+Command unit test는 Goal / Decision 배열 identity와 두 application의 실패 전파를 검증한다.
+
+**이 automated E2E의 Codex executable은 deterministic fake runtime이며, 실제 모델의 Comparison
+품질을 평가하는 benchmark가 아니다.** 수동 Real Codex Comparison 품질 관찰이나 반복 외부 프로젝트
+검증을 이번 closeout에 추가하지 않는다. 기존 v2 실제 실행 기록과 구분한다.
+
+- Specialist는 Frontend / UX 두 역할로 고정되며 순차 실행한다.
+- Context files는 Human이 명시적으로 선택한다.
+- Harness는 protocol 구조와 source reference를 검사하며 의미적 정확성을 증명하지 않는다.
+- Comparison은 resolution / synthesis가 아니며 Human governance outcome persistence도 없다.
+- 실제 모델의 Comparison 품질에 대한 반복 benchmark는 아직 없다. 이는 v5 Evaluation과 구분한다.
+
+CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded re-query와
+특정 framework/runtime 채택은 v3 완료에 포함하지 않는다.
 
 ## Runtime Framework Evaluation
 
-상태: **향후 architecture checkpoint**. 별도 제품 version이나 현재 구현 작업이 아니다.
+상태: **Next / Planned architecture checkpoint**. v3 종료 후 v4 구현 전에 실제 runtime 요구가
+생겼는지 평가한다. 별도 제품 version이나 채택 확정이 아니다.
 
 Make vs Adopt 경계 정리 → v3 Domain 설계 → v3 구현 / E2E → 작은 runtime spike →
 v4부터 가치가 확인된 runtime의 선택적 채택 순서를 따른다.
 
-> v3까지 AI Workspace의 Domain Language를 확정하고, v4부터 범용 Agent Runtime 문제가 실제로
+> v3에서 구현한 Domain Language를 기준으로, v4부터 범용 Agent Runtime 문제가 실제로
 > 등장하는 시점에 Framework를 평가·도입한다.
 
 실행 모델을 맡길 구체적인 요구가 있어야 채택한다. 모든 범용 기술을 직접 만든 뒤 붙이는 전략도,
-처음부터 framework의 domain model에 맞추는 전략도 아니다. 필요한 library는 v3 중에도 평가·사용할 수 있다.
+처음부터 framework의 domain model에 맞추는 전략도 아니다. 필요한 library는 별도 runtime 전환 없이 실제 필요가 생길 때 평가·사용할 수 있다.
 공통 판단 기준은 [Design Decision Filter](project-direction.md#design-decision-filter)를 따른다.
 
 예를 들어 향후 `spike/agents-sdk-runtime` 같은 격리된 실험에서 현재 `runCodexSpecialist()`와 같은

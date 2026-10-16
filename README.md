@@ -13,15 +13,18 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
   TaskContract로 변환하고, Human Task Approval 뒤 단일 Codex Worker로 실행한다.
 - **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
   Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
+- **v3 — Structured Decision Comparison**: 독립 AgentDecision을 Concern 단위로 비교해
+  Agreement / Conflict / Trade-off와 Uncertainty / Limitation / Separate Concern을 구조화하고,
+  원본 Specialist / Evidence reference를 검증한다.
 
-Agent discussion / comparison / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
+Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
 미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
 
 문서는 다음 책임으로 나눈다.
 
 - [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
 - [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
-- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0 / v1 / v2와 이후 검증 단계
+- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0–v3와 이후 검증 단계
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
 범용 Agent Framework를 대체하는 것이 목표는 아니다. 향후 필요한 runtime / infrastructure는
@@ -104,8 +107,13 @@ Frontend / UX Specialist는 같은 Goal / commit과 같은 선택 파일을 각�
 Evidence는 제공 파일의 exact path와 line 조건·범위를 검사한다. Schema / Evidence 검증 통과가
 recommendation의 의미적 정확성을 보장하지는 않는다.
 
-출력은 Snapshot, 각 Specialist의 Recommendation / Evidence / Risks / Uncertainty와 Decision Duration이다.
-Comparison / synthesis / persistence나 Planning·Execution 자동 연결은 없다. 이 명령은 Repository 변경,
+Decision command는 `runDecision()`의 실제 Goal / Snapshot SHA / 원본 AgentDecision[]을
+`compareDecisions()`에 전달한다. 출력은 Snapshot, 각 Specialist의 Recommendation / Evidence /
+Risks / Uncertainty, Comparison의 Findings / Gaps와 전체 Decision Duration이다. 비교 결과가 모두
+비어 있으면 `Comparison: no material relationships found.`를 표시한다. Comparator의 JSON protocol과
+source reference도 검증하며 실패 시 전체 명령이 실패한다.
+Synthesis / final recommendation / winner / automatic resolution / persistence와 Planning·Execution
+자동 연결은 없다. 이 명령은 Repository 변경,
 Task Approval / Review / Apply / Commit / Push / Cleanup flow를 실행하지 않는다.
 상세 입력·오류·출력은 [CLI / Human interface](docs/cli-and-human-interface.md#decision-flow)를 따른다.
 
@@ -123,6 +131,18 @@ Task Approval / Review / Apply / Commit / Push / Cleanup flow를 실행하지 �
 이 실행은 Same Goal / Same Snapshot / Limited Context / Read-only Authority / Independent Decisions /
 Structured AgentDecision / Evidence Validation / CLI integration / Actual Codex execution이 연결됨을 확인했다.
 다른 작업·모델·환경에서의 성공률, 판단 품질이나 Multi-Agent 우위를 입증하지 않는다.
+
+### v3 automated E2E coverage
+
+Automated Decision CLI E2E는 explicit / interactive 입력에서 Frontend → UX → Comparator와
+Comparison presentation 연결, 동일 commit SHA, Decision 전달 구조, Comparator Context의 files 부재,
+Specialist 간 isolation, Repository unchanged와 Evidence 실패 시 fail-fast를 확인한다.
+Command unit test는 동일 Goal / Decision 배열의 identity와 Comparison 실패 전파도 확인한다.
+
+이 자동 E2E는 deterministic fake Codex executable을 사용한다. 실제 모델의 Comparison 품질을
+평가하는 benchmark가 아니며, 별도 외부 프로젝트의 반복 Real Codex Comparison 품질 관찰은
+이번 closeout에 기록하지 않는다. Relation / rationale / statement의 의미적 정확성은 Harness의
+구조·참조 검증으로 증명되지 않는다. 구현 범위와 남은 평가는 [Roadmap](docs/roadmap.md#v3--agreement--conflict--structured-decision-comparison)에 둔다.
 
 ## Adaptive Planning / Fast Path
 
@@ -331,10 +351,11 @@ CLI에서도 명시적 Apply 승인 없이는 적용하지 않는다. patch는 W
 ## Timeout
 
 - Codex Worker 기본 timeout: 15분
-- Codex Specialist 기본 timeout: 각 15분 (현재 Decision CLI에는 override 입력 없음)
+- Codex Specialist 기본 timeout: 각 15분
+- Codex Comparator 기본 timeout: 15분 (현재 Decision CLI에는 두 runtime의 override 입력 없음)
 - 각 Verification command 기본 timeout: 5분
 
-아래 환경변수와 patch / cleanup 설명은 Execution에 한정한다. Specialist 실패는 Decision 전체를
+아래 환경변수와 patch / cleanup 설명은 Execution에 한정한다. Specialist / Comparator 실패는 Decision command 전체를
 reject하며 임시 cwd를 제거하고, Decision patch나 artifact를 만들지 않는다.
 
 Execution CLI에서 millisecond 단위로 override하려면

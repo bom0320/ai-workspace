@@ -44,13 +44,15 @@ AI Workspace가 소유하는 Decision Assurance는 근거와 검증의 범위·�
 
 ### 현재 구현과 확장 범위
 
-현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision이 구현되어 있다.
+현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision,
+v3 Structured Decision Comparison이 구현되어 있다.
 TaskContract와 승인 경계는 실행할 행동을, Snapshot / Context / Authority / AgentDecision과 Evidence
 검증은 독립 판단의 조건을 명시한다. Planning 자체보다 실행 권한을 넘기기 전 explicit contract
 boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture.md#2-current-architecture)에 둔다.
 
 현재 interface는 Node.js CLI이고 Agent integration은 외부 Codex CLI 하나다. 별도 GUI ADE,
-여러 provider 지원, Decision comparison / synthesis, Human governance history는 현재 기능이 아니다.
+여러 provider 지원, Synthesis, Human governance history는 현재 기능이 아니다.
+현재 CLI는 독립 Decision 생성과 Structured Comparison을 별도 application use-case로 조합한다.
 
 현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
 방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
@@ -89,8 +91,8 @@ Single-Agent vs Governed Multi-Agent evaluation criteria는 프로젝트의 개�
 - 최종 recommendation은 원래 AgentDecision / Evidence / Verification까지 추적 가능해야 한다.
 - Human approval / override / reject는 서로 다른 권한과 의미이며 대상과 효과를 명시해야 한다.
 
-마지막 세 항목의 comparison / synthesis / 확장된 Human governance는 미래 책임이다.
-현재 v2 Evidence 존재·범위 검증이 이 책임 전체를 구현한 것은 아니다.
+Comparison의 관계 의미와 source reference 검증은 v3에 구현되어 있다. Synthesis / 확장된 Human
+governance는 미래 책임이며 현재 검증이 Conflict의 실제 정확성까지 증명하는 것은 아니다.
 
 ### 범용 메커니즘과의 경계
 
@@ -197,9 +199,9 @@ objective / acceptance criteria 전체 충족의 증명이 아니다.
 
 ### 4. Explainable Governance
 
-v3에서 Agreement / Conflict / Trade-off / uncertainty의 의미를 설계한다. 서로 다른 Concern이나 표현
-차이를 Conflict로 취급하지 않고 Evidence에 근거한 disagreement인지 확인해야 한다. 근거 부족과 비교
-불가능성도 표시해야 한다. 현재 v2는 독립 Decision을 표시할 뿐 비교·합의·종합하지 않는다.
+v3는 Concern별 Agreement / Conflict / Trade-off와 Gap을 구조화하고 원본 Decision / Evidence 참조를
+검증한다. 서로 다른 Concern이나 표현 차이를 Conflict로 취급하지 않도록 prompt에 명시하고 근거 부족과
+비교 불가능성도 표시한다. 이는 분류나 요약의 의미적 정확성 증명이 아니며 합의·종합·해결을 수행하지 않는다.
 
 v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
 종합 책임의 구현 방식은 runtime 평가 이후 선택하며 CEO라는 이름을 architecture commitment로 삼지 않는다.

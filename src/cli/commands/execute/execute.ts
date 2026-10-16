@@ -8,11 +8,11 @@ import {
   type WorkerContext,
 } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
-import { presentTiming, type HumanInteractionTiming } from "../presenters/timing.js";
+import { presentTiming, type HumanInteractionTiming } from "../../presenters/timing.js";
 
-import { runReviewStage } from "./review/review.js";
-import { runWorkspaceCleanup } from "./cleanup/workspace-cleanup.js";
-import { runPostExecutionDelivery } from "./delivery/delivery.js";
+import { runReviewStage } from "../review/review.js";
+import { runWorkspaceCleanup } from "../cleanup/workspace-cleanup.js";
+import { runPostExecutionDelivery } from "../delivery/delivery.js";
 
 function timeoutFromEnvironment(name: string): number | undefined {
   const value = process.env[name];

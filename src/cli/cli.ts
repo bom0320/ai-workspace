@@ -3,11 +3,11 @@ import { pathToFileURL } from "node:url";
 
 import type { RunDecisionInput } from "@/application/decision/index.js";
 import type { PlanningResult } from "@/application/planning/index.js";
-import { runPlanCommand } from "./commands/plan.js";
-import { runDecisionCommand } from "./commands/decision.js";
+import { runPlanCommand } from "./commands/plan/plan.js";
+import { runDecisionCommand } from "./commands/decision/decision.js";
 import { presentDecisions } from "./presenters/decisions.js";
 import { presentComparison } from "./presenters/comparison.js";
-import { runExecuteCommand, runExecutionCli } from "./commands/execute.js";
+import { runExecuteCommand, runExecutionCli } from "./commands/execute/execute.js";
 import { approveTask } from "./prompts/approve-task.js";
 import { askGoal, type GoalInput } from "./prompts/ask-goal.js";
 import { askDecision } from "./prompts/ask-decision.js";

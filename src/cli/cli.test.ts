@@ -10,8 +10,8 @@ import { runCli } from "./cli.js";
 import { selectWorkflow } from "./prompts/select-workflow.js";
 import { askDecision } from "./prompts/ask-decision.js";
 import { askExecution } from "./prompts/ask-execution.js";
-import { runExecutionCli } from "./commands/execute.js";
-import { runDecisionCommand } from "./commands/decision.js";
+import { runExecutionCli } from "./commands/execute/execute.js";
+import { runDecisionCommand } from "./commands/decision/decision.js";
 import { presentDecisions } from "./presenters/decisions.js";
 import { presentComparison } from "./presenters/comparison.js";
 
@@ -20,15 +20,15 @@ vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({ resolveRepositoryRoot: vi.fn() }));
 vi.mock("./prompts/approve-task.js", () => ({ approveTask: vi.fn() }));
 vi.mock("./prompts/ask-goal.js", () => ({ askGoal: vi.fn() }));
-vi.mock("./commands/decision.js", () => ({ runDecisionCommand: vi.fn() }));
+vi.mock("./commands/decision/decision.js", () => ({ runDecisionCommand: vi.fn() }));
 vi.mock("./presenters/decisions.js", () => ({ presentDecisions: vi.fn() }));
 vi.mock("./presenters/comparison.js", () => ({ presentComparison: vi.fn() }));
 
 vi.mock("./prompts/select-workflow.js", () => ({ selectWorkflow: vi.fn() }));
 vi.mock("./prompts/ask-decision.js", () => ({ askDecision: vi.fn() }));
 vi.mock("./prompts/ask-execution.js", () => ({ askExecution: vi.fn() }));
-vi.mock("./commands/execute.js", async () => ({
-  ...await vi.importActual<typeof import("./commands/execute.js")>("./commands/execute.js"),
+vi.mock("./commands/execute/execute.js", async () => ({
+  ...await vi.importActual<typeof import("./commands/execute/execute.js")>("./commands/execute/execute.js"),
   runExecutionCli: vi.fn(),
 }));
 

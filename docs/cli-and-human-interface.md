@@ -184,9 +184,12 @@ Review / Apply / Commit / Push / Cleanup을 진행하지 않는다. 실제 E2E �
 src/cli/
 ├─ cli.ts
 ├─ commands/
-│  ├─ plan.ts
-│  ├─ decision.ts
-│  ├─ execute.ts
+│  ├─ plan/
+│  │  └─ plan.ts
+│  ├─ decision/
+│  │  └─ decision.ts
+│  ├─ execute/
+│  │  └─ execute.ts
 │  ├─ delivery/
 │  │  ├─ delivery.ts
 │  │  ├─ apply.ts
@@ -215,10 +218,10 @@ src/cli/
 - `cli.ts`: interactive selector와 explicit plan / decision / execute / direct Goal routing.
   Planning / Decision은 입력 기반 helper를 interactive / explicit 경로가 재사용하며 string[]로
   재직렬화하지 않는다. Execute 선택은 기존 runExecutionCli의 task / repository 인자로 연결한다.
-- `commands/plan.ts`: GoalSpec 생성·검증, `planTask()` 호출, PlanningResult 반환.
-- `commands/decision.ts`: `runDecision()`에 입력을 위임하고 결과 반환. Snapshot / Goal / 파일 loading /
+- `commands/plan/plan.ts`: GoalSpec 생성·검증, `planTask()` 호출, PlanningResult 반환.
+- `commands/decision/decision.ts`: `runDecision()`에 입력을 위임하고 결과 반환. Snapshot / Goal / 파일 loading /
   Specialist 구성은 application entry의 책임이며 CLI에서 재조립하지 않는다.
-- `commands/execute.ts`: `executeTask()` 호출과 결과 출력, Review → Delivery → Cleanup 연결.
+- `commands/execute/execute.ts`: `executeTask()` 호출과 결과 출력, Review → Delivery → Cleanup 연결.
 - `commands/review/`: 변경 presentation과 Review completion gate.
 - `commands/delivery/`: Apply 성공 후 Commit, Commit 성공 후 Push의 승인·결과 연결.
 - `commands/cleanup/`: Delete / Keep 결정에 따라 infrastructure의 worktree 제거 호출.

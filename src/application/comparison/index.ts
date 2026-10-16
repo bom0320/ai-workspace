@@ -16,3 +16,4 @@ export {
   runCodexComparator,
   type CodexComparatorOptions,
 } from "./comparator/codex-comparator.js";
+export { compareDecisions } from "./flow/compare-decisions.js";

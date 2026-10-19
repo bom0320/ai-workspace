@@ -8,7 +8,8 @@
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
 현재 구현은 이 브랜치의 v0 / v1 / v2 / v3 코드 기준이다. Future responsibility는 현재 runtime이나
-추가할 폴더의 명세가 아니며, 특정 framework/runtime 도입을 확정하지 않는다.
+추가할 폴더의 명세가 아니다. v4는 LangGraph.js Workflow Runtime 채택이 확정됐지만 설치·통합과
+CEO workflow는 미구현이며 아래 Current Architecture와 구분한다.
 
 ## 2. Current Architecture
 
@@ -207,24 +208,96 @@ Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구
 
 ## 5. Target Responsibility Model
 
-현재 Decision / Comparison 책임 위에 향후 Synthesis / Human escalation을 추가하는 모델이다.
-독립 plane, 별도 CEO / Coordinator 또는 ADE layer를 만들라는 명세가 아니다.
+### v4 결정과 구현 상태
+
+v4 목표는 **CEO Governance / AI Organization Orchestration의 전체 E2E lifecycle**이다.
+CEO Agent가 Human Goal을 분석하고 조직을 제안하며 독립 판단을 종합한 뒤, 승인된 작업을 기존
+Repository Harness에서 실행하고 최종 Executive Report를 Human에게 전달한다.
+단일 SynthesisResult 생성만으로 v4가 완료되는 것은 아니다.
+
+| 항목 | 확정된 결정 | 현재 구현 상태 |
+| --- | --- | --- |
+| Workflow Runtime | LangGraph.js 채택 | 패키지 설치·코드 통합 없음 |
+| Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 존재; CEO 실행 방식은 v4 설계 대상 |
+| Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
+| Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
+| 기존 capability | v0–v3 Application API / Domain Model 재사용 | 기존 Planning / Execution / Decision / Comparison 동작 유지 |
+
+### v4 Target Workflow — Planned
 
 ```text
-Human ↔ CLI / Human decision surface
-              ↓
-AI Workspace Governance: Contract / Authority / Context / Decision / Evidence
-              ├─ 현재: Planning / Execution / Independent Decision / Structured Comparison
-              ├─ 향후: Synthesis / Human escalation
-              └─ 실행 위임 → Replaceable runtime + Git / Process infrastructure → Repository
+Human Goal / Constraints
+    ↓
+CEO Agent: Intent / Task Analysis → Staffing / Context / Budget Proposal
+    ↓
+Harness Validation
+    ↓
+Human Staffing Approval
+    ↓
+Specialist Agents (v2): Independent Analysis → AgentDecision[]
+    ↓
+Decision Comparison (v3): Agreement / Conflict / Trade-off / Gaps
+    ↓
+CEO Synthesis / Decision
+  Recommendation / Rationale / Evidence / Unresolved Issues / Human Escalation
+    ↓
+Harness Validation
+    ↓
+Human Governance: Approve / Override / Reject
+    ↓ (승인된 내용만 진행)
+Approved Decision
+    ↓
+TaskContract / Planning (v1)
+    ↓
+Human Task Approval
+    ↓
+Repository Harness / Worker (v0)
+  Safe Workspace / Scope Enforcement / Verification / Evidence
+    ↓
+Human Change Review / Delivery (Apply / Commit / Push는 각각 별도 승인)
+    ↓
+CEO Executive Report
+    ↓
+Human
 ```
 
-Harness가 use-case의 순서와 상태 제어·Domain 의미를 소유한다. 외부 runtime이 실행 일부를 맡더라도
-framework run/session/step이 core model에 불필요하게 누출되어서는 안 된다.
-실제 두 번째 구현이나 중복 책임이 생기기 전에 generic SpecialistRunner, provider registry,
-`infrastructure/codex` 같은 abstraction을 미리 만들지 않는다. 도입 순서와 판단은
-[Project Direction](project-direction.md#build-vs-adopt), v3 이후 checkpoint는
-[Roadmap](roadmap.md#runtime-framework-evaluation)을 따른다.
+도식은 승인된 작업의 목표 경로다. Reject / 승인 대기 / validation 실패 시 실행을 진행하지 않아야 하며,
+Override의 변경 내용도 Harness 검증과 필요한 승인 범위를 충족해야 한다. 실패·거절·미해결 이슈의
+보고 및 종료 분기는 v4 Domain 설계에서 정의한다. 현재 CLI가 이 전체 흐름을 실행한다는 뜻은 아니다.
+
+### 책임과 소유권
+
+| 주체 | v4 책임 | 권한 경계 |
+| --- | --- | --- |
+| CEO Agent — Autonomous Decision Maker | Goal 분석, Intent / Task Analysis, Staffing / Context / Budget Proposal, Specialist 판단 종합, Recommendation / Trade-off 판단, Escalation 제안, Executive Report | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
+| Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
+| LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
+| Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 우선 재사용, 구체적인 CEO 호출 방식은 v4에서 설계 |
+| Human — Final Authority | Goal / Constraints, Staffing Approval, Governance Approve / Override / Reject, Task Approval, Change Review, Apply / Commit / Push | 각 승인은 독립된 대상과 의미를 가지며 다른 권한의 포괄 승인이 아님 |
+
+### 통합 시 지켜야 할 invariant
+
+- 기존 `planTask()` / `executeTask()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
+  Decision 생성과 Comparison의 독립 capability 경계를 유지하고 각 application에 전체 조직 workflow를 숨겨 넣지 않는다.
+- LangGraph.js가 workflow state와 순서를 실행하더라도 Governance 전이의 허용 조건·의미는 Harness가 정의한다.
+  Framework state / run / node가 core Domain Model에 불필요하게 누출되지 않도록 한다.
+- Human Approval은 단순 interrupt가 아니다. 승인 주체·대상·내용·유효 조건을 Harness가 검증하고
+  staffing 승인, Governance 승인, Task Approval, Review / Apply / Commit / Push를 분리한다.
+- 전체 LangGraph State를 Specialist에게 자동 전달하지 않는다. 승인된 Context만 projection하고
+  같은 Snapshot / Goal, Specialist 간 독립성과 제한된 authority를 보존한다.
+- Workflow checkpoint는 실행 재개용 상태다. 영구 Governance / Provenance Record의 의미·보존 정책을
+  대신하지 않으며 checkpoint만으로 승인 이력·Decision / Evidence traceability가 보장되지 않는다.
+- 승인 후 resume / retry / replay에서 Worker / Apply / Commit / Push의 중복 실행 위험을 다룬다.
+  Side effect 완료 여부와 재실행 허용 조건을 확인하고, stale approval이나 변경된 Repository 상태로
+  실행하지 않도록 설계·테스트한다. 현재 exactly-once 실행이나 crash recovery가 구현됐다는 주장이 아니다.
+- CEO 판단 품질과 runtime 실행 안정성을 별도로 검증한다. Schema / reference 통과가 recommendation의
+  의미적 타당성을 증명하지 않으며 workflow 완료가 Agent 품질이나 Multi-Agent 우위를 입증하지 않는다.
+
+LangGraph.js의 구체적인 graph / state schema / checkpoint backend / Domain type / 파일 배치는
+이 문서에서 선행 확정하지 않는다. 실제 책임과 요구가 생길 때 설계하며 generic SpecialistRunner,
+provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도입 원칙은
+[Project Direction](project-direction.md#build-vs-adopt), 단계별 구현과 완료 기준은
+[Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
 
 ## 6. Current and Conditional Domain Models
 
@@ -239,7 +312,8 @@ framework run/session/step이 core model에 불필요하게 누출되어서는 �
 | ComparisonPayload | Current | protocol/comparison.ts의 strict Zod schema와 inferred type. Comparator output의 구조 검증을 통과한 상태; Reference Validation 뒤 같은 shape를 ComparisonResult로 반환 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| Synthesis / CEO / Coordinator | Future / Conditional | 종합·escalation 책임과 별도 Agent 구현 여부를 구분. Runtime 평가 후 선택 |
+| CEO Agent / Synthesis / Staffing / Executive Report | v4 Planned | CEO의 판단·종합·보고 역할은 목표로 확정; Domain / protocol과 Codex 실행 방식은 단계별 설계, 현재 미구현 |
+| 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
 
 Planning의 PlannerDecision은 inspect / complete protocol이고 AgentDecision과 다른 개념이다.
@@ -566,5 +640,5 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Decision Context는 Snapshot commit의 explicit files이며 다른 Specialist의 Decision을 포함하지 않는다.
 - Schema 및 Evidence path / line 검증을 Decision의 의미적 정확성 보장으로 과장하지 않는다.
 - Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.
-- 실제 domain 의미 없는 Run / Round 복제나 CEO / Coordinator 역할명을 구현 약속으로 만들지 않는다.
+- 실제 domain 의미 없는 Run / Round 복제나 별도 Coordinator를 선행 구현하지 않는다. v4 CEO 역할의 구체 설계는 단계적으로 진행한다.
 - Runtime boundary는 Zod validation을 사용하며 현재 요청에 필요하지 않은 추상화를 만들지 않는다.

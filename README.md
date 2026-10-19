@@ -27,9 +27,17 @@ Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry
 - [Roadmap](docs/roadmap.md): 어디로 가는가 — v0–v3와 이후 검증 단계
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
-범용 Agent Framework를 대체하는 것이 목표는 아니다. 향후 필요한 runtime / infrastructure는
-기존 기술을 평가하되 governance semantics는 프로젝트가 소유한다. 판단 기준은
-[Project direction](docs/project-direction.md#build-vs-adopt)에 둔다.
+**v4 — CEO Governance / AI Organization Orchestration은 Planned**다. Workflow Runtime은
+**LangGraph.js 채택 확정 / 설치·통합 미구현**이며, 기존 Codex 기반 Agent 실행과 v0–v3 API를 재사용한다.
+Human Goal → CEO의 Staffing / Context / Budget 제안 → Human 승인 → 독립 Decision / Comparison
+→ CEO Synthesis → Human Governance → 승인된 TaskContract / Repository 실행 → Change Review / Delivery
+→ CEO Executive Report까지 전체 E2E 연결이 목표다. 단일 Synthesis 생성으로 완료하지 않는다.
+
+LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
+소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.
+판단 기준은 [Project Direction](docs/project-direction.md#build-vs-adopt), 책임 경계는
+[Architecture](docs/architecture.md#5-target-responsibility-model), 순서는
+[Roadmap](docs/roadmap.md#v4--ceo-governance--ai-organization-orchestration)에 둔다.
 
 아래는 지금 사용할 수 있는 기능과 사용법이다.
 

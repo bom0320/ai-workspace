@@ -11,8 +11,7 @@
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
-| Architecture checkpoint | Runtime Framework Evaluation | Next / Planned checkpoint, v3 이후·v4 구현 방식 선택 전 |
-| v4 | CEO Governance / Explainable Synthesis / Human Governance | Planned, 별도 CEO Agent는 미확정 |
+| v4 | CEO Governance / AI Organization Orchestration | Planned; LangGraph.js 채택 확정, 통합 미구현 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
@@ -172,60 +171,65 @@ Command unit test는 Goal / Decision 배열 identity와 두 application의 실�
 CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded re-query와
 특정 framework/runtime 채택은 v3 완료에 포함하지 않는다.
 
-## Runtime Framework Evaluation
+## v4 — CEO Governance / AI Organization Orchestration
 
-상태: **Next / Planned architecture checkpoint**. v3 종료 후 v4 구현 전에 실제 runtime 요구가
-생겼는지 평가한다. 별도 제품 version이나 채택 확정이 아니다.
+> Human Goal부터 CEO의 조직 구성·판단, Human 승인, Repository 실행과 Executive Report까지 연결할 수 있는가?
 
-Make vs Adopt 경계 정리 → v3 Domain 설계 → v3 구현 / E2E → 작은 runtime spike →
-v4부터 가치가 확인된 runtime의 선택적 채택 순서를 따른다.
+상태: **Planned**. **Workflow Runtime은 LangGraph.js 채택으로 확정**했다.
+기존 Codex 기반 Agent Execution Runtime과 v0–v3 Application API / Domain Model을 우선 재사용한다.
+LangGraph.js는 아직 설치·통합되지 않았으며 CEO / 전체 workflow도 미구현이다.
 
-> v3에서 구현한 Domain Language를 기준으로, v4부터 범용 Agent Runtime 문제가 실제로
-> 등장하는 시점에 Framework를 평가·도입한다.
+기존 Runtime Framework Evaluation checkpoint와 별도 선행 Runtime Spike는 제거한다.
+채택 여부를 다시 결정하는 단계 없이 아래 구현 과정의 필요한 시점에 LangGraph.js를 통합하고,
+구체 기능의 작동 여부·runtime 안정성과 Harness ownership은 통합 테스트 및 전체 E2E에서 검증한다.
+Make vs Adopt 원칙은 [Project Direction](project-direction.md#build-vs-adopt)을 유지한다.
 
-실행 모델을 맡길 구체적인 요구가 있어야 채택한다. 모든 범용 기술을 직접 만든 뒤 붙이는 전략도,
-처음부터 framework의 domain model에 맞추는 전략도 아니다. 필요한 library는 별도 runtime 전환 없이 실제 필요가 생길 때 평가·사용할 수 있다.
-공통 판단 기준은 [Design Decision Filter](project-direction.md#design-decision-filter)를 따른다.
+### 목표와 책임
 
-예를 들어 향후 `spike/agents-sdk-runtime` 같은 격리된 실험에서 현재 `runCodexSpecialist()`와 같은
-Domain Input / Output 책임을 가진 Agents SDK prototype을 비교할 수 있다. 이 branch나 prototype은
-아직 만들지 않았고 OpenAI Agents SDK를 채택한 것도 아니다.
+Human Goal → CEO 분석·Staffing / Context / Budget 제안 → Harness Validation → Human Staffing Approval
+→ v2 Independent Decisions → v3 Comparison → CEO Synthesis / Decision → Harness Validation
+→ Human Governance (Approve / Override / Reject) → Approved Decision → v1 Planning / TaskContract
+→ Human Task Approval → v0 Repository Harness / Worker → Human Change Review / Delivery
+→ CEO Executive Report → Human의 전체 lifecycle이 목표다.
 
-### 평가 기준
+CEO는 Autonomous Decision Maker, Harness는 Governance & Control Owner, LangGraph.js는 Workflow Runtime,
+Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 도식과 권한 경계는
+[Target Architecture](architecture.md#5-target-responsibility-model)를 따른다.
+CEO의 자율 판단이 실행 authority 확대를 뜻하지 않으며 각 Human 승인은 독립적이다.
 
-- Harness control ownership과 Domain Input / Output 보존
-- Context isolation, structured output, tool governance와 guardrails
-- Tracing, HITL과 실제 workflow 요구 충족 여부
-- Framework coupling, runtime complexity, performance, maintainability
+### 내부 구현 순서
 
-가치가 확인되지 않으면 현재 구현을 유지한다. 두 번째 runtime의 실제 필요 전에는 generic
-SpecialistRunner interface, provider registry, runtime abstraction layer를 만들지 않는다.
-기술별 평가 시점은 [도입 원칙](project-direction.md#외부-기술과의-관계-및-도입-시점)에 둔다.
+1. **CEO Domain & Authority**: CEO 판단 책임과 실행 권한의 구분, Harness 정책·계약 설계.
+2. **Intent Analysis & Staffing**: Human Goal / Constraints를 분석해 Staffing / Context / Budget Proposal 생성.
+3. **Human Staffing Approval**: Harness proposal validation과 명시적 승인 enforcement 연결.
+4. **Context Routing & Coordination**: 승인된 Context projection, 권한·예산·Snapshot 일관성과 독립성 보존.
+5. **Independent Decision & Comparison**: 기존 v2 / v3 application을 통합하고 원본 Decision / Evidence 참조 유지.
+6. **CEO Synthesis**: Recommendation, Rationale / Evidence, Trade-off, Unresolved Issues / Escalation 표현.
+7. **Human Governance**: Approve / Override / Reject의 대상·효과를 검증하고 승인된 Decision만 handoff.
+8. **Execution Handoff**: v1 Planning / TaskContract → Human Task Approval → v0 실행 → Review / Delivery 연결.
+9. **Executive Reporting**: 판단 근거, 승인·실행·Verification / Evidence와 미해결 사항을 Human에게 보고.
+10. **E2E & Evaluation**: Human Goal부터 Executive Report까지 검증하고 CEO 판단 품질과 runtime 안정성을 분리 평가.
 
-## v4 — CEO Governance / Explainable Synthesis / Human Governance
-
-> Comparison 결과로 설명 가능한 recommendation을 만들고 Human이 판단할 대상과 이유를 드러낼 수 있는가?
-
-상태: **Planned**. CEO Governance는 종합 책임을 가리키며 별도 CEO Agent 구현이 성공 기준은 아니다.
-
-```text
-Decision Comparison
-→ Evidence-backed recommendation
-→ Unresolved conflict / trade-off / uncertainty 표시
-→ 필요한 Human escalation
-→ approve / override / reject
-```
+LangGraph.js의 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합은
+이 순서 중 실제로 필요한 단계에서 진행한다. Graph 설계·checkpoint backend·CEO 호출 방식·Domain
+schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 구조적 대칭만을 위해 미리 만들지 않는다.
 
 ### Exit Criteria
 
-- Recommendation이 원래 AgentDecision / Evidence / 관련 Verification까지 추적 가능하다.
-- 해결되지 않은 충돌, 근거 부족, scope / authority 변경 등 escalation 조건을 설명한다.
-- Approve / override / reject의 대상·권한·이유·결과를 구분한다.
-- 기존 Task Approval / Change Review / Apply / Commit / Push의 권한 분리와 Human merge / release 권한을 보존한다.
+- **단일 SynthesisResult가 아닌 Human Goal → 최종 Executive Report의 전체 E2E**가 연결된다.
+- Staffing / Context / Budget Proposal을 Harness가 검증하고 Human Staffing Approval을 강제한다.
+- LangGraph State 전체를 Specialist에게 전달하지 않고 승인된 Context, 독립 판단과 같은 Snapshot 기준을 유지한다.
+- Synthesis / Report의 recommendation과 근거가 원본 AgentDecision / Comparison / Evidence / 관련 Verification에 연결된다.
+- 미해결 Conflict / Trade-off / Uncertainty와 Human escalation을 드러내고 Approve / Override / Reject를 구분한다.
+- Governance 승인과 Task Approval / Change Review / Apply / Commit / Push를 분리하며 승인 없이 실행 권한을 확대하지 않는다.
+- 거절·validation 실패·실행 실패 경로에서 권한이 우회되지 않고 결과와 미해결 상태가 보고된다.
+- Interrupt / resume / checkpoint·recovery를 실제 통합에서 검증한다. Workflow checkpoint와 영구 Governance /
+  Provenance Record를 구분하고 승인 후 resume / retry에서 Worker / Apply / Commit / Push 중복 위험을 검사한다.
+- CEO 판단 품질과 runtime state / routing / 복구·실행 안정성의 검증 결과를 구분한다.
+  실제 Agent 실행 관찰과 fake runtime 자동 테스트를 구분하며 품질 우위를 가정하지 않는다.
 
-구현은 deterministic function, single LLM call, Agents SDK runtime, framework supervisor, 별도 CEO Agent
-중 미정이다. v3 이후 평가 결과와 tool guardrail / HITL 등의 실제 요구로 선택한다.
-Coordinator나 Staffing을 독립 조직 runtime으로 만드는 약속도 아니다.
+v4의 큰 목표와 LangGraph.js 채택은 고정한다. 구체적인 Domain 설계와 내부 구현은 위 순서로 진행하며,
+현재 CEO 실행, 승인·재개 workflow, Executive Report가 구현되었다고 해석하지 않는다.
 
 ## v5 — Evaluation
 
@@ -248,7 +252,8 @@ E2E 수치를 협업 우위나 생산성 보장의 증거로 사용하지 않는
 
 ## Later — Requirement-driven Infrastructure
 
-OPA는 authority 규칙의 동적 복잡성이 증가할 때, Temporal / Restate는 장기 HITL, crash recovery,
-durable scheduling / retry / checkpoint 요구가 생길 때만 평가한다. 현재 도입하지 않는다.
+OPA는 authority 규칙의 동적 복잡성이 증가할 때 평가한다. Temporal / Restate 등 추가 durable runtime은
+v4 LangGraph.js 통합으로 충족되지 않는 장기 HITL / crash recovery / durable scheduling 등의 요구가
+실제로 확인될 때 검토하며 현재 채택하지 않는다.
 메모리상 Agent 상태 재개와 전체 workflow durability를 구분하며, domain records 보존을 generic durable
 engine 구축으로 확대하지 않는다. Ownership과 시점은 Project Direction을 기준으로 판단한다.

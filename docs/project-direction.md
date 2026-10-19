@@ -110,50 +110,58 @@ AI Workspace는 governance semantics와 use-case의 순서·상태 제어를 소
 >
 > Keep governance ownership in the Harness.
 
-Framework/SDK를 코어 orchestration의 주체로 먼저 도입하지 않는다. Harness가 Domain Language와
-상태 제어를 정의한 뒤 범용 기능을 Library / Framework / Runtime / Infrastructure로 격리해 조합한다.
-향후 외부 runtime이 실행 구조 일부를 맡더라도 Authority, Context, Evidence, Conflict, Human approval의
-의미를 대신 정의해서는 안 된다.
+Harness가 Domain Language와 Governance 정책을 정의하고, 범용 실행 메커니즘은 외부 기술로
+격리해 조합한다. **v4 Workflow Runtime은 LangGraph.js 채택으로 확정**했다. Human Goal부터
+Staffing / 승인 / 판단 / 실행 / Executive Report까지 연결할 workflow 요구에 따른 Architecture Decision이다.
+CEO의 Autonomous Decision과 Harness의 Execution Authority를 분리하며 Human이 최종 권한을 가진다.
 
-순서는 Make vs Adopt 경계 정리 → v3 Domain 설계 → v3 구현 / E2E → 필요한 runtime spike 평가 →
-v4부터 가치가 확인된 runtime의 선택적 채택이다. 모든 기술을 직접 만든 뒤 framework를 붙이는 전략도,
-처음부터 framework의 domain model에 AI Workspace를 맞추는 전략도 아니다. 현재 필요한 commodity
-capability는 v3 중에도 library로 활용할 수 있다.
+LangGraph.js는 workflow state / routing / coordination / interrupt·resume / checkpoint·recovery /
+lifecycle의 실행 메커니즘을 맡는다. Authority, Context, Evidence, Conflict, Human approval의 의미와
+정책은 Harness가 소유한다. Agent Execution Runtime은 기존 Codex 기반 실행을 우선 재사용한다.
+Workflow Runtime을 채택하는 것이 Codex나 기존 v0–v3 Domain Model / Application API를 대체하는 것은 아니다.
+
+채택 여부를 결정하는 별도 Framework Evaluation / 선행 Runtime Spike는 생략한다.
+LangGraph.js 통합은 v4의 필요한 단계에서 진행하고, 구체적 기능의 실제 작동 여부와 소유권 보존은
+구현·통합 테스트·전체 E2E에서 검증한다. **기술 선택은 확정됐지만 패키지 설치·코드 통합은 미구현**이다.
+구체적인 책임과 전체 목표는 [v4 Architecture](architecture.md#5-target-responsibility-model)에 둔다.
 
 ### Library vs Framework / Runtime
 
 | 구분 | 실행 흐름의 소유권 | 도입 판단 |
 | --- | --- | --- |
 | Library | Harness가 흐름을 계속 소유하며 필요한 capability만 호출 | 현재 필요가 생기면 기존 구현을 우선 평가해 사용 가능 |
-| Framework / Runtime | Agent loop, workflow state, handoff, pause / resume 등 실행 구조 일부를 맡을 수 있음 | ownership과 실행 모델의 영향을 별도 architecture decision과 spike로 검증 |
+| Framework / Runtime | Agent loop, workflow state, handoff, pause / resume 등 실행 구조 일부를 맡을 수 있음 | 실행 모델과 ownership을 architecture decision으로 명시하고 통합 과정에서 검증; v4는 LangGraph.js로 확정 |
 | Infrastructure / Tool | 저장·관찰·policy evaluation·protocol·process 관찰 등의 수단 제공 | 실제 요구와 운영 부담, domain 경계 보존 여부로 선택 |
 
 현재 Zod는 runtime schema validation library로 사용한다. Serialization / logging utility,
 tracing instrumentation, retry utility, concurrency primitive도 필요가 생기면 평가할 library 예다.
 이 목록이 현재 retry / concurrency 기능을 제공한다는 뜻은 아니다.
 
-OpenAI Agents SDK는 단순 schema library가 아닌 Agent Runtime / Framework **평가 후보**다.
+OpenAI Agents SDK는 단순 schema library가 아닌 Agent Runtime / Framework 후보이며 현재 채택하지 않았다.
+v4 Workflow Runtime 선택을 다시 결정하기 위한 선행 spike 후보로 두지 않는다.
 Pydantic AI 역시 단순 validation library로 분류하지 않으며 현재 TypeScript stack에 도입할 계획은 없다.
 현재 사용하는 schema library는 Zod다.
 
 ### 외부 기술과의 관계 및 도입 시점
 
 현재 stack은 Node.js, TypeScript, pnpm, tsx, Vitest, Zod와 외부 Codex CLI다.
-OpenAI Agents SDK, OPA, Temporal, Restate, LangGraph, CrewAI, LangSmith는 현재 코드나
-production dependency에 도입되어 있지 않다. 아래는 **채택 확정이 아닌 평가 시점과 후보**다.
+LangGraph.js는 **v4 Workflow Runtime으로 채택 확정 / 설치·통합 미구현**이다.
+OpenAI Agents SDK, OPA, Temporal, Restate, CrewAI, LangSmith도 현재 dependency가 아니며,
+LangGraph.js 외 기술의 채택을 이번 결정으로 확정하지 않는다.
 
-| 범용 책임 | 현재 판단 | 평가가 필요한 조건 / 후보 |
+| 범용 책임 | 현재 결정 / 구현 상태 | 도입·검증 조건 |
 | --- | --- | --- |
-| Agent Runtime / Guardrails | 도입 보류 | tool-enabled Specialist 또는 종합·조율 역할이 실제로 필요할 때. v3 이후 OpenAI Agents SDK spike 등으로 평가하며 CEO / Coordinator Agent를 전제하지 않음 |
-| Tracing / Observability | 현재 duration telemetry로 충분 | v3 이후 Specialist / Comparison / 제한된 Re-query 등 흐름이 복잡해질 때. 가장 빠른 외부 infrastructure 도입 후보이며 instrumentation과 backend를 구분. OpenTelemetry / LangSmith 등 평가 가능 |
-| Generic policy evaluation | 현재 별도 engine 불필요 | Role × Action × Resource 권한 규칙이 동적이고 복잡해질 때 OPA 등 평가 |
-| Durable workflow execution | 현재 요구에서는 확실히 불필요 | 장시간 Human approval, process/server restart 후 resume, multi-hour / multi-day workflow, durable scheduling / step retry / checkpoint가 실제 요구가 될 때 Temporal / Restate 등 평가 |
-| Workflow / orchestration framework | 현재 도입·재작성 계획 없음 | 범용 실행 구조가 실제 문제일 때 LangGraph / Agent Framework / CrewAI 등 비교 가능 |
-| Tool interoperability / process observation | 필요 시 검토 | MCP / tmux 등 도구를 활용할 수 있으나 자체 generic protocol이나 process UI를 제품 목표로 삼지 않음 |
+| Workflow Runtime | LangGraph.js 채택 확정; 통합 미구현 | v4 단계별 구현에서 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합 및 E2E 검증 |
+| Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | CEO의 구체적 호출 방식은 v4에서 설계; OpenAI Agents SDK 등으로 교체하는 결정은 없음 |
+| Tracing / Observability | 현재 duration telemetry 사용 | v4 흐름의 관찰 요구에 따라 instrumentation / backend 평가; OpenTelemetry / LangSmith 등은 미채택 |
+| Generic policy evaluation | 현재 별도 engine 불필요 | Role × Action × Resource 규칙이 동적으로 복잡해질 때 OPA 등 평가 |
+| 추가 durable execution infrastructure | 현재 미채택 | LangGraph.js 통합 후에도 남는 장기 HITL / crash recovery / durable scheduling 요구를 근거로 Temporal / Restate 등 필요성 판단 |
+| Tool interoperability / process observation | 필요 시 검토 | MCP / tmux 등을 활용할 수 있으나 자체 generic protocol / process UI는 목표가 아님 |
 
-AI Workspace는 이 기술들과 경쟁하는 범용 플랫폼을 만들지 않는다. 후보의 구체적 기능과 적합성은
-실제 spike 시점에 조사한다. [Runtime Framework Evaluation](roadmap.md#runtime-framework-evaluation)의
-진입·평가 조건을 통과하기 전에는 특정 runtime을 필수 dependency로 고정하지 않는다.
+AI Workspace는 범용 플랫폼과 경쟁하기보다 기존 기술을 조합한다. LangGraph.js의 채택 여부를
+재평가하는 checkpoint는 두지 않고, [v4 구현과 E2E](roadmap.md#v4--ceo-governance--ai-organization-orchestration)에서
+Context isolation, approval enforcement, resume / retry 시 중복 실행 위험과 운영 요구를 검증한다.
+설치만으로 특정 기능이나 복구 보장이 성립한다고 보지 않는다.
 
 OPA가 필요해져도 “UX Specialist는 Repository write 불가”라는 Domain Rule은 AI Workspace가 정의한다.
 OPA는 그 규칙의 representation / evaluation mechanism이 될 수 있고 runtime은 결과에 따라 action을
@@ -204,7 +212,8 @@ v3는 Concern별 Agreement / Conflict / Trade-off와 Gap을 구조화하고 원�
 비교 불가능성도 표시한다. 이는 분류나 요약의 의미적 정확성 증명이 아니며 합의·종합·해결을 수행하지 않는다.
 
 v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
-종합 책임의 구현 방식은 runtime 평가 이후 선택하며 CEO라는 이름을 architecture commitment로 삼지 않는다.
+v4는 CEO Agent가 판단과 종합·보고를 맡고 LangGraph.js가 전체 workflow를 실행하도록 설계한다.
+구체적인 CEO Domain / protocol / Codex 실행 방식은 단계적으로 정하며 현재 구현된 기능은 아니다.
 
 ### 5. Human Governance
 
@@ -241,8 +250,9 @@ Schema validation, serialization, retry, logging, tracing instrumentation, concu
 Agent가 실행되고 멈추고 상태를 저장·재개하는 프로그램의 근본 실행 구조가 바뀌는가?
 Agent loop, handoff, workflow state, pause / resume, checkpoint, durable execution, long-lived HITL이 예다.
 
-**그렇다면 Framework / Runtime architecture decision으로 별도 평가한다.** 작은 spike에서 Harness control,
-Context isolation과 coupling을 확인한다. 두 번째 runtime 구현의 실제 필요 전에는 generic SpecialistRunner,
+**그렇다면 Framework / Runtime architecture decision을 명시하고 실행 모델의 영향을 검증한다.**
+v4는 LangGraph.js 채택이 확정되어 별도 선행 spike 대신 구현·E2E에서 Harness control / Context isolation /
+coupling을 확인한다. 두 번째 Agent Execution Runtime의 실제 필요 전에는 generic SpecialistRunner,
 provider registry, runtime abstraction layer를 미리 만들지 않는다.
 
 세 질문은 배타적 분류가 아니다. Domain Rule을 library로 평가하거나 runtime으로 실행할 때도 의미의

@@ -38,8 +38,8 @@
 - Human은 승인과 최종 governance 결정을 소유한다.
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - Worker는 scoped execution, Specialist는 supplied Context의 독립 판단을 수행한다.
-- Git / Process 및 교체 가능한 runtime은 기술적 실행 수단이다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 CEO / Coordinator / DecisionRun / DecisionRound를 필수 구현으로 전제하지 않는다.
+- Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js 채택 확정 / 설치·통합 미구현이며, 기존 Codex 기반 Agent Execution Runtime을 우선 재사용한다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 v4는 CEO Agent의 판단·종합·보고와 전체 조직 workflow를 목표로 하되 현재 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 

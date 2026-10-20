@@ -366,6 +366,42 @@ Evaluation은 요청이 제공된 승인 범위와 사용량에 부합하는지 
 구성을 담당해야 한다. 현재 함수는 AuthorityVerdict / Invocation을 생성하지 않으며 I/O나 상태 변경이 없다.
 기존 v0–v3 실행 경로에는 연결하지 않는다.
 
+### v4 Step 2.1 — Intent & Staffing Domain / Protocol — schema만 구현
+
+```text
+Human GoalSpec + RepositorySnapshot + Available Specialists + Repository Context
+→ CEOStaffingDecision
+   ├─ propose → StaffingDraft
+   ├─ inspect → Inspection Request
+   └─ escalate → Human Clarification
+→ Harness Finalization / Validation (Planned) → StaffingProposal
+→ Human Staffing Approval (Planned) → ApprovedOperatingScope issuance (Planned)
+```
+
+`application/staffing/model/staffing.ts`는 CEO의 해석인 IntentAnalysis와 공식 제안인
+StaffingProposal / StaffingAssignment를 정의한다. Proposal은 원본 Human GoalSpec과 Constraints,
+Harness가 확보한 RepositorySnapshot, Harness 소유 Proposal / Assignment ID를 보존할 구조다.
+IntentAnalysis는 원본 Goal을 대체하지 않는다. 실제 원본 보존·ID 발급은 후속 Finalization 책임이며
+schema parsing이 출처·발급·Constraints 준수를 증명하지는 않는다.
+
+`protocol/ceo.ts`는 model schema에서 Harness 소유 필드를 제외하여 StaffingAssignmentDraft /
+StaffingDraft를 파생하고 strict discriminated union인 CEOStaffingDecision을 정의한다.
+의존성은 protocol → model 방향이며 순환 import나 중복 schema가 없다. CEO는 업무·Context·Budget과
+선택 이유를 제안하지만 Goal / Snapshot / ID / Approval / Authority를 Draft에 주입할 수 없다.
+Specialist ID는 기존 decision 소유 SpecialistDefinition을 참조하며 해당 모델을 이동하거나 복제하지 않는다.
+Assignment objective는 이번 Goal의 위임 업무이고 SpecialistDefinition.objective는 기본 역할·책임이다.
+
+모든 외부 object는 strict하며 필수 문자열은 non-empty, Budget은 양의 정수, assignments /
+contextPaths / inspect paths / escalate questions는 최소 1개다. considerations / uncertainties는 빈 배열을
+허용한다. Schema는 구조만 검증한다. Specialist 등록·역할 적합성, Context 경로 안전성·접근권·파일 존재,
+Budget 정책 상한, 실제 Snapshot 상태, Human Approval은 검증하지 않는다. Proposal parsing은
+ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 접근 권한을 만들지 않는다.
+
+현재 구현은 schema / inferred type / unit test / public API뿐이다. CEO 실행, Planning Loop,
+Finalization / Policy Validation / Approval / Scope 발급 및 LangGraph 연결은 미구현이며 기존 v0–v3와
+Governance 실행 경로는 변경하지 않는다. Step 2.2의 Repository Context Discovery는 추가 Context 요청의
+경로·접근 정책과 조사 한계를 검증하고 Repository 기준 상태에 맞는 Context를 제공하는 후속 책임이다.
+
 ## 6. Current and Conditional Domain Models
 
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
@@ -380,7 +416,8 @@ Evaluation은 요청이 제공된 승인 범위와 사용량에 부합하는지 
 | ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema implemented, enforcement Planned | application/governance의 strict 구조 계약. 승인·권한 검증이나 실행 허용을 제공하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| CEO Agent / Synthesis / Staffing / Executive Report | v4 Planned | CEO의 판단·종합·보고 역할은 목표로 확정; Domain / protocol과 Codex 실행 방식은 단계별 설계, 현재 미구현 |
+| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema implemented, flow Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| CEO Agent / Synthesis / Staffing workflow / Executive Report | v4 Planned | CEO의 판단·종합·보고 역할은 목표로 확정; Domain / protocol과 Codex 실행 방식은 단계별 설계, 현재 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
 

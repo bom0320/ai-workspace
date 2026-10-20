@@ -299,6 +299,41 @@ provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도�
 [Project Direction](project-direction.md#build-vs-adopt), 단계별 구현과 완료 기준은
 [Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
 
+### v4 Step 1.3 — Authority Core Model— schema만 구현
+
+`application/governance/model/authority.ts`는 조직 운영 권한의 Domain 데이터를 소유한다.
+현재 구현은 strict Zod schema / inferred type과 구조 검증 테스트뿐이며 CEO / policy evaluator /
+Workflow 실행은 미구현이다. LangGraph State와 결합하지 않는다.
+
+```text
+CEO-generated InvokeSpecialistRequest
+    ≠ Harness-approved ApprovedOperatingScope
+    ≠ Harness-authorized AuthorizedSpecialistInvocation
+```
+
+CEO는 판단과 실행 요청을 생성한다. Harness는 승인된 Scope와 Governance Policy를 근거로
+실행 권한을 검증하고 Runtime은 Harness가 허용한 실행 입력만 수행해야 한다.
+이 관계의 enforcement와 Verdict 발급 함수는 이후 단계에서 구현한다.
+
+- ApprovedOperatingScope: Goal / RepositorySnapshot, Assignment의 Specialist ID / objective / contextPaths,
+  호출 예산 상한, proposal / approval / policy 참조와 version을 보존한다. 발급 후 불변으로 취급하며
+  권한 변경 시 새 버전을 발급한다. Schema parsing은 객체의 전체 수명 동안 불변성을 강제하거나
+  실제 승인·활성·취소·교체 상태를 검증하지 않는다. Lifecycle은 향후 신뢰 가능한 기록에서 관리한다.
+- InvokeSpecialistRequest: scope ID / version, assignment ID와 요청 Context paths만 받는다.
+  CEO가 authority / objective를 추가하는 입력은 구조적으로 거부하지만 Context 부분집합은 아직 검사하지 않는다.
+- AuthorizedSpecialistInvocation: invocation ID, 기존 Goal / Snapshot / SpecialistDefinition / InspectedFile[]을
+  사용한다. 파일은 후속 enforcement가 승인된 Snapshot에서 구성해야 하며 parse 성공은 실행 권한이 아니다.
+- AuthorityVerdict: allowed는 Invocation을 포함하고 approval-required / denied는 reason을 포함한다.
+  Harness의 검증 결과를 표현하는 구조일 뿐 현재 정책 평가로 Verdict를 생성하지 않는다.
+
+Scope assignments / assignment contextPaths / request requestedContextPaths / invocation files는 최소 1개,
+version / maxAgentInvocations는 양의 정수다. Schema는 필드 구조와 값 범위를 검증하며 approvalRecordId의
+실재·유효성, policy 적합성, Specialist 등록, Context 권한, Snapshot 실제 상태, budget 잔여량과 중복
+Invocation을 검증하지 않는다. Invocation ID는 향후 budget reservation / 중복 실행 제어의 연결점이다.
+
+기존 decision model의 Snapshot / Specialist / Authority에 재사용 schema를 추가하고 기존 타입 shape는
+유지했다. GoalSpec / InspectedFile schema를 재사용하며 AgentDecision을 복제하거나 변경하지 않는다.
+
 ## 6. Current and Conditional Domain Models
 
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
@@ -310,6 +345,7 @@ provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도�
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
 | ComparisonContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / AgentDecision[]만 포함 |
 | ComparisonPayload | Current | protocol/comparison.ts의 strict Zod schema와 inferred type. Comparator output의 구조 검증을 통과한 상태; Reference Validation 뒤 같은 shape를 ComparisonResult로 반환 |
+| ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema implemented, enforcement Planned | application/governance의 strict 구조 계약. 승인·권한 검증이나 실행 허용을 제공하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
 | CEO Agent / Synthesis / Staffing / Executive Report | v4 Planned | CEO의 판단·종합·보고 역할은 목표로 확정; Domain / protocol과 Codex 실행 방식은 단계별 설계, 현재 미구현 |

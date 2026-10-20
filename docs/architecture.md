@@ -302,8 +302,8 @@ provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도�
 ### v4 Step 1.3 — Authority Core Model— schema만 구현
 
 `application/governance/model/authority.ts`는 조직 운영 권한의 Domain 데이터를 소유한다.
-현재 구현은 strict Zod schema / inferred type과 구조 검증 테스트뿐이며 CEO / policy evaluator /
-Workflow 실행은 미구현이다. LangGraph State와 결합하지 않는다.
+Core Model은 strict Zod schema / inferred type을 제공한다. Step 1.4의 순수 Authority Evaluation을
+추가했으며 CEO / Policy Engine / Workflow 실행은 미구현이다. LangGraph State와 결합하지 않는다.
 
 ```text
 CEO-generated InvokeSpecialistRequest
@@ -320,7 +320,7 @@ CEO는 판단과 실행 요청을 생성한다. Harness는 승인된 Scope와 Go
   권한 변경 시 새 버전을 발급한다. Schema parsing은 객체의 전체 수명 동안 불변성을 강제하거나
   실제 승인·활성·취소·교체 상태를 검증하지 않는다. Lifecycle은 향후 신뢰 가능한 기록에서 관리한다.
 - InvokeSpecialistRequest: scope ID / version, assignment ID와 요청 Context paths만 받는다.
-  CEO가 authority / objective를 추가하는 입력은 구조적으로 거부하지만 Context 부분집합은 아직 검사하지 않는다.
+  CEO가 authority / objective를 추가하는 입력은 구조적으로 거부하며 Context 부분집합은 아래 Evaluation에서 검사한다.
 - AuthorizedSpecialistInvocation: invocation ID, 기존 Goal / Snapshot / SpecialistDefinition / InspectedFile[]을
   사용한다. 파일은 후속 enforcement가 승인된 Snapshot에서 구성해야 하며 parse 성공은 실행 권한이 아니다.
 - AuthorityVerdict: allowed는 Invocation을 포함하고 approval-required / denied는 reason을 포함한다.
@@ -333,6 +333,38 @@ Invocation을 검증하지 않는다. Invocation ID는 향후 budget reservation
 
 기존 decision model의 Snapshot / Specialist / Authority에 재사용 schema를 추가하고 기존 타입 shape는
 유지했다. GoalSpec / InspectedFile schema를 재사용하며 AgentDecision을 복제하거나 변경하지 않는다.
+
+### v4 Step 1.4 — Authority Evaluation
+
+```text
+ApprovedOperatingScope + InvokeSpecialistRequest + Trusted Evaluation Context
+→ evaluateInvocationRequest() → InvocationEligibility
+→ Future Authorization → AuthorizedSpecialistInvocation
+```
+
+Governance public API의 순수 함수는 strict 구조 검증 → Scope ID / version 일치 → Active lifecycle →
+Assignment ID 유일성 / 존재 → 승인·요청 Context 경로 검증 및 정확한 부분집합 → Budget 잔여량 순서로
+검사한다. 실패는 reason을 포함한 denied, 모두 통과하면 eligible만 반환한다. 잘못된 입력·음수·비정수·
+안전한 정수 범위를 넘는 사용량도 denied다. 상위 정책의 확대 허용 정보가 없으므로
+reapproval-required는 결과 모델에만 존재하며 현재 evaluator가 추측하여 반환하지 않는다.
+미승인 Assignment / Context 확대는 별도 Staffing Proposal 변경 절차가 필요하다는 이유로 차단한다.
+
+Evaluation Context는 Harness가 제공할 scopeStatus(active / revoked / superseded)와 해당 Scope version의
+usedAgentInvocations다. Scope 객체는 현재 승인 버전을, Context는 그 버전의 최신 lifecycle / usage를
+나타내야 한다. 조회·Persistence·출처 인증은 구현하지 않았으며 입력 parsing으로 신뢰성과 최신성이
+증명되지는 않는다. CEO가 이 입력들을 통제하는 연결은 안전한 enforcement가 아니다.
+
+Context는 repository-relative exact file path로 비교한다. 정규화나 prefix 비교를 하지 않으며 중복,
+빈 segment, dot / dot-dot segment, backslash, colon, control character와 절대경로를 거부한다.
+Decision loader의 absolute / traversal 거부와 일치하면서 모호한 표현을 더 제한한다. 기존 loader는
+파일 읽기를 포함하는 내부 use-case이므로 import하거나 v2의 동작을 변경하지 않는다.
+파일 존재·Git blob·symlink·Snapshot 검증은 수행하지 않는다.
+
+Evaluation은 요청이 제공된 승인 범위와 사용량에 부합하는지 판단한다. eligible은 실제 실행 허가나
+예산 확보가 아니다. Budget Evaluation만 구현하며 Budget Reservation / 동시성 제어 / Usage Recording은
+미구현이다. 후속 Authorization이 최신 권한 확인, 예산의 안전한 확보와 승인된 Snapshot 기반 실행 입력
+구성을 담당해야 한다. 현재 함수는 AuthorityVerdict / Invocation을 생성하지 않으며 I/O나 상태 변경이 없다.
+기존 v0–v3 실행 경로에는 연결하지 않는다.
 
 ## 6. Current and Conditional Domain Models
 

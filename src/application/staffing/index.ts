@@ -14,3 +14,19 @@ export {
   type StaffingDraft,
   type CEOStaffingDecision,
 } from "./protocol/ceo.js";
+export {
+  staffingContextSchema,
+  staffingInspectionLimitsSchema,
+  specialistCandidateSchema,
+  type StaffingContext,
+  type StaffingInspectionLimits,
+  type SpecialistCandidate,
+} from "./protocol/context.js";
+export {
+  discoverStaffingContext,
+  createStaffingContext,
+  inspectStaffingContext,
+  type DiscoverStaffingContextOptions,
+  type StaffingContextState,
+  type StaffingContextResult,
+} from "./flow/discover-context.js";

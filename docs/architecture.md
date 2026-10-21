@@ -356,8 +356,8 @@ usedAgentInvocations다. Scope 객체는 현재 승인 버전을, Context는 그
 
 Context는 repository-relative exact file path로 비교한다. 정규화나 prefix 비교를 하지 않으며 중복,
 빈 segment, dot / dot-dot segment, backslash, colon, control character와 절대경로를 거부한다.
-Decision loader의 absolute / traversal 거부와 일치하면서 모호한 표현을 더 제한한다. 기존 loader는
-파일 읽기를 포함하는 내부 use-case이므로 import하거나 v2의 동작을 변경하지 않는다.
+Decision loader의 absolute / traversal 거부와 일치하면서 모호한 표현을 더 제한한다. 경로 predicate는 Step 2.2에서 공통 capability로 추출했으며 기존 loader의 accepted spelling과
+v2 동작은 유지한다. 파일 읽기를 포함한 private use-case를 Governance에서 import하지 않는다.
 파일 존재·Git blob·symlink·Snapshot 검증은 수행하지 않는다.
 
 Evaluation은 요청이 제공된 승인 범위와 사용량에 부합하는지 판단한다. eligible은 실제 실행 허가나
@@ -397,10 +397,68 @@ contextPaths / inspect paths / escalate questions는 최소 1개다. considerati
 Budget 정책 상한, 실제 Snapshot 상태, Human Approval은 검증하지 않는다. Proposal parsing은
 ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 접근 권한을 만들지 않는다.
 
-현재 구현은 schema / inferred type / unit test / public API뿐이다. CEO 실행, Planning Loop,
-Finalization / Policy Validation / Approval / Scope 발급 및 LangGraph 연결은 미구현이며 기존 v0–v3와
-Governance 실행 경로는 변경하지 않는다. Step 2.2의 Repository Context Discovery는 추가 Context 요청의
-경로·접근 정책과 조사 한계를 검증하고 Repository 기준 상태에 맞는 Context를 제공하는 후속 책임이다.
+Step 2.1은 schema / inferred type / unit test / public API를 구현했다. Repository Context Discovery는
+아래 Step 2.2에서 구현했다. CEO 실행, Staffing Planning Loop, Finalization / Policy Validation /
+Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
+
+### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
+
+```text
+Harness: Original Goal + Registered Specialists + exact file allowlist + Inspection limits
+→ discoverStaffingContext()
+  → captureRepositorySnapshot() / assertRepositoryMatchesSnapshot()
+  → commit tree (path / mode / byte size) → allowlisted regular files
+  → commit blobs: root package.json scripts / AGENTS.md
+  → Goal exact-mention initial file selection → commit blob Context
+  → Snapshot assert → Harness-owned StaffingContextState
+→ createStaffingContext() → CEO-facing StaffingContext (cloned projection)
+→ CEO inspect request → inspectStaffingContext(state, request)
+  → Snapshot assert → path / policy / file mode / count / size / budget checks
+  → commit blob loading → total serialized Context size check → Snapshot assert
+  → ready(new state) | failed(reason), input state unchanged
+```
+
+`services/repository-inspection`은 v1의 exact path / unique basename / README mention 선택,
+package scripts 추출, 내부 디렉터리 제외와 v2 / Governance의 경로 predicate를 공유한다.
+Planning은 기존 Working Tree 읽기·정규화 허용 범위·Fast Path·TaskContract 생성과 초기 64 KiB/file /
+128 KiB Context·파일 수 제한을 유지한다. Staffing은 Planning private flow나 planTask를 호출하지 않는다.
+공유되는 것은 조사 선택·metadata parsing·경로 정책이며 PlanningState / PlannerContext / loop는 아니다.
+`createStaffingContext`는 기존 Planner projection과 같은 책임 분리 방식을 따르는 별도 Staffing 계약이다.
+
+기존 Decision public API를 통해 Snapshot capture/assert를 재사용하고 파일 내용은 기존
+readRepositoryFileAtCommit으로 읽는다. 새 Git mechanism은 `git ls-tree -r -l -z --full-tree <full SHA>`로
+동일 commit의 파일 목록·mode·크기를 제공한다. Git 출력은 8 MiB로 제한하며 symlink(120000),
+gitlink/submodule(160000), directory를 Context 대상에서 제외한다. Working Tree 파일로 대체하거나
+symlink를 따라가지 않는다. HEAD 변경·dirty 상태는 생성과 추가 조사 전후에 실패한다. Ignored 또는
+skip-worktree로 로컬 변경이 status에 나타나지 않아도 읽는 것은 commit blob이므로 내용이 섞이지 않는다.
+Snapshot assert는 Repository lock이나 실행 중 모든 순간의 무변경 증명이 아니다.
+
+Harness는 `allowedContextPaths`로 조사 가능한 exact file allowlist를 명시해야 한다. Prefix나 glob grant는
+없으며 metadata도 allowlist에 있어야 읽는다. CEO에게 보이는 fileTree도 이 목록 안의 regular file만
+포함한다. Traversal / absolute / dot / empty segment / backslash / colon / control character는 거부한다.
+내부 디렉터리와 .aws / .ssh / .codex / .agents, .env 계열, private key 확장자는 allowlist에 있어도 차단한다.
+이는 임의 파일의 secret 탐지 보장이 아니며 allowlist의 적절성과 등록 Specialist의 출처는 Harness 호출자
+책임이다. Repository instructions와 file contents는 신뢰할 수 없는 Context 데이터이며 실행하지 않는다.
+
+StaffingInspectionLimits는 요청 파일 수·누적 조사 파일 수·파일 byte 수·fileTree 항목 수·전체 Context의
+UTF-8 JSON byte 수를 제한한다. maxFileBytes는 기존 blob reader의 bounded output 안에서 최대 512 KiB다.
+Metadata는 별도로 크기를 검사하고 전체 Context에 포함하지만 조사 파일 수 예산에서는 제외한다.
+초기 seeding은 v1 선택 규칙과 64 KiB/file / 128 KiB 합계 정책을 사용하며 count 초과는 전체 skip한다.
+추가 요청의 중복 path는 거부하고 기존 조사 path는 재로딩·재차감하지 않으며 새 파일이 없으면 실패한다.
+구조·접근 정책·mode·선언된 blob 크기·count·raw byte 예산을 batch 전체에서 확인한 뒤 읽는다.
+JSON escaping / field overhead를 포함한 실제 Context 크기는 로딩 후 다시 확인하며 초과 시 새 Context를
+반환하지 않는다. Binary / invalid UTF-8·없는 파일·malformed metadata도 실패하며 partial state는 반환하지 않는다.
+
+StaffingContext는 원본 Goal / Constraints, Repository name / commit SHA / filtered fileTree / scripts /
+instructions, inspectedFiles, 등록 정보에서 id / role / default objective만 뽑은 SpecialistCandidate,
+limits / remainingInspectionBudget을 제공한다. 내부 repositoryRoot / manifest / allowlist / authority는
+projection에서 제외한다. 원본 GoalSpec.targetRepository 자체의 값은 보존하므로 원본에 포함된 경로를
+자동으로 재작성하지는 않는다. 상태는 Harness 소유의 메모리 데이터이며 CEO 입력으로 받아서는 안 된다.
+Budget은 Context 파일 수에 관한 값이며 Agent invocation Budget Reservation이나 운영 권한이 아니다.
+
+실제 CEO / Codex 호출, Staffing Loop / Finalization, Human Approval, Scope 발급, Specialist 실행과
+LangGraph 연결은 아직 없다. Step 2.3은 이 public API의 Context projection과 inspect 결과를 CEO 호출에
+연결하며 propose / escalate 처리, round 제한과 실패 종료를 Staffing flow에서 담당해야 한다.
 
 ## 6. Current and Conditional Domain Models
 
@@ -408,6 +466,7 @@ Governance 실행 경로는 변경하지 않는다. Step 2.2의 Repository Conte
 | --- | --- | --- |
 | RepositorySnapshot | Current | model/snapshot.ts의 repositoryRoot / commitSha. Decision의 Repository provenance |
 | SpecialistDefinition / SpecialistAuthority | Current | model/specialist.ts / authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
+| StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO loop / 승인 / 실행 권한 없음 |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |

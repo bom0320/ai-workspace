@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 
+import { isInternalInspectionComponent, parsePackageScripts } from "@/services/repository-inspection/index.js";
+
 import type { RepositoryInfo } from "../../model/state.js";
 
 function readOptionalFile(path: string): string | undefined {
@@ -14,27 +16,6 @@ function readOptionalFile(path: string): string | undefined {
   }
 }
 
-function readPackageScripts(repositoryRoot: string): Record<string, string> {
-  const contents = readOptionalFile(join(repositoryRoot, "package.json"));
-  if (contents === undefined) {
-    return {};
-  }
-
-  const packageJson: unknown = JSON.parse(contents);
-  if (typeof packageJson !== "object" || packageJson === null) {
-    return {};
-  }
-
-  const scripts: unknown = "scripts" in packageJson ? packageJson.scripts : undefined;
-  if (typeof scripts !== "object" || scripts === null || Array.isArray(scripts)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(scripts).filter(([, value]) => typeof value === "string"),
-  );
-}
-
 export function inspectRepository(repositoryRoot: string): RepositoryInfo {
   const fileTree: string[] = [];
 
@@ -46,7 +27,7 @@ export function inspectRepository(repositoryRoot: string): RepositoryInfo {
     for (const entry of entries) {
       const relativePath = join(relativeDirectory, entry.name);
       if (entry.isDirectory()) {
-        if ([".git", "node_modules", ".ai-workspace"].includes(entry.name)) {
+        if (isInternalInspectionComponent(entry.name)) {
           continue;
         }
         collectFiles(relativePath);
@@ -62,7 +43,7 @@ export function inspectRepository(repositoryRoot: string): RepositoryInfo {
     repositoryRoot,
     repositoryName: basename(repositoryRoot),
     fileTree: fileTree.sort(),
-    packageScripts: readPackageScripts(repositoryRoot),
+    packageScripts: parsePackageScripts(readOptionalFile(join(repositoryRoot, "package.json"))),
     instructions: readOptionalFile(join(repositoryRoot, "AGENTS.md")),
   };
 }

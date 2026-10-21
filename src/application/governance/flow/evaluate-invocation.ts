@@ -1,3 +1,5 @@
+import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
+
 import {
   approvedOperatingScopeSchema,
   invokeSpecialistRequestSchema,
@@ -9,9 +11,7 @@ import {
 // This also rejects every unsafe form rejected by Decision's private loader,
 // without importing its file-reading use-case or changing v2 path semantics.
 function hasUnambiguousPaths(paths: string[]): boolean {
-  return new Set(paths).size === paths.length && paths.every((path) =>
-    path.trim().length > 0 && !/[\\:\x00-\x1f\x7f]/.test(path) &&
-    path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."));
+  return new Set(paths).size === paths.length && paths.every(isUnambiguousRepositoryPath);
 }
 
 /** Pure point-in-time evaluation. Inputs must be supplied by the Harness;

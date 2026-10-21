@@ -214,6 +214,20 @@ LangGraph.js의 state / routing / coordination / interrupt·resume / checkpoint�
 이 순서 중 실제로 필요한 단계에서 진행한다. Graph 설계·checkpoint backend·CEO 호출 방식·Domain
 schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 구조적 대칭만을 위해 미리 만들지 않는다.
 
+### Step 2 진행 상태
+
+- **2.1 Implemented**: Intent / Staffing Draft / Proposal과 CEO propose / inspect / escalate의 strict schema.
+  Proposal parsing은 Human Approval이나 운영 권한 발급이 아니다.
+- **2.2 Implemented**: v1의 Goal 기반 초기 파일 선택·metadata parsing·내부 경로 제외를 공통 capability로
+  재사용하고 v2 Snapshot capture/assert 및 commit blob reader로 Staffing Context를 구성한다.
+  Tree / package scripts / AGENTS.md / inspected files는 같은 commit 기준이다. Harness exact allowlist,
+  regular-file mode, 파일·Context 크기·조사 예산을 검증하며 CEO-facing projection에 내부 절대경로를 추가하지 않는다.
+  Planning은 Working Tree 기반 조사와 TaskContract 생성 책임을 유지하고 Staffing은 별도 Application이다.
+  실제 임시 Git Repository와 기존 v1–v3 / Governance 회귀 테스트로 검증한다.
+- **2.3 Planned**: CEO adapter / Staffing flow가 discovery → Context projection → inspect / propose / escalate를
+  연결한다. CEO 실행, round 제한, Staffing Loop / Proposal Finalization은 아직 미구현이다.
+  LangGraph 통합과 Human Approval / Scope 발급도 후속 단계다.
+
 ### Exit Criteria
 
 - **단일 SynthesisResult가 아닌 Human Goal → 최종 Executive Report의 전체 E2E**가 연결된다.

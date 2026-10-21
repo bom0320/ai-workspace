@@ -1,6 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
+import { isInternalInspectionComponent } from "@/services/repository-inspection/index.js";
+
 import { type InspectRequest, type InspectResult } from "../../protocol/inspection.js";
 
 export class InspectionRequestError extends Error {
@@ -35,9 +37,7 @@ export function inspectFiles(
           ...normalize(path).split(sep),
           // Preserve forbidden components removed by normalization.
           ...path.split(sep === "\\" ? /[\\/]/ : sep),
-        ].some((part) =>
-          [".git", "node_modules", ".ai-workspace"].includes(part),
-        )
+        ].some(isInternalInspectionComponent)
       ) {
         throw new InspectionRequestError(`Inspection path contains a forbidden directory: ${path}`);
       }

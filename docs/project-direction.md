@@ -24,6 +24,24 @@ AI Workspace = Agent가 일하는 작업 환경 + 규칙 + 안전장치
 개발 Agent에 특화된 규칙 → AI Workspace가 직접 설계
 ```
 
+### 최종 목표 — AI Development Organization
+
+Human이 상위 Goal과 Constraints를 제시하면 CEO가 조직을 구성하고, 여러 Specialist가 분야별로
+문제와 해결 방향을 분석한다. CEO는 판단과 Evidence를 비교·종합해 해결 방향을 제안하고 Human의
+승인을 받는다. 이후에도 CEO가 개발 업무를 분해하여 상세 설계·구현·테스트·리뷰를 여러 전문 직원에게
+배치하고, 의존성·진행·실패·재작업·재배치를 관리하며 필요한 Human Escalation과 결과 보고를 수행한다.
+
+목표는 **여러 AI 직원이 의사결정부터 설계·개발·검증까지 협력하고 Human이 이를 통제할 수 있는
+AI Development Organization**이다. Harness는 전체 Lifecycle의 Context / Authority / Scope / Budget /
+Evidence / Verification / Human Approval을 통제한다. 현재의 독립 의견 생성과 단일 Worker 실행은
+이 목표를 이루는 재사용 가능한 기반 capability다. 조직의 규모를 늘리기 전에 제한된 업무의 실행과
+검증을 신뢰할 수 있게 만드는 Reliable Worker before Agent Team 원칙을 유지한다.
+
+해결 방향을 승인하는 Phase A와 상세 설계·실행을 관리하는 Phase B의 책임은
+[Target Architecture](architecture.md#5-target-responsibility-model)에 둔다. 해결 방향 승인은 개별 코드
+변경·권한 확대의 포괄 승인이 아니며 Human은 Final Authority다. 이 전체 조직 운영은 목표이며,
+현재 구현 상태와 다음 순서는 [Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
+
 ### ADE와 Development Governance
 
 ADE는 Agent가 어디에서, 어떤 Context와 도구를 가지고 Human과 개발하는지를 다룬다.
@@ -53,6 +71,8 @@ boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture
 현재 interface는 Node.js CLI이고 Agent integration은 외부 Codex CLI 하나다. 별도 GUI ADE,
 여러 provider 지원, Synthesis, Human governance history는 현재 기능이 아니다.
 현재 CLI는 독립 Decision 생성과 Structured Comparison을 별도 application use-case로 조합한다.
+v4는 진행 중이며 Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing Context
+Discovery가 구현되어 있다. CEO 실행·조직 운영 전체 Workflow는 아직 연결되지 않았다.
 
 현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
 방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
@@ -212,8 +232,10 @@ v3는 Concern별 Agreement / Conflict / Trade-off와 Gap을 구조화하고 원�
 비교 불가능성도 표시한다. 이는 분류나 요약의 의미적 정확성 증명이 아니며 합의·종합·해결을 수행하지 않는다.
 
 v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
-v4는 CEO Agent가 판단과 종합·보고를 맡고 LangGraph.js가 전체 workflow를 실행하도록 설계한다.
-구체적인 CEO Domain / protocol / Codex 실행 방식은 단계적으로 정하며 현재 구현된 기능은 아니다.
+v4는 CEO가 판단·종합 이후에도 개발 업무 분해·배치·진행 평가·재작업·보고를 맡고 LangGraph.js가
+전체 workflow를 실행하도록 설계한다. Authority / Staffing 기반 schema와 Context Discovery는 구현했지만
+CEO adapter, Synthesis, 실행 조정과 전체 Workflow는 아직 미구현이다. 후속 Domain / protocol과 Codex
+실행 연결은 단계적으로 정한다.
 
 ### 5. Human Governance
 

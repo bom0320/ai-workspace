@@ -7,9 +7,9 @@
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
-현재 구현은 이 브랜치의 v0 / v1 / v2 / v3 코드 기준이다. Future responsibility는 현재 runtime이나
-추가할 폴더의 명세가 아니다. v4는 LangGraph.js Workflow Runtime 채택이 확정됐지만 설치·통합과
-CEO workflow는 미구현이며 아래 Current Architecture와 구분한다.
+현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2의 기반 기능을 포함한다. Future responsibility는 현재
+runtime이나 추가할 폴더의 명세가 아니다. v4는 진행 중이며 전체 CEO Workflow는 미완성이다.
+LangGraph.js Workflow Runtime 채택은 확정됐지만 설치·통합은 없고 아래 목표 흐름과 현재 실행을 구분한다.
 
 ## 2. Current Architecture
 
@@ -42,6 +42,13 @@ package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이
 runtime layer는 없다. Synthesis / Agent discussion / CEO / Coordinator / Human governance history /
 automatic retry / crash resume는 미구현이다. Decision / Comparison 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
 Decision과 Comparison은 독립 application capability이고 두 use-case의 실행 조합은 CLI command가 담당한다.
+
+v4 기반으로 Governance의 Authority schema / 순수 Invocation Eligibility Evaluation과 Staffing의
+Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Snapshot 기반 Context Discovery /
+추가 Inspection이 구현되어 있다. `services/repository-inspection`의 공통 조사 정책을 재사용하지만
+이 API들은 아직 CEO Adapter / Staffing Loop나 CLI·기존 Decision 실행에 연결되지 않았다.
+Scope issuance / Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement도 미구현이다.
+Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
 ## 3. Current End-to-End Flows
 
@@ -211,9 +218,11 @@ Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구
 ### v4 결정과 구현 상태
 
 v4 목표는 **CEO Governance / AI Organization Orchestration의 전체 E2E lifecycle**이다.
-CEO Agent가 Human Goal을 분석하고 조직을 제안하며 독립 판단을 종합한 뒤, 승인된 작업을 기존
-Repository Harness에서 실행하고 최종 Executive Report를 Human에게 전달한다.
-단일 SynthesisResult 생성만으로 v4가 완료되는 것은 아니다.
+Phase A에서 CEO는 조직을 제안하고 Specialist의 독립 판단을 종합해 해결 방향에 대한 Human 승인을 받는다.
+Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문 직원의 상세 설계·구현·테스트·리뷰,
+의존성·진행·실패·재작업·재배치를 계속 관리하며 최종 Executive Report를 Human에게 전달한다.
+전체 목표는 [AI Development Organization](project-direction.md#최종-목표--ai-development-organization)이며,
+단계별 구현 상태는 [Roadmap](roadmap.md#v4--ceo-governance--ai-organization-orchestration)을 따른다.
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
@@ -225,51 +234,116 @@ Repository Harness에서 실행하고 최종 Executive Report를 Human에게 전
 
 ### v4 Target Workflow — Planned
 
+다음은 두 Phase로 구성한 목표 Workflow다. 기반 schema와 Context Discovery의 구현이 전체 Workflow의
+완료를 뜻하지 않는다. 현재 CLI는 v0–v3 경로만 제공한다.
+
+#### Phase A — Decision & Approval
+
+목적은 무엇을 어떻게 해결할지 결정하고 Human의 승인을 받는 것이다.
+
 ```text
 Human Goal / Constraints
-    ↓
-CEO Agent: Intent / Task Analysis → Staffing / Context / Budget Proposal
-    ↓
-Harness Validation
-    ↓
-Human Staffing Approval
-    ↓
-Specialist Agents (v2): Independent Analysis → AgentDecision[]
-    ↓
-Decision Comparison (v3): Agreement / Conflict / Trade-off / Gaps
-    ↓
-CEO Synthesis / Decision
-  Recommendation / Rationale / Evidence / Unresolved Issues / Human Escalation
-    ↓
-Harness Validation
-    ↓
-Human Governance: Approve / Override / Reject
-    ↓ (승인된 내용만 진행)
-Approved Decision
-    ↓
-TaskContract / Planning (v1)
-    ↓
-Human Task Approval
-    ↓
-Repository Harness / Worker (v0)
-  Safe Workspace / Scope Enforcement / Verification / Evidence
-    ↓
-Human Change Review / Delivery (Apply / Commit / Push는 각각 별도 승인)
-    ↓
-CEO Executive Report
-    ↓
-Human
+→ CEO Intent Analysis
+→ Staffing / Context / Budget Proposal
+→ Harness Validation
+→ Human Staffing Approval
+→ Harness Scope issuance / Authorization → Authorized Specialist Invocation
+→ Independent Specialist Decisions (v2) → AgentDecision[]
+→ Decision Comparison (v3)
+→ CEO Synthesis: Recommendation / Rationale / Evidence / Trade-off / Unresolved Issues
+→ Harness Validation
+→ Human Governance: Approve / Override / Reject
+→ Approved Decision (승인된 방향만 Phase B로 전달)
 ```
 
-도식은 승인된 작업의 목표 경로다. Reject / 승인 대기 / validation 실패 시 실행을 진행하지 않아야 하며,
-Override의 변경 내용도 Harness 검증과 필요한 승인 범위를 충족해야 한다. 실패·거절·미해결 이슈의
-보고 및 종료 분기는 v4 Domain 설계에서 정의한다. 현재 CLI가 이 전체 흐름을 실행한다는 뜻은 아니다.
+초기 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이고, Human Governance는 종합된
+해결 방향에 대한 최종 판단이다. 두 승인은 서로 다르며 코드 변경 전체의 포괄 승인도 아니다.
+StaffingDraft / Proposal은 권한이 아니다. 목표 흐름에서는 승인 후에도 Harness가 Scope와 최신 권한을
+검증하고 예산을 확보하여 실행 입력을 발급해야 한다. 현재 evaluateInvocationRequest()는 Eligibility만
+평가하고 Scope issuance, Budget Reservation, AuthorizedSpecialistInvocation 구성·실행 연결은 하지 않는다.
+기존 v2 CLI가 이 후속 v4 Authorization을 이미 통과해 실행되는 것으로 해석하지 않는다.
+
+이 Phase의 Specialist 판단은 v2의 read-only / supplied Context / 같은 비교 단위의 Snapshot / 독립성 원칙을
+재사용한다. CEO의 추가 분석·재검토 요청은 후속 조직 Workflow에서 Context·권한·예산을 재검증할 별도
+작업이며 현재 v2의 자동 재질의·토론 기능이 아니다. CEO는 Recommendation, Rationale, Evidence,
+Trade-off, Unresolved Issues를 검토하고 근거 부족 시 Human에게 Escalate해야 한다.
+
+#### Phase B — Detailed Design & Execution
+
+목적은 승인된 해결 방향을 수행 가능한 개발 업무로 구체화하고 여러 직원의 결과를 관리하는 것이다.
+
+```text
+Approved Decision
+→ CEO Work Decomposition
+→ Implementation / Design / QA / Review Assignments
+→ Detailed Design & Planning
+→ TaskDraft → Harness TaskContract 구성 (Repository 실행 계약이 필요한 업무)
+→ Human Task Approval (해당 TaskContract 대상)
+→ Harness Authorization / Specialist 또는 Worker Execution (업무별 승인 권한 안에서)
+→ Verification / Review
+→ CEO Progress Evaluation
+   ├─ Continue → 다음 승인된 업무
+   ├─ Rework → 재작업 → 필요한 재검증·재승인 후 실행
+   ├─ Reassign → 업무 재배치 → 필요한 재검증·재승인 후 실행
+   ├─ Escalate → Human 판단 / 승인 대기
+   └─ Complete → Human Change Review / Delivery
+               → CEO Executive Report → Human
+```
+
+CEO는 Phase A 이후에도 업무 의존성, 진행 상태, 실패와 산출물·Evidence를 검토하며 Continue / Rework /
+Reassign / Escalate / Complete를 판단한다. Harness는 두 Phase 전체에서 Context / Authority / Scope /
+Budget / Evidence / Verification / Human Approval을 통제한다. 재작업·재배치는 기존 승인 범위 안에서만
+진행하며 범위를 바꾸면 필요한 승인과 Authorization을 다시 거쳐야 한다. Reject / 승인 대기 / validation
+실패 시 실행하지 않고, Override도 변경 내용에 대한 검증과 필요한 승인을 충족해야 한다.
+
+현재 v2 Specialist는 read-only Decision Agent다. 미래의 설계·구현·QA·리뷰 업무 수행은 역할과 승인된
+권한에 맞는 실행 경계가 추가로 필요하며 현재 Specialist runtime에 write 권한을 주는 근거가 아니다.
+실제 병렬 실행, 다중 Writing Worker, 다중 Worktree 통합·충돌 해결과 CEO 진행 관리는 미구현이다.
+각 업무의 산출물·승인 대상과 통합·실패·종료 정책은 후속 설계 대상이며 여기서 새 Schema를 확정하지 않는다.
+
+### Assignment와 Repository 실행 계약
+
+| 현재 모델 | 책임과 산출물 | 포함하지 않는 의미 |
+| --- | --- | --- |
+| StaffingAssignmentDraft | Specialist ID / 이번 Goal의 판단 objective / contextPaths / 선택 rationale을 제안 | 실행 Scope, SpecialistAuthority, Approval 또는 상세 구현 계약 |
+| StaffingAssignment | 위 제안에 Harness 소유 assignmentId를 포함하는 공식 Proposal의 항목 | Human Approval이나 운영 권한 발급 |
+| TaskDraft | objective / targetRepository / allowedPaths / forbiddenPaths / constraints / acceptanceCriteria / verification을 담는 구조화된 Repository 실행 명세 초안 | Staffing 선택이나 승인된 해결 방향 자체 |
+| TaskContract | Harness가 TaskDraft에 id / goalId를 부여하고 원본 Goal의 targetRepository와 Human Constraints를 보존한 v1/v0 실행 계약 | 모든 업무 유형의 범용 계약이나 후속 Delivery의 포괄 승인 |
+
+현재 TaskDraft는 TaskContract schema에서 id / goalId를 제외해 파생한다. 기존 v1의 목적은 자연어 Goal을
+Codex Worker가 수행할 구체적인 업무 명세로 변환하는 것이며, 이 의미와 Planner를 유지한다.
+현재 StaffingAssignmentDraft는 Phase A의 판단 업무 제안이다. Phase B의 구현 업무를 배치할
+Implementation Assignment / `ImplementationAssignment` 등은 **Proposed Concept**이며 현재 타입·Schema·API가
+존재하지 않는다. 이를 현재 StaffingAssignment와 동일시하거나 필드·파일 구조를 선행 확정하지 않는다.
+
+목표 관계는 분석 배치 → AgentDecision → CEO 종합 → Human의 해결 방향 승인 → CEO의 업무 분해 →
+필요한 개별 업무의 v1 Planning 구체화 → Harness 계약 구성·Task 승인·실행·검증이다.
+분석·판단, 문서 설계, 코드 구현, 테스트, 리뷰는 서로 다른 산출물과 권한을 가질 수 있으므로 모든 업무에
+TaskDraft를 강제하지 않는다. Repository 실행 계약이 필요한 업무에는 기존 TaskDraft / TaskContract를 적용한다.
+
+### CEO와 Planner의 handoff — Planned
+
+```text
+Approved Decision + Implementation Assignment + Repository Context
+→ 기존 v1 Planner → TaskDraft → Harness TaskContract → Human Task Approval
+```
+
+CEO는 해결 방향 선택과 업무 분해·배치를, Planner는 그 방향과 개별 업무를 실행 가능한 명세로 구체화하는
+책임을 맡는다. Planner가 원본 Goal만 보고 승인된 Decision과 충돌하는 방향을 다시 선택해서는 안 된다.
+Harness는 원본 Goal / Constraints와 승인된 방향의 provenance를 보존하고 범위 확대·모순을 검증해야 한다.
+
+현재 planTask() 입력은 goal / repositoryPath / limits / optional planner뿐이며 Approved Decision이나
+Implementation Assignment를 받지 않는다. 현재 v1은 Working Tree 기반 조사다. 위 handoff의 입력 계약,
+Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증은 **향후 통합 요구사항**이다. 기존 Planner를
+폐기하거나 대체 Planner를 새로 만드는 방향이 아니다.
 
 ### 책임과 소유권
 
 | 주체 | v4 책임 | 권한 경계 |
 | --- | --- | --- |
-| CEO Agent — Autonomous Decision Maker | Goal 분석, Intent / Task Analysis, Staffing / Context / Budget Proposal, Specialist 판단 종합, Recommendation / Trade-off 판단, Escalation 제안, Executive Report | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
+| CEO Agent — Autonomous Decision Maker | Phase A 판단·종합·제안, Phase B 업무 분해·배치·의존성·진행·실패 평가·재작업·재배치·Escalation·최종 보고 | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
+| Specialist / Worker | Phase A 독립 판단, Phase B 역할별 상세 설계·구현·QA·리뷰 산출물 | 현재 v2는 read-only Decision만 수행; 미래 업무 실행도 승인된 Context / Scope / Authority / Budget 안에서만 허용 |
+| Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 현재 v1 Goal → TaskDraft / TaskContract를 재사용하며 Approved Decision handoff는 미구현 |
 | Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
 | LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 우선 재사용, 구체적인 CEO 호출 방식은 v4에서 설계 |
@@ -284,7 +358,8 @@ Override의 변경 내용도 Harness 검증과 필요한 승인 범위를 충족
 - Human Approval은 단순 interrupt가 아니다. 승인 주체·대상·내용·유효 조건을 Harness가 검증하고
   staffing 승인, Governance 승인, Task Approval, Review / Apply / Commit / Push를 분리한다.
 - 전체 LangGraph State를 Specialist에게 자동 전달하지 않는다. 승인된 Context만 projection하고
-  같은 Snapshot / Goal, Specialist 간 독립성과 제한된 authority를 보존한다.
+  Phase A의 같은 비교 단위에서는 Snapshot / Goal과 Specialist 간 독립성을 보존한다. Phase B는 승인된
+  업무별 Context와 실행 기준 상태·제한된 authority를 검증하며 변경 후에도 최초 commit이 같다고 가정하지 않는다.
 - Workflow checkpoint는 실행 재개용 상태다. 영구 Governance / Provenance Record의 의미·보존 정책을
   대신하지 않으며 checkpoint만으로 승인 이력·Decision / Evidence traceability가 보장되지 않는다.
 - 승인 후 resume / retry / replay에서 Worker / Apply / Commit / Push의 중복 실행 위험을 다룬다.
@@ -476,7 +551,9 @@ LangGraph 연결은 아직 없다. Step 2.3은 이 public API의 Context project
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
 | IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema implemented, flow Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
-| CEO Agent / Synthesis / Staffing workflow / Executive Report | v4 Planned | CEO의 판단·종합·보고 역할은 목표로 확정; Domain / protocol과 Codex 실행 방식은 단계별 설계, 현재 미구현 |
+| InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
+| CEO Agent / Synthesis / Staffing workflow / Executive Report | v4 Planned | 기반 schema / Context Discovery는 구현; CEO adapter·loop·종합·전체 실행·보고 연결은 미구현 |
+| Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
 

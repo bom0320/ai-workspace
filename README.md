@@ -3,7 +3,8 @@
 AI Workspace는 개발자와 기존 AI Coding Agent가 실제 Git Repository에서 함께 일하기 위한
 Agent Development Environment(ADE)이자 Development Governance Harness다. 개발자와 팀의
 작업 방식·권한·검증 규칙을 코드화하여 실행 범위, Context, Evidence, Human approval을 통제한다.
-현재 operator interface는 Node.js CLI로 제공된다.
+현재 operator interface는 Node.js CLI로 제공된다. 최종 목표는 CEO가 여러 전문 AI 직원의 의사결정과
+상세 설계·구현·테스트·리뷰를 관리하고 Human이 승인과 Evidence로 통제하는 AI Development Organization이다.
 
 현재 다음 흐름이 구현되어 있다.
 
@@ -24,14 +25,20 @@ Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry
 
 - [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
 - [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
-- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0–v3와 이후 검증 단계
+- [Roadmap](docs/roadmap.md): 어디로 가는가 — 구현 상태와 v4 이후 검증 단계
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
-**v4 — CEO Governance / AI Organization Orchestration은 Planned**다. Workflow Runtime은
-**LangGraph.js 채택 확정 / 설치·통합 미구현**이며, 기존 Codex 기반 Agent 실행과 v0–v3 API를 재사용한다.
-Human Goal → CEO의 Staffing / Context / Budget 제안 → Human 승인 → 독립 Decision / Comparison
-→ CEO Synthesis → Human Governance → 승인된 TaskContract / Repository 실행 → Change Review / Delivery
-→ CEO Executive Report까지 전체 E2E 연결이 목표다. 단일 Synthesis 생성으로 완료하지 않는다.
+**v4 — CEO Governance / AI Organization Orchestration은 진행 중이며 전체 Workflow는 미완성**이다.
+Authority / Staffing schema, Invocation Eligibility Evaluation, CEO propose / inspect / escalate protocol과
+Snapshot 기반 Staffing Context Discovery / 추가 Inspection 및 공통 repository-inspection 재사용이 구현되어 있다.
+CEO Adapter / Staffing Loop, Proposal Finalization, Human Staffing Approval / Scope 발급과 실제
+Authorization·Specialist 실행 연결은 아직 없다.
+
+목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
+CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
+여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
+현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
+Workflow Runtime은 **LangGraph.js 채택 확정 / 설치·통합 미구현**이고 기존 Codex 실행과 v0–v3 API를 재사용한다.
 
 LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
 소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.

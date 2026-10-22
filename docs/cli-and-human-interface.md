@@ -10,8 +10,9 @@
 
 CLI는 workflow 선택, Goal / 명시적 Context 입력, TaskContract / Decision / Comparison 표시, Approval, Review, Apply / Commit / Push,
 Cleanup decision, telemetry / result 출력을 담당한다. Harness를 사람이 관찰하고 통제하는
-operator/debug adapter이자 Human decision surface다. Agent orchestration product를 목표로 하지
-않으며 Planning / Execution / Governance의 core logic을 소유하는 새로운 상위 계층은 아니다.
+operator/debug adapter이자 Human decision surface다. 전체 AI 조직의 orchestration과
+Planning / Execution / Governance의 core logic은 application / Harness와 Workflow Runtime의 책임이며
+CLI는 해당 책임을 소유하는 상위 계층이 아니다.
 현재 Human gate와 후속 stage 연결은 CLI가 담당하고, 계약·실행·Git 안전 검사는 각 모듈에 남긴다.
 
 ```text
@@ -300,5 +301,10 @@ UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한�
 Human 권한을 새 interface가 우회하지 않아야 한다.
 
 Revise, re-plan, 복잡한 approval policy, fancy TUI는 현재 제공하지 않는다.
-현재 Independent Decision / Structured Comparison 이후의 Explainable Synthesis / Evaluation은
-[Roadmap](roadmap.md)에 두며 이 문서에서 미래 UI나 Agent 역할로 확정하지 않는다.
+v4의 Phase A(해결 방향 판단·승인) / Phase B(상세 설계·실행)는
+[Target Architecture](architecture.md#5-target-responsibility-model)의 목표 흐름이다. Human Staffing Approval,
+해결 방향의 Approve / Override / Reject, 개별 Task Approval과 Change Review / Delivery는 각각 별도 접점이
+필요하다. 다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
+현재 CLI에는 Staffing / CEO / Human Governance 명령이나 화면이 없으며, 기존 Decision 명령은 독립 판단과
+비교까지만 수행한다. 구현된 v4 기반 API도 아직 CLI에 연결되지 않았다. 인터페이스 형태와 구현 순서는
+[Roadmap](roadmap.md)에 두며 새로운 명령·화면을 현재 기능으로 확정하지 않는다.

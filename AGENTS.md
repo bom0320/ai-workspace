@@ -8,6 +8,10 @@
 
 > Reliable Worker before Agent Team
 
+v4 목표는 CEO가 해결 방향의 판단·Human 승인(Phase A) 이후에도 여러 Specialist의 상세 설계·개발·검증과
+재작업·재배치·진행 평가(Phase B)를 관리하는 AI Development Organization이다. 전체 Workflow는 미완성이며
+Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing Context Discovery가 구현되어 있다.
+
 다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
 
 ## 2. Current Stack
@@ -37,9 +41,9 @@
 
 - Human은 승인과 최종 governance 결정을 소유한다.
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
-- Worker는 scoped execution, Specialist는 supplied Context의 독립 판단을 수행한다.
+- 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
 - Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js 채택 확정 / 설치·통합 미구현이며, 기존 Codex 기반 Agent Execution Runtime을 우선 재사용한다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 v4는 CEO Agent의 판단·종합·보고와 전체 조직 workflow를 목표로 하되 현재 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO 실행과 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 

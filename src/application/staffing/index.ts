@@ -30,3 +30,10 @@ export {
   type StaffingContextState,
   type StaffingContextResult,
 } from "./flow/discover-context.js";
+export type { CEOStaffingAgent } from "./protocol/ceo.js";
+export { runCodexCEO, type CodexCEOOptions } from "./ceo/codex-ceo.js";
+export { runStaffing, type RunStaffingOptions } from "./flow/run-staffing.js";
+export {
+  staffingRunResultSchema,
+  type StaffingRunResult,
+} from "./model/result.js";

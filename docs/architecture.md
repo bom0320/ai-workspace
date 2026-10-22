@@ -7,7 +7,7 @@
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
-현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2의 기반 기능을 포함한다. Future responsibility는 현재
+현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2 / 2.3의 Staffing 기능을 포함한다. Future responsibility는 현재
 runtime이나 추가할 폴더의 명세가 아니다. v4는 진행 중이며 전체 CEO Workflow는 미완성이다.
 LangGraph.js Workflow Runtime 채택은 확정됐지만 설치·통합은 없고 아래 목표 흐름과 현재 실행을 구분한다.
 
@@ -39,14 +39,15 @@ Codex role implementations / Git and Process infrastructure → Target Repositor
 
 현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod다. Codex CLI는 외부 실행 도구이며
 package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 generic
-runtime layer는 없다. Synthesis / Agent discussion / CEO / Coordinator / Human governance history /
+runtime layer는 없다. Synthesis / Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
 automatic retry / crash resume는 미구현이다. Decision / Comparison 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
 Decision과 Comparison은 독립 application capability이고 두 use-case의 실행 조합은 CLI command가 담당한다.
 
 v4 기반으로 Governance의 Authority schema / 순수 Invocation Eligibility Evaluation과 Staffing의
 Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Snapshot 기반 Context Discovery /
-추가 Inspection이 구현되어 있다. `services/repository-inspection`의 공통 조사 정책을 재사용하지만
-이 API들은 아직 CEO Adapter / Staffing Loop나 CLI·기존 Decision 실행에 연결되지 않았다.
+추가 Inspection이 구현되어 있다. Step 2.3의 Codex CEO Adapter와 runStaffing()이 이 API들을 연결해
+Draft / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
+실행에는 아직 연결하지 않는다.
 Scope issuance / Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement도 미구현이다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
@@ -235,7 +236,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
 | Workflow Runtime | LangGraph.js 채택 | 패키지 설치·코드 통합 없음 |
-| Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 존재; CEO 실행 방식은 v4 설계 대상 |
+| Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
 | 기존 capability | v0–v3 Application API / Domain Model 재사용 | 기존 Planning / Execution / Decision / Comparison 동작 유지 |
@@ -354,7 +355,7 @@ Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증�
 | Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 현재 v1 Goal → TaskDraft / TaskContract를 재사용하며 Approved Decision handoff는 미구현 |
 | Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
 | LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
-| Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 우선 재사용, 구체적인 CEO 호출 방식은 v4에서 설계 |
+| Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |
 | Human — Final Authority | Goal / Constraints, Staffing Approval, Governance Approve / Override / Reject, Task Approval, Change Review, Apply / Commit / Push | 각 승인은 독립된 대상과 의미를 가지며 다른 권한의 포괄 승인이 아님 |
 
 ### 통합 시 지켜야 할 invariant
@@ -386,7 +387,8 @@ provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도�
 
 `application/governance/model/authority.ts`는 조직 운영 권한의 Domain 데이터를 소유한다.
 Core Model은 strict Zod schema / inferred type을 제공한다. Step 1.4의 순수 Authority Evaluation을
-추가했으며 CEO / Policy Engine / Workflow 실행은 미구현이다. LangGraph State와 결합하지 않는다.
+추가했다. CEO Staffing 호출과 Loop는 Step 2.3에서 구현했으며 Policy Engine / 전체 Workflow 실행은
+미구현이다. LangGraph State와 결합하지 않는다.
 
 ```text
 CEO-generated InvokeSpecialistRequest
@@ -481,8 +483,8 @@ Budget 정책 상한, 실제 Snapshot 상태, Human Approval은 검증하지 않
 ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 접근 권한을 만들지 않는다.
 
 Step 2.1은 schema / inferred type / unit test / public API를 구현했다. Repository Context Discovery는
-아래 Step 2.2에서 구현했다. CEO 실행, Staffing Planning Loop, Finalization / Policy Validation /
-Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
+아래 Step 2.2에서 구현했고 CEO Staffing 호출·Loop는 Step 2.3에서 연결했다. Finalization / Policy
+Validation / Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
 
 ### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
 
@@ -546,9 +548,63 @@ projection에서 제외한다. 원본 GoalSpec.targetRepository 자체의 값은
 자동으로 재작성하지는 않는다. 상태는 Harness 소유의 메모리 데이터이며 CEO 입력으로 받아서는 안 된다.
 Budget은 Context 파일 수에 관한 값이며 Agent invocation Budget Reservation이나 운영 권한이 아니다.
 
-실제 CEO / Codex 호출, Staffing Loop / Finalization, Human Approval, Scope 발급, Specialist 실행과
-LangGraph 연결은 아직 없다. Step 2.3은 이 public API의 Context projection과 inspect 결과를 CEO 호출에
-연결하며 propose / escalate 처리, round 제한과 실패 종료를 Staffing flow에서 담당해야 한다.
+Step 2.3은 이 public API를 아래 Staffing Loop와 연결한다. Finalization, Human Approval, Scope 발급,
+Specialist 실행과 LangGraph 연결은 아직 없다.
+
+### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
+
+```text
+runStaffing({ goal, repositoryPath, availableSpecialists, allowedContextPaths,
+              limits: StaffingInspectionLimits, maxRounds, timeoutMs?, agent? })
+→ validate CEO call limits → discoverStaffingContext() → Harness-owned state
+→ Snapshot assert → createStaffingContext() (cloned projection) → CEO call
+→ Snapshot assert → ceoStaffingDecisionSchema validation (injected Agent도 검증)
+   ├─ inspect → 마지막 Round면 즉시 failed(round-limit), 파일 로딩 없음
+   │          → inspectStaffingContext() → 새 state → 다음 CEO call
+   ├─ propose → proposed { draft, rounds }
+   └─ escalate → escalated { reason, questions, rounds }
+실패 → failed { failure, reason, rounds } (유효한 Draft나 partial state 없음)
+```
+
+`protocol/ceo.ts`의 CEOStaffingAgent는 StaffingContext만 받고 CEOStaffingDecision을 반환한다.
+`ceo/codex-ceo.ts`의 runCodexCEO는 기존 runCommand와 v2/v3 Adapter의 실행 설정을 재사용한다.
+대상 Repository 밖 임시 cwd, read-only sandbox, ignore-user-config / ignore-rules / strict-config /
+ephemeral, approval never, web disabled, project docs 자동 로딩 차단, shell / tools / hooks / plugins /
+다른 Agent 기능 비활성화 설정으로 호출하고 성공·실패 모두 cwd를 cleanup한다. Runtime timeout 기본은
+호출당 15분이며 timeoutMs로 변경한다. Codex CLI 0.163.0의 help와 실제 호출에서 해당 설정 수용을 확인했다.
+기존 Process lifecycle의 하위 process 종료 범위와 플랫폼 한계는 그대로 유지한다.
+
+Prompt는 원본 Goal / Constraints 보존, 후보 Specialist ID 사용, 분석 업무·Context·예산 제안과 최소한의
+inspect / 필요한 Human escalate를 지시한다. AGENTS.md와 파일 내용은 untrusted data다. TaskContract,
+Harness ID / Approval / Scope / Authority 생성이나 코드 수정·Specialist 실행을 지시하지 않는다.
+등록 여부·Assignment 적합성·Draft Context 접근권·운영 예산 정책은 Prompt나 구조 검증으로 보장하지 않는다.
+구조적으로 유효한 Draft도 공식 Proposal Finalization / Validation과 Human Approval이 필요하다.
+
+`flow/run-staffing.ts`는 Discovery / Projection / Inspection을 재사용하며 반복만 제어한다.
+maxRounds는 양의 safe integer이고 rounds는 실제 CEO 호출 직전에 증가한다. 실패한 호출도 포함한다.
+마지막 Round의 propose / escalate는 가능하지만 inspect는 추가 파일 로딩·호출 없이 종료한다.
+매 호출 전후와 각 Inspection의 기존 전후 Snapshot 검사를 보존하며 최종 propose / escalate도 변경된
+Repository로 성공하지 않는다. State·Goal은 모델 출력으로 교체하지 않고 매번 Context 복제본을 전달한다.
+주입 Agent의 timeout / 취소 구현은 해당 Harness adapter 책임이며 timeoutMs는 기본 Codex Adapter에 적용한다.
+자동 retry, durable state, checkpoint나 LangGraph는 추가하지 않는다.
+
+`model/result.ts`의 strict StaffingRunResult는 proposed / escalated / failed와 rounds를 구분한다.
+실패 code는 invalid-input / discovery / inspection / agent-process / timeout / malformed-json /
+schema-validation / snapshot-drift / round-limit이다. Context 오류나 임의 Agent 예외·raw stderr를 그대로
+반환하지 않고 단계별 안전한 reason으로 제한한다. 기본 Adapter의 process 진단은 trusted caller가
+예외 cause로 확인할 수 있으며 use-case 실패 결과에는 포함하지 않는다. Escalation의 reason / questions는
+CEO 판단 데이터로 그대로 보존한다. 결과에 공식 Proposal ID·Assignment ID·승인·Invocation은 없다.
+
+Inspection Budget(파일 수·Context 크기), Staffing Round Limit(CEO 호출 수), Draft의
+maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향후 운영 권한)은 각각 독립적이다.
+이 Loop는 운영 예산 예약이나 Invocation Eligibility / Authorization을 수행하지 않는다.
+
+검증은 Fake CEO와 mock Process로 분기·최종 Snapshot drift·실패·격리 설정·cleanup을 확인한다.
+별도로 Codex CLI 0.163.0 실제 단일 smoke run에서 작은 임시 Git Repository, 등록 frontend 후보와 exact
+allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
+반복 품질이나 성공률 검증을 했다는 의미는 아니다. 다음 단계는 원본 Goal / Snapshot과 Draft의 연결을
+보존하는 Proposal Finalization / Policy Validation이며, Human Approval / Scope issuance / Authorization /
+Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 
 ## 6. Current and Conditional Domain Models
 
@@ -556,7 +612,7 @@ LangGraph 연결은 아직 없다. Step 2.3은 이 public API의 Context project
 | --- | --- | --- |
 | RepositorySnapshot | Current | model/snapshot.ts의 repositoryRoot / commitSha. Decision의 Repository provenance |
 | SpecialistDefinition / SpecialistAuthority | Current | model/specialist.ts / authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
-| StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO loop / 승인 / 실행 권한 없음 |
+| StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO Loop에서 재사용; 승인 / 실행 권한 없음 |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
@@ -565,9 +621,10 @@ LangGraph 연결은 아직 없다. Step 2.3은 이 public API의 Context project
 | ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema implemented, enforcement Planned | application/governance의 strict 구조 계약. 승인·권한 검증이나 실행 허용을 제공하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema implemented, flow Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema 및 Draft 생성 Loop implemented; Proposal Finalization Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
-| CEO Agent / Synthesis / Staffing workflow / Executive Report | v4 Planned | 기반 schema / Context Discovery는 구현; CEO adapter·loop·종합·전체 실행·보고 연결은 미구현 |
+| CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | Step 2.3의 제한된 CEO Staffing 호출·Inspection Loop. Draft / Escalation / Failure 반환; 공식 Proposal / 승인 / 실행 권한 없음 |
+| CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 호출·Loop는 구현; Specialist 실행·종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
 | Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |

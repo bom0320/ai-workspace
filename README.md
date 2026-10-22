@@ -18,7 +18,7 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
   Agreement / Conflict / Trade-off와 Uncertainty / Limitation / Separate Concern을 구조화하고,
   원본 Specialist / Evidence reference를 검증한다.
 
-Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
+Agent discussion / synthesis / CEO 전체 조직 운영 / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
 미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
 
 문서는 다음 책임으로 나눈다.
@@ -31,8 +31,9 @@ Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry
 **v4 — CEO Governance / AI Organization Orchestration은 진행 중이며 전체 Workflow는 미완성**이다.
 Authority / Staffing schema, Invocation Eligibility Evaluation, CEO propose / inspect / escalate protocol과
 Snapshot 기반 Staffing Context Discovery / 추가 Inspection 및 공통 repository-inspection 재사용이 구현되어 있다.
-CEO Adapter / Staffing Loop, Proposal Finalization, Human Staffing Approval / Scope 발급과 실제
-Authorization·Specialist 실행 연결은 아직 없다.
+Step 2.3의 Codex CEO Adapter / Staffing Loop는 제한된 inspect / propose / escalate를 처리하며
+StaffingDraft 또는 Escalation / Failure를 반환한다. Proposal Finalization, Human Staffing Approval /
+Scope 발급과 실제 Authorization·Specialist 실행 연결은 아직 없다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,

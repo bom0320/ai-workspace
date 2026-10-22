@@ -11,7 +11,7 @@
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
-| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 1.x / 2.1 / 2.2 기반 구현; 전체 Workflow 미완성 |
+| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 1.x / 2.1–2.3 Staffing 구현; 전체 Workflow 미완성 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
@@ -178,7 +178,7 @@ CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded 
 상태: **In progress — 기반 기능 일부 구현, 전체 Workflow 미완성**.
 **Workflow Runtime은 LangGraph.js 채택으로 확정**했다.
 기존 Codex 기반 Agent Execution Runtime과 v0–v3 Application API / Domain Model을 우선 재사용한다.
-LangGraph.js는 아직 설치·통합되지 않았으며 CEO / 전체 workflow도 미구현이다.
+LangGraph.js는 아직 설치·통합되지 않았다. CEO Staffing Adapter / Loop는 구현했지만 전체 조직 Workflow는 미구현이다.
 
 기존 Runtime Framework Evaluation checkpoint와 별도 선행 Runtime Spike는 제거한다.
 채택 여부를 다시 결정하는 단계 없이 아래 구현 과정의 필요한 시점에 LangGraph.js를 통합하고,
@@ -203,13 +203,14 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 ### 내부 구현 순서
 
-Step 2.3의 CEO Adapter / Staffing Context 연결을 다음 구현 대상으로 유지한다. 아래는 그 이후까지
-포함한 내부 마일스톤이며 미구현 모델의 이름·Schema나 병렬 실행 방식을 선행 확정하지 않는다.
+Step 2.3의 CEO Adapter / Staffing Context 연결은 구현했다. 다음은 StaffingProposal Finalization /
+Policy Validation이며 이후 Human Approval과 Scope issuance / Authorization으로 연결한다. 아래는
+전체 내부 마일스톤이며 미구현 모델의 이름·Schema나 병렬 실행 방식을 선행 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
 2. **Intent Analysis & Staffing**: 기존 schema / Snapshot Context Discovery 위에 Step 2.3 CEO Adapter와
-   inspect / propose / escalate 처리를 연결하고, Staffing Loop·Proposal Finalization / Validation을 단계적으로 구현.
+   inspect / propose / escalate와 제한된 Staffing Loop를 연결했다. Proposal Finalization / Validation은 후속 구현한다.
 3. **Human Staffing Approval**: 승인 대상·유효성 검증과 Approved Scope issuance 연결.
 4. **Context Routing & Authorization**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
    Authorized Specialist Invocation 구성·실행 Enforcement를 연결한다.
@@ -251,18 +252,23 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   regular-file mode, 파일·Context 크기·조사 예산을 검증하며 CEO-facing projection에 내부 절대경로를 추가하지 않는다.
   Planning은 Working Tree 기반 조사와 TaskContract 생성 책임을 유지하고 Staffing은 별도 Application이다.
   실제 임시 Git Repository와 기존 v1–v3 / Governance 회귀 테스트로 검증한다.
-- **2.3 Planned**: CEO adapter / Staffing flow가 discovery → Context projection → inspect / propose / escalate를
-  연결한다. CEO 실행, round 제한, Staffing Loop / Proposal Finalization은 아직 미구현이다.
-  LangGraph 통합과 Human Approval / Scope 발급도 후속 단계다.
+- **2.3 Implemented**: runStaffing()과 Codex CEO Adapter가 discovery → cloned Context → CEO 호출 →
+  inspect / propose / escalate를 연결한다. maxRounds와 호출당 Codex timeout, strict JSON / schema,
+  매 호출 전후·최종 Snapshot 검사, Inspection 실패와 안전한 failure reason을 제공한다.
+  마지막 Round의 inspect는 로딩·재호출 없이 실패하며 제안은 StaffingDraft일 뿐 공식 Proposal이 아니다.
+  Fake CEO / mock Process 테스트와 실제 Codex 0.163.0 단일 직접 propose(1 Round), Repository 무변경을 확인했다.
+  실제 모델의 여러 Round Inspection 품질·반복 benchmark는 검증하지 않았다.
+  Proposal Finalization / Validation, Human Approval / Scope 발급·Authorization과 LangGraph 통합은 후속 단계다.
 
-### Step 2.3 전에 확정할 연결 계약
+### Step 2.3 계약과 다음 연결점
 
-- CEO Adapter에 전달할 StaffingContext와 propose / inspect / escalate 처리·실패 종료의 책임 경계.
-  Repository 내용·AGENTS.md는 untrusted data이며 Context Inspection 성공은 Specialist 실행 허가가 아니다.
-- Staffing Loop의 round / 호출 한계, 취소·timeout·잘못된 응답·Snapshot drift 처리와 Escalation 결과 전달 방식.
-  Inspection 파일 수 예산과 Agent invocation 예산을 구분한다.
-- Harness의 Specialist 후보·exact allowlist·Inspection limits 공급 주체와 Goal / Snapshot 보존 방식.
-  Proposal Finalization·Approval·Authorization의 연결 순서는 유지하되 CEO가 ID·권한을 발급하지 못하게 한다.
+- CEO에는 StaffingContext만 전달하고 내부 state / allowlist / authority는 전달하지 않는다.
+  Repository 내용·AGENTS.md는 untrusted data이며 inspect 성공과 propose 결과는 운영 권한이 아니다.
+- CEO 호출 수(maxRounds), Inspection 파일 수·Context 크기, Draft의 이후 활동 예산과 Approved Scope
+  운영 예산을 구분한다. timeoutMs는 기본 Codex 호출에 적용하며 주입 Agent의 취소·timeout은 해당 adapter 책임이다.
+- Harness가 등록 후보·exact allowlist·Inspection limits를 공급한다. 다음 Finalization에서 run의 원본
+  Goal / Snapshot과 Draft의 provenance 연결, 등록·업무 적합성·Context·정책 예산·Human Constraints를 검증해야 한다.
+  ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.
 
 ### Exit Criteria
 
@@ -289,8 +295,8 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   실제 Agent 실행 관찰과 fake runtime 자동 테스트를 구분하며 품질 우위를 가정하지 않는다.
 
 v4의 큰 목표와 LangGraph.js 채택은 고정한다. 구체적인 Domain 설계와 내부 구현은 위 순서로 진행하며,
-기반 기능 일부의 구현을 CEO 실행, 승인·재개 Workflow, 다중 직원 구현·통합 또는 Executive Report의
-완료로 해석하지 않는다. Phase B의 Assignment 모델·handoff 계약·실행 및 재작업 정책은 후속 설계 대상이다.
+CEO Staffing 호출·Loop의 구현을 승인·재개 Workflow, Specialist 실행, 다중 직원 구현·통합 또는
+Executive Report의 완료로 해석하지 않는다. Phase B의 Assignment 모델·handoff 계약·실행 및 재작업 정책은 후속 설계 대상이다.
 
 ## v5 — Evaluation
 

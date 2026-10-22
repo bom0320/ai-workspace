@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { StaffingContext } from "./context.js";
+
 import {
   staffingAssignmentSchema,
   staffingProposalSchema,
@@ -45,3 +47,8 @@ export type StaffingAssignmentDraft = z.infer<
 >;
 export type StaffingDraft = z.infer<typeof staffingDraftSchema>;
 export type CEOStaffingDecision = z.infer<typeof ceoStaffingDecisionSchema>;
+
+// The CEO receives only a projected Context, never Harness-owned discovery state.
+export type CEOStaffingAgent = (
+  context: StaffingContext
+) => Promise<CEOStaffingDecision>;

@@ -493,6 +493,13 @@ Harness: Original Goal + Registered Specialists + exact file allowlist + Inspect
   → ready(new state) | failed(reason), input state unchanged
 ```
 
+Staffing의 `flow/discover-context.ts`는 입력 검증·Snapshot capture/assert·초기 Context 구성과 결과 반환을
+조율한다. `flow/inspection/policy.ts`는 파일 접근·mode·count·byte 예산의 순수 검사,
+`inspect-files.ts`는 검증 완료 후 Metadata / Git blob 로딩·직렬화 크기 재검사·새 State 구성,
+`initial-seeding.ts`는 기존 Goal mention 기반 optional seeding을 담당한다. State 타입은
+`model/context-state.ts`에 두며 기존 Staffing public API와 flow의 타입 export 경로는 유지한다.
+Snapshot 검증 시점과 외부 동작·실패 의미는 이 책임 분리로 변경하지 않는다.
+
 `services/repository-inspection`은 v1의 exact path / unique basename / README mention 선택,
 package scripts 추출, 내부 디렉터리 제외와 v2 / Governance의 경로 predicate를 공유한다.
 Planning은 기존 Working Tree 읽기·정규화 허용 범위·Fast Path·TaskContract 생성과 초기 64 KiB/file /

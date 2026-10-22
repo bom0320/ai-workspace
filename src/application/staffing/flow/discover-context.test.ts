@@ -264,6 +264,27 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     failure(discoverStaffingContext(options), /dirty/);
   });
 
+  it.each(["dirty", "HEAD changed"])(
+    "rejects %s during incremental loading without returning partial state",
+    (change) => {
+      const state = ready(discoverStaffingContext(options));
+      const before = structuredClone(state);
+      vi.mocked(
+        gitInfrastructure.readRepositoryFileAtCommit
+      ).mockImplementationOnce(() => {
+        if (change === "dirty") {
+          write("src/other.ts", "concurrent working tree change");
+        } else {
+          git("commit", "--quiet", "--allow-empty", "-m", "concurrent HEAD");
+        }
+        return "// other\n";
+      });
+
+      failure(inspect(state, ["src/other.ts"]), new RegExp(change));
+      expect(state).toEqual(before);
+    }
+  );
+
   it("rejects malformed, inaccessible or mismatched snapshots", () => {
     const state = ready(discoverStaffingContext(options));
     failure(

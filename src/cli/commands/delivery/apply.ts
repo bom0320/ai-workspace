@@ -11,8 +11,15 @@ export type ApplyResult =
   | { status: "skipped" }
   | { status: "blocked" | "failed"; reason: string };
 
-export async function runApplyCommand(repositoryRoot: string, execution: ExecutionResult): Promise<ApplyResult> {
-  if (!execution.passed || !execution.evidence.verification?.passed || !execution.artifacts) {
+export async function runApplyCommand(
+  repositoryRoot: string,
+  execution: ExecutionResult
+): Promise<ApplyResult> {
+  if (
+    !execution.passed ||
+    !execution.evidence.verification?.passed ||
+    !execution.artifacts
+  ) {
     return { status: "skipped" };
   }
   const patchPath = join(execution.artifacts.directory, "changes.patch");
@@ -29,8 +36,15 @@ export async function runApplyCommand(repositoryRoot: string, execution: Executi
     }
     result = { status: "skipped" };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "Unable to apply changes.";
-    result = { status: error instanceof PatchApplyError && error.stage === "dirty" ? "blocked" : "failed", reason };
+    const reason =
+      error instanceof Error ? error.message : "Unable to apply changes.";
+    result = {
+      status:
+        error instanceof PatchApplyError && error.stage === "dirty"
+          ? "blocked"
+          : "failed",
+      reason,
+    };
   }
   console.log("Changes were not applied.");
   if ("reason" in result) console.log(result.reason);

@@ -1,7 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 
-import { isInternalInspectionComponent, parsePackageScripts } from "@/services/repository-inspection/index.js";
+import {
+  isInternalInspectionComponent,
+  parsePackageScripts,
+} from "@/services/repository-inspection/index.js";
 
 import type { RepositoryInfo } from "../../model/state.js";
 
@@ -43,7 +46,9 @@ export function inspectRepository(repositoryRoot: string): RepositoryInfo {
     repositoryRoot,
     repositoryName: basename(repositoryRoot),
     fileTree: fileTree.sort(),
-    packageScripts: parsePackageScripts(readOptionalFile(join(repositoryRoot, "package.json"))),
+    packageScripts: parsePackageScripts(
+      readOptionalFile(join(repositoryRoot, "package.json"))
+    ),
     instructions: readOptionalFile(join(repositoryRoot, "AGENTS.md")),
   };
 }

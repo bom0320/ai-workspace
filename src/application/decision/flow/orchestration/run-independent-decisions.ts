@@ -21,7 +21,7 @@ export async function runIndependentDecisions(
   snapshot: RepositorySnapshot,
   goal: GoalSpec,
   inputs: IndependentDecisionInput[],
-  options: CodexSpecialistOptions = {},
+  options: CodexSpecialistOptions = {}
 ): Promise<AgentDecision[]> {
   const specialistIds = new Set<string>();
   for (const { specialist } of inputs) {
@@ -39,7 +39,11 @@ export async function runIndependentDecisions(
       files: input.files,
     };
     assertRepositoryMatchesSnapshot(snapshot);
-    const decision = await runCodexSpecialist(input.specialist, context, options);
+    const decision = await runCodexSpecialist(
+      input.specialist,
+      context,
+      options
+    );
     assertRepositoryMatchesSnapshot(snapshot);
     validateDecisionEvidence(context, decision);
     decisions.push(decision);

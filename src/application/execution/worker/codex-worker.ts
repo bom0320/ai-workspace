@@ -16,7 +16,7 @@ export async function runCodexWorker(
     | "codexProcessDurationMs"
     | "workerOutputProcessingDurationMs"
   >,
-  workerContext?: WorkerContext,
+  workerContext?: WorkerContext
 ): Promise<string> {
   const setupStartedAt = performance.now();
   let prompt = [
@@ -48,9 +48,12 @@ export async function runCodexWorker(
     task.verification.map((command) => `- ${command}`).join("\n") || "- (none)",
   ].join("\n");
   const files = (workerContext?.inspectedFiles ?? []).filter(
-    (file) => Buffer.byteLength(file.content, "utf8") <= 64 * 1024,
+    (file) => Buffer.byteLength(file.content, "utf8") <= 64 * 1024
   );
-  if (files.length > 0 && Buffer.byteLength(JSON.stringify(files), "utf8") <= 128 * 1024) {
+  if (
+    files.length > 0 &&
+    Buffer.byteLength(JSON.stringify(files), "utf8") <= 128 * 1024
+  ) {
     prompt += [
       "",
       "Repository context already inspected during planning (warm-start reference):",

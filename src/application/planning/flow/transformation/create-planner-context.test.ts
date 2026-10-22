@@ -26,10 +26,18 @@ function createState(): PlanningState {
 describe("createPlannerContext", () => {
   it("recalculates remaining budget from the current state without mutating limits", () => {
     const state = createState();
-    const budget = Object.freeze({ maxRounds: 4, maxFilesPerRequest: 5, maxTotalFiles: 2 });
-    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(1);
+    const budget = Object.freeze({
+      maxRounds: 4,
+      maxFilesPerRequest: 5,
+      maxTotalFiles: 2,
+    });
+    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(
+      1
+    );
     state.inspectedFiles.push({ path: "README.md", content: "read" });
-    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(0);
+    expect(createPlannerContext(state, budget).remainingInspectionBudget).toBe(
+      0
+    );
     expect(createPlannerContext(state, budget).limits).toBe(budget);
   });
   it("projects planning facts without exposing repositoryRoot", () => {
@@ -56,7 +64,9 @@ describe("createPlannerContext", () => {
     const state = createState();
     delete state.repository.instructions;
 
-    expect(createPlannerContext(state, limits).repository.instructions).toBeUndefined();
+    expect(
+      createPlannerContext(state, limits).repository.instructions
+    ).toBeUndefined();
     expect(state.repository).not.toHaveProperty("instructions");
   });
 
@@ -74,7 +84,9 @@ describe("createPlannerContext", () => {
 
     expect(input.goal).toBe(state.goal);
     expect(input.repository.fileTree).toBe(state.repository.fileTree);
-    expect(input.repository.packageScripts).toBe(state.repository.packageScripts);
+    expect(input.repository.packageScripts).toBe(
+      state.repository.packageScripts
+    );
     expect(input.inspectedFiles).toBe(state.inspectedFiles);
     expect(state).toEqual(before);
   });

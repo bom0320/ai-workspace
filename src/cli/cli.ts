@@ -6,14 +6,23 @@ import type { PlanningResult } from "@/application/planning/index.js";
 
 import { runPlanCommand } from "./commands/plan/index.js";
 import { runDecisionCommand } from "./commands/decision/index.js";
-import { presentDecisions, presentComparison } from "./presenters/decision/index.js";
-import { runExecuteCommand, runExecutionCli } from "./commands/execute/index.js";
+import {
+  presentDecisions,
+  presentComparison,
+} from "./presenters/decision/index.js";
+import {
+  runExecuteCommand,
+  runExecutionCli,
+} from "./commands/execute/index.js";
 import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
 import { askGoal, type GoalInput } from "./prompts/planning/index.js";
 import { askDecision } from "./prompts/decision/index.js";
 import { askExecution } from "./prompts/execution/index.js";
 import { presentTaskContract } from "./presenters/planning/index.js";
-import { presentTiming, type HumanInteractionTiming } from "./presenters/timing.js";
+import {
+  presentTiming,
+  type HumanInteractionTiming,
+} from "./presenters/timing.js";
 
 function reportPlanning(result: PlanningResult): boolean {
   if (result.status === "failed") {
@@ -28,28 +37,39 @@ function reportPlanning(result: PlanningResult): boolean {
 }
 
 export async function runPlanningCli(args: string[]): Promise<number> {
-  return executePlanningInput({ repositoryPath: args[0] ?? "", objective: args[1] ?? "" });
+  return executePlanningInput({
+    repositoryPath: args[0] ?? "",
+    objective: args[1] ?? "",
+  });
 }
 
 async function executePlanningInput(input: GoalInput): Promise<number> {
   const startedAt = performance.now();
   try {
     const result = await runPlanCommand(input);
-    console.log(`Planning Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`);
+    console.log(
+      `Planning Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`
+    );
     if (!reportPlanning(result) || result.status !== "completed") return 1;
     presentTaskContract(result.task);
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    const inputError = message === "Repository path is required." || message === "Objective is required.";
-    console.error(inputError ? `Error: ${message}` : `Error: Planning failed: ${message}`);
+    const inputError =
+      message === "Repository path is required." ||
+      message === "Objective is required.";
+    console.error(
+      inputError ? `Error: ${message}` : `Error: Planning failed: ${message}`
+    );
     return 1;
   }
 }
 
 export async function runDecisionCli(args: string[]): Promise<number> {
   return executeDecisionInput({
-    repositoryPath: args[0] ?? "", objective: args[1] ?? "", filePaths: args.slice(2),
+    repositoryPath: args[0] ?? "",
+    objective: args[1] ?? "",
+    filePaths: args.slice(2),
   });
 }
 
@@ -60,10 +80,14 @@ async function executeDecisionInput(input: RunDecisionInput): Promise<number> {
     const result = await runDecisionCommand(input);
     presentDecisions(result.snapshot, result.decisions);
     presentComparison(result.comparison);
-    console.log(`Decision Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`);
+    console.log(
+      `Decision Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`
+    );
     return 0;
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     return 1;
   }
 }
@@ -74,20 +98,28 @@ export async function runCli(args: string[]): Promise<number> {
   try {
     if (args[0] === "execute") return await runExecutionCli(args.slice(1));
     if (args.length > 0) {
-      return await runPlanAndExecute({ repositoryPath: args[0] ?? "", objective: args[1] ?? "" });
+      return await runPlanAndExecute({
+        repositoryPath: args[0] ?? "",
+        objective: args[1] ?? "",
+      });
     }
     const workflow = await selectWorkflow();
     switch (workflow) {
-      case "plan-execute": return await runPlanAndExecute(await askGoal());
-      case "plan": return await executePlanningInput(await askGoal());
-      case "decision": return await executeDecisionInput(await askDecision());
+      case "plan-execute":
+        return await runPlanAndExecute(await askGoal());
+      case "plan":
+        return await executePlanningInput(await askGoal());
+      case "decision":
+        return await executeDecisionInput(await askDecision());
       case "execute": {
         const input = await askExecution();
         return await runExecutionCli([input.taskPath, input.repositoryPath]);
       }
     }
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     return 1;
   }
 }
@@ -101,9 +133,14 @@ async function runPlanAndExecute(input: GoalInput): Promise<number> {
     const result = await runPlanCommand(input);
     timing.planningDurationMs = performance.now() - startedAt;
     const completed = reportPlanning(result);
-    console.log(`Planning Duration: ${(timing.planningDurationMs / 1_000).toFixed(1)}s`);
+    console.log(
+      `Planning Duration: ${(timing.planningDurationMs / 1_000).toFixed(1)}s`
+    );
     if (!completed || result.status !== "completed") {
-      presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
+      presentTiming({
+        ...timing,
+        totalDurationMs: performance.now() - startedAt,
+      });
       return 1;
     }
     const approvalStartedAt = performance.now();
@@ -112,19 +149,35 @@ async function runPlanAndExecute(input: GoalInput): Promise<number> {
     timing.approvalWaitDurationMs = performance.now() - approvalStartedAt;
     if (!approved) {
       console.log("Task: rejected. Execution was not started.");
-      presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
+      presentTiming({
+        ...timing,
+        totalDurationMs: performance.now() - startedAt,
+      });
       return 1;
     }
     console.log("Execution...");
-    const allowedPaths = new Set(result.task.allowedPaths.map((path) => normalize(path)));
+    const allowedPaths = new Set(
+      result.task.allowedPaths.map((path) => normalize(path))
+    );
     const workerContext = {
-      inspectedFiles: result.state.inspectedFiles.filter((file) => allowedPaths.has(normalize(file.path))),
+      inspectedFiles: result.state.inspectedFiles.filter((file) =>
+        allowedPaths.has(normalize(file.path))
+      ),
     };
-    return await runExecuteCommand(result.task, result.state.repository.repositoryRoot, { ...timing, startedAt }, workerContext);
+    return await runExecuteCommand(
+      result.task,
+      result.state.repository.repositoryRoot,
+      { ...timing, startedAt },
+      workerContext
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`Error: ${message}`);
-    if (startedAt !== undefined) presentTiming({ ...timing, totalDurationMs: performance.now() - startedAt });
+    if (startedAt !== undefined)
+      presentTiming({
+        ...timing,
+        totalDurationMs: performance.now() - startedAt,
+      });
     return 1;
   }
 }
@@ -134,5 +187,7 @@ const isEntryPoint =
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
 if (isEntryPoint) {
-  runCli(process.argv.slice(2)).then((exitCode) => { process.exitCode = exitCode; });
+  runCli(process.argv.slice(2)).then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }

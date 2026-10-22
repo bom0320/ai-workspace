@@ -5,7 +5,11 @@ import { join, resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getRepositoryHead, readRepositoryFileAtCommit, resolveRepositoryRoot } from "./repository.js";
+import {
+  getRepositoryHead,
+  readRepositoryFileAtCommit,
+  resolveRepositoryRoot,
+} from "./repository.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -26,11 +30,12 @@ afterEach(() => {
 describe("getRepositoryHead", () => {
   it("returns the current commit SHA without a trailing newline", () => {
     const repository = createTemporaryDirectory();
-    const git = (...args: string[]) => execFileSync("git", args, {
-      cwd: repository,
-      encoding: "utf8",
-      stdio: "pipe",
-    });
+    const git = (...args: string[]) =>
+      execFileSync("git", args, {
+        cwd: repository,
+        encoding: "utf8",
+        stdio: "pipe",
+      });
     git("init", "--quiet");
     git("config", "user.name", "Test");
     git("config", "user.email", "test@example.com");
@@ -45,7 +50,10 @@ describe("getRepositoryHead", () => {
 
   it("fails when the repository has no HEAD commit", () => {
     const repository = createTemporaryDirectory();
-    execFileSync("git", ["init", "--quiet"], { cwd: repository, stdio: "pipe" });
+    execFileSync("git", ["init", "--quiet"], {
+      cwd: repository,
+      stdio: "pipe",
+    });
 
     expect(() => getRepositoryHead(repository)).toThrow();
   });
@@ -64,7 +72,7 @@ describe("resolveRepositoryRoot", () => {
     const directory = createTemporaryDirectory();
 
     expect(() => resolveRepositoryRoot(join(directory, "missing"))).toThrow(
-      "Repository path does not exist",
+      "Repository path does not exist"
     );
   });
 
@@ -75,7 +83,7 @@ describe("resolveRepositoryRoot", () => {
     writeFileSync(file, "not a repository");
 
     expect(() => resolveRepositoryRoot(file)).toThrow(
-      "Repository path is not a directory",
+      "Repository path is not a directory"
     );
   });
 
@@ -86,16 +94,20 @@ describe("resolveRepositoryRoot", () => {
     mkdirSync(nestedDirectory);
 
     expect(() => resolveRepositoryRoot(nestedDirectory)).toThrow(
-      "Path is not a Git repository",
+      "Path is not a Git repository"
     );
   });
 });
 
-
 describe("readRepositoryFileAtCommit", () => {
   let repository: string;
   let commitSha: string;
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repository, encoding: "utf8", stdio: "pipe" });
+  const git = (...args: string[]) =>
+    execFileSync("git", args, {
+      cwd: repository,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
   beforeEach(() => {
     repository = createTemporaryDirectory();
     git("init", "--quiet");
@@ -108,7 +120,9 @@ describe("readRepositoryFileAtCommit", () => {
   });
 
   it("reads the exact text from a specified commit", () => {
-    expect(readRepositoryFileAtCommit(repository, commitSha, "example.txt")).toBe("snapshot contents\n");
+    expect(
+      readRepositoryFileAtCommit(repository, commitSha, "example.txt")
+    ).toBe("snapshot contents\n");
   });
 
   it("ignores newer commits and working tree changes", () => {
@@ -116,12 +130,16 @@ describe("readRepositoryFileAtCommit", () => {
     git("add", ".");
     git("commit", "--quiet", "-m", "next");
     writeFileSync(join(repository, "example.txt"), "uncommitted contents\n");
-    expect(readRepositoryFileAtCommit(repository, commitSha, "example.txt")).toBe("snapshot contents\n");
+    expect(
+      readRepositoryFileAtCommit(repository, commitSha, "example.txt")
+    ).toBe("snapshot contents\n");
   });
 
   it("rejects files not present in that commit, even if they exist in the working tree", () => {
     writeFileSync(join(repository, "new.txt"), "working tree only");
-    expect(() => readRepositoryFileAtCommit(repository, commitSha, "new.txt")).toThrow("Unable to read repository file at commit");
+    expect(() =>
+      readRepositoryFileAtCommit(repository, commitSha, "new.txt")
+    ).toThrow("Unable to read repository file at commit");
   });
 
   it("rejects a directory rather than returning a tree listing", () => {
@@ -129,13 +147,28 @@ describe("readRepositoryFileAtCommit", () => {
     writeFileSync(join(repository, "src", "file.ts"), "// example");
     git("add", ".");
     git("commit", "--quiet", "-m", "add directory");
-    expect(() => readRepositoryFileAtCommit(repository, getRepositoryHead(repository), "src")).toThrow("Unable to read repository file at commit");
+    expect(() =>
+      readRepositoryFileAtCommit(
+        repository,
+        getRepositoryHead(repository),
+        "src"
+      )
+    ).toThrow("Unable to read repository file at commit");
   });
 
-  it.each([Buffer.from([0, 1, 2]), Buffer.from([0xff, 0xfe])])("rejects binary or invalid UTF-8 contents: %j", (contents) => {
-    writeFileSync(join(repository, "binary.dat"), contents);
-    git("add", ".");
-    git("commit", "--quiet", "-m", "binary");
-    expect(() => readRepositoryFileAtCommit(repository, getRepositoryHead(repository), "binary.dat")).toThrow("must be UTF-8 text");
-  });
+  it.each([Buffer.from([0, 1, 2]), Buffer.from([0xff, 0xfe])])(
+    "rejects binary or invalid UTF-8 contents: %j",
+    (contents) => {
+      writeFileSync(join(repository, "binary.dat"), contents);
+      git("add", ".");
+      git("commit", "--quiet", "-m", "binary");
+      expect(() =>
+        readRepositoryFileAtCommit(
+          repository,
+          getRepositoryHead(repository),
+          "binary.dat"
+        )
+      ).toThrow("must be UTF-8 text");
+    }
+  );
 });

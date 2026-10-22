@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export function getWorkspaceDiff(workspacePath: string, baseCommit: string): { content: string; truncated: boolean } {
+export function getWorkspaceDiff(
+  workspacePath: string,
+  baseCommit: string
+): { content: string; truncated: boolean } {
   const directory = mkdtempSync(join(tmpdir(), "ai-workspace-review-"));
   const env = { ...process.env, GIT_INDEX_FILE: join(directory, "index") };
   const limit = 64 * 1024;
@@ -14,13 +17,36 @@ export function getWorkspaceDiff(workspacePath: string, baseCommit: string): { c
     let output: Buffer;
     let truncated = false;
     try {
-      output = execFileSync("git", ["diff", "--cached", "--binary", "--no-color", "--no-ext-diff", "--no-textconv", baseCommit, "--"], { ...options, maxBuffer: limit });
+      output = execFileSync(
+        "git",
+        [
+          "diff",
+          "--cached",
+          "--binary",
+          "--no-color",
+          "--no-ext-diff",
+          "--no-textconv",
+          baseCommit,
+          "--",
+        ],
+        { ...options, maxBuffer: limit }
+      );
     } catch (error) {
-      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOBUFS" || !("stdout" in error) || !Buffer.isBuffer(error.stdout)) throw error;
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "ENOBUFS" ||
+        !("stdout" in error) ||
+        !Buffer.isBuffer(error.stdout)
+      )
+        throw error;
       output = error.stdout;
       truncated = true;
     }
-    return { content: output.subarray(0, limit).toString("utf8"), truncated: truncated || output.length > limit };
+    return {
+      content: output.subarray(0, limit).toString("utf8"),
+      truncated: truncated || output.length > limit,
+    };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

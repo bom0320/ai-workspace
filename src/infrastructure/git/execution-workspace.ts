@@ -11,7 +11,8 @@ function linkDependencies(repositoryRoot: string, workspacePath: string): void {
       throw new Error("Repository node_modules is not a directory.");
     }
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      return;
     throw error;
   }
 
@@ -20,8 +21,10 @@ function linkDependencies(repositoryRoot: string, workspacePath: string): void {
   mkdirSync(destination);
   for (const entry of readdirSync(source, { withFileTypes: true })) {
     const target = join(source, entry.name);
-    const type = process.platform === "win32" && statSync(target).isDirectory()
-      ? "junction" : undefined;
+    const type =
+      process.platform === "win32" && statSync(target).isDirectory()
+        ? "junction"
+        : undefined;
     symlinkSync(target, join(destination, entry.name), type);
   }
 }
@@ -72,12 +75,18 @@ export function createExecutionWorkspace(repositoryRoot: string): string {
     try {
       removeExecutionWorkspace(repositoryRoot, workspacePath);
     } catch (cleanupError) {
-      throw new Error(`Failed to link execution workspace dependencies; cleanup also failed at ${workspacePath}.`, {
-        cause: new AggregateError([error, cleanupError]),
-      });
+      throw new Error(
+        `Failed to link execution workspace dependencies; cleanup also failed at ${workspacePath}.`,
+        {
+          cause: new AggregateError([error, cleanupError]),
+        }
+      );
     }
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to link execution workspace dependencies: ${detail}`, { cause: error });
+    throw new Error(
+      `Failed to link execution workspace dependencies: ${detail}`,
+      { cause: error }
+    );
   }
 
   return resolve(workspacePath);
@@ -85,20 +94,13 @@ export function createExecutionWorkspace(repositoryRoot: string): string {
 
 export function removeExecutionWorkspace(
   repositoryRoot: string,
-  workspaceRoot: string,
+  workspaceRoot: string
 ): void {
   try {
     execFileSync(
       "git",
-      [
-        "-C",
-        repositoryRoot,
-        "worktree",
-        "remove",
-        "--force",
-        workspaceRoot,
-      ],
-      { encoding: "utf8", stdio: "pipe" },
+      ["-C", repositoryRoot, "worktree", "remove", "--force", workspaceRoot],
+      { encoding: "utf8", stdio: "pipe" }
     );
   } catch (error) {
     let detail = error instanceof Error ? error.message : String(error);

@@ -11,11 +11,12 @@ import {
 } from "./repository-snapshot.js";
 
 let repositoryRoot: string;
-const git = (...args: string[]) => execFileSync("git", args, {
-  cwd: repositoryRoot,
-  encoding: "utf8",
-  stdio: "pipe",
-});
+const git = (...args: string[]) =>
+  execFileSync("git", args, {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
 
 beforeEach(() => {
   repositoryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-snapshot-"));
@@ -32,13 +33,18 @@ afterEach(() => {
 });
 
 function makeDirty(kind: string): void {
-  writeFileSync(join(repositoryRoot, kind === "untracked" ? "new.txt" : "README.md"), "changed\n");
+  writeFileSync(
+    join(repositoryRoot, kind === "untracked" ? "new.txt" : "README.md"),
+    "changed\n"
+  );
   if (kind === "staged") git("add", "README.md");
 }
 
 describe("captureRepositorySnapshot", () => {
   it("captures the current HEAD and resolves the repository path", () => {
-    const snapshot = captureRepositorySnapshot(relative(process.cwd(), repositoryRoot));
+    const snapshot = captureRepositorySnapshot(
+      relative(process.cwd(), repositoryRoot)
+    );
 
     expect(snapshot).toEqual({
       repositoryRoot,
@@ -51,7 +57,7 @@ describe("captureRepositorySnapshot", () => {
     makeDirty(kind);
 
     expect(() => captureRepositorySnapshot(repositoryRoot)).toThrow(
-      "Cannot capture repository snapshot: repository has uncommitted or untracked changes.",
+      "Cannot capture repository snapshot: repository has uncommitted or untracked changes."
     );
   });
 });
@@ -69,16 +75,19 @@ describe("assertRepositoryMatchesSnapshot", () => {
 
     expect(git("status", "--porcelain")).toBe("");
     expect(() => assertRepositoryMatchesSnapshot(snapshot)).toThrow(
-      `Repository HEAD changed: expected ${snapshot.commitSha}, received ${git("rev-parse", "HEAD").trim()}.`,
+      `Repository HEAD changed: expected ${snapshot.commitSha}, received ${git("rev-parse", "HEAD").trim()}.`
     );
   });
 
-  it.each(["tracked", "staged", "untracked"])("rejects a working tree with %s changes", (kind) => {
-    const snapshot = captureRepositorySnapshot(repositoryRoot);
-    makeDirty(kind);
+  it.each(["tracked", "staged", "untracked"])(
+    "rejects a working tree with %s changes",
+    (kind) => {
+      const snapshot = captureRepositorySnapshot(repositoryRoot);
+      makeDirty(kind);
 
-    expect(() => assertRepositoryMatchesSnapshot(snapshot)).toThrow(
-      "Repository working tree became dirty: uncommitted or untracked changes detected.",
-    );
-  });
+      expect(() => assertRepositoryMatchesSnapshot(snapshot)).toThrow(
+        "Repository working tree became dirty: uncommitted or untracked changes detected."
+      );
+    }
+  );
 });

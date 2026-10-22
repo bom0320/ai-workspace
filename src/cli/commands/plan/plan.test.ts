@@ -13,13 +13,24 @@ vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 
 const task: TaskContract = {
-  id: "task-001", goalId: "goal-001", objective: "Clarify README",
-  targetRepository: "example", allowedPaths: ["README.md"], forbiddenPaths: [],
-  constraints: [], acceptanceCriteria: ["Introduction is clear"], verification: [],
+  id: "task-001",
+  goalId: "goal-001",
+  objective: "Clarify README",
+  targetRepository: "example",
+  allowedPaths: ["README.md"],
+  forbiddenPaths: [],
+  constraints: [],
+  acceptanceCriteria: ["Introduction is clear"],
+  verification: [],
 };
 const state: PlanningState = {
   goal: { objective: task.objective, targetRepository: "example" },
-  repository: { repositoryRoot: "/repositories/example", repositoryName: "example", fileTree: ["README.md"], packageScripts: {} },
+  repository: {
+    repositoryRoot: "/repositories/example",
+    repositoryName: "example",
+    fileTree: ["README.md"],
+    packageScripts: {},
+  },
   inspectedFiles: [],
 };
 const planTaskMock = vi.mocked(planTask);
@@ -28,33 +39,54 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  planTaskMock.mockResolvedValue({ status: "completed", task, state, rounds: 2 });
+  planTaskMock.mockResolvedValue({
+    status: "completed",
+    task,
+    state,
+    rounds: 2,
+  });
 });
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("Planning CLI", () => {
   it("accepts GoalInput independently of argv and returns the application result", async () => {
     const result = { status: "completed" as const, task, state, rounds: 2 };
     planTaskMock.mockResolvedValue(result);
-    expect(await runPlanCommand({ repositoryPath: ".", objective: "Clarify README" })).toBe(result);
+    expect(
+      await runPlanCommand({ repositoryPath: ".", objective: "Clarify README" })
+    ).toBe(result);
   });
   it("rejects a missing repository path", async () => {
     expect(await runPlanningCli([])).toBe(1);
-    expect(console.error).toHaveBeenCalledWith("Error: Repository path is required.");
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Repository path is required."
+    );
     expect(planTaskMock).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, "", "   "])("rejects a missing or blank objective: %j", async (objective) => {
-    expect(await runPlanningCli(objective === undefined ? ["."] : [".", objective])).toBe(1);
-    expect(console.error).toHaveBeenCalledWith("Error: Objective is required.");
-    expect(planTaskMock).not.toHaveBeenCalled();
-  });
+  it.each([undefined, "", "   "])(
+    "rejects a missing or blank objective: %j",
+    async (objective) => {
+      expect(
+        await runPlanningCli(objective === undefined ? ["."] : [".", objective])
+      ).toBe(1);
+      expect(console.error).toHaveBeenCalledWith(
+        "Error: Objective is required."
+      );
+      expect(planTaskMock).not.toHaveBeenCalled();
+    }
+  );
 
   it("creates a goal and invokes planTask without injecting a planner", async () => {
     expect(await runPlanningCli([".", "Clarify README"])).toBe(0);
     expect(planTaskMock).toHaveBeenCalledWith({
-      goal: { objective: "Clarify README", targetRepository: basename(resolve(".")) },
+      goal: {
+        objective: "Clarify README",
+        targetRepository: basename(resolve(".")),
+      },
       repositoryPath: ".",
       limits: { maxRounds: 4, maxFilesPerRequest: 5, maxTotalFiles: 12 },
     });
@@ -70,18 +102,27 @@ describe("Planning CLI", () => {
   });
 
   it("reports workflow failure with exit code 1", async () => {
-    planTaskMock.mockResolvedValue({ status: "failed", state, rounds: 4, reason: "Planning round limit reached." });
+    planTaskMock.mockResolvedValue({
+      status: "failed",
+      state,
+      rounds: 4,
+      reason: "Planning round limit reached.",
+    });
     expect(await runPlanningCli([".", "Clarify README"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Planning: failed");
     expect(console.error).toHaveBeenCalledWith("Rounds: 4");
-    expect(console.error).toHaveBeenCalledWith("Reason: Planning round limit reached.");
+    expect(console.error).toHaveBeenCalledWith(
+      "Reason: Planning round limit reached."
+    );
     expect(executeTask).not.toHaveBeenCalled();
   });
 
   it("reports unexpected errors without a stack trace and returns exit code 1", async () => {
     planTaskMock.mockRejectedValue(new Error("Codex planner timed out"));
     expect(await runPlanningCli([".", "Clarify README"])).toBe(1);
-    expect(console.error).toHaveBeenCalledWith("Error: Planning failed: Codex planner timed out");
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Planning failed: Codex planner timed out"
+    );
     expect(executeTask).not.toHaveBeenCalled();
   });
 });

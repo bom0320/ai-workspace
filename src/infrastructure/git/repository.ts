@@ -13,24 +13,35 @@ export function getRepositoryHead(repositoryRoot: string): string {
 export function readRepositoryFileAtCommit(
   repositoryRoot: string,
   commitSha: string,
-  path: string,
+  path: string
 ): string {
   let content: Buffer;
   try {
-    content = execFileSync("git", ["cat-file", "blob", `${commitSha}:${path}`], {
-      cwd: repositoryRoot,
-      stdio: "pipe",
-    });
+    content = execFileSync(
+      "git",
+      ["cat-file", "blob", `${commitSha}:${path}`],
+      {
+        cwd: repositoryRoot,
+        stdio: "pipe",
+      }
+    );
   } catch (cause) {
-    throw new Error(`Unable to read repository file at commit ${commitSha}: ${path}.`, { cause });
+    throw new Error(
+      `Unable to read repository file at commit ${commitSha}: ${path}.`,
+      { cause }
+    );
   }
   if (content.includes(0)) {
     throw new Error(`Decision context file must be UTF-8 text: ${path}.`);
   }
   try {
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(content);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+      content
+    );
   } catch (cause) {
-    throw new Error(`Decision context file must be UTF-8 text: ${path}.`, { cause });
+    throw new Error(`Decision context file must be UTF-8 text: ${path}.`, {
+      cause,
+    });
   }
 }
 

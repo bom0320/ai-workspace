@@ -12,31 +12,57 @@ import { askDecision } from "./prompts/decision/index.js";
 import { askExecution } from "./prompts/execution/index.js";
 import { runExecutionCli } from "./commands/execute/index.js";
 import { runDecisionCommand } from "./commands/decision/index.js";
-import { presentDecisions, presentComparison } from "./presenters/decision/index.js";
+import {
+  presentDecisions,
+  presentComparison,
+} from "./presenters/decision/index.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
-vi.mock("@/infrastructure/git/index.js", () => ({ resolveRepositoryRoot: vi.fn() }));
-vi.mock("./prompts/workflow/index.js", () => ({ approveTask: vi.fn(), selectWorkflow: vi.fn() }));
+vi.mock("@/infrastructure/git/index.js", () => ({
+  resolveRepositoryRoot: vi.fn(),
+}));
+vi.mock("./prompts/workflow/index.js", () => ({
+  approveTask: vi.fn(),
+  selectWorkflow: vi.fn(),
+}));
 vi.mock("./prompts/planning/index.js", () => ({ askGoal: vi.fn() }));
-vi.mock("./commands/decision/index.js", () => ({ runDecisionCommand: vi.fn() }));
-vi.mock("./presenters/decision/index.js", () => ({ presentDecisions: vi.fn(), presentComparison: vi.fn() }));
+vi.mock("./commands/decision/index.js", () => ({
+  runDecisionCommand: vi.fn(),
+}));
+vi.mock("./presenters/decision/index.js", () => ({
+  presentDecisions: vi.fn(),
+  presentComparison: vi.fn(),
+}));
 
 vi.mock("./prompts/decision/index.js", () => ({ askDecision: vi.fn() }));
 vi.mock("./prompts/execution/index.js", () => ({ askExecution: vi.fn() }));
 vi.mock("./commands/execute/index.js", async () => ({
-  ...await vi.importActual<typeof import("./commands/execute/index.js")>("./commands/execute/index.js"),
+  ...(await vi.importActual<typeof import("./commands/execute/index.js")>(
+    "./commands/execute/index.js"
+  )),
   runExecutionCli: vi.fn(),
 }));
 
 const task: TaskContract = {
-  id: "task-human", goalId: "goal-human", objective: "Clarify README",
-  targetRepository: "example", allowedPaths: ["README.md"], forbiddenPaths: [],
-  constraints: [], acceptanceCriteria: ["Clear introduction"], verification: [],
+  id: "task-human",
+  goalId: "goal-human",
+  objective: "Clarify README",
+  targetRepository: "example",
+  allowedPaths: ["README.md"],
+  forbiddenPaths: [],
+  constraints: [],
+  acceptanceCriteria: ["Clear introduction"],
+  verification: [],
 };
 const state: PlanningState = {
   goal: { objective: task.objective, targetRepository: "example" },
-  repository: { repositoryRoot: "/repositories/example", repositoryName: "example", fileTree: [], packageScripts: {} },
+  repository: {
+    repositoryRoot: "/repositories/example",
+    repositoryName: "example",
+    fileTree: [],
+    packageScripts: {},
+  },
   inspectedFiles: [],
 };
 
@@ -44,79 +70,165 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(selectWorkflow).mockResolvedValue("plan-execute");
   vi.mocked(runExecutionCli).mockResolvedValue(0);
-  vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" }, decisions: [], comparison: { findings: [], gaps: [] } });
+  vi.mocked(runDecisionCommand).mockResolvedValue({
+    goal: state.goal,
+    snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" },
+    decisions: [],
+    comparison: { findings: [], gaps: [] },
+  });
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state, rounds: 2 });
-  vi.mocked(executeTask).mockResolvedValue({ passed: true, evidence: {}, failures: [] });
-  vi.mocked(resolveRepositoryRoot).mockReturnValue(state.repository.repositoryRoot);
+  vi.mocked(planTask).mockResolvedValue({
+    status: "completed",
+    task,
+    state,
+    rounds: 2,
+  });
+  vi.mocked(executeTask).mockResolvedValue({
+    passed: true,
+    evidence: {},
+    failures: [],
+  });
+  vi.mocked(resolveRepositoryRoot).mockReturnValue(
+    state.repository.repositoryRoot
+  );
 });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("CLI approval boundary", () => {
   it("routes decision independently of Planning, Approval and Execution", async () => {
-    const snapshot = { repositoryRoot: "/repositories/example", commitSha: "abc123" };
-    vi.mocked(runDecisionCommand).mockResolvedValue({ goal: state.goal, snapshot, decisions: [], comparison: { findings: [], gaps: [] } });
-    expect(await runCli(["decision", "/repositories/example", "Review UI", "src/button.tsx", "README.md"])).toBe(0);
+    const snapshot = {
+      repositoryRoot: "/repositories/example",
+      commitSha: "abc123",
+    };
+    vi.mocked(runDecisionCommand).mockResolvedValue({
+      goal: state.goal,
+      snapshot,
+      decisions: [],
+      comparison: { findings: [], gaps: [] },
+    });
+    expect(
+      await runCli([
+        "decision",
+        "/repositories/example",
+        "Review UI",
+        "src/button.tsx",
+        "README.md",
+      ])
+    ).toBe(0);
     expect(runDecisionCommand).toHaveBeenCalledWith({
-      repositoryPath: "/repositories/example", objective: "Review UI", filePaths: ["src/button.tsx", "README.md"],
+      repositoryPath: "/repositories/example",
+      objective: "Review UI",
+      filePaths: ["src/button.tsx", "README.md"],
     });
     expect(presentDecisions).toHaveBeenCalledWith(snapshot, []);
     expect(presentComparison).toHaveBeenCalledWith({ findings: [], gaps: [] });
-    expect(vi.mocked(presentDecisions).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(presentComparison).mock.invocationCallOrder[0]);
+    expect(
+      vi.mocked(presentDecisions).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(presentComparison).mock.invocationCallOrder[0]);
     expect(console.log).toHaveBeenCalledWith("Decision...");
-    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Decision Duration: \d+\.\ds$/));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/^Decision Duration: \d+\.\ds$/)
+    );
     expect(planTask).not.toHaveBeenCalled();
     expect(executeTask).not.toHaveBeenCalled();
     expect(approveTask).not.toHaveBeenCalled();
     expect(askGoal).not.toHaveBeenCalled();
   });
 
-  it.each(["Evidence validation failed", "Comparison reference validation failed"])("reports command failure without partial presentation: %s", async (message) => {
-    vi.mocked(runDecisionCommand).mockRejectedValue(new Error(message));
-    expect(await runCli(["decision", ".", "Review UI", "README.md"])).toBe(1);
-    expect(console.error).toHaveBeenCalledWith(`Error: ${message}`);
-    expect(presentDecisions).not.toHaveBeenCalled();
-    expect(presentComparison).not.toHaveBeenCalled();
-    expect(planTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-  });
+  it.each([
+    "Evidence validation failed",
+    "Comparison reference validation failed",
+  ])(
+    "reports command failure without partial presentation: %s",
+    async (message) => {
+      vi.mocked(runDecisionCommand).mockRejectedValue(new Error(message));
+      expect(await runCli(["decision", ".", "Review UI", "README.md"])).toBe(1);
+      expect(console.error).toHaveBeenCalledWith(`Error: ${message}`);
+      expect(presentDecisions).not.toHaveBeenCalled();
+      expect(presentComparison).not.toHaveBeenCalled();
+      expect(planTask).not.toHaveBeenCalled();
+      expect(executeTask).not.toHaveBeenCalled();
+    }
+  );
 
   it("passes missing decision arguments to command validation", async () => {
-    vi.mocked(runDecisionCommand).mockRejectedValue(new Error("Repository path is required."));
+    vi.mocked(runDecisionCommand).mockRejectedValue(
+      new Error("Repository path is required.")
+    );
     expect(await runCli(["decision"])).toBe(1);
-    expect(runDecisionCommand).toHaveBeenCalledWith({ repositoryPath: "", objective: "", filePaths: [] });
-    expect(console.error).toHaveBeenCalledWith("Error: Repository path is required.");
+    expect(runDecisionCommand).toHaveBeenCalledWith({
+      repositoryPath: "",
+      objective: "",
+      filePaths: [],
+    });
+    expect(console.error).toHaveBeenCalledWith(
+      "Error: Repository path is required."
+    );
   });
   it("passes only inspected files matching allowed paths into Execution", async () => {
-    const inspectedFiles = [{ path: "README.md", content: "Existing introduction" }, { path: "package.json", content: "{}" }];
-    vi.mocked(planTask).mockResolvedValue({ status: "completed", task, state: { ...state, inspectedFiles }, rounds: 1 });
+    const inspectedFiles = [
+      { path: "README.md", content: "Existing introduction" },
+      { path: "package.json", content: "{}" },
+    ];
+    vi.mocked(planTask).mockResolvedValue({
+      status: "completed",
+      task,
+      state: { ...state, inspectedFiles },
+      rounds: 1,
+    });
     vi.mocked(approveTask).mockResolvedValue(true);
     expect(await runCli([".", "Clarify README"])).toBe(0);
-    expect(executeTask).toHaveBeenCalledWith(task, state.repository.repositoryRoot, {
-      workerContext: { inspectedFiles: [inspectedFiles[0]] },
-    });
+    expect(executeTask).toHaveBeenCalledWith(
+      task,
+      state.repository.repositoryRoot,
+      {
+        workerContext: { inspectedFiles: [inspectedFiles[0]] },
+      }
+    );
     expect(task).not.toHaveProperty("inspectedFiles");
   });
   it("shows planning, Human wait, execution stages and end-to-end total", async () => {
     vi.mocked(approveTask).mockResolvedValue(true);
-    vi.mocked(executeTask).mockResolvedValue({ passed: true, evidence: {}, failures: [],
-      telemetry: { workspaceDurationMs: 800, workerDurationMs: 42700,
-        verificationDurationMs: 11300, cleanupDurationMs: 400, totalDurationMs: 55200 } });
+    vi.mocked(executeTask).mockResolvedValue({
+      passed: true,
+      evidence: {},
+      failures: [],
+      telemetry: {
+        workspaceDurationMs: 800,
+        workerDurationMs: 42700,
+        verificationDurationMs: 11300,
+        cleanupDurationMs: 400,
+        totalDurationMs: 55200,
+      },
+    });
     expect(await runCli([".", "Clarify README"])).toBe(0);
     expect(console.log).toHaveBeenCalledWith("Worker: 42.7s");
-    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Approval Wait: \d+\.\ds$/));
-    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^Total: \d+\.\ds$/));
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/^Approval Wait: \d+\.\ds$/)
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/^Total: \d+\.\ds$/)
+    );
   });
   it("asks for Goal input when arguments are absent", async () => {
-    vi.mocked(askGoal).mockResolvedValue({ repositoryPath: ".", objective: "Interactive goal" });
+    vi.mocked(askGoal).mockResolvedValue({
+      repositoryPath: ".",
+      objective: "Interactive goal",
+    });
     vi.mocked(approveTask).mockResolvedValue(true);
     expect(await runCli([])).toBe(0);
     expect(askGoal).toHaveBeenCalledOnce();
     expect(selectWorkflow).toHaveBeenCalledOnce();
     expect(runDecisionCommand).not.toHaveBeenCalled();
     expect(runExecutionCli).not.toHaveBeenCalled();
-    expect(planTask).toHaveBeenCalledWith(expect.objectContaining({ goal: expect.objectContaining({ objective: "Interactive goal" }) }));
+    expect(planTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goal: expect.objectContaining({ objective: "Interactive goal" }),
+      })
+    );
     expect(vi.mocked(executeTask).mock.calls[0][0]).toBe(task);
   });
 
@@ -129,7 +241,12 @@ describe("CLI approval boundary", () => {
   });
   it("passes the generated task directly to execution only after approval resolves", async () => {
     let approve!: (answer: boolean) => void;
-    vi.mocked(approveTask).mockImplementation(() => new Promise((resolve) => { approve = resolve; }));
+    vi.mocked(approveTask).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          approve = resolve;
+        })
+    );
     const pending = runCli([".", "Clarify README"]);
     await vi.waitFor(() => expect(approveTask).toHaveBeenCalledWith());
     expect(executeTask).not.toHaveBeenCalled();
@@ -137,7 +254,11 @@ describe("CLI approval boundary", () => {
     expect(askGoal).not.toHaveBeenCalled();
     approve(true);
     expect(await pending).toBe(0);
-    expect(executeTask).toHaveBeenCalledWith(task, state.repository.repositoryRoot, { workerContext: { inspectedFiles: [] } });
+    expect(executeTask).toHaveBeenCalledWith(
+      task,
+      state.repository.repositoryRoot,
+      { workerContext: { inspectedFiles: [] } }
+    );
     expect(vi.mocked(executeTask).mock.calls[0][0]).toBe(task);
   });
 
@@ -148,7 +269,12 @@ describe("CLI approval boundary", () => {
   });
 
   it("does not ask for approval or execute after planning failure", async () => {
-    vi.mocked(planTask).mockResolvedValue({ status: "failed", state, rounds: 4, reason: "Round limit" });
+    vi.mocked(planTask).mockResolvedValue({
+      status: "failed",
+      state,
+      rounds: 4,
+      reason: "Round limit",
+    });
     expect(await runCli([".", "Clarify README"])).toBe(1);
     expect(approveTask).not.toHaveBeenCalled();
     expect(executeTask).not.toHaveBeenCalled();
@@ -167,15 +293,21 @@ describe("CLI approval boundary", () => {
   });
 });
 
-
 describe("interactive workflow routing", () => {
   it("routes Plan only through askGoal without Approval or Execution", async () => {
     vi.mocked(selectWorkflow).mockResolvedValue("plan");
-    vi.mocked(askGoal).mockResolvedValue({ repositoryPath: ".", objective: "Plan the change" });
+    vi.mocked(askGoal).mockResolvedValue({
+      repositoryPath: ".",
+      objective: "Plan the change",
+    });
     expect(await runCli([])).toBe(0);
     expect(selectWorkflow).toHaveBeenCalledOnce();
     expect(askGoal).toHaveBeenCalledOnce();
-    expect(planTask).toHaveBeenCalledWith(expect.objectContaining({ goal: expect.objectContaining({ objective: "Plan the change" }) }));
+    expect(planTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goal: expect.objectContaining({ objective: "Plan the change" }),
+      })
+    );
     expect(approveTask).not.toHaveBeenCalled();
     expect(executeTask).not.toHaveBeenCalled();
     expect(runDecisionCommand).not.toHaveBeenCalled();
@@ -183,7 +315,11 @@ describe("interactive workflow routing", () => {
   });
 
   it("routes Decision input directly to the shared Decision flow", async () => {
-    const input = { repositoryPath: ".", objective: "Review UI", filePaths: ["foo.ts", "bar.ts"] };
+    const input = {
+      repositoryPath: ".",
+      objective: "Review UI",
+      filePaths: ["foo.ts", "bar.ts"],
+    };
     vi.mocked(selectWorkflow).mockResolvedValue("decision");
     vi.mocked(askDecision).mockResolvedValue(input);
     expect(await runCli([])).toBe(0);
@@ -200,7 +336,10 @@ describe("interactive workflow routing", () => {
 
   it("routes Execute existing task with the original task/repository argument order", async () => {
     vi.mocked(selectWorkflow).mockResolvedValue("execute");
-    vi.mocked(askExecution).mockResolvedValue({ taskPath: "task.json", repositoryPath: "." });
+    vi.mocked(askExecution).mockResolvedValue({
+      taskPath: "task.json",
+      repositoryPath: ".",
+    });
     expect(await runCli([])).toBe(0);
     expect(askExecution).toHaveBeenCalledOnce();
     expect(runExecutionCli).toHaveBeenCalledWith(["task.json", "."]);
@@ -225,7 +364,9 @@ describe("interactive workflow routing", () => {
   });
 
   it("reports selector EOF without entering another workflow", async () => {
-    vi.mocked(selectWorkflow).mockRejectedValue(new Error("Workflow input ended"));
+    vi.mocked(selectWorkflow).mockRejectedValue(
+      new Error("Workflow input ended")
+    );
     expect(await runCli([])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Error: Workflow input ended");
     expect(askGoal).not.toHaveBeenCalled();

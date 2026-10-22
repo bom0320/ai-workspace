@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { runCommand } from "@/infrastructure/process/index.js";
 
 import type { ComparisonContext } from "../protocol/context.js";
-import { comparisonPayloadSchema, type ComparisonPayload } from "../protocol/comparison.js";
+import {
+  comparisonPayloadSchema,
+  type ComparisonPayload,
+} from "../protocol/comparison.js";
 
 export type CodexComparatorOptions = {
   timeoutMs?: number;
@@ -13,7 +16,7 @@ export type CodexComparatorOptions = {
 
 export async function runCodexComparator(
   context: ComparisonContext,
-  options: CodexComparatorOptions = {},
+  options: CodexComparatorOptions = {}
 ): Promise<ComparisonPayload> {
   const timeoutMs = options.timeoutMs ?? 15 * 60 * 1_000;
   const prompt = [
@@ -57,36 +60,52 @@ export async function runCodexComparator(
   // Context-only execution outside the target repository; no reference validation here.
   const cwd = mkdtempSync(join(tmpdir(), "ai-workspace-codex-comparator-"));
   try {
-    const result = await runCommand("codex", [
-      "exec",
-      "--ignore-user-config",
-      "--ignore-rules",
-      "--strict-config",
-      "--ephemeral",
-      "--skip-git-repo-check",
-      "--sandbox", "read-only",
-      "--color", "never",
-      "-c", 'approval_policy="never"',
-      "-c", 'web_search="disabled"',
-      "-c", "project_doc_max_bytes=0",
-      "-c", "features={shell_tool=false,unified_exec=false,view_image=false,code_mode=false,code_mode_host=false,apps=false,plugins=false,browser_use=false,computer_use=false,multi_agent=false,multi_agent_v2=false,hooks=false,image_generation=false,skill_search=false,memories=false,shell_snapshot=false}",
-      prompt,
-    ], { cwd, timeoutMs });
+    const result = await runCommand(
+      "codex",
+      [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--strict-config",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "read-only",
+        "--color",
+        "never",
+        "-c",
+        'approval_policy="never"',
+        "-c",
+        'web_search="disabled"',
+        "-c",
+        "project_doc_max_bytes=0",
+        "-c",
+        "features={shell_tool=false,unified_exec=false,view_image=false,code_mode=false,code_mode_host=false,apps=false,plugins=false,browser_use=false,computer_use=false,multi_agent=false,multi_agent_v2=false,hooks=false,image_generation=false,skill_search=false,memories=false,shell_snapshot=false}",
+        prompt,
+      ],
+      { cwd, timeoutMs }
+    );
 
     if (result.timedOut) {
       throw new Error(`Codex comparator timed out after ${timeoutMs} ms.`);
     }
     if (result.error || result.exitCode !== 0) {
-      const detail = result.stderr.trim() || result.error?.message ||
+      const detail =
+        result.stderr.trim() ||
+        result.error?.message ||
         `Codex exited with code ${result.exitCode ?? "unavailable"}.`;
-      throw new Error(`Failed to run Codex comparator: ${detail}`, { cause: result.error });
+      throw new Error(`Failed to run Codex comparator: ${detail}`, {
+        cause: result.error,
+      });
     }
 
     let output: unknown;
     try {
       output = JSON.parse(result.stdout.trim());
     } catch (error) {
-      throw new Error("Codex comparator returned malformed JSON.", { cause: error });
+      throw new Error("Codex comparator returned malformed JSON.", {
+        cause: error,
+      });
     }
     return comparisonPayloadSchema.parse(output);
   } finally {

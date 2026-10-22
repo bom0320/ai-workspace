@@ -19,7 +19,7 @@ export type VerificationResult = {
 export async function runVerification(
   verification: string[],
   workspaceRoot: string,
-  timeoutMs = DEFAULT_VERIFICATION_TIMEOUT_MS,
+  timeoutMs = DEFAULT_VERIFICATION_TIMEOUT_MS
 ): Promise<VerificationResult> {
   const commands: VerificationCommandResult[] = [];
 
@@ -39,9 +39,7 @@ export async function runVerification(
     commands.push({
       command,
       passed:
-        result.exitCode === 0 &&
-        result.error === undefined &&
-        !result.timedOut,
+        result.exitCode === 0 && result.error === undefined && !result.timedOut,
       exitCode: result.exitCode,
       stdout: result.stdout,
       stderr,

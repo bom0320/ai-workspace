@@ -24,9 +24,8 @@ import {
 } from "../index.js";
 
 vi.mock("@/infrastructure/git/index.js", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("@/infrastructure/git/index.js")
-  >();
+  const actual =
+    await importOriginal<typeof import("@/infrastructure/git/index.js")>();
   return {
     ...actual,
     readRepositoryFileAtCommit: vi.fn(actual.readRepositoryFileAtCommit),

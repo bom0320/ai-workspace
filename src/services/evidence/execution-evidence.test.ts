@@ -30,7 +30,7 @@ function createGitRepository(): string {
     ["-C", repository, "commit", "--quiet", "-m", "initial"],
     {
       env: gitIdentity,
-    },
+    }
   );
 
   return repository;
@@ -117,9 +117,13 @@ describe("collectChangedPaths", () => {
     const baseCommit = head(repository);
     writeFileSync(join(repository, "modified.txt"), "committed change\n");
     execFileSync("git", ["-C", repository, "add", "modified.txt"]);
-    execFileSync("git", ["-C", repository, "commit", "--quiet", "-m", "worker"], {
-      env: gitIdentity,
-    });
+    execFileSync(
+      "git",
+      ["-C", repository, "commit", "--quiet", "-m", "worker"],
+      {
+        env: gitIdentity,
+      }
+    );
 
     expect(collectChangedPaths(repository, baseCommit)).toEqual([
       "modified.txt",
@@ -132,7 +136,7 @@ describe("collectChangedPaths", () => {
     temporaryDirectories.push(directory);
 
     expect(() => collectChangedPaths(directory, "missing-base")).toThrow(
-      "Failed to collect execution evidence",
+      "Failed to collect execution evidence"
     );
   });
 });

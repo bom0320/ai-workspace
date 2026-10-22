@@ -16,7 +16,9 @@ const validTaskContract = {
 
 describe("taskContractSchema", () => {
   it("parses a valid TaskContract", () => {
-    expect(taskContractSchema.parse(validTaskContract)).toEqual(validTaskContract);
+    expect(taskContractSchema.parse(validTaskContract)).toEqual(
+      validTaskContract
+    );
   });
 
   it("rejects a missing required field", () => {
@@ -32,9 +34,9 @@ describe("taskContractSchema", () => {
         taskContractSchema.safeParse({
           ...validTaskContract,
           [field]: "",
-        }).success,
+        }).success
       ).toBe(false);
-    },
+    }
   );
 
   it.each([
@@ -48,7 +50,7 @@ describe("taskContractSchema", () => {
       taskContractSchema.safeParse({
         ...validTaskContract,
         [field]: [""],
-      }).success,
+      }).success
     ).toBe(false);
   });
 
@@ -57,7 +59,7 @@ describe("taskContractSchema", () => {
       taskContractSchema.safeParse({
         ...validTaskContract,
         allowedPaths: "src/contracts/task.ts",
-      }).success,
+      }).success
     ).toBe(false);
   });
 });

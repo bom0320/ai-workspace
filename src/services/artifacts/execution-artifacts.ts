@@ -28,20 +28,23 @@ function errorDetail(error: unknown): string {
 
 export function createExecutionRun(
   task: TaskContract,
-  runsRoot = resolve(process.cwd(), ".ai-workspace", "runs"),
+  runsRoot = resolve(process.cwd(), ".ai-workspace", "runs")
 ): string {
   try {
     mkdirSync(runsRoot, { recursive: true });
     const runDirectory = mkdtempSync(join(runsRoot, "run-"));
     writeFileSync(
       join(runDirectory, "task.json"),
-      `${JSON.stringify(task, null, 2)}\n`,
+      `${JSON.stringify(task, null, 2)}\n`
     );
     return resolve(runDirectory);
   } catch (error) {
-    throw new Error(`Failed to create execution result directory: ${errorDetail(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Failed to create execution result directory: ${errorDetail(error)}`,
+      {
+        cause: error,
+      }
+    );
   }
 }
 
@@ -52,16 +55,19 @@ export function getExecutionBaseCommit(workspaceRoot: string): string {
       stdio: ["ignore", "pipe", "pipe"],
     }).trim();
   } catch (error) {
-    throw new Error(`Failed to determine patch base commit: ${errorDetail(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Failed to determine patch base commit: ${errorDetail(error)}`,
+      {
+        cause: error,
+      }
+    );
   }
 }
 
 export function preserveExecutionChanges(
   workspaceRoot: string,
   runDirectory: string,
-  baseCommit: string,
+  baseCommit: string
 ): void {
   const temporaryIndex = join(runDirectory, `.patch-index-${randomUUID()}`);
   const patchPath = join(runDirectory, "changes.patch");
@@ -99,12 +105,15 @@ export function preserveExecutionChanges(
       {
         env: gitEnvironment,
         stdio: ["ignore", patchDescriptor, "pipe"],
-      },
+      }
     );
   } catch (error) {
-    throw new Error(`Failed to preserve execution changes: ${errorDetail(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Failed to preserve execution changes: ${errorDetail(error)}`,
+      {
+        cause: error,
+      }
+    );
   } finally {
     if (patchDescriptor !== undefined) {
       closeSync(patchDescriptor);
@@ -115,16 +124,19 @@ export function preserveExecutionChanges(
 
 export function writeExecutionResult(
   runDirectory: string,
-  result: object,
+  result: object
 ): void {
   try {
     writeFileSync(
       join(runDirectory, "result.json"),
-      `${JSON.stringify(result, null, 2)}\n`,
+      `${JSON.stringify(result, null, 2)}\n`
     );
   } catch (error) {
-    throw new Error(`Failed to write final execution result: ${errorDetail(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Failed to write final execution result: ${errorDetail(error)}`,
+      {
+        cause: error,
+      }
+    );
   }
 }

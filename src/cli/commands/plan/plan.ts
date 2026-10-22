@@ -5,7 +5,10 @@ import { goalSpecSchema } from "@/contracts/goal.js";
 
 import type { GoalInput } from "../../prompts/planning/index.js";
 
-export function runPlanCommand({ repositoryPath, objective }: GoalInput): Promise<PlanningResult> {
+export function runPlanCommand({
+  repositoryPath,
+  objective,
+}: GoalInput): Promise<PlanningResult> {
   if (!repositoryPath?.trim()) {
     throw new Error("Repository path is required.");
   }

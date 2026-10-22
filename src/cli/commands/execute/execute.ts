@@ -9,7 +9,10 @@ import {
 } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
-import { presentTiming, type HumanInteractionTiming } from "../../presenters/timing.js";
+import {
+  presentTiming,
+  type HumanInteractionTiming,
+} from "../../presenters/timing.js";
 import { runReviewStage } from "../review/index.js";
 import { runWorkspaceCleanup } from "../cleanup/index.js";
 import { runPostExecutionDelivery } from "../delivery/index.js";
@@ -64,7 +67,7 @@ export async function runExecuteCommand(
   task: TaskContract,
   repositoryPath: string,
   timing?: HumanInteractionTiming & { startedAt: number },
-  workerContext?: WorkerContext,
+  workerContext?: WorkerContext
 ): Promise<number> {
   console.log("Task Contract: valid");
 
@@ -84,10 +87,10 @@ export async function runExecuteCommand(
   const executionOptions: TaskExecutionOptions = {};
   if (workerContext) executionOptions.workerContext = workerContext;
   const workerTimeoutMs = timeoutFromEnvironment(
-    "AI_WORKSPACE_WORKER_TIMEOUT_MS",
+    "AI_WORKSPACE_WORKER_TIMEOUT_MS"
   );
   const verificationTimeoutMs = timeoutFromEnvironment(
-    "AI_WORKSPACE_VERIFICATION_TIMEOUT_MS",
+    "AI_WORKSPACE_VERIFICATION_TIMEOUT_MS"
   );
 
   if (workerTimeoutMs !== undefined) {
@@ -126,10 +129,10 @@ export async function runExecuteCommand(
       console.error("Verification: failed");
 
       for (const command of result.evidence.verification.commands.filter(
-        (command) => !command.passed,
+        (command) => !command.passed
       )) {
         console.error(
-          `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`,
+          `Failed command: ${command.command} (exit code: ${command.exitCode ?? "unavailable"})`
         );
       }
     }
@@ -167,8 +170,15 @@ export async function runExecuteCommand(
   try {
     if (result.workspace) {
       const review = await runReviewStage(result);
-      if (review.status === "continued" && result.passed && result.evidence.verification?.passed) {
-        await runPostExecutionDelivery({ repositoryRoot, executionResult: result });
+      if (
+        review.status === "continued" &&
+        result.passed &&
+        result.evidence.verification?.passed
+      ) {
+        await runPostExecutionDelivery({
+          repositoryRoot,
+          executionResult: result,
+        });
       } else {
         console.log(`Review: ${review.status}\nDelivery was not attempted.`);
       }
@@ -183,7 +193,9 @@ export async function runExecuteCommand(
       ...result.telemetry,
       ...(cleanupDurationMs === undefined ? {} : { cleanupDurationMs }),
       ...timing,
-      ...(timing ? { totalDurationMs: performance.now() - timing.startedAt } : {}),
+      ...(timing
+        ? { totalDurationMs: performance.now() - timing.startedAt }
+        : {}),
     });
   }
   return result.passed ? 0 : 1;

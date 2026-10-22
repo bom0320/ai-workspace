@@ -22,12 +22,18 @@ let workspacePath: string | undefined;
 
 function createGitRepository(): string {
   const repository = mkdtempSync(
-    join(tmpdir(), "ai-workspace-source-repository-"),
+    join(tmpdir(), "ai-workspace-source-repository-")
   );
 
   execFileSync("git", ["init", "--quiet", repository]);
   execFileSync("git", ["-C", repository, "config", "user.name", "Test User"]);
-  execFileSync("git", ["-C", repository, "config", "user.email", "test@example.com"]);
+  execFileSync("git", [
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "test@example.com",
+  ]);
 
   writeFileSync(join(repository, "committed.txt"), "committed content\n");
   execFileSync("git", ["-C", repository, "add", "committed.txt"]);
@@ -76,21 +82,57 @@ describe("createExecutionWorkspace", () => {
     const repository = createGitRepository();
     const dependencies = join(repository, "node_modules");
     mkdirSync(join(dependencies, "example"), { recursive: true });
-    writeFileSync(join(dependencies, "example", "index.js"), "module.exports = 42;\n");
+    writeFileSync(
+      join(dependencies, "example", "index.js"),
+      "module.exports = 42;\n"
+    );
     writeFileSync(join(repository, ".gitignore"), "node_modules/\n");
     execFileSync("git", ["-C", repository, "add", ".gitignore"]);
-    execFileSync("git", ["-C", repository, "commit", "--quiet", "-m", "ignore dependencies"]);
-    const before = execFileSync("git", ["-C", repository, "status", "--porcelain"], { encoding: "utf8" });
+    execFileSync("git", [
+      "-C",
+      repository,
+      "commit",
+      "--quiet",
+      "-m",
+      "ignore dependencies",
+    ]);
+    const before = execFileSync(
+      "git",
+      ["-C", repository, "status", "--porcelain"],
+      { encoding: "utf8" }
+    );
     workspacePath = createExecutionWorkspace(repository);
-    expect(readFileSync(join(workspacePath, "node_modules", "example", "index.js"), "utf8")).toBe("module.exports = 42;\n");
-    expect(execFileSync(process.execPath, ["-e", "process.stdout.write(String(require('example')))"], {
-      cwd: workspacePath, encoding: "utf8",
-    })).toBe("42");
-    expect(execFileSync("git", ["-C", workspacePath, "status", "--porcelain"], { encoding: "utf8" })).toBe("");
+    expect(
+      readFileSync(
+        join(workspacePath, "node_modules", "example", "index.js"),
+        "utf8"
+      )
+    ).toBe("module.exports = 42;\n");
+    expect(
+      execFileSync(
+        process.execPath,
+        ["-e", "process.stdout.write(String(require('example')))"],
+        {
+          cwd: workspacePath,
+          encoding: "utf8",
+        }
+      )
+    ).toBe("42");
+    expect(
+      execFileSync("git", ["-C", workspacePath, "status", "--porcelain"], {
+        encoding: "utf8",
+      })
+    ).toBe("");
     removeExecutionWorkspace(repository, workspacePath);
     expect(existsSync(workspacePath)).toBe(false);
-    expect(readFileSync(join(dependencies, "example", "index.js"), "utf8")).toBe("module.exports = 42;\n");
-    expect(execFileSync("git", ["-C", repository, "status", "--porcelain"], { encoding: "utf8" })).toBe(before);
+    expect(
+      readFileSync(join(dependencies, "example", "index.js"), "utf8")
+    ).toBe("module.exports = 42;\n");
+    expect(
+      execFileSync("git", ["-C", repository, "status", "--porcelain"], {
+        encoding: "utf8",
+      })
+    ).toBe(before);
   });
 
   it("keeps existing behavior when no dependencies are installed", () => {
@@ -102,10 +144,24 @@ describe("createExecutionWorkspace", () => {
   it("reports dependency setup failure and removes the failed worktree registration", () => {
     const repository = createGitRepository();
     writeFileSync(join(repository, "node_modules"), "not a directory");
-    const before = execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], { encoding: "utf8" });
-    expect(() => createExecutionWorkspace(repository)).toThrow("Failed to link execution workspace dependencies");
-    expect(execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], { encoding: "utf8" })).toBe(before);
-    expect(readFileSync(join(repository, "node_modules"), "utf8")).toBe("not a directory");
+    const before = execFileSync(
+      "git",
+      ["-C", repository, "worktree", "list", "--porcelain"],
+      { encoding: "utf8" }
+    );
+    expect(() => createExecutionWorkspace(repository)).toThrow(
+      "Failed to link execution workspace dependencies"
+    );
+    expect(
+      execFileSync(
+        "git",
+        ["-C", repository, "worktree", "list", "--porcelain"],
+        { encoding: "utf8" }
+      )
+    ).toBe(before);
+    expect(readFileSync(join(repository, "node_modules"), "utf8")).toBe(
+      "not a directory"
+    );
   });
   it("creates a detached Git worktree from the repository HEAD", () => {
     const repository = createGitRepository();
@@ -114,34 +170,34 @@ describe("createExecutionWorkspace", () => {
 
     expect(workspacePath).not.toBe(repository);
     expect(readFileSync(join(workspacePath, "committed.txt"), "utf8")).toBe(
-      "committed content\n",
+      "committed content\n"
     );
     expect(
       execFileSync(
         "git",
         ["-C", workspacePath, "rev-parse", "--is-inside-work-tree"],
-        { encoding: "utf8" },
-      ).trim(),
+        { encoding: "utf8" }
+      ).trim()
     ).toBe("true");
     expect(
       execFileSync(
         "git",
         ["-C", workspacePath, "rev-parse", "--abbrev-ref", "HEAD"],
-        { encoding: "utf8" },
-      ).trim(),
+        { encoding: "utf8" }
+      ).trim()
     ).toBe("HEAD");
   });
 
   it("reports Git failures with execution workspace context", () => {
     const repository = mkdtempSync(
-      join(tmpdir(), "ai-workspace-empty-repository-"),
+      join(tmpdir(), "ai-workspace-empty-repository-")
     );
 
     repositoryPath = repository;
     execFileSync("git", ["init", "--quiet", repository]);
 
     expect(() => createExecutionWorkspace(repository)).toThrow(
-      "Failed to create execution workspace",
+      "Failed to create execution workspace"
     );
   });
 });
@@ -154,9 +210,13 @@ describe("removeExecutionWorkspace", () => {
 
     expect(existsSync(workspacePath)).toBe(true);
     expect(
-      execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], {
-        encoding: "utf8",
-      }),
+      execFileSync(
+        "git",
+        ["-C", repository, "worktree", "list", "--porcelain"],
+        {
+          encoding: "utf8",
+        }
+      )
     ).toContain(workspacePath);
 
     writeFileSync(join(workspacePath, "committed.txt"), "modified content\n");
@@ -166,9 +226,13 @@ describe("removeExecutionWorkspace", () => {
 
     expect(existsSync(workspacePath)).toBe(false);
     expect(
-      execFileSync("git", ["-C", repository, "worktree", "list", "--porcelain"], {
-        encoding: "utf8",
-      }),
+      execFileSync(
+        "git",
+        ["-C", repository, "worktree", "list", "--porcelain"],
+        {
+          encoding: "utf8",
+        }
+      )
     ).not.toContain(workspacePath);
   });
 
@@ -177,7 +241,7 @@ describe("removeExecutionWorkspace", () => {
     const missingWorkspace = join(repository, "missing-worktree");
 
     expect(() =>
-      removeExecutionWorkspace(repository, missingWorkspace),
+      removeExecutionWorkspace(repository, missingWorkspace)
     ).toThrow("Failed to remove execution workspace");
   });
 });

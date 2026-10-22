@@ -15,4 +15,3 @@ export type PlanningState = {
   repository: RepositoryInfo;
   inspectedFiles: InspectedFile[];
 };
-

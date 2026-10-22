@@ -10,7 +10,11 @@ import { buildTaskContract } from "./build-task-contract.js";
 const goal: GoalSpec = {
   objective: "Clarify the project description",
   targetRepository: "human-repository",
-  constraints: ["No new dependencies", "Keep changes scoped", "No new dependencies"],
+  constraints: [
+    "No new dependencies",
+    "Keep changes scoped",
+    "No new dependencies",
+  ],
 };
 const draft: TaskDraft = {
   objective: "Clarify the introduction in README.md",
@@ -38,23 +42,30 @@ describe("buildTaskContract", () => {
 
   it("preserves Human constraints before Draft constraints with stable deduplication", () => {
     expect(buildTaskContract({ draft, goal, ...ids }).constraints).toEqual([
-      "No new dependencies", "Keep changes scoped", "README.md only",
+      "No new dependencies",
+      "Keep changes scoped",
+      "README.md only",
     ]);
   });
 
   it("preserves Human constraints even when the Draft omits all of them", () => {
-    expect(buildTaskContract({ draft: { ...draft, constraints: [] }, goal, ...ids }).constraints)
-      .toEqual(["No new dependencies", "Keep changes scoped"]);
+    expect(
+      buildTaskContract({ draft: { ...draft, constraints: [] }, goal, ...ids })
+        .constraints
+    ).toEqual(["No new dependencies", "Keep changes scoped"]);
   });
 
   it("uses only Draft constraints when the Goal has no constraints", () => {
     const { constraints: _constraints, ...withoutConstraints } = goal;
-    expect(buildTaskContract({ draft, goal: withoutConstraints, ...ids }).constraints)
-      .toEqual(["Keep changes scoped", "README.md only"]);
+    expect(
+      buildTaskContract({ draft, goal: withoutConstraints, ...ids }).constraints
+    ).toEqual(["Keep changes scoped", "README.md only"]);
   });
 
   it("uses the Human repository even when the Draft requests a different repository", () => {
-    expect(buildTaskContract({ draft, goal, ...ids }).targetRepository).toBe(goal.targetRepository);
+    expect(buildTaskContract({ draft, goal, ...ids }).targetRepository).toBe(
+      goal.targetRepository
+    );
   });
 
   it("does not mutate either input", () => {
@@ -67,11 +78,18 @@ describe("buildTaskContract", () => {
     expect(task.constraints).not.toBe(draft.constraints);
   });
 
-  it.each(["taskId", "goalId"] as const)("rejects an empty Harness %s", (field) => {
-    expect(() => buildTaskContract({ draft, goal, ...ids, [field]: "" })).toThrow(ZodError);
-  });
+  it.each(["taskId", "goalId"] as const)(
+    "rejects an empty Harness %s",
+    (field) => {
+      expect(() =>
+        buildTaskContract({ draft, goal, ...ids, [field]: "" })
+      ).toThrow(ZodError);
+    }
+  );
 
   it("rejects an empty Draft objective", () => {
-    expect(() => buildTaskContract({ draft: { ...draft, objective: "" }, goal, ...ids })).toThrow(ZodError);
+    expect(() =>
+      buildTaskContract({ draft: { ...draft, objective: "" }, goal, ...ids })
+    ).toThrow(ZodError);
   });
 });

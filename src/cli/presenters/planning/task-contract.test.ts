@@ -4,14 +4,21 @@ import type { TaskContract } from "@/contracts/task.js";
 
 import { presentTaskContract } from "./task-contract.js";
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("presentTaskContract", () => {
   it("prints every task field without changing the task or asking for input", () => {
     const task: TaskContract = {
-      id: "task-001", goalId: "goal-001", objective: "Clarify README",
-      targetRepository: "example", allowedPaths: ["README.md"], forbiddenPaths: ["src/"],
-      constraints: ["No dependencies"], acceptanceCriteria: ["Clear introduction"],
+      id: "task-001",
+      goalId: "goal-001",
+      objective: "Clarify README",
+      targetRepository: "example",
+      allowedPaths: ["README.md"],
+      forbiddenPaths: ["src/"],
+      constraints: ["No dependencies"],
+      acceptanceCriteria: ["Clear introduction"],
       verification: ["git diff --check"],
     };
     const before = structuredClone(task);

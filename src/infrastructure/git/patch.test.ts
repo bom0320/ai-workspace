@@ -9,7 +9,8 @@ import { applyPatch, isRepositoryClean, PatchApplyError } from "./patch.js";
 
 let root: string;
 let patch: string;
-const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+const git = (...args: string[]) =>
+  execFileSync("git", args, { cwd: root, encoding: "utf8" });
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "patch-repository-"));
   patch = join(tmpdir(), `patch-${root.split("/").at(-1)}.patch`);
@@ -23,26 +24,45 @@ beforeEach(() => {
   writeFileSync(patch, git("diff", "--binary"));
   writeFileSync(join(root, "README.md"), "original\n");
 });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); rmSync(patch, { force: true }); });
-it("detects clean repositories", () => expect(isRepositoryClean(root)).toBe(true));
-it.each(["tracked", "staged", "untracked"])("detects %s changes and blocks apply", (kind) => {
-  writeFileSync(join(root, kind === "untracked" ? "new.txt" : "README.md"), "human\n");
-  if (kind === "staged") git("add", ".");
-  expect(isRepositoryClean(root)).toBe(false);
-  expect(() => applyPatch(root, patch)).toThrow("uncommitted changes");
-  expect(readFileSync(join(root, "README.md"), "utf8")).toBe(kind === "untracked" ? "original\n" : "human\n");
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true });
+  rmSync(patch, { force: true });
 });
+it("detects clean repositories", () =>
+  expect(isRepositoryClean(root)).toBe(true));
+it.each(["tracked", "staged", "untracked"])(
+  "detects %s changes and blocks apply",
+  (kind) => {
+    writeFileSync(
+      join(root, kind === "untracked" ? "new.txt" : "README.md"),
+      "human\n"
+    );
+    if (kind === "staged") git("add", ".");
+    expect(isRepositoryClean(root)).toBe(false);
+    expect(() => applyPatch(root, patch)).toThrow("uncommitted changes");
+    expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
+      kind === "untracked" ? "original\n" : "human\n"
+    );
+  }
+);
 it("pre-checks and applies a valid patch while retaining the artifact", () => {
   expect(() => git("apply", "--check", patch)).not.toThrow();
   applyPatch(root, patch);
   expect(readFileSync(join(root, "README.md"), "utf8")).toBe("updated\n");
   expect(readFileSync(patch, "utf8")).toContain("+updated");
 });
-it.each(["invalid", "conflicting"])("rejects a %s patch without modifying the repository", (kind) => {
-  if (kind === "invalid") writeFileSync(patch, "not a patch");
-  else { writeFileSync(join(root, "README.md"), "different\n"); git("add", "."); git("commit", "--quiet", "-m", "changed base"); }
-  const before = readFileSync(join(root, "README.md"), "utf8");
-  expect(() => applyPatch(root, patch)).toThrow(PatchApplyError);
-  expect(readFileSync(join(root, "README.md"), "utf8")).toBe(before);
-  expect(isRepositoryClean(root)).toBe(true);
-});
+it.each(["invalid", "conflicting"])(
+  "rejects a %s patch without modifying the repository",
+  (kind) => {
+    if (kind === "invalid") writeFileSync(patch, "not a patch");
+    else {
+      writeFileSync(join(root, "README.md"), "different\n");
+      git("add", ".");
+      git("commit", "--quiet", "-m", "changed base");
+    }
+    const before = readFileSync(join(root, "README.md"), "utf8");
+    expect(() => applyPatch(root, patch)).toThrow(PatchApplyError);
+    expect(readFileSync(join(root, "README.md"), "utf8")).toBe(before);
+    expect(isRepositoryClean(root)).toBe(true);
+  }
+);

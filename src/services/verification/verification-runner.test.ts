@@ -54,7 +54,7 @@ describe("runVerification", () => {
   it("records a failed command and preserves stdout and stderr", async () => {
     const command = nodeCommand(
       "process.stdout.write('partial output'); " +
-        "process.stderr.write('failure details'); process.exit(3)",
+        "process.stderr.write('failure details'); process.exit(3)"
     );
     const result = await runVerification([command], process.cwd());
 
@@ -74,7 +74,7 @@ describe("runVerification", () => {
         nodeCommand("process.exit(2)"),
         nodeCommand("process.exit(0)"),
       ],
-      process.cwd(),
+      process.cwd()
     );
 
     expect(result.passed).toBe(false);
@@ -89,7 +89,7 @@ describe("runVerification", () => {
     const workspaceRoot = createTemporaryDirectory();
     const result = await runVerification(
       [nodeCommand("process.stdout.write(process.cwd())")],
-      workspaceRoot,
+      workspaceRoot
     );
 
     expect(result.commands[0]?.stdout).toBe(realpathSync(workspaceRoot));
@@ -98,7 +98,7 @@ describe("runVerification", () => {
   it("records a command that cannot be found as a failure", async () => {
     const result = await runVerification(
       ["ai-workspace-command-that-does-not-exist"],
-      process.cwd(),
+      process.cwd()
     );
     const command = result.commands[0];
 
@@ -117,7 +117,7 @@ describe("runVerification", () => {
         "setTimeout(() => {",
         `  writeFileSync(${JSON.stringify(markerPath)}, "late change");`,
         "}, 500);",
-      ].join("\n"),
+      ].join("\n")
     );
     writeFileSync(
       join(workspaceRoot, "parent.cjs"),
@@ -125,7 +125,7 @@ describe("runVerification", () => {
         'const { spawn } = require("node:child_process");',
         `spawn(${JSON.stringify(process.execPath)}, ["child.cjs"], { stdio: "ignore" });`,
         "setTimeout(() => {}, 5_000);",
-      ].join("\n"),
+      ].join("\n")
     );
     const command = `${JSON.stringify(process.execPath)} parent.cjs`;
 
@@ -139,7 +139,7 @@ describe("runVerification", () => {
       timedOut: true,
     });
     expect(result.commands[0]?.stderr).toContain(
-      "Verification command timed out after 50 ms.",
+      "Verification command timed out after 50 ms."
     );
     expect(existsSync(markerPath)).toBe(false);
   });

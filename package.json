@@ -8,13 +8,16 @@
     "plan": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts plan",
     "decision": "TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts decision",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "format": "prettier --write \"src/**/*.ts\" \"*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"*.ts\""
   },
   "dependencies": {
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "prettier": "3.9.10",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"

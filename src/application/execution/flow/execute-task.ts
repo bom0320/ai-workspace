@@ -1,7 +1,5 @@
 import type { TaskContract } from "@/contracts/task.js";
-import {
-  createExecutionWorkspace,
-} from "@/infrastructure/git/index.js";
+import { createExecutionWorkspace } from "@/infrastructure/git/index.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
@@ -17,10 +15,7 @@ import {
   runVerificationStage,
   runWorkerStage,
 } from "./orchestration/stages.js";
-import type {
-  ExecutionState,
-  TaskExecutionOptions,
-} from "../model/state.js";
+import type { ExecutionState, TaskExecutionOptions } from "../model/state.js";
 
 export type { TaskExecutionOptions } from "../model/state.js";
 
@@ -62,7 +57,8 @@ export async function executeTask(
   try {
     workspaceRoot = createExecutionWorkspace(repositoryRoot);
   } catch (error) {
-    state.telemetry!.workspaceDurationMs = performance.now() - workspaceStartedAt;
+    state.telemetry!.workspaceDurationMs =
+      performance.now() - workspaceStartedAt;
     addExecutionFailure(state, "workspace", error);
 
     return finalizeExecutionResult(state, artifacts);

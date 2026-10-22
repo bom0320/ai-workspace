@@ -3,7 +3,10 @@ import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
 import { isInternalInspectionComponent } from "@/services/repository-inspection/index.js";
 
-import { type InspectRequest, type InspectResult } from "../../protocol/inspection.js";
+import {
+  type InspectRequest,
+  type InspectResult,
+} from "../../protocol/inspection.js";
 
 export class InspectionRequestError extends Error {
   override name = "InspectionRequestError";
@@ -11,7 +14,7 @@ export class InspectionRequestError extends Error {
 
 export function inspectFiles(
   repositoryRoot: string,
-  request: InspectRequest,
+  request: InspectRequest
 ): InspectResult {
   const seen = new Set<string>();
   const files: { path: string; absolutePath: string }[] = [];
@@ -19,7 +22,9 @@ export function inspectFiles(
   try {
     for (const path of request.paths) {
       if (isAbsolute(path)) {
-        throw new InspectionRequestError(`Inspection path must be relative: ${path}`);
+        throw new InspectionRequestError(
+          `Inspection path must be relative: ${path}`
+        );
       }
 
       const absolutePath = resolve(repositoryRoot, path);
@@ -29,7 +34,9 @@ export function inspectFiles(
         relativePath.startsWith(`..${sep}`) ||
         isAbsolute(relativePath)
       ) {
-        throw new InspectionRequestError(`Inspection path is outside the repository: ${path}`);
+        throw new InspectionRequestError(
+          `Inspection path is outside the repository: ${path}`
+        );
       }
 
       if (
@@ -39,11 +46,15 @@ export function inspectFiles(
           ...path.split(sep === "\\" ? /[\\/]/ : sep),
         ].some(isInternalInspectionComponent)
       ) {
-        throw new InspectionRequestError(`Inspection path contains a forbidden directory: ${path}`);
+        throw new InspectionRequestError(
+          `Inspection path contains a forbidden directory: ${path}`
+        );
       }
 
       if (!statSync(absolutePath).isFile()) {
-        throw new InspectionRequestError(`Inspection path is not a file: ${path}`);
+        throw new InspectionRequestError(
+          `Inspection path is not a file: ${path}`
+        );
       }
 
       if (!seen.has(absolutePath)) {
@@ -60,7 +71,8 @@ export function inspectFiles(
     };
   } catch (error) {
     if (
-      error instanceof Error && "code" in error &&
+      error instanceof Error &&
+      "code" in error &&
       ["ENOENT", "ENOTDIR", "EISDIR"].includes(String(error.code))
     ) {
       throw new InspectionRequestError(error.message, { cause: error });

@@ -20,7 +20,7 @@ const FORCE_KILL_DELAY_MS = 250;
 export function runCommand(
   command: string,
   args: string[],
-  options: CommandOptions,
+  options: CommandOptions
 ): Promise<CommandResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -31,7 +31,9 @@ export function runCommand(
     });
     let processStartedAt: number | undefined;
     let processDurationMs: number | undefined;
-    child.once("spawn", () => { processStartedAt = performance.now(); });
+    child.once("spawn", () => {
+      processStartedAt = performance.now();
+    });
     let stdout = "";
     let stderr = "";
     let spawnError: Error | undefined;
@@ -52,13 +54,11 @@ export function runCommand(
           process.kill(-child.pid, signal);
         }
       } catch (error) {
-        if (
-          !(
-            error instanceof Error &&
-            "code" in error &&
-            error.code === "ESRCH"
-          )
-        ) {
+        if (!(
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ESRCH"
+        )) {
           spawnError ??=
             error instanceof Error ? error : new Error(String(error));
         }
@@ -90,7 +90,8 @@ export function runCommand(
       spawnError = error;
     });
     child.once("close", (code) => {
-      if (processStartedAt !== undefined) processDurationMs = performance.now() - processStartedAt;
+      if (processStartedAt !== undefined)
+        processDurationMs = performance.now() - processStartedAt;
       exitCode = code;
       closed = true;
       finish();

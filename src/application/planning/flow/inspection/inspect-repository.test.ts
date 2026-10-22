@@ -1,4 +1,10 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
@@ -14,7 +20,11 @@ function createRepository(): string {
   return directory;
 }
 
-function writeFixture(repository: string, relativePath: string, contents = ""): void {
+function writeFixture(
+  repository: string,
+  relativePath: string,
+  contents = ""
+): void {
   const path = join(repository, relativePath);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, contents);
@@ -34,12 +44,19 @@ describe("inspectRepository", () => {
 
   it("uses the root directory basename as the repository name", () => {
     const repository = createRepository();
-    expect(inspectRepository(repository).repositoryName).toBe(basename(repository));
+    expect(inspectRepository(repository).repositoryName).toBe(
+      basename(repository)
+    );
   });
 
   it("collects only relative file paths recursively and sorts them", () => {
     const repository = createRepository();
-    const paths = ["z.txt", join("src", "contracts", "task.ts"), "AGENTS.md", join("src", "cli.ts")];
+    const paths = [
+      "z.txt",
+      join("src", "contracts", "task.ts"),
+      "AGENTS.md",
+      join("src", "cli.ts"),
+    ];
     for (const path of paths) {
       writeFixture(repository, path);
     }
@@ -56,19 +73,39 @@ describe("inspectRepository", () => {
       writeFixture(repository, join("src", directory, "ignored.txt"));
       writeFixture(repository, join("src", "kept.ts"));
 
-      expect(inspectRepository(repository).fileTree).toEqual([join("src", "kept.ts")]);
-    },
+      expect(inspectRepository(repository).fileTree).toEqual([
+        join("src", "kept.ts"),
+      ]);
+    }
   );
 
   it("reads only root package scripts and includes only string values", () => {
     const repository = createRepository();
-    writeFixture(repository, "package.json", JSON.stringify({
-      scripts: { typecheck: "tsc --noEmit", test: "vitest run", empty: "", number: 1, null: null, object: {}, array: [] },
-    }));
-    writeFixture(repository, join("nested", "package.json"), '{"scripts":{"build":"nested"}}');
+    writeFixture(
+      repository,
+      "package.json",
+      JSON.stringify({
+        scripts: {
+          typecheck: "tsc --noEmit",
+          test: "vitest run",
+          empty: "",
+          number: 1,
+          null: null,
+          object: {},
+          array: [],
+        },
+      })
+    );
+    writeFixture(
+      repository,
+      join("nested", "package.json"),
+      '{"scripts":{"build":"nested"}}'
+    );
 
     expect(inspectRepository(repository).packageScripts).toEqual({
-      typecheck: "tsc --noEmit", test: "vitest run", empty: "",
+      typecheck: "tsc --noEmit",
+      test: "vitest run",
+      empty: "",
     });
   });
 
@@ -88,7 +125,7 @@ describe("inspectRepository", () => {
       const repository = createRepository();
       writeFixture(repository, "package.json", JSON.stringify({ scripts }));
       expect(inspectRepository(repository).packageScripts).toEqual({});
-    },
+    }
   );
 
   it("throws for malformed package.json", () => {
@@ -127,6 +164,8 @@ describe("inspectRepository", () => {
     for (const [path, contents] of Object.entries(files)) {
       expect(readFileSync(join(repository, path), "utf8")).toBe(contents);
     }
-    expect(inspectRepository(repository).fileTree).toEqual(Object.keys(files).sort());
+    expect(inspectRepository(repository).fileTree).toEqual(
+      Object.keys(files).sort()
+    );
   });
 });

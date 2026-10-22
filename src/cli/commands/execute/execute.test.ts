@@ -3,7 +3,10 @@ import { ZodError } from "zod";
 
 import type { TaskContract } from "@/contracts/task.js";
 import { loadTaskContract } from "@/contracts/task-loader.js";
-import { type ExecutionResult, executeTask } from "@/application/execution/index.js";
+import {
+  type ExecutionResult,
+  executeTask,
+} from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
 import { runReviewStage } from "../review/index.js";
@@ -62,7 +65,9 @@ beforeEach(() => {
   executeTaskMock.mockResolvedValue(successfulResult);
   vi.mocked(runReviewStage).mockResolvedValue({ status: "continued" });
   vi.mocked(runWorkspaceCleanup).mockResolvedValue({ status: "kept" });
-  vi.mocked(runPostExecutionDelivery).mockResolvedValue({ apply: { status: "skipped" } });
+  vi.mocked(runPostExecutionDelivery).mockResolvedValue({
+    apply: { status: "skipped" },
+  });
 });
 
 afterEach(() => {
@@ -74,14 +79,14 @@ describe("CLI", async () => {
   it("rejects a missing Task file argument", async () => {
     expect(await runCli([])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Task file path is required.",
+      "Error: Task file path is required."
     );
   });
 
   it("rejects a missing Repository path argument", async () => {
     expect(await runCli(["task.json"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Repository path is required.",
+      "Error: Repository path is required."
     );
   });
 
@@ -92,7 +97,7 @@ describe("CLI", async () => {
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: TaskContract validation failed.",
+      "Error: TaskContract validation failed."
     );
     expect(resolveRepositoryRootMock).not.toHaveBeenCalled();
     expect(executeTaskMock).not.toHaveBeenCalled();
@@ -105,7 +110,7 @@ describe("CLI", async () => {
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Repository resolution failed: not a Git repository",
+      "Error: Repository resolution failed: not a Git repository"
     );
     expect(executeTaskMock).not.toHaveBeenCalled();
   });
@@ -115,7 +120,7 @@ describe("CLI", async () => {
     expect(executeTaskMock).toHaveBeenCalledWith(
       task,
       "/repositories/example",
-      {},
+      {}
     );
   });
 
@@ -127,7 +132,7 @@ describe("CLI", async () => {
     expect(executeTaskMock).toHaveBeenCalledWith(
       task,
       "/repositories/example",
-      { workerTimeoutMs: 25, verificationTimeoutMs: 30 },
+      { workerTimeoutMs: 25, verificationTimeoutMs: 30 }
     );
   });
 
@@ -137,7 +142,7 @@ describe("CLI", async () => {
     expect(console.log).toHaveBeenCalledWith("Verification: passed");
     expect(console.log).toHaveBeenCalledWith("Changed Paths: 1");
     expect(console.log).toHaveBeenCalledWith(
-      "Run Artifacts: /workspace/.ai-workspace/runs/run-001",
+      "Run Artifacts: /workspace/.ai-workspace/runs/run-001"
     );
   });
 
@@ -158,14 +163,12 @@ describe("CLI", async () => {
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Scope: failed");
+    expect(console.error).toHaveBeenCalledWith("Scope violation: README.md");
     expect(console.error).toHaveBeenCalledWith(
-      "Scope violation: README.md",
+      "Error: Execution Workspace cleanup failed: worktree removal failed"
     );
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Execution Workspace cleanup failed: worktree removal failed",
-    );
-    expect(console.error).toHaveBeenCalledWith(
-      "Execution Workspace retained: /tmp/execution-workspace",
+      "Execution Workspace retained: /tmp/execution-workspace"
     );
   });
 
@@ -195,10 +198,10 @@ describe("CLI", async () => {
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith("Verification: failed");
     expect(console.error).toHaveBeenCalledWith(
-      "Failed command: pnpm test (exit code: 1)",
+      "Failed command: pnpm test (exit code: 1)"
     );
     expect(console.error).not.toHaveBeenCalledWith(
-      "Error: Verification failed: Verification failed.",
+      "Error: Verification failed: Verification failed."
     );
   });
 
@@ -217,7 +220,7 @@ describe("CLI", async () => {
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Verification failed: verification runner failed",
+      "Error: Verification failed: verification runner failed"
     );
   });
 
@@ -225,22 +228,20 @@ describe("CLI", async () => {
     executeTaskMock.mockResolvedValue({
       passed: false,
       evidence: { workerOutput: "Codex final output" },
-      failures: [
-        { stage: "preservation", message: "patch storage failed" },
-      ],
+      failures: [{ stage: "preservation", message: "patch storage failed" }],
       artifacts: { directory: "/workspace/.ai-workspace/runs/run-002" },
       retainedWorkspace: "/tmp/execution-workspace",
     });
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.log).toHaveBeenCalledWith(
-      "Run Artifacts: /workspace/.ai-workspace/runs/run-002",
+      "Run Artifacts: /workspace/.ai-workspace/runs/run-002"
     );
     expect(console.error).toHaveBeenCalledWith(
-      "Execution Workspace retained: /tmp/execution-workspace",
+      "Execution Workspace retained: /tmp/execution-workspace"
     );
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Execution result preservation failed: patch storage failed",
+      "Error: Execution result preservation failed: patch storage failed"
     );
   });
 
@@ -254,30 +255,63 @@ describe("CLI", async () => {
 
     expect(await runCli(["task.json", "/repositories/example"])).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
-      "Error: Final execution report failed: result storage failed",
+      "Error: Final execution report failed: result storage failed"
     );
   });
 });
 
-it.each(["continued", "aborted", "failed"] as const)("gates delivery on review %s and always cleans up", async (status) => {
-  const result = { ...successfulResult, workspace: { path: "/tmp/workspace" } };
-  executeTaskMock.mockResolvedValue(result);
-  vi.mocked(runReviewStage).mockResolvedValue(status === "failed" ? { status, reason: "diff failed" } : { status });
-  expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
-  if (status === "continued") expect(runPostExecutionDelivery).toHaveBeenCalledWith({ repositoryRoot: "/repositories/example", executionResult: result });
-  else expect(runPostExecutionDelivery).not.toHaveBeenCalled();
-  expect(runWorkspaceCleanup).toHaveBeenCalledWith("/repositories/example", result);
-  expect(result.passed).toBe(true);
-});
+it.each(["continued", "aborted", "failed"] as const)(
+  "gates delivery on review %s and always cleans up",
+  async (status) => {
+    const result = {
+      ...successfulResult,
+      workspace: { path: "/tmp/workspace" },
+    };
+    executeTaskMock.mockResolvedValue(result);
+    vi.mocked(runReviewStage).mockResolvedValue(
+      status === "failed" ? { status, reason: "diff failed" } : { status }
+    );
+    expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
+    if (status === "continued")
+      expect(runPostExecutionDelivery).toHaveBeenCalledWith({
+        repositoryRoot: "/repositories/example",
+        executionResult: result,
+      });
+    else expect(runPostExecutionDelivery).not.toHaveBeenCalled();
+    expect(runWorkspaceCleanup).toHaveBeenCalledWith(
+      "/repositories/example",
+      result
+    );
+    expect(result.passed).toBe(true);
+  }
+);
 it("preserves successful Execution after Delivery and Cleanup failures", async () => {
   const result = { ...successfulResult, workspace: { path: "/tmp/workspace" } };
   executeTaskMock.mockResolvedValue(result);
-  vi.mocked(runPostExecutionDelivery).mockResolvedValue({ apply: { status: "applied" }, commit: { status: "committed", commitSha: "sha" }, push: { status: "failed", reason: "remote failed" } });
-  vi.mocked(runWorkspaceCleanup).mockResolvedValue({ status: "failed", reason: "cleanup failed", durationMs: 1 });
-  expect(await runCli(["task.json", "/repositories/example"])).toBe(0); expect(result.passed).toBe(true); expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
+  vi.mocked(runPostExecutionDelivery).mockResolvedValue({
+    apply: { status: "applied" },
+    commit: { status: "committed", commitSha: "sha" },
+    push: { status: "failed", reason: "remote failed" },
+  });
+  vi.mocked(runWorkspaceCleanup).mockResolvedValue({
+    status: "failed",
+    reason: "cleanup failed",
+    durationMs: 1,
+  });
+  expect(await runCli(["task.json", "/repositories/example"])).toBe(0);
+  expect(result.passed).toBe(true);
+  expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
 });
 it("asks cleanup even when delivery unexpectedly throws", async () => {
-  executeTaskMock.mockResolvedValue({ ...successfulResult, workspace: { path: "/tmp/workspace" } });
-  vi.mocked(runPostExecutionDelivery).mockRejectedValueOnce(new Error("unexpected delivery error"));
-  await expect(runCli(["task.json", "/repositories/example"])).rejects.toThrow("unexpected delivery error"); expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
+  executeTaskMock.mockResolvedValue({
+    ...successfulResult,
+    workspace: { path: "/tmp/workspace" },
+  });
+  vi.mocked(runPostExecutionDelivery).mockRejectedValueOnce(
+    new Error("unexpected delivery error")
+  );
+  await expect(runCli(["task.json", "/repositories/example"])).rejects.toThrow(
+    "unexpected delivery error"
+  );
+  expect(runWorkspaceCleanup).toHaveBeenCalledOnce();
 });

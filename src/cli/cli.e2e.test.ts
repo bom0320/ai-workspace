@@ -21,7 +21,7 @@ import type { ExecutionResult } from "@/application/execution/index.js";
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const cliPath = join(projectRoot, "src", "cli", "cli.ts");
 const tsxImport = pathToFileURL(
-  createRequire(import.meta.url).resolve("tsx"),
+  createRequire(import.meta.url).resolve("tsx")
 ).href;
 
 type Scenario =
@@ -61,7 +61,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
   const lateWorkerRecord = join(temporaryRoot, "late-worker-change.txt");
   const lateVerificationRecord = join(
     temporaryRoot,
-    "late-verification-change.txt",
+    "late-verification-change.txt"
   );
   const taskPath = join(temporaryRoot, "task.json");
   let workspaceRoot: string | undefined;
@@ -213,7 +213,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
     expect(cli.signal).toBeNull();
     expect(
       existsSync(workerRecord),
-      `CLI stdout:\n${cli.stdout}\nCLI stderr:\n${cli.stderr}`,
+      `CLI stdout:\n${cli.stdout}\nCLI stderr:\n${cli.stderr}`
     ).toBe(true);
 
     workspaceRoot = readFileSync(workerRecord, "utf8");
@@ -226,31 +226,42 @@ function runScenario(scenario: Scenario): ScenarioResult {
     expect(runDirectory).toBeDefined();
     expect(
       runDirectory?.startsWith(
-        join(realpathSync(temporaryRoot), ".ai-workspace", "runs"),
-      ),
+        join(realpathSync(temporaryRoot), ".ai-workspace", "runs")
+      )
     ).toBe(true);
     expect(runDirectory?.startsWith(repositoryRoot)).toBe(false);
     expect(existsSync(join(runDirectory!, "changes.patch"))).toBe(true);
     expect(existsSync(join(runDirectory!, "task.json"))).toBe(true);
     expect(existsSync(join(runDirectory!, "result.json"))).toBe(true);
-    expect(readFileSync(join(runDirectory!, "base-commit.txt"), "utf8").trim()).toBe(
-      originalHead,
-    );
+    expect(
+      readFileSync(join(runDirectory!, "base-commit.txt"), "utf8").trim()
+    ).toBe(originalHead);
 
     const storedResult = JSON.parse(
-      readFileSync(join(runDirectory!, "result.json"), "utf8"),
+      readFileSync(join(runDirectory!, "result.json"), "utf8")
     ) as ExecutionResult;
     expect(storedResult.telemetry).toBeDefined();
     expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
-    expect(storedResult.telemetry!.codexProcessDurationMs).toBeGreaterThanOrEqual(0);
-    expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(storedResult.telemetry!.codexProcessDurationMs!);
-    expect(storedResult.telemetry!.workerSetupDurationMs).toBeGreaterThanOrEqual(0);
-    expect(storedResult.telemetry!.workerOutputProcessingDurationMs).toBeGreaterThanOrEqual(0);
+    expect(
+      storedResult.telemetry!.codexProcessDurationMs
+    ).toBeGreaterThanOrEqual(0);
+    expect(storedResult.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(
+      storedResult.telemetry!.codexProcessDurationMs!
+    );
+    expect(
+      storedResult.telemetry!.workerSetupDurationMs
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      storedResult.telemetry!.workerOutputProcessingDurationMs
+    ).toBeGreaterThanOrEqual(0);
     expect(storedResult.telemetry!.cleanupDurationMs).toBeUndefined();
-    expect(realpathSync(storedResult.workspace!.path)).toBe(realpathSync(workspaceRoot));
-    for (const duration of Object.values(storedResult.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
+    expect(realpathSync(storedResult.workspace!.path)).toBe(
+      realpathSync(workspaceRoot)
+    );
+    for (const duration of Object.values(storedResult.telemetry!))
+      expect(duration).toBeGreaterThanOrEqual(0);
     expect(storedResult.passed).toBe(
-      scenario === "success" || scenario === "worker-commit-allowed",
+      scenario === "success" || scenario === "worker-commit-allowed"
     );
     expect(storedResult.artifacts).toEqual({
       directory: runDirectory,
@@ -273,14 +284,13 @@ function runScenario(scenario: Scenario): ScenarioResult {
       originalForbidden
     );
     expect(git(repositoryRoot, ["status", "--porcelain"])).toBe(originalStatus);
-    expect(git(repositoryRoot, ["worktree", "list", "--porcelain"])).toContain(originalWorktrees.trim());
+    expect(git(repositoryRoot, ["worktree", "list", "--porcelain"])).toContain(
+      originalWorktrees.trim()
+    );
     expect(existsSync(workspaceRoot)).toBe(true);
     expect(existsSync(runDirectory!)).toBe(true);
 
-    if (
-      scenario === "worker-timeout" ||
-      scenario === "verification-timeout"
-    ) {
+    if (scenario === "worker-timeout" || scenario === "verification-timeout") {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_700);
     }
 
@@ -384,15 +394,15 @@ describe("CLI end-to-end execution", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Verification: failed");
     expect(result.verificationRan).toBe(true);
-    expect(result.storedResult.evidence.verification?.commands[0]).toMatchObject(
-      {
-        passed: false,
-        timedOut: true,
-      },
-    );
-    expect(result.storedResult.evidence.verification?.commands[0]?.stderr).toContain(
-      "Verification command timed out after 500 ms.",
-    );
+    expect(
+      result.storedResult.evidence.verification?.commands[0]
+    ).toMatchObject({
+      passed: false,
+      timedOut: true,
+    });
+    expect(
+      result.storedResult.evidence.verification?.commands[0]?.stderr
+    ).toContain("Verification command timed out after 500 ms.");
     expect(result.storedResult.failures[0]?.stage).toBe("verification");
     expect(result.lateVerificationChange).toBe(false);
   });
@@ -433,8 +443,17 @@ describe("CLI end-to-end execution", () => {
   });
 });
 
-async function runPlanningScenario(answer: string, interactive = false, applyAnswer?: string, delivery = false, reviewAnswer = "Continue", cleanupAnswer = "Delete"): Promise<void> {
-  const temporaryRoot = mkdtempSync(join(tmpdir(), "ai-workspace-planning-e2e-"));
+async function runPlanningScenario(
+  answer: string,
+  interactive = false,
+  applyAnswer?: string,
+  delivery = false,
+  reviewAnswer = "Continue",
+  cleanupAnswer = "Delete"
+): Promise<void> {
+  const temporaryRoot = mkdtempSync(
+    join(tmpdir(), "ai-workspace-planning-e2e-")
+  );
   const repositoryRoot = join(temporaryRoot, "repository");
   const bin = join(temporaryRoot, "bin");
   const workerRecord = join(temporaryRoot, "worker.txt");
@@ -455,27 +474,35 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
       git(repositoryRoot, ["push", "--set-upstream", "origin", "HEAD"]);
     }
     const fakeCodex = join(bin, "codex");
-    writeFileSync(fakeCodex, [
-      `#!${process.execPath}`,
-      'const { writeFileSync, appendFileSync } = require("node:fs");',
-      'const args = process.argv.slice(2);',
-      'if (args.includes("read-only")) {',
-      '  appendFileSync(process.env.E2E_PLANNER_RECORD, "round\\n");',
-      '  const input = JSON.parse(args.at(-1).split("PlannerContext:\\n")[1]);',
-      '  if (input.inspectedFiles.length === 0) {',
-      '    console.log(JSON.stringify({type:"inspect",request:{paths:["README.md"]}}));',
-      '  } else {',
-      '    console.log(JSON.stringify({type:"complete",task:{objective:"Clarify introduction",targetRepository:"repository",allowedPaths:["README.md"],forbiddenPaths:[],constraints:[],acceptanceCriteria:["Clear introduction"],verification:[]}}));',
-      '  }',
-      '} else {',
-      '  if (!args.at(-1).includes("Original introduction")) throw new Error("Planning context did not reach Worker");',
-      '  writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());',
-      '  writeFileSync("README.md", "Clear introduction\\n");',
-      '  console.log("Worker complete");',
-      '}',
-    ].join("\n"));
+    writeFileSync(
+      fakeCodex,
+      [
+        `#!${process.execPath}`,
+        'const { writeFileSync, appendFileSync } = require("node:fs");',
+        "const args = process.argv.slice(2);",
+        'if (args.includes("read-only")) {',
+        '  appendFileSync(process.env.E2E_PLANNER_RECORD, "round\\n");',
+        '  const input = JSON.parse(args.at(-1).split("PlannerContext:\\n")[1]);',
+        "  if (input.inspectedFiles.length === 0) {",
+        '    console.log(JSON.stringify({type:"inspect",request:{paths:["README.md"]}}));',
+        "  } else {",
+        '    console.log(JSON.stringify({type:"complete",task:{objective:"Clarify introduction",targetRepository:"repository",allowedPaths:["README.md"],forbiddenPaths:[],constraints:[],acceptanceCriteria:["Clear introduction"],verification:[]}}));',
+        "  }",
+        "} else {",
+        '  if (!args.at(-1).includes("Original introduction")) throw new Error("Planning context did not reach Worker");',
+        "  writeFileSync(process.env.E2E_WORKER_RECORD, process.cwd());",
+        '  writeFileSync("README.md", "Clear introduction\\n");',
+        '  console.log("Worker complete");',
+        "}",
+      ].join("\n")
+    );
     chmodSync(fakeCodex, 0o755);
-    const args = ["--import", tsxImport, cliPath, ...(interactive ? [] : [repositoryRoot, "Clarify introduction"])];
+    const args = [
+      "--import",
+      tsxImport,
+      cliPath,
+      ...(interactive ? [] : [repositoryRoot, "Clarify introduction"]),
+    ];
     const options = {
       cwd: temporaryRoot,
       env: {
@@ -487,100 +514,148 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
       },
     };
     const cli = interactive
-      ? await new Promise<{ stdout: string; stderr: string; status: number | null; signal: string | null; error?: Error }>((resolveResult, reject) => {
-        const child = spawn(process.execPath, args, options);
-        let stdout = "";
-        let stderr = "";
-        let workflowSent = false;
-        let repositorySent = false;
-        let goalSent = false;
-        let approvalSent = false;
-        let reviewSent = false;
-        let cleanupSent = false;
-        let applySent = false;
-        let commitSent = false;
-        let messageSent = false;
-        let pushSent = false;
-        const timer = setTimeout(() => { child.kill(); reject(new Error("Interactive CLI timed out")); }, 15_000);
-        child.stdout.on("data", (chunk) => {
-          stdout += chunk.toString();
-          if (!workflowSent && stdout.includes("4. Execute existing task")) {
-            workflowSent = true;
-            child.stdin.write("1\n");
-          }
-          if (!repositorySent && stdout.includes("Repository:\n>")) {
-            repositorySent = true;
-            child.stdin.write(` ${repositoryRoot} \n`);
-          }
-          if (!goalSent && stdout.includes("Goal:\n>")) {
-            goalSent = true;
-            child.stdin.write(" Clarify introduction \n");
-          }
-          if (!approvalSent && stdout.includes("Approve / Reject")) {
-            approvalSent = true;
-            child.stdin.write(answer);
-          }
-          if (!reviewSent && stdout.includes("Continue / Abort")) {
-            reviewSent = true;
-            const workspace = readFileSync(workerRecord, "utf8");
-            expect(existsSync(workspace)).toBe(true);
-            expect(readFileSync(join(workspace, "README.md"), "utf8")).toBe("Clear introduction\n");
-            child.stdin.write(`${reviewAnswer}\n`);
-          }
-          if (!cleanupSent && stdout.includes("Delete / Keep")) {
-            cleanupSent = true;
-            child.stdin.end(`${cleanupAnswer}\n`);
-          }
-          if (!applySent && stdout.includes("Apply / Skip")) {
-            applySent = true;
-            child.stdin.write(`${applyAnswer ?? "Skip"}\n`);
-          }
-          if (!commitSent && stdout.includes("Commit / Skip")) {
-            commitSent = true;
-            child.stdin.write(delivery ? "Commit\n" : "Skip\n");
-          }
-          if (delivery && !messageSent && stdout.includes("Commit message:")) {
-            messageSent = true;
-            child.stdin.write("docs: clarify README introduction\n");
-          }
-          if (delivery && !pushSent && stdout.includes("Push / Skip")) {
-            pushSent = true;
-            child.stdin.write("Push\n");
-          }
+      ? await new Promise<{
+          stdout: string;
+          stderr: string;
+          status: number | null;
+          signal: string | null;
+          error?: Error;
+        }>((resolveResult, reject) => {
+          const child = spawn(process.execPath, args, options);
+          let stdout = "";
+          let stderr = "";
+          let workflowSent = false;
+          let repositorySent = false;
+          let goalSent = false;
+          let approvalSent = false;
+          let reviewSent = false;
+          let cleanupSent = false;
+          let applySent = false;
+          let commitSent = false;
+          let messageSent = false;
+          let pushSent = false;
+          const timer = setTimeout(() => {
+            child.kill();
+            reject(new Error("Interactive CLI timed out"));
+          }, 15_000);
+          child.stdout.on("data", (chunk) => {
+            stdout += chunk.toString();
+            if (!workflowSent && stdout.includes("4. Execute existing task")) {
+              workflowSent = true;
+              child.stdin.write("1\n");
+            }
+            if (!repositorySent && stdout.includes("Repository:\n>")) {
+              repositorySent = true;
+              child.stdin.write(` ${repositoryRoot} \n`);
+            }
+            if (!goalSent && stdout.includes("Goal:\n>")) {
+              goalSent = true;
+              child.stdin.write(" Clarify introduction \n");
+            }
+            if (!approvalSent && stdout.includes("Approve / Reject")) {
+              approvalSent = true;
+              child.stdin.write(answer);
+            }
+            if (!reviewSent && stdout.includes("Continue / Abort")) {
+              reviewSent = true;
+              const workspace = readFileSync(workerRecord, "utf8");
+              expect(existsSync(workspace)).toBe(true);
+              expect(readFileSync(join(workspace, "README.md"), "utf8")).toBe(
+                "Clear introduction\n"
+              );
+              child.stdin.write(`${reviewAnswer}\n`);
+            }
+            if (!cleanupSent && stdout.includes("Delete / Keep")) {
+              cleanupSent = true;
+              child.stdin.end(`${cleanupAnswer}\n`);
+            }
+            if (!applySent && stdout.includes("Apply / Skip")) {
+              applySent = true;
+              child.stdin.write(`${applyAnswer ?? "Skip"}\n`);
+            }
+            if (!commitSent && stdout.includes("Commit / Skip")) {
+              commitSent = true;
+              child.stdin.write(delivery ? "Commit\n" : "Skip\n");
+            }
+            if (
+              delivery &&
+              !messageSent &&
+              stdout.includes("Commit message:")
+            ) {
+              messageSent = true;
+              child.stdin.write("docs: clarify README introduction\n");
+            }
+            if (delivery && !pushSent && stdout.includes("Push / Skip")) {
+              pushSent = true;
+              child.stdin.write("Push\n");
+            }
+          });
+          child.stderr.on("data", (chunk) => {
+            stderr += chunk.toString();
+          });
+          child.once("error", (error) => {
+            clearTimeout(timer);
+            reject(error);
+          });
+          child.once("close", (status, signal) => {
+            clearTimeout(timer);
+            resolveResult({ stdout, stderr, status, signal });
+          });
+        })
+      : spawnSync(process.execPath, args, {
+          ...options,
+          encoding: "utf8",
+          input: answer,
+          timeout: 30_000,
         });
-        child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-        child.once("error", (error) => { clearTimeout(timer); reject(error); });
-        child.once("close", (status, signal) => {
-          clearTimeout(timer);
-          resolveResult({ stdout, stderr, status, signal });
-        });
-      })
-      : spawnSync(process.execPath, args, { ...options, encoding: "utf8", input: answer, timeout: 30_000 });
     expect(cli.error).toBeUndefined();
     expect(cli.signal).toBeNull();
     expect(cli.stdout, cli.stderr).toContain("Planning: completed");
     expect(cli.stdout).toContain("Rounds: 2");
     expect(cli.stdout).toContain("Approve / Reject");
     expect(readFileSync(plannerRecord, "utf8")).toBe("round\nround\n");
-    expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe(applyAnswer === "Apply" ? "Clear introduction\n" : "Original introduction\n");
+    expect(readFileSync(join(repositoryRoot, "README.md"), "utf8")).toBe(
+      applyAnswer === "Apply"
+        ? "Clear introduction\n"
+        : "Original introduction\n"
+    );
     if (delivery) {
       expect(cli.stdout, cli.stderr).toContain("Commit created:");
       expect(cli.stdout, cli.stderr).toContain("Push complete.");
       expect(git(repositoryRoot, ["status", "--porcelain"])).toBe("");
-      expect(git(repositoryRoot, ["rev-parse", "HEAD"]).trim()).toBe(git(repositoryRoot, ["rev-parse", "@{upstream}"]).trim());
-      expect(git(repositoryRoot, ["log", "-1", "--format=%s"]).trim()).toBe("docs: clarify README introduction");
-      const branch = git(repositoryRoot, ["symbolic-ref", "--short", "HEAD"]).trim();
-      expect(git(repositoryRoot, ["--git-dir", join(temporaryRoot, "remote.git"), "rev-parse", `refs/heads/${branch}`]).trim()).toBe(git(repositoryRoot, ["rev-parse", "HEAD"]).trim());
+      expect(git(repositoryRoot, ["rev-parse", "HEAD"]).trim()).toBe(
+        git(repositoryRoot, ["rev-parse", "@{upstream}"]).trim()
+      );
+      expect(git(repositoryRoot, ["log", "-1", "--format=%s"]).trim()).toBe(
+        "docs: clarify README introduction"
+      );
+      const branch = git(repositoryRoot, [
+        "symbolic-ref",
+        "--short",
+        "HEAD",
+      ]).trim();
+      expect(
+        git(repositoryRoot, [
+          "--git-dir",
+          join(temporaryRoot, "remote.git"),
+          "rev-parse",
+          `refs/heads/${branch}`,
+        ]).trim()
+      ).toBe(git(repositoryRoot, ["rev-parse", "HEAD"]).trim());
     }
     if (answer.trim() === "Approve") {
       expect(cli.status, cli.stderr).toBe(0);
       expect(existsSync(workerRecord)).toBe(true);
       const artifactsMatch = cli.stdout.match(/^Run Artifacts: (.+)$/m)!;
       expect(artifactsMatch).not.toBeNull();
-      const storedTask = JSON.parse(readFileSync(join(artifactsMatch[1], "task.json"), "utf8"));
+      const storedTask = JSON.parse(
+        readFileSync(join(artifactsMatch[1], "task.json"), "utf8")
+      );
       expect(storedTask.id).toMatch(/^task-/);
       expect(cli.stdout).toContain(storedTask.id);
-      expect(existsSync(readFileSync(workerRecord, "utf8"))).toBe(interactive ? cleanupAnswer === "Keep" : true);
+      expect(existsSync(readFileSync(workerRecord, "utf8"))).toBe(
+        interactive ? cleanupAnswer === "Keep" : true
+      );
       expect(cli.stdout).toContain("Review\n------");
       expect(cli.stdout).toContain("diff --git a/README.md b/README.md");
       if (reviewAnswer === "Abort") {
@@ -598,20 +673,53 @@ async function runPlanningScenario(answer: string, interactive = false, applyAns
   } finally {
     if (existsSync(workerRecord)) {
       const workspace = readFileSync(workerRecord, "utf8");
-      if (existsSync(workspace)) git(repositoryRoot, ["worktree", "remove", "--force", workspace]);
+      if (existsSync(workspace))
+        git(repositoryRoot, ["worktree", "remove", "--force", workspace]);
     }
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }
 
 describe("CLI planning through approval and execution", () => {
-  it("aborts review and keeps the workspace without delivery", async () => { await runPlanningScenario("Approve\n", true, undefined, false, "Abort", "Keep"); });
-  it("aborts review and deletes the workspace without delivery", async () => { await runPlanningScenario("Approve\n", true, undefined, false, "Abort", "Delete"); });
-  it("connects Goal through Approve, Apply, Commit message and Push to a bare remote", async () => { await runPlanningScenario("Approve\n", true, "Apply", true); });
-  it("applies verified changes after a separate Apply decision", async () => { await runPlanningScenario("Approve\n", true, "Apply"); });
-  it("preserves artifacts without applying after Skip", async () => { await runPlanningScenario("Approve\n", true, "Skip"); });
-  it("collects an interactive Goal and waits for approval before execution", async () => { await runPlanningScenario("Approve\n", true); });
-  it("executes the finalized task only after Approve", async () => { await runPlanningScenario("Approve\n"); });
-  it("does not execute after Reject", async () => { await runPlanningScenario("Reject\n"); });
-  it("does not execute on EOF", async () => { await runPlanningScenario(""); });
+  it("aborts review and keeps the workspace without delivery", async () => {
+    await runPlanningScenario(
+      "Approve\n",
+      true,
+      undefined,
+      false,
+      "Abort",
+      "Keep"
+    );
+  });
+  it("aborts review and deletes the workspace without delivery", async () => {
+    await runPlanningScenario(
+      "Approve\n",
+      true,
+      undefined,
+      false,
+      "Abort",
+      "Delete"
+    );
+  });
+  it("connects Goal through Approve, Apply, Commit message and Push to a bare remote", async () => {
+    await runPlanningScenario("Approve\n", true, "Apply", true);
+  });
+  it("applies verified changes after a separate Apply decision", async () => {
+    await runPlanningScenario("Approve\n", true, "Apply");
+  });
+  it("preserves artifacts without applying after Skip", async () => {
+    await runPlanningScenario("Approve\n", true, "Skip");
+  });
+  it("collects an interactive Goal and waits for approval before execution", async () => {
+    await runPlanningScenario("Approve\n", true);
+  });
+  it("executes the finalized task only after Approve", async () => {
+    await runPlanningScenario("Approve\n");
+  });
+  it("does not execute after Reject", async () => {
+    await runPlanningScenario("Reject\n");
+  });
+  it("does not execute on EOF", async () => {
+    await runPlanningScenario("");
+  });
 });

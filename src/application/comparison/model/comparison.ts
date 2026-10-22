@@ -1,6 +1,7 @@
 export type ComparisonRelation = "agreement" | "conflict" | "trade-off";
 
-export type ComparisonGapKind = "uncertainty" | "limitation" | "separate-concern";
+export type ComparisonGapKind =
+  "uncertainty" | "limitation" | "separate-concern";
 
 export type ComparisonPosition = {
   specialistId: string;

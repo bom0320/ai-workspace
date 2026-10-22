@@ -72,6 +72,7 @@ Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing 
 ## 6. Coding Rules
 
 - TypeScript의 strict 설정을 유지한다.
+- TypeScript 포맷은 `.prettierrc.json`을 따른다. `pnpm format`으로 적용하고 `pnpm format:check`로 확인한다.
 - Runtime boundary validation에는 Zod schema를 사용한다.
 - Contract는 Zod schema를 source of truth로 삼고 `z.infer`로 TypeScript 타입을 생성한다.
 - 불필요한 class hierarchy를 만들지 않는다.

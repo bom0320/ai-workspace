@@ -13,7 +13,13 @@ it.each([
   { lines: [], expected: false },
 ])("requires explicit Delete: $lines", async ({ lines, expected }) => {
   const close = vi.fn();
-  vi.mocked(createInterface).mockReturnValue({ close, async *[Symbol.asyncIterator]() { yield* lines; } } as unknown as ReturnType<typeof createInterface>);
+  vi.mocked(createInterface).mockReturnValue({
+    close,
+    async *[Symbol.asyncIterator]() {
+      yield* lines;
+    },
+  } as unknown as ReturnType<typeof createInterface>);
   vi.spyOn(console, "log").mockImplementation(() => {});
-  expect(await approveWorkspaceDeletion()).toBe(expected); expect(close).toHaveBeenCalledOnce();
+  expect(await approveWorkspaceDeletion()).toBe(expected);
+  expect(close).toHaveBeenCalledOnce();
 });

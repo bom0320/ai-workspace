@@ -22,13 +22,19 @@ describe("plannerDecisionSchema", () => {
   it("strips supplied identifiers consistently with the existing Zod object policy", () => {
     const rawTask = { ...validTask, id: "ai-id", goalId: "ai-goal" };
     expect(taskDraftSchema.parse(rawTask)).toEqual(validTask);
-    expect(plannerDecisionSchema.parse({ type: "complete", task: rawTask }))
-      .toEqual({ type: "complete", task: validTask });
+    expect(
+      plannerDecisionSchema.parse({ type: "complete", task: rawTask })
+    ).toEqual({ type: "complete", task: validTask });
   });
 
-  it.each(["objective", "targetRepository"] as const)("rejects an empty Draft %s", (field) => {
-    expect(taskDraftSchema.safeParse({ ...validTask, [field]: "" }).success).toBe(false);
-  });
+  it.each(["objective", "targetRepository"] as const)(
+    "rejects an empty Draft %s",
+    (field) => {
+      expect(
+        taskDraftSchema.safeParse({ ...validTask, [field]: "" }).success
+      ).toBe(false);
+    }
+  );
   it("parses a valid inspect decision", () => {
     const decision = { type: "inspect", request: { paths: ["src/cli.ts"] } };
     expect(plannerDecisionSchema.parse(decision)).toEqual(decision);
@@ -45,18 +51,26 @@ describe("plannerDecisionSchema", () => {
   });
 
   it("rejects an unknown decision type", () => {
-    expect(plannerDecisionSchema.safeParse({ type: "unknown" }).success).toBe(false);
+    expect(plannerDecisionSchema.safeParse({ type: "unknown" }).success).toBe(
+      false
+    );
   });
 
   it("rejects an empty string in inspection paths", () => {
-    expect(plannerDecisionSchema.safeParse({
-      type: "inspect", request: { paths: [""] },
-    }).success).toBe(false);
+    expect(
+      plannerDecisionSchema.safeParse({
+        type: "inspect",
+        request: { paths: [""] },
+      }).success
+    ).toBe(false);
   });
 
   it("rejects an invalid completed TaskDraft", () => {
-    expect(plannerDecisionSchema.safeParse({
-      type: "complete", task: { ...validTask, objective: "" },
-    }).success).toBe(false);
+    expect(
+      plannerDecisionSchema.safeParse({
+        type: "complete",
+        task: { ...validTask, objective: "" },
+      }).success
+    ).toBe(false);
   });
 });

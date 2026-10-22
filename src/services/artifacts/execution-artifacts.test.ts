@@ -65,7 +65,13 @@ function createRepository(): {
   git(repositoryRoot, ["commit", "-m", "initial"]);
 
   const baseCommit = git(repositoryRoot, ["rev-parse", "HEAD"]).trim();
-  git(repositoryRoot, ["worktree", "add", "--detach", workspaceRoot, baseCommit]);
+  git(repositoryRoot, [
+    "worktree",
+    "add",
+    "--detach",
+    workspaceRoot,
+    baseCommit,
+  ]);
 
   return { root, repositoryRoot, workspaceRoot, baseCommit };
 }
@@ -80,7 +86,10 @@ describe("execution artifacts", () => {
   it("preserves modified, new, deleted, and binary files without changing the original index", () => {
     const { root, repositoryRoot, workspaceRoot, baseCommit } =
       createRepository();
-    writeFileSync(join(repositoryRoot, "index-only.txt"), "staged in original\n");
+    writeFileSync(
+      join(repositoryRoot, "index-only.txt"),
+      "staged in original\n"
+    );
     git(repositoryRoot, ["add", "index-only.txt"]);
     const originalStatus = git(repositoryRoot, ["status", "--porcelain"]);
     const originalIndex = git(repositoryRoot, ["diff", "--cached", "--binary"]);
@@ -90,7 +99,7 @@ describe("execution artifacts", () => {
     unlinkSync(join(workspaceRoot, "deleted.txt"));
     writeFileSync(
       join(workspaceRoot, "binary.bin"),
-      Buffer.from([0, 9, 8, 7, 6]),
+      Buffer.from([0, 9, 8, 7, 6])
     );
 
     const runDirectory = createExecutionRun(task, join(root, "runs"));
@@ -110,33 +119,37 @@ describe("execution artifacts", () => {
     expect(existsSync(join(runDirectory, "changes.patch"))).toBe(true);
     expect(existsSync(join(runDirectory, "task.json"))).toBe(true);
     expect(existsSync(join(runDirectory, "result.json"))).toBe(true);
-    expect(readFileSync(join(runDirectory, "base-commit.txt"), "utf8").trim()).toBe(
-      baseCommit,
-    );
+    expect(
+      readFileSync(join(runDirectory, "base-commit.txt"), "utf8").trim()
+    ).toBe(baseCommit);
 
     const restoredRoot = join(root, "restored");
     execFileSync("git", ["clone", repositoryRoot, restoredRoot], {
       stdio: "pipe",
     });
     git(restoredRoot, ["checkout", "--detach", baseCommit]);
-    git(restoredRoot, ["apply", "--binary", join(runDirectory, "changes.patch")]);
+    git(restoredRoot, [
+      "apply",
+      "--binary",
+      join(runDirectory, "changes.patch"),
+    ]);
 
     expect(readFileSync(join(restoredRoot, "modified.txt"), "utf8")).toBe(
-      "after\n",
+      "after\n"
     );
     expect(readFileSync(join(restoredRoot, "new.txt"), "utf8")).toBe(
-      "new file\n",
+      "new file\n"
     );
     expect(existsSync(join(restoredRoot, "deleted.txt"))).toBe(false);
     expect(readFileSync(join(restoredRoot, "binary.bin"))).toEqual(
-      Buffer.from([0, 9, 8, 7, 6]),
+      Buffer.from([0, 9, 8, 7, 6])
     );
     expect(git(repositoryRoot, ["status", "--porcelain"])).toBe(originalStatus);
     expect(git(repositoryRoot, ["diff", "--cached", "--binary"])).toBe(
-      originalIndex,
+      originalIndex
     );
     expect(readFileSync(join(repositoryRoot, "modified.txt"), "utf8")).toBe(
-      "before\n",
+      "before\n"
     );
   });
 
@@ -158,10 +171,14 @@ describe("execution artifacts", () => {
       stdio: "pipe",
     });
     git(restoredRoot, ["checkout", "--detach", baseCommit]);
-    git(restoredRoot, ["apply", "--binary", join(runDirectory, "changes.patch")]);
+    git(restoredRoot, [
+      "apply",
+      "--binary",
+      join(runDirectory, "changes.patch"),
+    ]);
 
     expect(readFileSync(join(restoredRoot, "modified.txt"), "utf8")).toBe(
-      "committed change\n",
+      "committed change\n"
     );
     expect(git(repositoryRoot, ["rev-parse", "HEAD"]).trim()).toBe(baseCommit);
   });

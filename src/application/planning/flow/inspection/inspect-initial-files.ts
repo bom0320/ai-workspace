@@ -14,14 +14,23 @@ const MAX_INITIAL_CONTEXT_BYTES = 128 * 1024;
 export function inspectInitialFiles(
   repository: RepositoryInfo,
   objective: string,
-  limits: PlanningLimits,
+  limits: PlanningLimits
 ): InspectedFile[] {
-  if (!Object.values(limits).every((value) => Number.isSafeInteger(value) && value >= 0) || limits.maxRounds === 0) {
+  if (
+    !Object.values(limits).every(
+      (value) => Number.isSafeInteger(value) && value >= 0
+    ) ||
+    limits.maxRounds === 0
+  ) {
     return [];
   }
   const paths = selectGoalMentionedPaths(repository.fileTree, objective);
   // Optional seeding is skipped rather than trimming an over-budget selection.
-  if (paths.length > limits.maxFilesPerRequest || paths.length > limits.maxTotalFiles) return [];
+  if (
+    paths.length > limits.maxFilesPerRequest ||
+    paths.length > limits.maxTotalFiles
+  )
+    return [];
   let bytes = 0;
   const smallFiles = paths.filter((path) => {
     const size = statSync(join(repository.repositoryRoot, path)).size;

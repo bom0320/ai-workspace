@@ -1,14 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
-export function isRepositoryClean(repositoryRoot: string): boolean {
-  return (
-    execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-    }).trim() === ""
-  );
-}
+import { isRepositoryClean } from "../repository/status.js";
 
 export class PatchApplyError extends Error {
   constructor(

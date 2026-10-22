@@ -1,21 +1,22 @@
 export {
   createExecutionWorkspace,
   removeExecutionWorkspace,
-} from "./execution-workspace.js";
+} from "./workspace/execution-workspace.js";
 export {
   getRepositoryHead,
   readRepositoryFileAtCommit,
   resolveRepositoryRoot,
-} from "./repository.js";
-export { applyPatch, isRepositoryClean, PatchApplyError } from "./patch.js";
-export { stagePaths, commitChanges } from "./commit.js";
+} from "./repository/repository.js";
+export { isRepositoryClean } from "./repository/status.js";
+export { applyPatch, PatchApplyError } from "./delivery/patch.js";
+export { stagePaths, commitChanges } from "./delivery/commit.js";
 export {
   getCurrentBranch,
   pushCurrentBranch,
   PushBlockedError,
-} from "./push.js";
-export { getWorkspaceDiff } from "./workspace-diff.js";
+} from "./delivery/push.js";
+export { getWorkspaceDiff } from "./workspace/workspace-diff.js";
 export {
   listRepositoryFilesAtCommit,
   type CommitFile,
-} from "./commit-files.js";
+} from "./repository/commit-files.js";

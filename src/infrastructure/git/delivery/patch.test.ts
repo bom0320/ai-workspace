@@ -5,7 +5,8 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { applyPatch, isRepositoryClean, PatchApplyError } from "./patch.js";
+import { isRepositoryClean } from "../repository/status.js";
+import { applyPatch, PatchApplyError } from "./patch.js";
 
 let root: string;
 let patch: string;
@@ -28,8 +29,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
   rmSync(patch, { force: true });
 });
-it("detects clean repositories", () =>
-  expect(isRepositoryClean(root)).toBe(true));
 it.each(["tracked", "staged", "untracked"])(
   "detects %s changes and blocks apply",
   (kind) => {
@@ -46,6 +45,7 @@ it.each(["tracked", "staged", "untracked"])(
   }
 );
 it("pre-checks and applies a valid patch while retaining the artifact", () => {
+  expect(isRepositoryClean(root)).toBe(true);
   expect(() => git("apply", "--check", patch)).not.toThrow();
   applyPatch(root, patch);
   expect(readFileSync(join(root, "README.md"), "utf8")).toBe("updated\n");

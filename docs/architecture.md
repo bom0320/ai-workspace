@@ -209,6 +209,14 @@ Workspace는 실행용 worktree이고 artifacts는 task.json / base-commit.txt /
 ExecutionResult는 완료 시점 snapshot이며 Review / Delivery / Cleanup 결과를 이후 저장하는 기록이 아니다.
 Cleanup은 workspace만 대상으로 하고 artifacts는 유지한다. Artifact preservation은 durable execution이 아니다.
 
+Artifacts Service는 Run Directory와 Artifact 경로·보존 순서·실패 의미를 소유하고, Git I/O는
+`infrastructure/git`에 위임한다. `getExecutionBaseCommit`은 getRepositoryHead를 재사용하며
+`workspace/workspace-patch.ts`의 writeWorkspacePatch는 격리된 임시 Index와 출력 descriptor·cleanup을 관리해 binary /
+full-index Patch를 크기 제한 없이 파일에 저장한다. 리뷰용 getWorkspaceDiff의 제한·truncation 정책과는
+분리한다. `workspace/changed-paths.ts`의 getWorkspaceChangedPaths는 null-delimited Git 경로를 수집·중복 제거·정렬하고,
+Evidence Service는 ExecutionEvidence 타입과 기존 수집 실패 context를 유지한다. Execution stage 순서와
+최종 결과 구성은 기존 Application이 담당한다.
+
 Human gate와 Delivery는 실행 성공과 별개다. Duration telemetry는 운영 데이터이며 Evidence와 구분한다.
 CLI의 Goal flow Total은 이후 Human 대기를 포함할 수 있지만 Execution snapshot timing은 포함하지 않는다.
 Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구간의 전체 시간이며 개별 runtime tracing backend는 없다.

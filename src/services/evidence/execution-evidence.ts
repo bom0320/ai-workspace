@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { getWorkspaceChangedPaths } from "@/infrastructure/git/index.js";
 
 import type { VerificationResult } from "@/services/verification/index.js";
 
@@ -13,22 +13,7 @@ export function collectChangedPaths(
   baseCommit: string
 ): string[] {
   try {
-    const tracked = execFileSync(
-      "git",
-      ["-C", workspaceRoot, "diff", "--name-only", "-z", baseCommit, "--"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
-    );
-    const untracked = execFileSync(
-      "git",
-      ["-C", workspaceRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
-    );
-
-    return [
-      ...new Set(
-        `${tracked}${untracked}`.split("\0").filter((path) => path.length > 0)
-      ),
-    ].sort();
+    return getWorkspaceChangedPaths(workspaceRoot, baseCommit);
   } catch (error) {
     let detail = error instanceof Error ? error.message : String(error);
 

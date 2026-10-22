@@ -20,3 +20,8 @@ export {
   listRepositoryFilesAtCommit,
   type CommitFile,
 } from "./repository/commit-files.js";
+export { getWorkspaceChangedPaths } from "./workspace/changed-paths.js";
+export {
+  writeWorkspacePatch,
+  WorkspacePatchCleanupError,
+} from "./workspace/workspace-patch.js";

@@ -326,9 +326,37 @@ Implementation Assignment / `ImplementationAssignment` 등은 **Proposed Concept
 존재하지 않는다. 이를 현재 StaffingAssignment와 동일시하거나 필드·파일 구조를 선행 확정하지 않는다.
 
 목표 관계는 분석 배치 → AgentDecision → CEO 종합 → Human의 해결 방향 승인 → CEO의 업무 분해 →
-필요한 개별 업무의 v1 Planning 구체화 → Harness 계약 구성·Task 승인·실행·검증이다.
+Repository 변경 계약이 필요한 개별 업무의 v1 Planning 구체화 → Harness 계약 구성·Task 승인·실행·검증이다.
 분석·판단, 문서 설계, 코드 구현, 테스트, 리뷰는 서로 다른 산출물과 권한을 가질 수 있으므로 모든 업무에
 TaskDraft를 강제하지 않는다. Repository 실행 계약이 필요한 업무에는 기존 TaskDraft / TaskContract를 적용한다.
+
+### v1 Planning과 v4 CEO의 Application 책임
+
+v4는 **What & Why / Governance**를 맡는다. CEO는 문제·불확실성의 해석, 전문가와 Context / Budget
+배치 제안, 판단·Comparison의 orchestration, Synthesis와 해결 방향 제안, 승인 후 업무 분해·배치·진행
+평가·재작업·재배치·Escalation·보고를 담당한다. 해결 방향의 최종 승인은 Human에게 있고, Harness가
+검증·권한 통제를 소유한다. 현재 구현된 CEO Staffing 호출·Loop와 이 전체 목표 책임을 구분한다.
+
+v1은 **Task Planning & Execution Contract**를 맡는다. Repository Context에서 개별 작업의 objective,
+수정 가능·금지 경로, Constraints, Acceptance Criteria와 Verification을 구체화하고 TaskDraft를 만든다.
+Harness의 buildTaskContract()가 계약을 최종화하고 CLI가 TaskContract 표시·Task Approval·Execution
+handoff를 연결한다. Task Approval 자체를 Planner가 수행하지 않는다.
+
+| 사용 맥락 | 결정 범위 | 현재 상태 |
+| --- | --- | --- |
+| Standalone v1 | Human Goal과 Repository Context에서 구체적인 실행 작업을 계획 | 현재 Plan only / Plan & Execute. v4를 거치지 않는 독립 기능 유지 |
+| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | Planned. 현재 planTask()가 이 통합 입력이나 승인 방향 검증을 지원하는 것은 아님 |
+
+IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 CEO의 Goal 해석을 나타내는
+**데이터 모델**이다. 현재 CEOStaffingDecision의 propose 분기에 포함된 StaffingDraft.intent로 생성되며
+별도 v1 Planner 호출이나 범용 Planning Engine이 아니다. 두 기능 모두 Goal을 이해하지만 CEO의 목적은
+문제 이해와 전문가 판단·배치의 근거를 만드는 것이고, v1의 목적은 실행 계약을 만드는 것이다.
+공통 Intent Analysis 모듈을 추출하거나 두 Application의 State / Loop를 통합하지 않는다.
+
+Work Decomposition은 필요한 업무·목적·담당자·의존성·진행 순서를 정한다. Task Planning은 그중 개별
+Repository 변경 업무의 실행 범위·제약·완료 조건·검증을 정한다. 읽기 전용 분석·설계 검토·비교에
+TaskContract를 일괄 강제하지 않으며, 앞서 설명한 Phase A StaffingAssignment와 향후 Phase B Work Assignment도
+같은 모델로 가정하지 않는다.
 
 ### CEO와 Planner의 handoff — Planned
 
@@ -340,11 +368,20 @@ Approved Decision + Implementation Assignment + Repository Context
 CEO는 해결 방향 선택과 업무 분해·배치를, Planner는 그 방향과 개별 업무를 실행 가능한 명세로 구체화하는
 책임을 맡는다. Planner가 원본 Goal만 보고 승인된 Decision과 충돌하는 방향을 다시 선택해서는 안 된다.
 Harness는 원본 Goal / Constraints와 승인된 방향의 provenance를 보존하고 범위 확대·모순을 검증해야 한다.
+CEO나 Planner는 원본 Goal / Constraints를 임의 변경할 수 없다. 승인된 방향·범위·제약으로 계약을 만들 수
+없다면 임의 진행하지 않고 상위 판단과 필요한 재승인을 요청해야 한다. 이 검증·반환 경로는 향후 설계한다.
+Staffing Approval(분석 배치), Governance Approval(해결 방향), Task Approval(구체 실행 작업),
+Change Review / Delivery Approval(결과 검토·반영)은 각각 별도이며 이전 승인이 후속 승인을 대체하지 않는다.
 
 현재 planTask() 입력은 goal / repositoryPath / limits / optional planner뿐이며 Approved Decision이나
 Implementation Assignment를 받지 않는다. 현재 v1은 Working Tree 기반 조사다. 위 handoff의 입력 계약,
 Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증은 **향후 통합 요구사항**이다. 기존 Planner를
 폐기하거나 대체 Planner를 새로 만드는 방향이 아니다.
+
+현재 runStaffing()은 CEOStaffingDecision을 검증해 StaffingDraft / Escalation / Failure를 반환할 뿐
+planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. Decision 소유 Snapshot 모델·검사 기능 재사용은
+이 use-case들의 실행 연결과 다르다. 현재 Decision CLI의 runDecision() → compareDecisions() 조합도
+CEO Staffing이나 Planning handoff와 독립적이다.
 
 ### 책임과 소유권
 

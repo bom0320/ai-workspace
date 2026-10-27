@@ -37,6 +37,9 @@ TaskDraft → TaskContract, Human constraints preservation, Human Task Approval�
 Planning 자체보다 실행 전 explicit contract boundary가 핵심이다. Zod는 structural validity를 검증한다.
 Goal flow의 Task Approval과 실행 후 Review / Apply / Commit / Push / Cleanup을 구분한다.
 명시적 JSON execute는 Planning / Task Approval을 거치지 않는 별도 경로다.
+현재 Standalone v1은 Human Goal로 독립 실행하며 그대로 유지한다. 향후 v4 통합에서는 승인된 방향과
+개별 구현 업무를 실행 계약으로 구체화하는 데 재사용한다. 입력·검증 계약은 아래 v4 Step 9의 Planned
+범위이며 현재 planTask()의 기능이 아니다. [책임 경계](architecture.md#v1-planning과-v4-ceo의-application-책임)를 따른다.
 
 ## v2 — Governed Independent Decision
 
@@ -218,10 +221,13 @@ Policy Validation이며 이후 Human Approval과 Scope issuance / Authorization�
 6. **CEO Synthesis**: Recommendation, Rationale / Evidence, Trade-off, Unresolved Issues / Escalation 표현.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
 7. **Human Governance**: 해결 방향의 Approve / Override / Reject 대상·효과를 검증하고 Approved Decision만 handoff.
-8. **CEO Work Decomposition — Phase B**: 승인된 방향을 설계·구현·QA·리뷰 업무로 나누고 산출물·의존성·권한을 배치.
-9. **Detailed Design & Planning Handoff**: 승인된 Decision + 개별 구현 Assignment + Repository Context를
-   기존 v1 Planner로 구체화한다. 필요한 업무에 TaskDraft / TaskContract와 Human Task Approval을 적용하며
-   Planner가 승인 방향을 다시 선택하지 않도록 검증한다. 현재 planTask() 입력 확장은 미구현이다.
+8. **CEO Work Decomposition — Phase B (Planned)**: 승인된 방향에서 설계·구현·QA·리뷰 업무의 목적·산출물·담당자·
+   의존성·진행 순서를 정한다. 현재 Phase A StaffingAssignment와 향후 Phase B Work Assignment를 동일 모델로 가정하지 않는다.
+9. **Detailed Design & Planning Handoff (Planned)**: 승인된 Decision + 개별 구현 Assignment + Repository
+   Context를 기존 v1 Planner에 전달해 수정 범위·Constraints·Acceptance Criteria·Verification을 구체화한다.
+   Repository 변경 계약이 필요한 업무에 TaskDraft / TaskContract와 Human Task Approval을 적용하며 읽기 전용
+   분석·설계 검토·비교에 일괄 강제하지 않는다. 원본 Goal / Constraints와 승인 방향을 보존하고, 범위 이탈·모순은
+   상위 판단·필요한 재승인으로 돌려야 한다. 현재 planTask() 입력 확장과 검증·반환 경로는 미구현이다.
 10. **Multi-Specialist Execution Coordination**: 승인된 개별 업무의 Specialist / Worker 실행을 기존 v0
     Harness에 연결한다. 다중 Writing Worker·병렬성·Worktree 변경 통합과 충돌 해결 정책은 별도로 설계·검증한다.
 11. **Verification / Review & CEO Progress Evaluation**: 산출물·Evidence·의존성·실패를 검토하여

@@ -304,7 +304,11 @@ Revise, re-plan, 복잡한 approval policy, fancy TUI는 현재 제공하지 않
 v4의 Phase A(해결 방향 판단·승인) / Phase B(상세 설계·실행)는
 [Target Architecture](architecture.md#5-target-responsibility-model)의 목표 흐름이다. Human Staffing Approval,
 해결 방향의 Approve / Override / Reject, 개별 Task Approval과 Change Review / Delivery는 각각 별도 접점이
-필요하다. 다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
+필요하다. Staffing Approval은 전문가 배치·분석 범위, Governance Approval은 해결 방향, Task Approval은
+구체적인 TaskContract, Change Review / Delivery는 실행 결과·변경 반영을 대상으로 한다. 어느 승인도
+다른 단계의 포괄 실행 권한이 아니다. 현재 Plan & Execute의 TaskContract 표시 → Approve / Reject는
+Standalone v1의 접점이며 v4의 앞선 승인 단계를 수행한 것으로 간주하지 않는다.
+다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
 현재 CLI에는 Staffing / CEO / Human Governance 명령이나 화면이 없으며, 기존 Decision 명령은 독립 판단과
 비교까지만 수행한다. 구현된 v4 기반 API도 아직 CLI에 연결되지 않았다. 인터페이스 형태와 구현 순서는
 [Roadmap](roadmap.md)에 두며 새로운 명령·화면을 현재 기능으로 확정하지 않는다.

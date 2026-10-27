@@ -250,7 +250,8 @@ describe("CLI approval boundary", () => {
     const pending = runCli([".", "Clarify README"]);
     await vi.waitFor(() => expect(approveTask).toHaveBeenCalledWith());
     expect(executeTask).not.toHaveBeenCalled();
-    expect(console.log).toHaveBeenCalledWith(JSON.stringify(task, null, 2));
+    expect(console.log).toHaveBeenCalledWith(`Task ID: ${task.id}`);
+    expect(console.log).toHaveBeenCalledWith(`\nObjective:\n${task.objective}`);
     expect(askGoal).not.toHaveBeenCalled();
     approve(true);
     expect(await pending).toBe(0);

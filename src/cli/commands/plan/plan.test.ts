@@ -97,7 +97,8 @@ describe("Planning CLI", () => {
     expect(console.log).toHaveBeenCalledWith("Planning: completed");
     expect(console.log).toHaveBeenCalledWith("Rounds: 2");
     expect(console.log).toHaveBeenCalledWith("\nTask Contract:");
-    expect(console.log).toHaveBeenCalledWith(JSON.stringify(task, null, 2));
+    expect(console.log).toHaveBeenCalledWith(`Task ID: ${task.id}`);
+    expect(console.log).toHaveBeenCalledWith(`\nObjective:\n${task.objective}`);
     expect(executeTask).not.toHaveBeenCalled();
   });
 

@@ -89,6 +89,9 @@ describe("runCodexCEO", () => {
     for (const policy of [
       "CEO staffing decision agent",
       "preserve the original Human Goal and Constraints",
+      "Consider all Human Constraints",
+      "mechanical checks do not prove semantic compliance",
+      "Do not generate or modify Harness enforcementRules",
       "Do not access repositories, local files, tools, shell commands, network, web",
       "generate a TaskContract",
       "execute Specialists",

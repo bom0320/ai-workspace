@@ -272,9 +272,11 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 - **R1 Implemented**: RepositorySnapshot / SpecialistDefinition / SpecialistAuthority를 공통 contracts로 이동하고
   Snapshot capture/assert 정책은 공통 서비스가 소유한다. 기존 Decision import / public API는 호환 export를 유지한다.
 - **R2 Implemented**: 단일 runStaffing()은 private CEO Loop를 실행하고 한 번 캡처한
-  Goal / Snapshot에서 Proposal을 최종화한다. 등록·중복 배치·안전한 Snapshot Context·크기·예산·Harness가
-  원문에 연결한 구조화 Constraint 규칙을 검사한 뒤 ID를 발급한다. 연결 규칙이 없는 Constraints는
-  unverifiedHumanConstraints로 보존·표시한다. 역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
+  Goal / Snapshot에서 Proposal을 최종화한다. 등록·중복 배치·안전한 Snapshot Context·크기·예산과 Harness의
+  enforcementRules(context-paths / specialists / invocation-budget)를 검사한 뒤 ID를 발급한다. Human Instructions는
+  CEO Context와 proposal.goal.constraints에 원문 그대로 보존하며 Rule과 문자열로 연결하지 않는다.
+  unverifiedHumanConstraints는 제거했고 어떤 지시도 Rule 성공으로 검증 완료 처리하지 않는다.
+  역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
   Human Staffing Approval / Scope issuance / Budget Reservation / Invocation 실행은 미구현이다.
 
 ### Step 2.3 계약과 다음 연결점
@@ -284,8 +286,9 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 - CEO 호출 수(maxRounds), Inspection 파일 수·Context 크기, Draft의 이후 활동 예산과 Approved Scope
   운영 예산을 구분한다. timeoutMs는 기본 Codex 호출에 적용하며 주입 Agent의 취소·timeout은 해당 adapter 책임이다.
 - Harness가 등록 후보·exact allowlist·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
-  Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적인 구조화 Constraint 규칙을 검증한다.
+  Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적 Enforcement Rules를 검증한다.
   업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
+  Step 3 Human Staffing Approval은 proposal.goal.constraints 전체와 제안을 검토하는 접점을 구현해야 한다.
   ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.
 
 ### Exit Criteria

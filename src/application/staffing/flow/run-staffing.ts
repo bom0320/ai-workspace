@@ -49,12 +49,7 @@ export async function runStaffing(
   }
   try {
     const draft = staffingDraftSchema.parse(result.draft);
-    const unverifiedHumanConstraints = validateProposal(
-      draft,
-      state,
-      runOptions.availableSpecialists,
-      policy
-    );
+    validateProposal(draft, state, runOptions.availableSpecialists, policy);
     assertRepositoryMatchesSnapshot(state.snapshot);
     const proposal = buildStaffingProposal(draft, state);
     assertRepositoryMatchesSnapshot(state.snapshot);
@@ -62,7 +57,6 @@ export async function runStaffing(
       status: "proposed",
       proposal,
       rounds,
-      unverifiedHumanConstraints,
     };
   } catch (error) {
     try {

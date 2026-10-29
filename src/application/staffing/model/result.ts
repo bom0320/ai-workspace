@@ -2,16 +2,14 @@ import { z } from "zod";
 
 import { staffingProposalSchema } from "./staffing.js";
 
-// A validated proposal is not Human approval or execution authority.
+// Proposed means structural/policy checks passed, not semantic compliance with
+// all Human instructions, Human approval, or execution authority.
 export const staffingRunResultSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("proposed"),
       proposal: staffingProposalSchema,
       rounds: z.number().int().positive(),
-      // No executable rule was supplied for these preserved Human constraints.
-      // An empty list still does not prove semantic compliance.
-      unverifiedHumanConstraints: z.array(z.string().min(1)),
     })
     .strict(),
   z

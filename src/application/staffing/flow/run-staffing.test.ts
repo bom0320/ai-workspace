@@ -115,7 +115,7 @@ beforeEach(() => {
       maxContextBytes: 131072,
       maxFileTreeEntries: 20,
     },
-    policy: { maxAgentInvocations: 4, constraintRules: [] },
+    policy: { maxAgentInvocations: 4, enforcementRules: [] },
     maxRounds: 3,
     agent: vi.fn<CEOStaffingAgent>(async () => ({ type: "propose", draft })),
   };
@@ -181,7 +181,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     expect(result.proposal.intent).toEqual(before.intent);
     expect(result.proposal.budget).toEqual(before.budget);
     expect(draft).toEqual(before);
-    expect(result.unverifiedHumanConstraints).toEqual(["No edits"]);
+    expect(result).not.toHaveProperty("unverifiedHumanConstraints");
     expect(result.proposal).not.toHaveProperty("approvalRecordId");
     expect(result.proposal).not.toHaveProperty("scope");
     expect(result.proposal).not.toHaveProperty("invocation");
@@ -333,14 +333,14 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   });
 
   it.each(["context-paths", "specialists", "invocation-budget"] as const)(
-    "rejects violations of an explicitly bound Human %s rule",
+    "rejects violations of a Harness %s enforcement rule",
     async (type) => {
-      options.policy.constraintRules = [
+      options.policy.enforcementRules = [
         type === "context-paths"
-          ? { type, constraint: "No edits", allowedContextPaths: ["src/b.ts"] }
+          ? { type, allowedContextPaths: ["src/b.ts"] }
           : type === "specialists"
-            ? { type, constraint: "No edits", allowedSpecialistIds: ["ux"] }
-            : { type, constraint: "No edits", maxAgentInvocations: 1 },
+            ? { type, allowedSpecialistIds: ["ux"] }
+            : { type, maxAgentInvocations: 1 },
       ];
       expect(await runStaffing(options)).toMatchObject({
         status: "failed",
@@ -350,34 +350,39 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   );
 
   it("accepts structurally satisfied rules without claiming semantic proof", async () => {
-    options.policy.constraintRules = [
+    options.policy.enforcementRules = [
       {
         type: "context-paths",
-        constraint: "No edits",
         allowedContextPaths: ["src/a.ts"],
       },
       {
         type: "specialists",
-        constraint: "No edits",
         allowedSpecialistIds: ["frontend"],
       },
       {
         type: "invocation-budget",
-        constraint: "No edits",
         maxAgentInvocations: 2,
       },
     ];
-    expect(await runStaffing(options)).toMatchObject({
-      status: "proposed",
-      unverifiedHumanConstraints: [],
-    });
+    const result = await runStaffing(options);
+    expect(result.status).toBe("proposed");
+    if (result.status !== "proposed") throw new Error("Expected Proposal");
+    expect(result.proposal.goal.constraints).toEqual(options.goal.constraints);
+    expect(result).not.toHaveProperty("unverifiedHumanConstraints");
+    expect(
+      staffingRunResultSchema.safeParse({
+        ...result,
+        unverifiedHumanConstraints: [],
+      }).success
+    ).toBe(false);
   });
 
-  it("rejects rules not linked to original constraints and invalid policy before calling the CEO", async () => {
-    options.policy.constraintRules = [
+  it("rejects obsolete constraint fields and invalid policy before calling the CEO", async () => {
+    options.policy.enforcementRules = [
       {
         type: "specialists",
-        constraint: "Invented Human constraint",
+        // @ts-expect-error Obsolete natural-language binding is not a policy field.
+        constraint: "No edits",
         allowedSpecialistIds: [],
       },
     ];
@@ -387,12 +392,92 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       rounds: 0,
     });
     expect(options.agent).not.toHaveBeenCalled();
-    options.policy = { maxAgentInvocations: 0, constraintRules: [] };
+    options.policy = { maxAgentInvocations: 0, enforcementRules: [] };
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "invalid-input",
       rounds: 0,
     });
+  });
+
+  it("passes every original Human instruction to the CEO and preserves it in the Proposal", async () => {
+    options.goal.constraints = [
+      " No edits ",
+      "Prefer accessible feedback",
+      " No edits ",
+    ];
+    const originalGoal = structuredClone(options.goal);
+    options.agent = vi.fn<CEOStaffingAgent>(async (context) => {
+      expect(context.goal).toEqual(originalGoal);
+      expect(context).not.toHaveProperty("policy");
+      expect(context).not.toHaveProperty("enforcementRules");
+      return { type: "propose", draft };
+    });
+    const result = await runStaffing(options);
+    expect(result.status).toBe("proposed");
+    if (result.status !== "proposed") throw new Error("Expected Proposal");
+    expect(result.proposal.goal).toEqual(originalGoal);
+    expect(options.goal).toEqual(originalGoal);
+    // Policy success makes no claim that "Prefer accessible feedback" was met.
+    expect(Object.keys(result).sort()).toEqual([
+      "proposal",
+      "rounds",
+      "status",
+    ]);
+  });
+
+  it("enforces policies even without any Human Constraint strings", async () => {
+    delete options.goal.constraints;
+    options.policy.enforcementRules = [
+      { type: "specialists", allowedSpecialistIds: ["frontend"] },
+      { type: "context-paths", allowedContextPaths: ["src/a.ts"] },
+      { type: "invocation-budget", maxAgentInvocations: 2 },
+    ];
+    expect(await runStaffing(options)).toMatchObject({ status: "proposed" });
+    options.policy.enforcementRules = [
+      { type: "specialists", allowedSpecialistIds: [] },
+    ];
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
+      reason: "Proposal violates Harness Specialist policy.",
+    });
+  });
+
+  it("preserves Human clarification as escalation without treating policy as instruction resolution", async () => {
+    options.goal.constraints = ["Keep current flow", "Replace current flow"];
+    options.agent = vi.fn<CEOStaffingAgent>(async (context) => {
+      expect(context.goal.constraints).toEqual(options.goal.constraints);
+      return {
+        type: "escalate",
+        reason: "Conflicting Human instructions",
+        questions: ["Which flow direction should take priority?"],
+      };
+    });
+    const ids = vi.spyOn(crypto, "randomUUID");
+    const result = await runStaffing(options);
+    expect(result).toEqual({
+      status: "escalated",
+      reason: "Conflicting Human instructions",
+      questions: ["Which flow direction should take priority?"],
+      rounds: 1,
+    });
+    expect(staffingRunResultSchema.parse(result)).toEqual(result);
+    expect(ids).not.toHaveBeenCalled();
+  });
+
+  it("rejects obsolete top-level constraintRules rather than silently ignoring them", async () => {
+    options.policy = {
+      ...options.policy,
+      // @ts-expect-error Obsolete policy field is rejected at the runtime boundary.
+      constraintRules: [],
+    };
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "invalid-input",
+      rounds: 0,
+    });
+    expect(options.agent).not.toHaveBeenCalled();
   });
 
   it("rejects duplicate Harness registry IDs before the CEO", async () => {
@@ -407,27 +492,32 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     expect(options.agent).not.toHaveBeenCalled();
   });
 
-  it.each(["goal", "snapshot", "id", "authority", "assignmentId"])(
-    "rejects CEO injection of %s",
-    async (field) => {
-      options.agent = async () => ({
-        type: "propose",
-        draft:
-          field === "assignmentId"
-            ? {
-                ...draft,
-                assignments: [
-                  { ...draft.assignments[0], assignmentId: "CEO-id" },
-                ],
-              }
-            : { ...draft, [field]: "CEO-owned" },
-      });
-      expect(await runStaffing(options)).toMatchObject({
-        status: "failed",
-        failure: "schema-validation",
-      });
-    }
-  );
+  it.each([
+    "goal",
+    "snapshot",
+    "id",
+    "authority",
+    "assignmentId",
+    "policy",
+    "enforcementRules",
+  ])("rejects CEO injection of %s", async (field) => {
+    options.agent = async () => ({
+      type: "propose",
+      draft:
+        field === "assignmentId"
+          ? {
+              ...draft,
+              assignments: [
+                { ...draft.assignments[0], assignmentId: "CEO-id" },
+              ],
+            }
+          : { ...draft, [field]: "CEO-owned" },
+    });
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "schema-validation",
+    });
+  });
 
   it("does not treat caller-supplied Draft/ContextState as a trusted Run", async () => {
     const agent = vi.fn<CEOStaffingAgent>(async () => ({

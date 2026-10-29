@@ -39,6 +39,7 @@ export {
 } from "./model/result.js";
 export {
   staffingProposalPolicySchema,
-  staffingConstraintRuleSchema,
+  staffingEnforcementRuleSchema,
   type StaffingProposalPolicy,
+  type StaffingEnforcementRule,
 } from "./model/policy.js";

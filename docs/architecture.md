@@ -604,7 +604,7 @@ runStaffing({ goal, repositoryPath, availableSpecialists, allowedContextPaths, p
    ├─ inspect → 마지막 Round면 즉시 failed(round-limit), 파일 로딩 없음
    │          → inspectStaffingContext() → 새 state → 다음 CEO call
    ├─ propose → 내부 Draft + state → R2 Policy Validation / Finalization
-   │          → proposed { proposal, rounds, unverifiedHumanConstraints }
+   │          → proposed { proposal, rounds }
    └─ escalate → escalated { reason, questions, rounds }
 실패 → failed { failure, reason, rounds } (Draft / Proposal / partial state 없음)
 ```
@@ -623,7 +623,8 @@ Harness ID / Approval / Scope / Authority 생성이나 코드 수정·Specialist
 등록 여부·Assignment 적합성·Draft Context 접근권·운영 예산 정책은 Prompt나 구조 검증으로 보장하지 않는다.
 구조적으로 유효한 Draft도 공식 Proposal Finalization / Validation과 Human Approval이 필요하다.
 
-`flow/run-staffing.ts`는 Discovery / Projection / Inspection을 재사용하며 반복만 제어한다.
+`flow/run-staffing.ts`는 Discovery / CEO Loop / Validation / Finalization을 조합하고,
+`flow/orchestration/run-staffing-loop.ts`가 Projection / Inspection을 재사용하며 반복을 제어한다.
 maxRounds는 양의 safe integer이고 rounds는 실제 CEO 호출 직전에 증가한다. 실패한 호출도 포함한다.
 마지막 Round의 propose / escalate는 가능하지만 inspect는 추가 파일 로딩·호출 없이 종료한다.
 매 호출 전후와 각 Inspection의 기존 전후 Snapshot 검사를 보존하며 최종 propose / escalate도 변경된
@@ -665,9 +666,9 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
 → discovery에서 Snapshot capture (1회) → CEO Loop
 → 내부 proposed { draft, rounds, state } (public API에는 state 미노출)
 → 같은 state의 Goal / Snapshot / 파일 목록으로 Finalization
-→ 등록·중복 배치·Context·예산·구조화 Constraint 검사 → Snapshot assert
+→ 등록·중복 배치·Context·예산·Harness Enforcement Rules 검사 → Snapshot assert
 → Harness Proposal / Assignment UUID 발급 → staffingProposalSchema → Snapshot assert
-→ proposed { proposal, rounds, unverifiedHumanConstraints }
+→ proposed { proposal, rounds }
 ```
 
 공개 API는 외부 Draft나 ContextState를 최종화 입력으로 받지 않는다. 임의로 추가된 draft / state가 있어도
@@ -688,11 +689,17 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
   Assignment당 maxFilesPerRequest, Proposal의 unique 파일 합계 maxTotalFiles, maxFileBytes / maxContextBytes를
   적용한다. Finalization 파일 검사는 CEO의 남은 Inspection Budget이나 Round를 소비·변경하지 않는다.
 - Draft의 maxAgentInvocations는 Harness policy.maxAgentInvocations 이하여야 한다. 운영 예산 예약은 아니다.
-- GoalSpec.constraints는 자유 문자열이다. Harness가 constraintRules에 원문을 정확히 연결한 context-paths
-  (exact 허용 경로), specialists(허용 ID), invocation-budget(상한) 규칙만 구조적으로 검사한다. 원문에 없는
-  Constraint의 규칙은 입력 오류다. 연결된 모든 규칙은 함께 만족해야 하며 자연어를 임의로 해석하지 않는다.
-  규칙이 없는 원문은 unverifiedHumanConstraints로 명시하고 proposal.goal에도 그대로 보존한다. 빈 미검증
-  목록도 의미적 충족의 증명이 아니며 Human 검토를 대체하지 않는다.
+- GoalSpec.constraints는 Human Instructions의 원문이다. 같은 Run의 원본 Goal에서 CEO StaffingContext와
+  StaffingProposal.goal까지 순서·내용을 보존한다. CEO는 Goal과 Constraints를 함께 고려하고 모순·불명확함이
+  있으면 escalate할 수 있다. Instruction의 보존·전달은 기계적 정책 검사와 별개이며 v1의 원본 보존 원칙을 따른다.
+- Harness policy.enforcementRules는 context-paths(exact 허용 경로), specialists(허용 ID), invocation-budget
+  (상한)의 제한된 기계적 정책이다. 원문 Constraint와의 문자열 연결은 없고 모든 Rule을 함께 만족해야 한다.
+  정책의 출처·신뢰성은 Harness 호출 경계가 관리하며 CEO에는 정책 작성·변경 권한을 부여하지 않는다.
+  model/policy.ts의 staffingEnforcementRuleSchema / StaffingEnforcementRule은 정책 구조를 정의할 뿐,
+  자연어 지시 전체의 모델이나 의미 해석기가 아니다. validateProposal()은 void를 반환하고 위반 시 실패한다.
+- unverifiedHumanConstraints 결과 필드는 제거했다. Rule 성공으로 어떤 Human 지시도 검증 완료로 분류하지
+  않는다. 향후 Human Approval은 proposal.goal.constraints **전체**를 검토해야 한다. proposed는 구조·명시적
+  정책 검증 통과이며 자연어 지시 전체의 의미적 충족, Human 승인 또는 실행 권한의 증명이 아니다.
 
 모든 정책·파일 검사 후 UUID로 Proposal / Assignment ID를 생성하고 Assignment ID 중복도 확인한다.
 전역 ID 유일성 저장소·Proposal persistence는 없다. 실패 시 Proposal이나 partial state는 반환하지 않으며

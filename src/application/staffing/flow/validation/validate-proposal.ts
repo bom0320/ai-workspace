@@ -28,7 +28,7 @@ export function validateProposal(
   state: StaffingContextState,
   specialists: StaffingLoopOptions["availableSpecialists"],
   policy: StaffingProposalPolicy
-): string[] {
+): void {
   if (draft.budget.maxAgentInvocations > policy.maxAgentInvocations)
     throw new ProposalPolicyError(
       "Proposed invocation budget exceeds Harness policy."
@@ -84,27 +84,27 @@ export function validateProposal(
   if (paths.size > limits.maxTotalFiles)
     throw new ProposalPolicyError("Proposal Context exceeds maxTotalFiles.");
 
-  for (const rule of policy.constraintRules) {
+  for (const rule of policy.enforcementRules) {
     if (
       rule.type === "context-paths" &&
       [...paths].some((path) => !rule.allowedContextPaths.includes(path))
     )
       throw new ProposalPolicyError(
-        "Proposal violates a structured Human Context constraint."
+        "Proposal violates Harness Context policy."
       );
     if (
       rule.type === "specialists" &&
       ids.some((id) => !rule.allowedSpecialistIds.includes(id))
     )
       throw new ProposalPolicyError(
-        "Proposal violates a structured Human Specialist constraint."
+        "Proposal violates Harness Specialist policy."
       );
     if (
       rule.type === "invocation-budget" &&
       draft.budget.maxAgentInvocations > rule.maxAgentInvocations
     )
       throw new ProposalPolicyError(
-        "Proposal violates a structured Human invocation budget constraint."
+        "Proposal violates Harness invocation budget policy."
       );
   }
 
@@ -127,10 +127,6 @@ export function validateProposal(
     ),
   }));
   assertContextBudget({ ...projection, inspectedFiles });
-  return (state.context.goal.constraints ?? []).filter(
-    (constraint) =>
-      !policy.constraintRules.some((rule) => rule.constraint === constraint)
-  );
 }
 
 export function prepareProposalInput(options: RunStaffingOptions) {
@@ -142,18 +138,14 @@ export function prepareProposalInput(options: RunStaffingOptions) {
   runOptions.availableSpecialists = specialistDefinitionSchema
     .array()
     .parse(runOptions.availableSpecialists);
-  for (const rule of policy.constraintRules) {
-    if (!runOptions.goal.constraints?.includes(rule.constraint))
-      throw new ProposalPolicyError(
-        "Rule is not bound to an original Human constraint."
-      );
+  for (const rule of policy.enforcementRules) {
     if (
       rule.type === "context-paths" &&
       rule.allowedContextPaths.some(
         (path) => !isUnambiguousRepositoryPath(path)
       )
     )
-      throw new ProposalPolicyError("Invalid structured Context constraint.");
+      throw new ProposalPolicyError("Invalid Harness Context policy.");
   }
   return { runOptions, policy };
 }

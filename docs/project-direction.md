@@ -234,7 +234,7 @@ v3는 Concern별 Agreement / Conflict / Trade-off와 Gap을 구조화하고 원�
 v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
 v4는 CEO가 판단·종합 이후에도 개발 업무 분해·배치·진행 평가·재작업·보고를 맡고 LangGraph.js가
 전체 workflow를 실행하도록 설계한다. Authority / Staffing 기반 schema, Context Discovery와 CEO Staffing
-Adapter / Loop는 구현되어 있다. Proposal Finalization, Synthesis, 실행 조정과 전체 Workflow는 아직
+Adapter / Loop와 제한된 정책 검증·Proposal Finalization은 구현되어 있다. Synthesis, 실행 조정과 전체 Workflow는 아직
 미구현이며 후속 Domain / protocol과 실행 연결은 단계적으로 정한다.
 
 ### 5. Human Governance

@@ -1,6 +1,6 @@
 import { selectGoalMentionedPaths } from "@/services/repository-inspection/index.js";
 
-import type { StaffingContextState } from "../../model/context-state.js";
+import type { StaffingContextState } from "../../model/state.js";
 import { addInspectedFiles } from "./inspect-files.js";
 import { byteLength } from "./policy.js";
 

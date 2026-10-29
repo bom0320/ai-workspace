@@ -206,14 +206,14 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 ### 내부 구현 순서
 
-Step 2.3의 CEO Adapter / Staffing Context 연결은 구현했다. 다음은 StaffingProposal Finalization /
-Policy Validation이며 이후 Human Approval과 Scope issuance / Authorization으로 연결한다. 아래는
+Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
+구현했다. 다음은 Human Staffing Approval이며 이후 Scope issuance / Authorization으로 연결한다. 아래는
 전체 내부 마일스톤이며 미구현 모델의 이름·Schema나 병렬 실행 방식을 선행 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
 2. **Intent Analysis & Staffing**: 기존 schema / Snapshot Context Discovery 위에 Step 2.3 CEO Adapter와
-   inspect / propose / escalate와 제한된 Staffing Loop를 연결했다. Proposal Finalization / Validation은 후속 구현한다.
+   inspect / propose / escalate와 제한된 Staffing Loop를 연결했다. R2에서 Proposal Finalization / 제한된 Policy Validation을 구현했다.
 3. **Human Staffing Approval**: 승인 대상·유효성 검증과 Approved Scope issuance 연결.
 4. **Context Routing & Authorization**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
    Authorized Specialist Invocation 구성·실행 Enforcement를 연결한다.
@@ -261,10 +261,21 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 - **2.3 Implemented**: runStaffing()과 Codex CEO Adapter가 discovery → cloned Context → CEO 호출 →
   inspect / propose / escalate를 연결한다. maxRounds와 호출당 Codex timeout, strict JSON / schema,
   매 호출 전후·최종 Snapshot 검사, Inspection 실패와 안전한 failure reason을 제공한다.
-  마지막 Round의 inspect는 로딩·재호출 없이 실패하며 제안은 StaffingDraft일 뿐 공식 Proposal이 아니다.
+  마지막 Round의 inspect는 로딩·재호출 없이 실패한다. CEO의 StaffingDraft는 내부 중간 산출물이며
+  현재 runStaffing()은 R2 검증·최종화를 거친 StaffingProposal을 성공 결과로 반환한다.
   Fake CEO / mock Process 테스트와 실제 Codex 0.163.0 단일 직접 propose(1 Round), Repository 무변경을 확인했다.
   실제 모델의 여러 Round Inspection 품질·반복 benchmark는 검증하지 않았다.
-  Proposal Finalization / Validation, Human Approval / Scope 발급·Authorization과 LangGraph 통합은 후속 단계다.
+  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Human Approval / Scope 발급·Authorization과 LangGraph 통합은 후속 단계다.
+
+### Capability 통합 리팩토링 상태
+
+- **R1 Implemented**: RepositorySnapshot / SpecialistDefinition / SpecialistAuthority를 공통 contracts로 이동하고
+  Snapshot capture/assert 정책은 공통 서비스가 소유한다. 기존 Decision import / public API는 호환 export를 유지한다.
+- **R2 Implemented**: 단일 runStaffing()은 private CEO Loop를 실행하고 한 번 캡처한
+  Goal / Snapshot에서 Proposal을 최종화한다. 등록·중복 배치·안전한 Snapshot Context·크기·예산·Harness가
+  원문에 연결한 구조화 Constraint 규칙을 검사한 뒤 ID를 발급한다. 연결 규칙이 없는 Constraints는
+  unverifiedHumanConstraints로 보존·표시한다. 역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
+  Human Staffing Approval / Scope issuance / Budget Reservation / Invocation 실행은 미구현이다.
 
 ### Step 2.3 계약과 다음 연결점
 
@@ -272,8 +283,9 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   Repository 내용·AGENTS.md는 untrusted data이며 inspect 성공과 propose 결과는 운영 권한이 아니다.
 - CEO 호출 수(maxRounds), Inspection 파일 수·Context 크기, Draft의 이후 활동 예산과 Approved Scope
   운영 예산을 구분한다. timeoutMs는 기본 Codex 호출에 적용하며 주입 Agent의 취소·timeout은 해당 adapter 책임이다.
-- Harness가 등록 후보·exact allowlist·Inspection limits를 공급한다. 다음 Finalization에서 run의 원본
-  Goal / Snapshot과 Draft의 provenance 연결, 등록·업무 적합성·Context·정책 예산·Human Constraints를 검증해야 한다.
+- Harness가 등록 후보·exact allowlist·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
+  Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적인 구조화 Constraint 규칙을 검증한다.
+  업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
   ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.
 
 ### Exit Criteria

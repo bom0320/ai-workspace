@@ -4,7 +4,7 @@ import {
   isUnambiguousRepositoryPath,
 } from "@/services/repository-inspection/index.js";
 
-import type { StaffingContextState } from "../../model/context-state.js";
+import type { StaffingContextState } from "../../model/state.js";
 import type {
   StaffingContext,
   StaffingInspectionLimits,

@@ -14,26 +14,20 @@ import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
 
-import type { StaffingContextState } from "../model/context-state.js";
-import { ceoStaffingDecisionSchema } from "../protocol/ceo.js";
+import type { StaffingContextState } from "../../model/state.js";
+import { ceoStaffingDecisionSchema } from "../../protocol/ceo.js";
 import {
   staffingContextSchema,
   staffingInspectionLimitsSchema,
   type StaffingContext,
   type StaffingInspectionLimits,
-} from "../protocol/context.js";
-import {
-  addInspectedFiles,
-  loadRepositoryMetadata,
-} from "./inspection/inspect-files.js";
-import { seedInitialFiles } from "./inspection/initial-seeding.js";
-import {
-  assertContextBudget,
-  createAllowedFileTree,
-} from "./inspection/policy.js";
+} from "../../protocol/context.js";
+import { addInspectedFiles, loadRepositoryMetadata } from "./inspect-files.js";
+import { seedInitialFiles } from "./initial-seeding.js";
+import { assertContextBudget, createAllowedFileTree } from "./policy.js";
 
-// Preserve the existing direct import path as well as the module public API.
-export type { StaffingContextState } from "../model/context-state.js";
+// Keep Context types available through this module and the public API.
+export type { StaffingContextState } from "../../model/state.js";
 
 export type StaffingContextResult =
   | { status: "ready"; state: StaffingContextState }

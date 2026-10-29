@@ -1,154 +1,84 @@
-import { z, ZodError } from "zod";
-
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
-import {
-  CodexCEOError,
-  runCodexCEO,
-  type CodexCEOOptions,
-} from "../ceo/codex-ceo.js";
+import type { StaffingProposalPolicy } from "../model/policy.js";
 import type { StaffingRunResult } from "../model/result.js";
+import { staffingDraftSchema } from "../protocol/ceo.js";
 import {
-  ceoStaffingDecisionSchema,
-  type CEOStaffingAgent,
-} from "../protocol/ceo.js";
+  runStaffingLoop,
+  type StaffingLoopOptions,
+} from "./orchestration/run-staffing-loop.js";
+import { buildStaffingProposal } from "./transformation/build-staffing-proposal.js";
 import {
-  discoverStaffingContext,
-  createStaffingContext,
-  inspectStaffingContext,
-  type DiscoverStaffingContextOptions,
-} from "./discover-context.js";
+  prepareProposalInput,
+  validateProposal,
+  ProposalPolicyError,
+  type RunStaffingOptions,
+} from "./validation/validate-proposal.js";
 
-export type RunStaffingOptions = DiscoverStaffingContextOptions &
-  CodexCEOOptions & {
-    maxRounds: number;
-    agent?: CEOStaffingAgent;
-  };
-
-const callLimitsSchema = z
-  .object({
-    maxRounds: z.number().int().positive(),
-    timeoutMs: z.number().int().positive().max(2_147_483_647).optional(),
-  })
-  .strict();
-
-type Failure = Extract<StaffingRunResult, { status: "failed" }>["failure"];
+export type { RunStaffingOptions } from "./validation/validate-proposal.js";
 
 export async function runStaffing(
   options: RunStaffingOptions
 ): Promise<StaffingRunResult> {
-  let rounds = 0;
-  const fail = (failure: Failure, reason: string): StaffingRunResult => ({
+  let runOptions: StaffingLoopOptions;
+  let policy: StaffingProposalPolicy;
+  try {
+    ({ runOptions, policy } = prepareProposalInput(options));
+  } catch {
+    return {
+      status: "failed",
+      failure: "invalid-input",
+      reason: "Invalid Harness proposal policy or run inputs.",
+      rounds: 0,
+    };
+  }
+
+  const result = await runStaffingLoop(runOptions);
+  if (result.status !== "proposed") return result;
+  const { state, rounds } = result;
+  const drift = (): StaffingRunResult => ({
     status: "failed",
-    failure,
-    reason,
+    failure: "snapshot-drift",
+    reason: "Repository no longer matches the staffing Run Snapshot.",
     rounds,
   });
-  const limits = callLimitsSchema.safeParse({
-    maxRounds: options.maxRounds,
-    timeoutMs: options.timeoutMs,
-  });
-  if (!limits.success)
-    return fail(
-      "invalid-input",
-      "CEO maxRounds and timeoutMs must be valid positive integer limits."
-    );
-
-  const discovery = discoverStaffingContext(options);
-  if (discovery.status === "failed") {
-    return fail(
-      "discovery",
-      "Staffing context discovery failed; check inputs, repository state, allowlist and inspection limits."
-    );
+  try {
+    assertRepositoryMatchesSnapshot(state.snapshot);
+  } catch {
+    return drift();
   }
-  let state = discovery.state;
-  const agent: CEOStaffingAgent =
-    options.agent ??
-    ((context) => runCodexCEO(context, { timeoutMs: limits.data.timeoutMs }));
-
-  while (rounds < limits.data.maxRounds) {
+  try {
+    const draft = staffingDraftSchema.parse(result.draft);
+    const unverifiedHumanConstraints = validateProposal(
+      draft,
+      state,
+      runOptions.availableSpecialists,
+      policy
+    );
+    assertRepositoryMatchesSnapshot(state.snapshot);
+    const proposal = buildStaffingProposal(draft, state);
+    assertRepositoryMatchesSnapshot(state.snapshot);
+    return {
+      status: "proposed",
+      proposal,
+      rounds,
+      unverifiedHumanConstraints,
+    };
+  } catch (error) {
     try {
       assertRepositoryMatchesSnapshot(state.snapshot);
     } catch {
-      return fail(
-        "snapshot-drift",
-        "Repository no longer matches the captured staffing Snapshot."
-      );
+      return drift();
     }
-
-    let context;
-    try {
-      context = createStaffingContext(state);
-    } catch {
-      return fail(
-        "discovery",
-        "Unable to project StaffingContext from Harness state."
-      );
-    }
-
-    let output: unknown;
-    rounds += 1;
-    try {
-      output = await agent(context);
-    } catch (error) {
-      if (error instanceof CodexCEOError)
-        return fail(error.failure, error.message);
-      if (error instanceof ZodError)
-        return fail(
-          "schema-validation",
-          "CEO response failed the staffing decision schema."
-        );
-      return fail("agent-process", "CEO staffing agent failed.");
-    }
-
-    // Required even for the final propose/escalate response. Also checked before
-    // inspecting or calling the CEO again; no returned decision grants authority.
-    try {
-      assertRepositoryMatchesSnapshot(state.snapshot);
-    } catch {
-      return fail(
-        "snapshot-drift",
-        "Repository changed during the CEO staffing call."
-      );
-    }
-    const parsed = ceoStaffingDecisionSchema.safeParse(output);
-    if (!parsed.success)
-      return fail(
-        "schema-validation",
-        "CEO response failed the staffing decision schema."
-      );
-    const decision = parsed.data;
-    if (decision.type === "propose")
-      return { status: "proposed", draft: decision.draft, rounds };
-    if (decision.type === "escalate")
-      return {
-        status: "escalated",
-        reason: decision.reason,
-        questions: decision.questions,
-        rounds,
-      };
-    if (rounds === limits.data.maxRounds)
-      return fail(
-        "round-limit",
-        "CEO staffing round limit reached before further inspection."
-      );
-
-    const inspection = inspectStaffingContext(state, decision);
-    if (inspection.status === "failed") {
-      try {
-        assertRepositoryMatchesSnapshot(state.snapshot);
-      } catch {
-        return fail(
-          "snapshot-drift",
-          "Repository changed during staffing inspection."
-        );
-      }
-      return fail(
-        "inspection",
-        "Staffing inspection failed; request did not satisfy file access or inspection budget checks."
-      );
-    }
-    state = inspection.state;
+    // Policy diagnostics below contain no supplied paths, content or root.
+    return {
+      status: "failed",
+      failure: "policy-validation",
+      reason:
+        error instanceof ProposalPolicyError
+          ? error.message
+          : "Staffing proposal validation failed.",
+      rounds,
+    };
   }
-  return fail("round-limit", "CEO staffing round limit reached.");
 }

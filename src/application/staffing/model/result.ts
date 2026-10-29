@@ -1,14 +1,17 @@
 import { z } from "zod";
 
-import { staffingDraftSchema } from "../protocol/ceo.js";
+import { staffingProposalSchema } from "./staffing.js";
 
-// A use-case outcome, never an approved StaffingProposal or execution authority.
+// A validated proposal is not Human approval or execution authority.
 export const staffingRunResultSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("proposed"),
-      draft: staffingDraftSchema,
-      rounds: z.number().int().nonnegative(),
+      proposal: staffingProposalSchema,
+      rounds: z.number().int().positive(),
+      // No executable rule was supplied for these preserved Human constraints.
+      // An empty list still does not prove semantic compliance.
+      unverifiedHumanConstraints: z.array(z.string().min(1)),
     })
     .strict(),
   z
@@ -32,6 +35,7 @@ export const staffingRunResultSchema = z.discriminatedUnion("status", [
         "schema-validation",
         "snapshot-drift",
         "round-limit",
+        "policy-validation",
       ]),
       reason: z.string().min(1),
       rounds: z.number().int().nonnegative(),

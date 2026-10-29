@@ -46,7 +46,7 @@ Decision과 Comparison은 독립 application capability이고 두 use-case의 �
 v4 기반으로 Governance의 Authority schema / 순수 Invocation Eligibility Evaluation과 Staffing의
 Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Snapshot 기반 Context Discovery /
 추가 Inspection이 구현되어 있다. Step 2.3의 Codex CEO Adapter와 runStaffing()이 이 API들을 연결해
-Draft / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
+R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
 실행에는 아직 연결하지 않는다.
 Scope issuance / Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement도 미구현이다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
@@ -383,7 +383,7 @@ Implementation Assignment를 받지 않는다. 현재 v1은 Working Tree 기반 
 Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증은 **향후 통합 요구사항**이다. 기존 Planner를
 폐기하거나 대체 Planner를 새로 만드는 방향이 아니다.
 
-현재 runStaffing()은 CEOStaffingDecision을 검증해 StaffingDraft / Escalation / Failure를 반환할 뿐
+현재 runStaffing()은 CEO의 Draft를 검증·최종화해 StaffingProposal / Escalation / Failure를 반환할 뿐
 planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
 이 use-case들의 실행 연결과 다르다. 현재 Decision CLI의 runDecision() → compareDecisions() 조합도
 CEO Staffing이나 Planning handoff와 독립적이다.
@@ -501,14 +501,14 @@ Human GoalSpec + RepositorySnapshot + Available Specialists + Repository Context
    ├─ propose → StaffingDraft
    ├─ inspect → Inspection Request
    └─ escalate → Human Clarification
-→ Harness Finalization / Validation (Planned) → StaffingProposal
+→ Harness Finalization / Validation (R2 implemented) → StaffingProposal
 → Human Staffing Approval (Planned) → ApprovedOperatingScope issuance (Planned)
 ```
 
 `application/staffing/model/staffing.ts`는 CEO의 해석인 IntentAnalysis와 공식 제안인
 StaffingProposal / StaffingAssignment를 정의한다. Proposal은 원본 Human GoalSpec과 Constraints,
 Harness가 확보한 RepositorySnapshot, Harness 소유 Proposal / Assignment ID를 보존할 구조다.
-IntentAnalysis는 원본 Goal을 대체하지 않는다. 실제 원본 보존·ID 발급은 후속 Finalization 책임이며
+IntentAnalysis는 원본 Goal을 대체하지 않는다. 원본 보존·ID 발급은 아래 R2의 Finalization 책임이며
 schema parsing이 출처·발급·Constraints 준수를 증명하지는 않는다.
 
 `protocol/ceo.ts`는 model schema에서 Harness 소유 필드를 제외하여 StaffingAssignmentDraft /
@@ -525,8 +525,8 @@ Budget 정책 상한, 실제 Snapshot 상태, Human Approval은 검증하지 않
 ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 접근 권한을 만들지 않는다.
 
 Step 2.1은 schema / inferred type / unit test / public API를 구현했다. Repository Context Discovery는
-아래 Step 2.2에서 구현했고 CEO Staffing 호출·Loop는 Step 2.3에서 연결했다. Finalization / Policy
-Validation / Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
+아래 Step 2.2에서 구현했고 CEO Staffing 호출·Loop는 Step 2.3에서 연결했다. Finalization / 제한된 Policy
+Validation은 R2에서 구현했다. Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
 
 ### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
 
@@ -545,11 +545,11 @@ Harness: Original Goal + Registered Specialists + exact file allowlist + Inspect
   → ready(new state) | failed(reason), input state unchanged
 ```
 
-Staffing의 `flow/discover-context.ts`는 입력 검증·Snapshot capture/assert·초기 Context 구성과 결과 반환을
+Staffing의 `flow/inspection/discover-context.ts`는 입력 검증·Snapshot capture/assert·초기 Context 구성과 결과 반환을
 조율한다. `flow/inspection/policy.ts`는 파일 접근·mode·count·byte 예산의 순수 검사,
 `inspect-files.ts`는 검증 완료 후 Metadata / Git blob 로딩·직렬화 크기 재검사·새 State 구성,
 `initial-seeding.ts`는 기존 Goal mention 기반 optional seeding을 담당한다. State 타입은
-`model/context-state.ts`에 두며 기존 Staffing public API와 flow의 타입 export 경로는 유지한다.
+`model/state.ts`에 두며 기존 Staffing public API와 flow의 타입 export 경로는 유지한다.
 Snapshot 검증 시점과 외부 동작·실패 의미는 이 책임 분리로 변경하지 않는다.
 
 `services/repository-inspection`은 v1의 exact path / unique basename / README mention 선택,
@@ -590,22 +590,23 @@ projection에서 제외한다. 원본 GoalSpec.targetRepository 자체의 값은
 자동으로 재작성하지는 않는다. 상태는 Harness 소유의 메모리 데이터이며 CEO 입력으로 받아서는 안 된다.
 Budget은 Context 파일 수에 관한 값이며 Agent invocation Budget Reservation이나 운영 권한이 아니다.
 
-Step 2.3은 이 public API를 아래 Staffing Loop와 연결한다. Finalization, Human Approval, Scope 발급,
-Specialist 실행과 LangGraph 연결은 아직 없다.
+Step 2.3은 이 public API를 아래 Staffing Loop와 연결하고 R2는 같은 Run의 Proposal을 최종화한다.
+Human Approval, Scope 발급, Specialist 실행과 LangGraph 연결은 아직 없다.
 
 ### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
 
 ```text
-runStaffing({ goal, repositoryPath, availableSpecialists, allowedContextPaths,
+runStaffing({ goal, repositoryPath, availableSpecialists, allowedContextPaths, policy,
               limits: StaffingInspectionLimits, maxRounds, timeoutMs?, agent? })
 → validate CEO call limits → discoverStaffingContext() → Harness-owned state
 → Snapshot assert → createStaffingContext() (cloned projection) → CEO call
 → Snapshot assert → ceoStaffingDecisionSchema validation (injected Agent도 검증)
    ├─ inspect → 마지막 Round면 즉시 failed(round-limit), 파일 로딩 없음
    │          → inspectStaffingContext() → 새 state → 다음 CEO call
-   ├─ propose → proposed { draft, rounds }
+   ├─ propose → 내부 Draft + state → R2 Policy Validation / Finalization
+   │          → proposed { proposal, rounds, unverifiedHumanConstraints }
    └─ escalate → escalated { reason, questions, rounds }
-실패 → failed { failure, reason, rounds } (유효한 Draft나 partial state 없음)
+실패 → failed { failure, reason, rounds } (Draft / Proposal / partial state 없음)
 ```
 
 `protocol/ceo.ts`의 CEOStaffingAgent는 StaffingContext만 받고 CEOStaffingDecision을 반환한다.
@@ -632,10 +633,10 @@ Repository로 성공하지 않는다. State·Goal은 모델 출력으로 교체�
 
 `model/result.ts`의 strict StaffingRunResult는 proposed / escalated / failed와 rounds를 구분한다.
 실패 code는 invalid-input / discovery / inspection / agent-process / timeout / malformed-json /
-schema-validation / snapshot-drift / round-limit이다. Context 오류나 임의 Agent 예외·raw stderr를 그대로
+schema-validation / snapshot-drift / round-limit / policy-validation이다. Context 오류나 임의 Agent 예외·raw stderr를 그대로
 반환하지 않고 단계별 안전한 reason으로 제한한다. 기본 Adapter의 process 진단은 trusted caller가
 예외 cause로 확인할 수 있으며 use-case 실패 결과에는 포함하지 않는다. Escalation의 reason / questions는
-CEO 판단 데이터로 그대로 보존한다. 결과에 공식 Proposal ID·Assignment ID·승인·Invocation은 없다.
+CEO 판단 데이터로 그대로 보존한다. 공식 Proposal / Assignment ID는 R2 최종화 성공 시에만 반환하며 승인·Invocation은 없다.
 
 Inspection Budget(파일 수·Context 크기), Staffing Round Limit(CEO 호출 수), Draft의
 maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향후 운영 권한)은 각각 독립적이다.
@@ -644,9 +645,63 @@ maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향�
 검증은 Fake CEO와 mock Process로 분기·최종 Snapshot drift·실패·격리 설정·cleanup을 확인한다.
 별도로 Codex CLI 0.163.0 실제 단일 smoke run에서 작은 임시 Git Repository, 등록 frontend 후보와 exact
 allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
-반복 품질이나 성공률 검증을 했다는 의미는 아니다. 다음 단계는 원본 Goal / Snapshot과 Draft의 연결을
-보존하는 Proposal Finalization / Policy Validation이며, Human Approval / Scope issuance / Authorization /
+반복 품질이나 성공률 검증을 했다는 의미는 아니다. 원본 Goal / Snapshot과 Draft의 연결을 보존하는
+Proposal Finalization / 제한된 Policy Validation은 아래 R2에서 구현했다. Human Approval / Scope issuance / Authorization /
 Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
+
+### R2 — Staffing Proposal Finalization & Policy Validation — 구현
+
+`runStaffing({ ...discoveryOptions, maxRounds, policy, timeoutMs?, agent? })`가 단일 Staffing Application
+진입점이다. private `flow/orchestration/run-staffing-loop.ts`에서 한 번의 CEO Loop를 실행하고 Draft를
+검증·최종화한 뒤 proposed(StaffingProposal) / escalated / failed를 반환한다. 이전의 Draft 전용 공개 API와
+runStaffingProposal은 통합·제거했다. StaffingDraft는 CEO의 중간 산출물이며 StaffingProposal과 별개다.
+flow 루트에는 run-staffing 진입점과 테스트를 두며 Context 조사는 inspection, 입력·Proposal 검사는
+validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-staffing-proposal에 둔다.
+`model/policy.ts`는 Proposal 정책 데이터 Schema이며 `flow/inspection/policy.ts`의 파일 접근·조사 예산 검사와 구분한다.
+
+```text
+Harness Goal / registration / exact allowlist / inspection limits / proposal policy
+→ 실행 전 입력 복제·정책 구조 검증
+→ discovery에서 Snapshot capture (1회) → CEO Loop
+→ 내부 proposed { draft, rounds, state } (public API에는 state 미노출)
+→ 같은 state의 Goal / Snapshot / 파일 목록으로 Finalization
+→ 등록·중복 배치·Context·예산·구조화 Constraint 검사 → Snapshot assert
+→ Harness Proposal / Assignment UUID 발급 → staffingProposalSchema → Snapshot assert
+→ proposed { proposal, rounds, unverifiedHumanConstraints }
+```
+
+공개 API는 외부 Draft나 ContextState를 최종화 입력으로 받지 않는다. 임의로 추가된 draft / state가 있어도
+그 값은 사용하지 않는다. 원본 Goal과 Snapshot은 CEO 응답으로 교체하지 않고 같은 Run의 private state에서
+가져온다. 등록 정보와 정책도 첫 await 전에 복제하여 호출 중 caller / Agent의 입력 변경과 분리한다.
+이는 in-process 출처 연결이며 저장소 기반 등록·정책의 진위, durable provenance 또는 암호학적 증명이 아니다.
+등록 목록·allowlist·policy는 신뢰 경계 안의 Harness caller가 공급해야 한다.
+
+검증 범위:
+
+- 등록된 Specialist ID만 허용한다. Phase A는 Specialist당 하나의 분석 Assignment만 허용하고 중복 배치를
+  거부한다. 선택된 등록 authority는 read-only / shellExecution false여야 한다. 역할·objective의 의미적 적합성은 증명하지 않는다.
+- Assignment 내부 중복 contextPaths는 거부한다. 서로 다른 Assignment가 같은 파일을 참조하는 것은 허용한다.
+  exact allowlist와 같은 Snapshot의 filtered fileTree, 경로·secret-like 정책, regular mode(100644/100755),
+  파일 크기를 모두 확인한다. Symlink / Gitlink / Directory / 존재하지 않는 파일은 허용하지 않는다.
+- 기존 inspection policy의 isInspectablePath / requireFile / Context byte 검사를 재사용한다. 전체 배치를
+  preflight한 뒤 같은 commit의 Git blob을 읽고 UTF-8 / binary와 실제 JSON 직렬화 Context 크기를 검사한다.
+  Assignment당 maxFilesPerRequest, Proposal의 unique 파일 합계 maxTotalFiles, maxFileBytes / maxContextBytes를
+  적용한다. Finalization 파일 검사는 CEO의 남은 Inspection Budget이나 Round를 소비·변경하지 않는다.
+- Draft의 maxAgentInvocations는 Harness policy.maxAgentInvocations 이하여야 한다. 운영 예산 예약은 아니다.
+- GoalSpec.constraints는 자유 문자열이다. Harness가 constraintRules에 원문을 정확히 연결한 context-paths
+  (exact 허용 경로), specialists(허용 ID), invocation-budget(상한) 규칙만 구조적으로 검사한다. 원문에 없는
+  Constraint의 규칙은 입력 오류다. 연결된 모든 규칙은 함께 만족해야 하며 자연어를 임의로 해석하지 않는다.
+  규칙이 없는 원문은 unverifiedHumanConstraints로 명시하고 proposal.goal에도 그대로 보존한다. 빈 미검증
+  목록도 의미적 충족의 증명이 아니며 Human 검토를 대체하지 않는다.
+
+모든 정책·파일 검사 후 UUID로 Proposal / Assignment ID를 생성하고 Assignment ID 중복도 확인한다.
+전역 ID 유일성 저장소·Proposal persistence는 없다. 실패 시 Proposal이나 partial state는 반환하지 않으며
+기존 Loop failure / Escalation을 보존한다. 정책 실패는 failed(policy-validation), Finalization 중 Repository
+변경은 failed(snapshot-drift)다. 파일·Git 오류의 raw 진단은 결과에 직접 노출하지 않는다.
+
+**proposed는 검증 범위를 통과한 제안이지 승인·실행 권한이 아니다.** Human Staffing Approval,
+ApprovedOperatingScope issuance, Budget Reservation, AuthorizedSpecialistInvocation 발급·실행은 수행하지 않는다.
+Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 연결하지 않는다.
 
 ## 6. Current and Conditional Domain Models
 
@@ -663,9 +718,9 @@ Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 | ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema implemented, enforcement Planned | application/governance의 strict 구조 계약. 승인·권한 검증이나 실행 허용을 제공하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema 및 Draft 생성 Loop implemented; Proposal Finalization Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Approval Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
-| CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | Step 2.3의 제한된 CEO Staffing 호출·Inspection Loop. Draft / Escalation / Failure 반환; 공식 Proposal / 승인 / 실행 권한 없음 |
+| CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
 | CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 호출·Loop는 구현; Specialist 실행·종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
 | Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |

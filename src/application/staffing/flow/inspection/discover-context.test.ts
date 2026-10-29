@@ -21,7 +21,7 @@ import {
   type DiscoverStaffingContextOptions,
   type StaffingContextResult,
   type StaffingContextState,
-} from "../index.js";
+} from "../../index.js";
 
 vi.mock("@/infrastructure/git/index.js", async (importOriginal) => {
   const actual =

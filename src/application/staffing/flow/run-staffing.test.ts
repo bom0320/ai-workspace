@@ -1,98 +1,123 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import * as crypto from "node:crypto";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { runCommand } from "@/infrastructure/process/index.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";
+import * as snapshotService from "@/services/repository-snapshot/index.js";
 
 import {
   runStaffing,
   staffingRunResultSchema,
+  staffingProposalSchema,
   type CEOStaffingAgent,
-  type CEOStaffingDecision,
   type RunStaffingOptions,
-  type StaffingContext,
   type StaffingDraft,
 } from "../index.js";
 
-vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
-vi.mock("@/infrastructure/git/index.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/infrastructure/git/index.js")>()),
+vi.mock("@/infrastructure/git/index.js", async (original) => ({
+  ...(await original<typeof import("@/infrastructure/git/index.js")>()),
+}));
+vi.mock("@/services/repository-snapshot/index.js", async (original) => ({
+  ...(await original<
+    typeof import("@/services/repository-snapshot/index.js")
+  >()),
+}));
+vi.mock("node:crypto", async (original) => ({
+  ...(await original<typeof import("node:crypto")>()),
 }));
 
 let root: string;
 let options: RunStaffingOptions;
+let draft: StaffingDraft;
 const git = (...args: string[]) =>
-  execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" });
-const draft: StaffingDraft = {
-  intent: {
-    problem: "Login feedback",
-    desiredOutcome: "Review feedback",
-    considerations: [],
-    uncertainties: [],
-  },
-  assignments: [
-    {
-      specialistId: "frontend",
-      objective: "Review login",
-      contextPaths: ["src/login.ts"],
-      rationale: "Frontend expertise",
-    },
-  ],
-  budget: { maxAgentInvocations: 2 },
-  rationale: "One analysis Specialist",
-};
-const propose: CEOStaffingDecision = { type: "propose", draft };
-const escalate: CEOStaffingDecision = {
-  type: "escalate",
-  reason: "Need Human choice",
-  questions: ["Which login flow?"],
-};
-const inspect = (path: string): CEOStaffingDecision => ({
-  type: "inspect",
-  paths: [path],
-  reason: "Need evidence",
-});
-
+  execFileSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+  }).trim();
 beforeEach(() => {
-  vi.mocked(runCommand).mockReset();
-  root = mkdtempSync(join(tmpdir(), "ai-workspace-staffing-run-"));
+  root = mkdtempSync(join(tmpdir(), "ai-workspace-proposal-"));
   git("init", "--quiet");
   git("config", "user.name", "Test");
   git("config", "user.email", "test@example.com");
   mkdirSync(join(root, "src"));
-  writeFileSync(join(root, "src/login.ts"), "export const login = true;\n");
-  writeFileSync(join(root, "src/other.ts"), "export const other = true;\n");
-  writeFileSync(join(root, "private.txt"), "private data");
+  writeFileSync(join(root, "src/a.ts"), "export const a = 1;\n");
+  writeFileSync(join(root, "src/b.ts"), "export const b = 2;\n");
+  writeFileSync(join(root, "private.txt"), "private\n");
+  writeFileSync(join(root, ".env"), "TOKEN=private\n");
+  writeFileSync(join(root, "binary.bin"), Buffer.from([0, 1, 2]));
+  writeFileSync(join(root, "invalid.txt"), Buffer.from([0xff]));
+  symlinkSync("src/a.ts", join(root, "link"));
   git("add", ".");
-  git("commit", "--quiet", "-m", "fixture");
+  git("commit", "--quiet", "-m", "initial");
+  git(
+    "update-index",
+    "--add",
+    "--cacheinfo",
+    `160000,${git("rev-parse", "HEAD")},module`
+  );
+  git("commit", "--quiet", "-m", "gitlink");
+  mkdirSync(join(root, "module"));
+  draft = {
+    intent: {
+      problem: "Feedback",
+      desiredOutcome: "Analysis",
+      considerations: [],
+      uncertainties: [],
+    },
+    assignments: [
+      {
+        specialistId: "frontend",
+        objective: "Analyze",
+        contextPaths: ["src/a.ts"],
+        rationale: "Frontend experience",
+      },
+    ],
+    budget: { maxAgentInvocations: 2 },
+    rationale: "Focused analysis",
+  };
   options = {
+    repositoryPath: root,
     goal: {
-      objective: "Analyze login feedback",
+      objective: "Analyze feedback",
       targetRepository: "example",
       constraints: ["No edits"],
     },
-    repositoryPath: root,
     availableSpecialists: [
       {
         id: "frontend",
         role: "Frontend",
-        objective: "Review frontend",
+        objective: "Frontend analysis",
+        authority: { repositoryAccess: "read", shellExecution: false },
+      },
+      {
+        id: "ux",
+        role: "UX",
+        objective: "UX analysis",
         authority: { repositoryAccess: "read", shellExecution: false },
       },
     ],
-    allowedContextPaths: ["src/login.ts", "src/other.ts"],
+    allowedContextPaths: ["src/a.ts", "src/b.ts"],
     limits: {
       maxFilesPerRequest: 2,
-      maxTotalFiles: 2,
+      maxTotalFiles: 3,
       maxFileBytes: 65536,
       maxContextBytes: 131072,
-      maxFileTreeEntries: 10,
+      maxFileTreeEntries: 20,
     },
+    policy: { maxAgentInvocations: 4, constraintRules: [] },
     maxRounds: 3,
+    agent: vi.fn<CEOStaffingAgent>(async () => ({ type: "propose", draft })),
   };
 });
 afterEach(() => {
@@ -100,331 +125,400 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-function agentSequence(...decisions: CEOStaffingDecision[]) {
-  let index = 0;
-  return vi.fn<CEOStaffingAgent>(async () => decisions[index++]);
+function addUX() {
+  draft.assignments.push({
+    ...draft.assignments[0],
+    specialistId: "ux",
+    objective: "Review usability",
+  });
 }
 
-describe("runStaffing — draft / escalation only", () => {
-  it("calls the CEO with only a cloned projection and proposes immediately in one round", async () => {
-    const before = structuredClone(options);
-    const agent = agentSequence(propose);
-    const result = await runStaffing({ ...options, agent });
-    expect(result).toEqual({ status: "proposed", draft, rounds: 1 });
+describe("runStaffing — same-run finalization, not authorization", () => {
+  it("preserves the original Goal/Snapshot and Draft, issues unique IDs only after validation, without rerunning the CEO", async () => {
+    addUX();
+    const capture = vi.spyOn(snapshotService, "captureRepositorySnapshot");
+    const ids = vi.spyOn(crypto, "randomUUID");
+    const goal = structuredClone(options.goal);
+    const before = structuredClone(draft);
+    const sha = git("rev-parse", "HEAD");
+    const result = await runStaffing(options);
+    expect(result.status).toBe("proposed");
+    if (result.status !== "proposed") throw new Error("Expected finalization");
     expect(staffingRunResultSchema.parse(result)).toEqual(result);
-    const context = agent.mock.calls[0][0];
-    expect(context.goal).toEqual(options.goal);
-    expect(context.repository.commitSha).toBe(git("rev-parse", "HEAD").trim());
-    expect(context.inspectedFiles).toEqual([]);
-    expect(context.availableSpecialists).toEqual([
-      { id: "frontend", role: "Frontend", objective: "Review frontend" },
-    ]);
-    expect(context).not.toHaveProperty("snapshot");
-    expect(context).not.toHaveProperty("allowedContextPaths");
-    expect(context).not.toHaveProperty("files");
-    expect(JSON.stringify(context)).not.toContain(root);
-    expect(result).not.toHaveProperty("invocation");
-    expect(result).not.toHaveProperty("id");
-    expect(options).toEqual(before);
-  });
-
-  it("updates Context through multiple inspections before proposing", async () => {
-    const agent = agentSequence(
-      inspect("src/login.ts"),
-      inspect("src/other.ts"),
-      propose
+    expect(staffingProposalSchema.parse(result.proposal)).toEqual(
+      result.proposal
     );
-    const result = await runStaffing({ ...options, agent });
-    expect(result).toEqual({ status: "proposed", draft, rounds: 3 });
+    expect(result.rounds).toBe(1);
+    expect(result).not.toHaveProperty("draft");
+    expect(result).not.toHaveProperty("state");
     expect(
-      agent.mock.calls.map(([context]) => context.inspectedFiles.length)
-    ).toEqual([0, 1, 2]);
+      staffingRunResultSchema.safeParse({
+        status: "proposed",
+        draft,
+        rounds: 1,
+      }).success
+    ).toBe(false);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(result.proposal.snapshot).toEqual(capture.mock.results[0].value);
+    expect(result.proposal.snapshot).toEqual({
+      repositoryRoot: root,
+      commitSha: sha,
+    });
+    expect(result.proposal.goal).toEqual(goal);
+    expect(result.proposal.id).toMatch(/^proposal-/);
     expect(
-      agent.mock.calls.map(([context]) => context.remainingInspectionBudget)
-    ).toEqual([2, 1, 0]);
-    expect(agent.mock.calls[1][0].inspectedFiles).toEqual([
-      { path: "src/login.ts", content: "export const login = true;\n" },
-    ]);
+      new Set(
+        result.proposal.assignments.map(({ assignmentId }) => assignmentId)
+      ).size
+    ).toBe(2);
+    expect(ids).toHaveBeenCalledTimes(3);
+    expect(
+      result.proposal.assignments.map(
+        ({ assignmentId: _id, ...assignment }) => assignment
+      )
+    ).toEqual(before.assignments);
+    expect(result.proposal.intent).toEqual(before.intent);
+    expect(result.proposal.budget).toEqual(before.budget);
+    expect(draft).toEqual(before);
+    expect(result.unverifiedHumanConstraints).toEqual(["No edits"]);
+    expect(result.proposal).not.toHaveProperty("approvalRecordId");
+    expect(result.proposal).not.toHaveProperty("scope");
+    expect(result.proposal).not.toHaveProperty("invocation");
     expect(git("status", "--porcelain")).toBe("");
+    expect(git("rev-parse", "HEAD")).toBe(sha);
   });
 
-  it("uses Step 2.2 initial seeding and does not expose mutation of earlier Context to later calls", async () => {
-    const contexts: StaffingContext[] = [];
-    const goal = { ...options.goal, objective: "Review src/login.ts" };
-    const agent: CEOStaffingAgent = async (context) => {
-      contexts.push(context);
-      if (contexts.length === 1) {
-        expect(context.inspectedFiles).toHaveLength(1);
-        context.goal.constraints!.push("Forged constraint");
-        context.repository.fileTree.length = 0;
-        return inspect("src/other.ts");
-      }
-      expect(context.goal).toEqual(goal);
-      expect(context.repository.fileTree).toHaveLength(2);
-      return propose;
+  it("carries updated private state through inspect → propose with one capture", async () => {
+    const capture = vi.spyOn(snapshotService, "captureRepositorySnapshot");
+    options.agent = vi
+      .fn<CEOStaffingAgent>()
+      .mockResolvedValueOnce({
+        type: "inspect",
+        paths: ["src/a.ts"],
+        reason: "Evidence",
+      })
+      .mockImplementationOnce(async (context) => {
+        expect(context.inspectedFiles.map(({ path }) => path)).toEqual([
+          "src/a.ts",
+        ]);
+        return { type: "propose", draft };
+      });
+    expect(await runStaffing(options)).toMatchObject({
+      status: "proposed",
+      rounds: 2,
+    });
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(options.agent).toHaveBeenCalledTimes(2);
+  });
+
+  it("isolates original inputs/registration/policy from caller and Agent mutations during an await", async () => {
+    const originalGoal = structuredClone(options.goal);
+    options.agent = async (context) => {
+      context.goal.objective = "CEO overwrite";
+      options.goal.objective = "Caller overwrite";
+      options.goal.constraints = [];
+      options.policy.maxAgentInvocations = 0;
+      options.availableSpecialists = [];
+      options.allowedContextPaths = [];
+      return { type: "propose", draft };
     };
-    expect((await runStaffing({ ...options, goal, agent })).status).toBe(
-      "proposed"
-    );
-    expect(goal.constraints).toEqual(["No edits"]);
+    const result = await runStaffing(options);
+    expect(result.status).toBe("proposed");
+    if (result.status === "proposed")
+      expect(result.proposal.goal).toEqual(originalGoal);
   });
 
-  it("preserves escalation questions and reason as a normal decision", async () => {
-    expect(
-      await runStaffing({ ...options, agent: agentSequence(escalate) })
-    ).toEqual({
-      status: "escalated",
-      reason: escalate.reason,
-      questions: escalate.questions,
+  it.each([
+    "unknown",
+    "duplicate",
+    "write-authority",
+    "shell-authority",
+    "budget",
+    "duplicate-path",
+  ])("rejects %s before reading blobs or issuing IDs", async (kind) => {
+    if (kind === "unknown") draft.assignments[0].specialistId = "invented";
+    if (kind === "duplicate")
+      draft.assignments.push(structuredClone(draft.assignments[0]));
+    if (kind === "write-authority")
+      options.availableSpecialists[0].authority.repositoryAccess = "write";
+    if (kind === "shell-authority")
+      options.availableSpecialists[0].authority.shellExecution = true;
+    if (kind === "budget") draft.budget.maxAgentInvocations = 5;
+    if (kind === "duplicate-path")
+      draft.assignments[0].contextPaths.push("src/a.ts");
+    const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
+    const ids = vi.spyOn(crypto, "randomUUID");
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
       rounds: 1,
     });
+    expect(read).not.toHaveBeenCalled();
+    expect(ids).not.toHaveBeenCalled();
   });
 
-  it("does not call the CEO if discovery fails and does not expose raw paths", async () => {
-    const agent = agentSequence(propose);
-    const result = await runStaffing({
-      ...options,
-      repositoryPath: join(root, "missing"),
-      agent,
+  it.each([
+    "private.txt",
+    "missing.ts",
+    "/absolute",
+    "../outside",
+    "src/./a.ts",
+    ".env",
+    "link",
+    "module",
+    "src",
+  ])(
+    "rejects forbidden, unsafe, missing or non-regular Context %s",
+    async (path) => {
+      if (["missing.ts", ".env", "link", "module", "src"].includes(path))
+        options.allowedContextPaths.push(path);
+      draft.assignments[0].contextPaths = ["src/a.ts", path];
+      const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
+      expect(await runStaffing(options)).toMatchObject({
+        status: "failed",
+        failure: "policy-validation",
+      });
+      expect(read).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["binary.bin", "invalid.txt"])(
+    "rejects non-text Snapshot content %s",
+    async (path) => {
+      options.allowedContextPaths.push(path);
+      draft.assignments[0].contextPaths = [path];
+      const result = await runStaffing(options);
+      expect(result).toMatchObject({
+        status: "failed",
+        failure: "policy-validation",
+      });
+      expect(result).not.toHaveProperty("proposal");
+    }
+  );
+
+  it.each([
+    "maxFileBytes",
+    "maxFilesPerRequest",
+    "maxTotalFiles",
+    "maxContextBytes",
+  ] as const)("enforces %s for proposal Context", async (limit) => {
+    if (limit === "maxContextBytes") {
+      // Discovery fits; finalization's complete file contents do not.
+      writeFileSync(join(root, "src/a.ts"), "x".repeat(5000));
+      git("add", ".");
+      git("commit", "--quiet", "-m", "larger");
+      options.limits.maxContextBytes = 2000;
+    } else if (limit === "maxFileBytes") options.limits.maxFileBytes = 1;
+    else options.limits[limit] = 0;
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
     });
-    expect(result).toMatchObject({
+  });
+
+  it("rechecks actual JSON Context bytes after escaping, before issuing IDs", async () => {
+    writeFileSync(join(root, "src/a.ts"), '\"'.repeat(700));
+    git("add", ".");
+    git("commit", "--quiet", "-m", "escaped text");
+    options.limits.maxContextBytes = 2000;
+    const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
+    const ids = vi.spyOn(crypto, "randomUUID");
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(ids).not.toHaveBeenCalled();
+  });
+
+  it.each(["context-paths", "specialists", "invocation-budget"] as const)(
+    "rejects violations of an explicitly bound Human %s rule",
+    async (type) => {
+      options.policy.constraintRules = [
+        type === "context-paths"
+          ? { type, constraint: "No edits", allowedContextPaths: ["src/b.ts"] }
+          : type === "specialists"
+            ? { type, constraint: "No edits", allowedSpecialistIds: ["ux"] }
+            : { type, constraint: "No edits", maxAgentInvocations: 1 },
+      ];
+      expect(await runStaffing(options)).toMatchObject({
+        status: "failed",
+        failure: "policy-validation",
+      });
+    }
+  );
+
+  it("accepts structurally satisfied rules without claiming semantic proof", async () => {
+    options.policy.constraintRules = [
+      {
+        type: "context-paths",
+        constraint: "No edits",
+        allowedContextPaths: ["src/a.ts"],
+      },
+      {
+        type: "specialists",
+        constraint: "No edits",
+        allowedSpecialistIds: ["frontend"],
+      },
+      {
+        type: "invocation-budget",
+        constraint: "No edits",
+        maxAgentInvocations: 2,
+      },
+    ];
+    expect(await runStaffing(options)).toMatchObject({
+      status: "proposed",
+      unverifiedHumanConstraints: [],
+    });
+  });
+
+  it("rejects rules not linked to original constraints and invalid policy before calling the CEO", async () => {
+    options.policy.constraintRules = [
+      {
+        type: "specialists",
+        constraint: "Invented Human constraint",
+        allowedSpecialistIds: [],
+      },
+    ];
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "invalid-input",
+      rounds: 0,
+    });
+    expect(options.agent).not.toHaveBeenCalled();
+    options.policy = { maxAgentInvocations: 0, constraintRules: [] };
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "invalid-input",
+      rounds: 0,
+    });
+  });
+
+  it("rejects duplicate Harness registry IDs before the CEO", async () => {
+    options.availableSpecialists.push(
+      structuredClone(options.availableSpecialists[0])
+    );
+    expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "discovery",
       rounds: 0,
     });
-    expect(JSON.stringify(result)).not.toContain(root);
-    expect(agent).not.toHaveBeenCalled();
+    expect(options.agent).not.toHaveBeenCalled();
   });
 
-  it.each([
-    0,
-    -1,
-    1.5,
-    NaN,
-    Infinity,
-    Number.MAX_SAFE_INTEGER + 1,
-    "3",
-    undefined,
-  ])(
-    "rejects invalid maxRounds %j without discovery or CEO calls",
-    async (maxRounds) => {
-      const agent = agentSequence(propose);
-      const result = await runStaffing({
-        ...options,
-        maxRounds: maxRounds as number,
-        agent,
+  it.each(["goal", "snapshot", "id", "authority", "assignmentId"])(
+    "rejects CEO injection of %s",
+    async (field) => {
+      options.agent = async () => ({
+        type: "propose",
+        draft:
+          field === "assignmentId"
+            ? {
+                ...draft,
+                assignments: [
+                  { ...draft.assignments[0], assignmentId: "CEO-id" },
+                ],
+              }
+            : { ...draft, [field]: "CEO-owned" },
       });
-      expect(result).toMatchObject({
+      expect(await runStaffing(options)).toMatchObject({
         status: "failed",
-        failure: "invalid-input",
-        rounds: 0,
+        failure: "schema-validation",
       });
-      expect(agent).not.toHaveBeenCalled();
     }
   );
 
-  it.each(["private.txt", "../private.txt", "/outside.ts", "src/missing.ts"])(
-    "blocks invalid Inspection %j and stops",
-    async (path) => {
-      const agent = agentSequence(inspect(path), propose);
-      const result = await runStaffing({ ...options, agent });
-      expect(result).toMatchObject({
-        status: "failed",
-        failure: "inspection",
-        rounds: 1,
-      });
-      expect(agent).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  it("rejects an already-inspected-only request", async () => {
-    const agent = agentSequence(
-      inspect("src/login.ts"),
-      inspect("src/login.ts"),
-      propose
-    );
-    expect(await runStaffing({ ...options, agent })).toMatchObject({
-      status: "failed",
-      failure: "inspection",
-      rounds: 2,
+  it("does not treat caller-supplied Draft/ContextState as a trusted Run", async () => {
+    const agent = vi.fn<CEOStaffingAgent>(async () => ({
+      type: "escalate",
+      reason: "Human choice",
+      questions: ["Which direction?"],
+    }));
+    const result = await runStaffing({
+      ...options,
+      agent,
+      draft,
+      state: { snapshot: { repositoryRoot: "/fake", commitSha: "fake" } },
+    } as RunStaffingOptions);
+    expect(result).toEqual({
+      status: "escalated",
+      reason: "Human choice",
+      questions: ["Which direction?"],
+      rounds: 1,
     });
-    expect(agent).toHaveBeenCalledTimes(2);
+    expect(agent).toHaveBeenCalledOnce();
   });
 
-  it("enforces inspection Budget independently of rounds and proposed activity budget", async () => {
-    const agent = agentSequence(
-      inspect("src/login.ts"),
-      inspect("src/other.ts"),
-      propose
-    );
-    expect(
-      await runStaffing({
-        ...options,
-        limits: { ...options.limits, maxTotalFiles: 1 },
-        agent,
-      })
-    ).toMatchObject({ status: "failed", failure: "inspection", rounds: 2 });
-  });
-
-  it("does not load files or call again after inspect at the last round", async () => {
-    const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
-    const agent = agentSequence(inspect("src/login.ts"), propose);
-    expect(
-      await runStaffing({ ...options, maxRounds: 1, agent })
-    ).toMatchObject({ status: "failed", failure: "round-limit", rounds: 1 });
-    expect(read).not.toHaveBeenCalled();
-    expect(agent).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([propose, escalate])(
-    "accepts $type on the last round",
-    async (last) => {
-      const agent = agentSequence(inspect("src/login.ts"), last);
-      const result = await runStaffing({ ...options, maxRounds: 2, agent });
-      expect(result.status).toBe(
-        last.type === "propose" ? "proposed" : "escalated"
-      );
-      expect(result.rounds).toBe(2);
+  it.each(["HEAD", "dirty"])(
+    "fails when %s changes during CEO execution",
+    async (kind) => {
+      options.agent = async () => {
+        if (kind === "HEAD")
+          git("commit", "--quiet", "--allow-empty", "-m", "drift");
+        else writeFileSync(join(root, "private.txt"), "dirty");
+        return { type: "propose", draft };
+      };
+      expect(await runStaffing(options)).toMatchObject({
+        status: "failed",
+        failure: "snapshot-drift",
+      });
     }
   );
 
-  it.each([propose, escalate, inspect("src/login.ts")])(
-    "detects final Snapshot drift after $type",
-    async (decision) => {
-      for (const change of ["dirty", "head"]) {
-        const agent: CEOStaffingAgent = async () => {
-          if (change === "dirty")
-            writeFileSync(join(root, "src/other.ts"), "changed\n");
-          else git("commit", "--quiet", "--allow-empty", "-m", "HEAD changed");
-          return decision;
-        };
-        expect(await runStaffing({ ...options, agent })).toMatchObject({
-          status: "failed",
-          failure: "snapshot-drift",
-          rounds: 1,
-        });
-        if (change === "dirty") git("checkout", "--", "src/other.ts");
-      }
-    }
-  );
-
-  it("detects changes during Inspection before another CEO call", async () => {
-    const read = gitInfrastructure.readRepositoryFileAtCommit;
+  it("checks Snapshot after finalization blob loading and returns no partial Proposal", async () => {
+    const original = gitInfrastructure.readRepositoryFileAtCommit;
     vi.spyOn(
       gitInfrastructure,
       "readRepositoryFileAtCommit"
-    ).mockImplementationOnce((...args) => {
-      const content = read(...args);
-      writeFileSync(join(root, "src/other.ts"), "concurrent change");
-      return content;
+    ).mockImplementation((...args) => {
+      const text = original(...args);
+      git(
+        "commit",
+        "--quiet",
+        "--allow-empty",
+        "-m",
+        "drift during validation"
+      );
+      return text;
     });
-    const agent = agentSequence(inspect("src/login.ts"), propose);
-    expect(await runStaffing({ ...options, agent })).toMatchObject({
-      status: "failed",
-      failure: "snapshot-drift",
-      rounds: 1,
-    });
-    expect(agent).toHaveBeenCalledTimes(1);
-  });
-
-  it("validates even injected Agent output and rejects authority or ID injection", async () => {
-    for (const output of [
-      { ...propose, id: "forged" },
-      { type: "unknown" },
-      { type: "propose", draft: { ...draft, approvalRecordId: "forged" } },
-    ]) {
-      const agent = vi.fn(async () => output) as unknown as CEOStaffingAgent;
-      expect(await runStaffing({ ...options, agent })).toMatchObject({
-        status: "failed",
-        failure: "schema-validation",
-        rounds: 1,
-      });
-    }
-  });
-
-  it("does not claim Proposal policy validation or issue authority for structurally valid drafts", async () => {
-    const unvalidated = {
-      ...draft,
-      assignments: [
-        {
-          ...draft.assignments[0],
-          specialistId: "unregistered",
-          contextPaths: ["not-approved.ts"],
-        },
-      ],
-    };
-    expect(
-      await runStaffing({
-        ...options,
-        agent: agentSequence({ type: "propose", draft: unvalidated }),
-      })
-    ).toEqual({ status: "proposed", draft: unvalidated, rounds: 1 });
-  });
-
-  it("counts a failed invocation and omits sensitive arbitrary Agent errors", async () => {
-    const agent: CEOStaffingAgent = async () => {
-      throw new Error(`secret error at ${root}`);
-    };
-    const result = await runStaffing({ ...options, agent });
+    const ids = vi.spyOn(crypto, "randomUUID");
+    const result = await runStaffing(options);
     expect(result).toMatchObject({
       status: "failed",
-      failure: "agent-process",
-      rounds: 1,
+      failure: "snapshot-drift",
     });
-    expect(JSON.stringify(result)).not.toContain(root);
+    expect(result).not.toHaveProperty("proposal");
+    expect(ids).not.toHaveBeenCalled();
   });
 
-  it.each([
-    {
-      stdout: "not JSON",
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
-      failure: "malformed-json",
-    },
-    {
-      stdout: "{}",
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
-      failure: "schema-validation",
-    },
-    {
-      stdout: JSON.stringify(propose),
-      stderr: "",
-      exitCode: 0,
-      timedOut: true,
-      failure: "timeout",
-    },
-    {
-      stdout: "",
-      stderr: "/private/secret config",
-      exitCode: 1,
-      timedOut: false,
-      failure: "agent-process",
-    },
-  ])(
-    "handles default Codex adapter $failure without leaking raw diagnostics",
-    async ({ failure, ...result }) => {
-      vi.mocked(runCommand).mockResolvedValue(result);
-      const output = await runStaffing(options);
-      expect(output).toMatchObject({ status: "failed", failure, rounds: 1 });
-      expect(JSON.stringify(output)).not.toContain("/private/secret");
-    }
-  );
-
-  it("uses the real default adapter contract with an injected process runner", async () => {
-    vi.mocked(runCommand).mockResolvedValue({
-      stdout: JSON.stringify(propose),
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
+  it("rejects generated Assignment ID collisions", async () => {
+    addUX();
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(
+      "00000000-0000-4000-8000-000000000000"
+    );
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
     });
-    expect(await runStaffing({ ...options, timeoutMs: 1234 })).toEqual({
-      status: "proposed",
-      draft,
+  });
+
+  it("preserves inspection failures and round limits without IDs", async () => {
+    options.agent = async () => ({
+      type: "inspect",
+      paths: ["private.txt"],
+      reason: "Need info",
+    });
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "inspection",
       rounds: 1,
     });
-    expect(vi.mocked(runCommand).mock.calls[0][2].timeoutMs).toBe(1234);
+    options.maxRounds = 1;
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "round-limit",
+      rounds: 1,
+    });
   });
 });

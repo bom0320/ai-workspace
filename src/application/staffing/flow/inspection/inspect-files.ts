@@ -5,7 +5,7 @@ import {
 } from "@/infrastructure/git/index.js";
 import { parsePackageScripts } from "@/services/repository-inspection/index.js";
 
-import type { StaffingContextState } from "../../model/context-state.js";
+import type { StaffingContextState } from "../../model/state.js";
 import type { StaffingContext } from "../../protocol/context.js";
 import {
   assertContextBudget,

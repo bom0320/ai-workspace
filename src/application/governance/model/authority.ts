@@ -1,9 +1,7 @@
 import { z } from "zod";
 
-import {
-  repositorySnapshotSchema,
-  specialistDefinitionSchema,
-} from "@/application/decision/index.js";
+import { repositorySnapshotSchema } from "@/contracts/repository-snapshot.js";
+import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { inspectedFileSchema } from "@/contracts/inspected-file.js";
 

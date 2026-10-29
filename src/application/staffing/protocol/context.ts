@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { specialistDefinitionSchema } from "@/application/decision/index.js";
+import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { inspectedFileSchema } from "@/contracts/inspected-file.js";
 

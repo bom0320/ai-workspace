@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentDecision } from "../protocol/decision.js";
-import { captureRepositorySnapshot } from "./context/repository-snapshot.js";
+import { captureRepositorySnapshot } from "@/services/repository-snapshot/index.js";
 import { loadSnapshotFiles } from "./context/load-snapshot-files.js";
 import { runIndependentDecisions } from "./orchestration/run-independent-decisions.js";
 import { runDecision } from "./run-decision.js";
 
-vi.mock("./context/repository-snapshot.js", () => ({
+vi.mock("@/services/repository-snapshot/index.js", () => ({
   captureRepositorySnapshot: vi.fn(),
 }));
 vi.mock("./context/load-snapshot-files.js", () => ({

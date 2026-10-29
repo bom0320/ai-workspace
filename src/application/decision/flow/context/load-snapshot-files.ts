@@ -2,7 +2,7 @@ import type { InspectedFile } from "@/contracts/inspected-file.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 import { isRepositoryRelativePath } from "@/services/repository-inspection/index.js";
 
-import type { RepositorySnapshot } from "../../model/snapshot.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 
 export function loadSnapshotFiles(
   snapshot: RepositorySnapshot,

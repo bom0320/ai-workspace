@@ -1,9 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import type {
-  RepositorySnapshot,
-  SpecialistDefinition,
-} from "@/application/decision/index.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { SpecialistDefinition } from "@/contracts/specialist.js";
 import { approvedOperatingScopeSchema } from "@/application/governance/index.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 

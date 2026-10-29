@@ -5,9 +5,11 @@ import { z } from "zod";
 import {
   assertRepositoryMatchesSnapshot,
   captureRepositorySnapshot,
+} from "@/services/repository-snapshot/index.js";
+import {
   specialistDefinitionSchema,
   type SpecialistDefinition,
-} from "@/application/decision/index.js";
+} from "@/contracts/specialist.js";
 import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";

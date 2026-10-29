@@ -1,6 +1,6 @@
 import { z, ZodError } from "zod";
 
-import { assertRepositoryMatchesSnapshot } from "@/application/decision/index.js";
+import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
 import {
   CodexCEOError,

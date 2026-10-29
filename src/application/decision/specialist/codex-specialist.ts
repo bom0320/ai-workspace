@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { runCommand } from "@/infrastructure/process/index.js";
 
-import type { SpecialistDefinition } from "../model/specialist.js";
+import type { SpecialistDefinition } from "@/contracts/specialist.js";
 import type { SpecialistContext } from "../protocol/context.js";
 import {
   agentDecisionPayloadSchema,

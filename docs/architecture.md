@@ -115,7 +115,7 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 | Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository, Zod validation | AI가 시스템 ID나 Human 제약을 소유하지 않음 |
 | Execution application / Codex Worker | workspace와 Worker / Scope / Verification / artifacts 연결 / scoped 수정 | 정상 종료 때 workspace를 지우지 않으며 verification command는 Harness가 실행 |
 | Decision entry `runDecision` | 입력 검증, Snapshot / Goal / explicit Context와 두 Specialist 구성 | CLI presentation을 알지 않음 |
-| Decision Context flow | Snapshot capture/assert, commit 기준 파일 loading | working tree에서 Context를 임의로 읽거나 자동 탐색하지 않음 |
+| Decision Context flow | 공통 Snapshot 서비스 호출, commit 기준 파일 loading | working tree에서 Context를 임의로 읽거나 자동 탐색하지 않음 |
 | Decision orchestration / validation | 순차 독립 실행, Snapshot 전후 검사, Evidence exact path / line invariant | Agent끼리 판단 전달·비교·종합하지 않음 |
 | Codex Specialist | 제한된 Context로 판단, strict JSON parsing과 schema, Harness identity 주입 | Context와 Evidence의 일치 검증은 flow가 담당 |
 | CLI Decision command | runDecision → compareDecisions 조합, 동일 Goal / SHA / Decision 배열 전달 | 두 application 내부의 검증을 중복하지 않음; 별도 domain workflow layer가 아님 |
@@ -127,6 +127,11 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 ### Snapshot / Context / Authority
 
 RepositorySnapshot은 `{ repositoryRoot, commitSha }`라는 governed Git state reference다.
+공유 schema / type의 소유권은 `contracts/repository-snapshot.ts`, `contracts/specialist.ts`,
+`contracts/specialist-authority.ts`에 있다. Decision / Staffing / Governance는 이 계약을 직접 참조한다.
+`services/repository-snapshot`은 capture/assert 정책을 소유하고 실제 Git I/O는 infrastructure/git을 사용한다.
+Decision의 기존 public API와 model / flow/context 경로는 동일 schema·함수의 re-export로 호환성을 유지한다.
+이는 소유권 이동이며 Specialist authority, Snapshot 검사 시점·순서·실패 의미는 변경하지 않는다.
 Capture는 clean 상태만 허용하며 현재 HEAD를 기록한다. Assert는 HEAD 일치와 clean 상태를 확인한다.
 Clean은 기존 `git status --porcelain --untracked-files=all` 기준이므로 ignored 파일 전체 검사가 아니다.
 호출 전후 시점 검사이며 Repository lock이나 중간에 바뀌었다 복원된 상태까지 감지하는 기능은 아니다.
@@ -379,7 +384,7 @@ Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증�
 폐기하거나 대체 Planner를 새로 만드는 방향이 아니다.
 
 현재 runStaffing()은 CEOStaffingDecision을 검증해 StaffingDraft / Escalation / Failure를 반환할 뿐
-planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. Decision 소유 Snapshot 모델·검사 기능 재사용은
+planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
 이 use-case들의 실행 연결과 다르다. 현재 Decision CLI의 runDecision() → compareDecisions() 조합도
 CEO Staffing이나 Planning handoff와 독립적이다.
 
@@ -453,8 +458,8 @@ version / maxAgentInvocations는 양의 정수다. Schema는 필드 구조와 �
 실재·유효성, policy 적합성, Specialist 등록, Context 권한, Snapshot 실제 상태, budget 잔여량과 중복
 Invocation을 검증하지 않는다. Invocation ID는 향후 budget reservation / 중복 실행 제어의 연결점이다.
 
-기존 decision model의 Snapshot / Specialist / Authority에 재사용 schema를 추가하고 기존 타입 shape는
-유지했다. GoalSpec / InspectedFile schema를 재사용하며 AgentDecision을 복제하거나 변경하지 않는다.
+Snapshot / Specialist / Authority의 공유 schema는 contracts에 두고 기존 Decision export와 타입 shape를
+유지한다. GoalSpec / InspectedFile schema를 재사용하며 AgentDecision을 복제하거나 변경하지 않는다.
 
 ### v4 Step 1.4 — Authority Evaluation
 
@@ -510,7 +515,7 @@ schema parsing이 출처·발급·Constraints 준수를 증명하지는 않는�
 StaffingDraft를 파생하고 strict discriminated union인 CEOStaffingDecision을 정의한다.
 의존성은 protocol → model 방향이며 순환 import나 중복 schema가 없다. CEO는 업무·Context·Budget과
 선택 이유를 제안하지만 Goal / Snapshot / ID / Approval / Authority를 Draft에 주입할 수 없다.
-Specialist ID는 기존 decision 소유 SpecialistDefinition을 참조하며 해당 모델을 이동하거나 복제하지 않는다.
+Specialist ID는 공통 contracts 소유 SpecialistDefinition을 참조하며 schema를 복제하지 않는다.
 Assignment objective는 이번 Goal의 위임 업무이고 SpecialistDefinition.objective는 기본 역할·책임이다.
 
 모든 외부 object는 strict하며 필수 문자열은 non-empty, Budget은 양의 정수, assignments /
@@ -554,7 +559,7 @@ Planning은 기존 Working Tree 읽기·정규화 허용 범위·Fast Path·Task
 공유되는 것은 조사 선택·metadata parsing·경로 정책이며 PlanningState / PlannerContext / loop는 아니다.
 `createStaffingContext`는 기존 Planner projection과 같은 책임 분리 방식을 따르는 별도 Staffing 계약이다.
 
-기존 Decision public API를 통해 Snapshot capture/assert를 재사용하고 파일 내용은 기존
+공통 services/repository-snapshot에서 Snapshot capture/assert를 재사용하고 파일 내용은 기존
 readRepositoryFileAtCommit으로 읽는다. 새 Git mechanism은 `git ls-tree -r -l -z --full-tree <full SHA>`로
 동일 commit의 파일 목록·mode·크기를 제공한다. Git 출력은 8 MiB로 제한하며 symlink(120000),
 gitlink/submodule(160000), directory를 Context 대상에서 제외한다. Working Tree 파일로 대체하거나
@@ -647,8 +652,8 @@ Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
 | --- | --- | --- |
-| RepositorySnapshot | Current | model/snapshot.ts의 repositoryRoot / commitSha. Decision의 Repository provenance |
-| SpecialistDefinition / SpecialistAuthority | Current | model/specialist.ts / authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
+| RepositorySnapshot | Current | contracts/repository-snapshot.ts의 repositoryRoot / commitSha. Application 간 Repository provenance |
+| SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist.ts / specialist-authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
 | StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO Loop에서 재사용; 승인 / 실행 권한 없음 |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
@@ -771,7 +776,7 @@ flow/
 단순히 별도 책임이라는 이유로 `planning/inspection`, `planning/transformation`처럼
 use-case root로 올리지 않는다. 분류 축을 일관되게 유지한다.
 
-Decision도 같은 기준으로 `flow/context`에 Snapshot capture/assert와 commit 파일 loading,
+Decision도 같은 기준으로 `flow/context`에 commit 파일 loading과 Snapshot 서비스의 호환 export,
 `flow/orchestration`에 순차 실행·fail-fast, `flow/validation`에 Evidence invariant 검증을 둔다.
 `run-decision.ts`는 입력 검증, Goal 생성, Context loading과 두 Specialist 구성을 조립한다.
 
@@ -779,8 +784,8 @@ Decision도 같은 기준으로 `flow/context`에 Snapshot capture/assert와 com
 
 해당 use-case가 소유하는 상태, 설정, 결과를 둔다.
 Planning의 PlanningState, PlanningLimits, PlanningResult, RepositoryInfo와
-Execution의 ExecutionState, ExecutionResult, Decision의 RepositorySnapshot / SpecialistDefinition /
-SpecialistAuthority가 해당한다. RunDecisionResult는 실제 사용된 GoalSpec도 반환한다. 현재 RunDecisionInput / RunDecisionResult는 작은 use-case entry에
+Execution의 ExecutionState, ExecutionResult가 해당한다. 여러 Application이 공유하는 RepositorySnapshot /
+SpecialistDefinition / SpecialistAuthority는 contracts가 소유한다. RunDecisionResult는 실제 사용된 GoalSpec도 반환한다. 현재 RunDecisionInput / RunDecisionResult는 작은 use-case entry에
 함께 선언되어 있으며 구조적 대칭만을 위해 model 파일로 분리하지 않는다.
 
 > model ≠ 모든 타입을 넣는 곳

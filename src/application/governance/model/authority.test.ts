@@ -2,10 +2,10 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type {
   RepositoryAccess,
-  RepositorySnapshot,
   SpecialistAuthority,
-  SpecialistDefinition,
-} from "@/application/decision/index.js";
+} from "@/contracts/specialist-authority.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { SpecialistDefinition } from "@/contracts/specialist.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { InspectedFile } from "@/contracts/inspected-file.js";
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 
-import type { RepositorySnapshot } from "../../model/snapshot.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 import { loadSnapshotFiles } from "./load-snapshot-files.js";
 
 vi.mock("@/infrastructure/git/index.js", () => ({

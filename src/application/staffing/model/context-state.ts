@@ -1,4 +1,4 @@
-import type { RepositorySnapshot } from "@/application/decision/index.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 
 import type { StaffingContext } from "../protocol/context.js";

@@ -6,7 +6,7 @@ import { ZodError } from "zod";
 
 import { runCommand } from "@/infrastructure/process/index.js";
 
-import type { SpecialistDefinition } from "../model/specialist.js";
+import type { SpecialistDefinition } from "@/contracts/specialist.js";
 import type { SpecialistContext } from "../protocol/context.js";
 import { runCodexSpecialist } from "./codex-specialist.js";
 

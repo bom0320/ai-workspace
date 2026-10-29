@@ -1,7 +1,5 @@
-import type {
-  AgentDecision,
-  RepositorySnapshot,
-} from "@/application/decision/index.js";
+import type { AgentDecision } from "@/application/decision/index.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 
 export function presentDecisions(
   snapshot: RepositorySnapshot,

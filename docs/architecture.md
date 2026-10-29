@@ -546,7 +546,7 @@ Harness: Original Goal + Registered Specialists + exact file allowlist + Inspect
 ```
 
 Staffing의 `flow/inspection/discover-context.ts`는 입력 검증·Snapshot capture/assert·초기 Context 구성과 결과 반환을
-조율한다. `flow/inspection/policy.ts`는 파일 접근·mode·count·byte 예산의 순수 검사,
+조율한다. `flow/inspection/context-policy.ts`는 파일 접근·mode·count·byte 예산의 순수 검사,
 `inspect-files.ts`는 검증 완료 후 Metadata / Git blob 로딩·직렬화 크기 재검사·새 State 구성,
 `initial-seeding.ts`는 기존 Goal mention 기반 optional seeding을 담당한다. State 타입은
 `model/state.ts`에 두며 기존 Staffing public API와 flow의 타입 export 경로는 유지한다.
@@ -657,7 +657,7 @@ Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 runStaffingProposal은 통합·제거했다. StaffingDraft는 CEO의 중간 산출물이며 StaffingProposal과 별개다.
 flow 루트에는 run-staffing 진입점과 테스트를 두며 Context 조사는 inspection, 입력·Proposal 검사는
 validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-staffing-proposal에 둔다.
-`model/policy.ts`는 Proposal 정책 데이터 Schema이며 `flow/inspection/policy.ts`의 파일 접근·조사 예산 검사와 구분한다.
+`model/policy.ts`는 Proposal 정책 데이터 Schema이며 `flow/inspection/context-policy.ts`의 파일 접근·조사 예산 검사와 구분한다.
 
 ```text
 Harness Goal / registration / exact allowlist / inspection limits / proposal policy

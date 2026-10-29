@@ -14,7 +14,7 @@ import {
   byteLength,
   isInspectablePath,
   requireFile,
-} from "../inspection/policy.js";
+} from "../inspection/context-policy.js";
 
 export type RunStaffingOptions = StaffingLoopOptions & {
   policy: StaffingProposalPolicy;

@@ -2,7 +2,7 @@ import { selectGoalMentionedPaths } from "@/services/repository-inspection/index
 
 import type { StaffingContextState } from "../../model/state.js";
 import { addInspectedFiles } from "./inspect-files.js";
-import { byteLength } from "./policy.js";
+import { byteLength } from "./context-policy.js";
 
 export function seedInitialFiles(
   state: StaffingContextState

@@ -24,7 +24,10 @@ import {
 } from "../../protocol/context.js";
 import { addInspectedFiles, loadRepositoryMetadata } from "./inspect-files.js";
 import { seedInitialFiles } from "./initial-seeding.js";
-import { assertContextBudget, createAllowedFileTree } from "./policy.js";
+import {
+  assertContextBudget,
+  createAllowedFileTree,
+} from "./context-policy.js";
 
 // Keep Context types available through this module and the public API.
 export type { StaffingContextState } from "../../model/state.js";

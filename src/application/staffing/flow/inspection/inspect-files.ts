@@ -11,7 +11,7 @@ import {
   assertContextBudget,
   prepareInspection,
   prepareMetadataInspection,
-} from "./policy.js";
+} from "./context-policy.js";
 
 // Metadata is separately bounded and contributes to Context bytes, not the
 // inspected-file count. Preflight all metadata sizes before reading any blob.

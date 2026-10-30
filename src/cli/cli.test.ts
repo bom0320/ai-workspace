@@ -7,6 +7,7 @@ import type { TaskContract } from "@/contracts/task.js";
 
 import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
 import { askGoal } from "./prompts/planning/index.js";
+import { runGovernanceCli } from "./commands/governance/index.js";
 import { runCli } from "./cli.js";
 import { askDecision } from "./prompts/decision/index.js";
 import { askExecution } from "./prompts/execution/index.js";
@@ -17,6 +18,9 @@ import {
   presentComparison,
 } from "./presenters/decision/index.js";
 
+vi.mock("./commands/governance/index.js", () => ({
+  runGovernanceCli: vi.fn(),
+}));
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({
@@ -98,6 +102,15 @@ afterEach(() => {
 });
 
 describe("CLI approval boundary", () => {
+  it("routes explicit governance commands without Planning, Worker execution or Task Approval", async () => {
+    vi.mocked(runGovernanceCli).mockResolvedValue(0);
+    expect(await runCli(["governance", "approve", "proposal.json"])).toBe(0);
+    expect(runGovernanceCli).toHaveBeenCalledWith(["approve", "proposal.json"]);
+    expect(planTask).not.toHaveBeenCalled();
+    expect(executeTask).not.toHaveBeenCalled();
+    expect(approveTask).not.toHaveBeenCalled();
+    expect(selectWorkflow).not.toHaveBeenCalled();
+  });
   it("routes decision independently of Planning, Approval and Execution", async () => {
     const snapshot = {
       repositoryRoot: "/repositories/example",

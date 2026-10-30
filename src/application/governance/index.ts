@@ -17,3 +17,20 @@ export {
   type InvocationEligibility,
 } from "./model/authority.js";
 export { evaluateInvocationRequest } from "./flow/evaluate-invocation.js";
+export {
+  staffingSystemPolicySchema,
+  humanDelegationPolicyInputSchema,
+  humanDelegationPolicySchema,
+  approvalRecordSchema,
+  type StaffingSystemPolicy,
+  type HumanDelegationPolicyInput,
+  type HumanDelegationPolicy,
+  type ApprovalRecord,
+  type StaffingApprovalResult,
+} from "./model/approval.js";
+export {
+  configureStaffingSystemPolicy,
+  configureHumanDelegation,
+  approveStaffingProposal,
+  getApprovedStaffingScope,
+} from "./flow/staffing-approval.js";

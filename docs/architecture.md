@@ -7,7 +7,7 @@
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
-현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2 / 2.3의 Staffing 기능을 포함한다. Future responsibility는 현재
+현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2 / 2.3 / R2의 Staffing과 Step 3의 승인 기능을 포함한다. Future responsibility는 현재
 runtime이나 추가할 폴더의 명세가 아니다. v4는 진행 중이며 전체 CEO Workflow는 미완성이다.
 LangGraph.js Workflow Runtime 채택은 확정됐지만 설치·통합은 없고 아래 목표 흐름과 현재 실행을 구분한다.
 
@@ -48,7 +48,8 @@ Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Sna
 추가 Inspection이 구현되어 있다. Step 2.3의 Codex CEO Adapter와 runStaffing()이 이 API들을 연결해
 R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
 실행에는 아직 연결하지 않는다.
-Scope issuance / Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement도 미구현이다.
+Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 제공한다.
+Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement는 미구현이다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
 ## 3. Current End-to-End Flows
@@ -502,7 +503,7 @@ Human GoalSpec + RepositorySnapshot + Available Specialists + Repository Context
    ├─ inspect → Inspection Request
    └─ escalate → Human Clarification
 → Harness Finalization / Validation (R2 implemented) → StaffingProposal
-→ Human Staffing Approval (Planned) → ApprovedOperatingScope issuance (Planned)
+→ Human Staffing Approval / Delegation (Step 3 implemented) → ApprovedOperatingScope issuance (Step 3 implemented)
 ```
 
 `application/staffing/model/staffing.ts`는 CEO의 해석인 IntentAnalysis와 공식 제안인
@@ -526,7 +527,7 @@ ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 �
 
 Step 2.1은 schema / inferred type / unit test / public API를 구현했다. Repository Context Discovery는
 아래 Step 2.2에서 구현했고 CEO Staffing 호출·Loop는 Step 2.3에서 연결했다. Finalization / 제한된 Policy
-Validation은 R2에서 구현했다. Approval / Scope 발급 및 LangGraph 연결은 미구현이다.
+Validation은 R2에서 구현했고 Staffing Approval / Scope 발급은 Step 3에서 연결했다. LangGraph 연결은 미구현이다.
 
 ### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
 
@@ -591,7 +592,7 @@ projection에서 제외한다. 원본 GoalSpec.targetRepository 자체의 값은
 Budget은 Context 파일 수에 관한 값이며 Agent invocation Budget Reservation이나 운영 권한이 아니다.
 
 Step 2.3은 이 public API를 아래 Staffing Loop와 연결하고 R2는 같은 Run의 Proposal을 최종화한다.
-Human Approval, Scope 발급, Specialist 실행과 LangGraph 연결은 아직 없다.
+Staffing Approval / Scope 발급은 Step 3의 별도 Governance API로 연결한다. Specialist 실행과 LangGraph 연결은 아직 없다.
 
 ### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
 
@@ -647,8 +648,8 @@ maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향�
 별도로 Codex CLI 0.163.0 실제 단일 smoke run에서 작은 임시 Git Repository, 등록 frontend 후보와 exact
 allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
 반복 품질이나 성공률 검증을 했다는 의미는 아니다. 원본 Goal / Snapshot과 Draft의 연결을 보존하는
-Proposal Finalization / 제한된 Policy Validation은 아래 R2에서 구현했다. Human Approval / Scope issuance / Authorization /
-Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
+Proposal Finalization / 제한된 Policy Validation은 아래 R2, Staffing Approval / Scope issuance는 Step 3에서 구현했다.
+Authorization / Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 
 ### R2 — Staffing Proposal Finalization & Policy Validation — 구현
 
@@ -710,6 +711,71 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
 ApprovedOperatingScope issuance, Budget Reservation, AuthorizedSpecialistInvocation 발급·실행은 수행하지 않는다.
 Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 연결하지 않는다.
 
+### v4 Step 3 — Staffing Approval & Human Delegation — 구현
+
+```text
+Human-approved System Policy + optional Human Delegation Policy (local signed ledger)
++ StaffingProposal → approveStaffingProposal()
+→ current System Policy로 기존 Staffing 파일·등록·Authority·예산 검사 재수행
+→ active Phase A delegation의 Repository / Specialist / exact Context / budget 평가
+   ├─ 범위 내 → 새 human-delegation ApprovalRecord
+   ├─ 범위 밖 / 위임 미설정 → approval-required (원본 제안 digest에 연결)
+   │   → CLI가 실제 controlling terminal 확인 → direct-human ApprovalRecord
+   └─ System Policy 위반 / 위임 철회·만료·불일치 / 신뢰 실패 → denied
+→ 최신 Snapshot / 정책 재검사 → 기존 approvedOperatingScopeSchema로 Scope version 1 발급
+→ Proposal + ApprovalRecord + Scope를 원자적으로 보존 (Specialist 실행 없음)
+```
+
+`flow/staffing-approval.ts`는 설정·승인·조회 진입점이다. 내부 평가와 Scope 구성은 validation /
+transformation에 둔다. `configureStaffingSystemPolicy()`와 `configureHumanDelegation()`은 최초 설정·변경도
+Human 확인 없이는 저장하지 않는다. Policy ID / version, Approval ID와 Scope ID는 Harness가 발급한다.
+정책 최신 버전은 로컬 ledger가 소유하고 이전 버전은 추적용으로 보존한다. 최초 범위는 phase-a /
+read-only / shellExecution false뿐이다. policy expiry는 호출 시점의 시스템 시계로 검사한다.
+
+System Policy는 등록 Specialist 전체 정의, exact allowlist, 파일·Context limits와 R2 enforcementRules /
+budget 상한을 소유한다. Staffing의 공개 validateStaffingProposal()을 재사용해 같은 Proposal Snapshot에서
+Git blob·경로·regular mode·중복·예산을 재검증하며 Snapshot을 다시 capture하지 않는다. 입력 JSON이 실제 R2
+Run에서 발급됐다는 서명 provenance나 Human Goal 입력자의 신원까지 인증하는 기능은 아니며, 해당 입력 경계는
+Harness caller가 소유한다. Human의 직접 승인도
+System Policy 위반을 우회하지 못한다. 위임 정책은 repository identity, 허용 Specialist·Context, 호출 상한,
+Phase / Authority / 정책 버전·status·expiresAt을 제한한다. 위임이 없으면 직접 확인하며 범위 밖도 직접
+확인한다. 반면 철회·만료·System Policy version 불일치는 불확실한 권한으로 승인하지 않도록 denied한다.
+Human이 새 정책을 다시 승인해야 한다. 호출 예산은 Proposal/Scope별 상한이며 Goal 간 누적 위임 사용량
+관리나 공유 예산 예약은 아니다. 이는 읽기 전용 분석 위임이며 해결 방향·Task·Delivery 승인이 아니다.
+
+승인 출처의 신뢰 경계는 **로컬 OS 계정과 Harness / CLI 코드**다. `infrastructure/terminal`은 /dev/tty를
+직접 열어 isatty를 검사하고 임의 challenge를 포함한 정확한 입력과 Enter를 받아야 일회성 process-local
+receipt를 만든다. stdin pipeline, boolean, JSON의 approved 필드나 직렬화한 receipt는 승인 증거가 아니다.
+review의 terminal control / bidi 문자는 escape하여 데이터가 승인 화면을 지우지 못하게 한다. CLI는 Goal /
+원본 Constraints 전체, 업무·Specialist·Context·예산·직접 확인 사유를 표시한다. 배치 변경 요청은 기존 제안을
+수정하는 승인이 아니라 새 Staffing 검증·제안으로 돌려야 한다. 거절·EOF·TTY 미지원은 실행하지 않는다.
+
+`services/governance-records`는 고정 `~/.ai-workspace-governance/`에 owner-only directory(0700)와
+key / signed ledger(0600)를 보존한다. 소유 UID·permission·symlink·hardlink·파일 크기를 검사하며 target
+Repository 안의 저장소는 거부한다. 서명 불일치·키/기록 소실·lock 충돌은 실패하고 새 기본 정책으로
+복구해 자동 승인하지 않는다. 임시 파일·rename과 배타 lock으로 한 ledger transaction을 구성하며 중복
+Proposal ID 발급을 막는다. System Policy 변경과 위임 교체는 version을 증가시켜 과거 확인을 새 승인에
+재사용하지 못하게 한다. Human 대기 동안 lock을 유지하지 않고 확인 후 새 transaction에서 다시 평가한다.
+
+동일 OS 계정/root, 변조된 Harness 또는 손상된 OS·시계까지 방어하는 보안 경계는 아니다. HMAC key도 같은
+계정이 읽을 수 있으므로 그런 공격자에 대한 Human 인증, rollback 방지 audit log, 조직 IAM이나 durable
+분산 저장소로 해석하지 않는다. 격리된 CEO에는 ledger / key나 receipt 발급 capability를 제공하지 않는다.
+외부 JSON 객체의 Schema 통과만으로 Human 설정을 증명하는 경로는 없다. 테스트는 실제 임시 Repository /
+owner-private signed file I/O와 mock controlling-terminal I/O를 조합하며 실제 사람이 승인을 수행한 E2E는 아니다.
+
+ApprovalRecord는 원본 Proposal 전체의 canonical SHA-256, Proposal ID, System Policy version과 승인 시각,
+direct-human confirmation 또는 delegation ID / version / 최초 Human confirmation ID를 보존한다. Scope의
+Goal / Snapshot / Assignment / Context / Budget은 검증된 Proposal에서 가져온다. getApprovedStaffingScope()는
+서명된 ledger와 source / digest / Scope 필드 연결·현재 정책·Snapshot을 재확인한다. 중복 발급·같은 ID의
+변경된 Proposal·변경된 정책에 과거 confirmation 재사용은 거부한다. Scope 재발급·수정은 구현하지 않는다.
+
+Human Constraints는 Proposal과 Scope에 그대로 보존한다. 기계적 정책 검증은 자연어 지시 전체의 의미적
+충족을 증명하지 않는다. Human은 위임 최초 설정 시 그 한계를 포함한 제한된 분석 권한만 위임하며 예외
+직접 승인에서는 원문 전체를 검토한다. 자동 승인은 AI의 승인이 아니라 **Human의 사전 위임을 Harness가
+집행한 새 승인 기록**이다. 발급된 Scope만으로 호출하지 않으며 Budget Reservation / Usage Recording,
+AuthorizedSpecialistInvocation 발급·집행, Phase B와 LangGraph는 여전히 미구현이다. 기존 순수
+ evaluateInvocationRequest()도 그대로이며 실제 인증된 lifecycle / 사용량을 연결하는 Authorization이 필요하다.
+
 ## 6. Current and Conditional Domain Models
 
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
@@ -722,10 +788,10 @@ Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
 | ComparisonContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / AgentDecision[]만 포함 |
 | ComparisonPayload | Current | protocol/comparison.ts의 strict Zod schema와 inferred type. Comparator output의 구조 검증을 통과한 상태; Reference Validation 뒤 같은 shape를 ComparisonResult로 반환 |
-| ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema implemented, enforcement Planned | application/governance의 strict 구조 계약. 승인·권한 검증이나 실행 허용을 제공하지 않음 |
+| ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema / Staffing Scope issuance implemented; invocation enforcement Planned | application/governance의 strict 구조 계약. Step 3은 승인 출처를 확인해 Scope를 발급하며 Invocation은 발급·실행하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Approval Planned | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Staffing Approval은 Step 3 | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
 | CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 호출·Loop는 구현; Specialist 실행·종합·Phase B 실행 조정·전체 보고 연결은 미구현 |

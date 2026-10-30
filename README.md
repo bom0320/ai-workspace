@@ -32,8 +32,8 @@ Agent discussion / synthesis / CEO 전체 조직 운영 / Coordinator, 공유 �
 Authority / Staffing schema, Invocation Eligibility Evaluation, CEO propose / inspect / escalate protocol과
 Snapshot 기반 Staffing Context Discovery / 추가 Inspection 및 공통 repository-inspection 재사용이 구현되어 있다.
 Step 2.3의 Codex CEO Adapter / Staffing Loop는 제한된 inspect / propose / escalate를 처리하며
-R2의 검증·Finalization까지 조합한 단일 runStaffing()은 StaffingProposal 또는 Escalation / Failure를 반환한다. Human Staffing Approval /
-Scope 발급과 실제 Authorization·Specialist 실행 연결은 아직 없다.
+R2의 검증·Finalization까지 조합한 단일 runStaffing()은 StaffingProposal 또는 Escalation / Failure를 반환한다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope 발급을 제공한다.
+실제 Authorization·Specialist 실행 연결은 아직 없다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,

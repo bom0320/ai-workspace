@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import type { RunDecisionInput } from "@/application/decision/index.js";
 import type { PlanningResult } from "@/application/planning/index.js";
 
+import { runGovernanceCli } from "./commands/governance/index.js";
+
 import { runPlanCommand } from "./commands/plan/index.js";
 import { runDecisionCommand } from "./commands/decision/index.js";
 import {
@@ -93,6 +95,7 @@ async function executeDecisionInput(input: RunDecisionInput): Promise<number> {
 }
 
 export async function runCli(args: string[]): Promise<number> {
+  if (args[0] === "governance") return runGovernanceCli(args.slice(1));
   if (args[0] === "decision") return runDecisionCli(args.slice(1));
   if (args[0] === "plan") return runPlanningCli(args.slice(1));
   try {

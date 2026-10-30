@@ -309,6 +309,49 @@ v4의 Phase A(해결 방향 판단·승인) / Phase B(상세 설계·실행)는
 다른 단계의 포괄 실행 권한이 아니다. 현재 Plan & Execute의 TaskContract 표시 → Approve / Reject는
 Standalone v1의 접점이며 v4의 앞선 승인 단계를 수행한 것으로 간주하지 않는다.
 다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
-현재 CLI에는 Staffing / CEO / Human Governance 명령이나 화면이 없으며, 기존 Decision 명령은 독립 판단과
-비교까지만 수행한다. 구현된 v4 기반 API도 아직 CLI에 연결되지 않았다. 인터페이스 형태와 구현 순서는
+현재 CLI의 governance 명령은 아래 Staffing 승인만 제공하며 CEO 실행 / 해결 방향의 Human Governance
+명령은 없다. 기존 Decision 명령은 독립 판단과 비교까지만 수행한다. 전체 조직 인터페이스 형태와 구현 순서는
 [Roadmap](roadmap.md)에 두며 새로운 명령·화면을 현재 기능으로 확정하지 않는다.
+
+
+## 7. Staffing Approval & Human Delegation — Step 3
+
+기존 selector는 그대로다. 다음 explicit command는 실행할 Specialist를 호출하지 않고 승인 정책과 Scope만 관리한다.
+JSON 입력 파일은 clean Snapshot 검사에 영향을 주지 않도록 대상 Repository 밖에 보관한다.
+
+```sh
+pnpm dev governance setup /path/to/system-policy.json
+pnpm dev governance delegate /path/to/repository /path/to/delegation-policy.json
+pnpm dev governance approve /path/to/staffing-proposal.json
+pnpm dev governance revoke /path/to/repository
+```
+
+System Policy JSON은 repositoryRoot, phase("phase-a"), availableSpecialists(기존 등록 정의),
+allowedContextPaths(exact 파일), limits(기존 StaffingInspectionLimits), policy(maxAgentInvocations /
+enforcementRules)를 사용한다. setup은 최초 설정과 변경 모두 실제 terminal 확인을 요구한다.
+CEO에게 설정 파일이나 서명 키를 제공해서는 안 된다.
+
+Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞게 지정):
+
+```json
+{
+  "phase": "phase-a",
+  "allowedSpecialistIds": ["frontend"],
+  "allowedContextPaths": ["src/login.ts"],
+  "repositoryAccess": "read",
+  "shellExecution": false,
+  "maxAgentInvocations": 2,
+  "expiresAt": "2027-01-01T00:00:00.000Z"
+}
+```
+
+최초 위임·교체·철회도 실제 /dev/tty에서 표시된 `Approve <random challenge>`와 Enter로 확인한다.
+stdin의 단순 Approve·JSON의 approved 필드로 대신할 수 없다. terminal이 없거나 거절·EOF이면 실패한다.
+위임 내 제안은 추가 입력 없이 승인되며, 위임 범위 밖은 Goal·원본 Constraints 전체·배치 업무·Context·
+호출 예산과 자동 승인 불가 사유를 보여준다. 배치 변경은 거절 후 새 검증 Proposal로 제출해야 한다.
+System Policy 위반은 Human 확인으로 우회하지 않는다. 만료·철회된 위임은 새 정책 확인 전까지 거부한다.
+
+승인 결과는 ApprovalRecord와 Scope를 출력하고 `~/.ai-workspace-governance/`에 서명된 기록을 보존한다.
+자세한 신뢰 경계·한계는 [Architecture의 Step 3](architecture.md#v4-step-3--staffing-approval--human-delegation--구현)을 따른다.
+Staffing 승인·Human 사전 위임은 해결 방향 Governance, Task Approval, Change Review / Delivery의 승인이 아니다.
+Scope가 발급되어도 Specialist 호출·Budget Reservation·Authorization은 수행하지 않는다.

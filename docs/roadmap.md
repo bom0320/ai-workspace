@@ -11,7 +11,7 @@
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
-| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 1.x / 2.1–2.3 Staffing 구현; 전체 Workflow 미완성 |
+| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 1.x / 2.1–2.3 / R2 Staffing 및 Step 3 승인 구현; 전체 Workflow 미완성 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
@@ -207,14 +207,16 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 ### 내부 구현 순서
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
-구현했다. 다음은 Human Staffing Approval이며 이후 Scope issuance / Authorization으로 연결한다. 아래는
+구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
+다음은 Budget Reservation / 최신 lifecycle·사용량 검증을 포함한 Authorization이다. 아래는
 전체 내부 마일스톤이며 미구현 모델의 이름·Schema나 병렬 실행 방식을 선행 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
 2. **Intent Analysis & Staffing**: 기존 schema / Snapshot Context Discovery 위에 Step 2.3 CEO Adapter와
    inspect / propose / escalate와 제한된 Staffing Loop를 연결했다. R2에서 Proposal Finalization / 제한된 Policy Validation을 구현했다.
-3. **Human Staffing Approval**: 승인 대상·유효성 검증과 Approved Scope issuance 연결.
+3. **Human Staffing Approval — Implemented**: owner-private signed ledger의 Human 위임·직접 승인 근거를 검증하고 Scope를 발급한다.
+   로컬 OS 계정 / CLI 신뢰 경계이며 외부 IAM·분산 audit 보장은 아니다.
 4. **Context Routing & Authorization**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
    Authorized Specialist Invocation 구성·실행 Enforcement를 연결한다.
 5. **Independent Decision & Comparison — Phase A**: 기존 v2 / v3를 재사용하고 원본 Evidence 참조와 독립성 유지.
@@ -265,7 +267,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   현재 runStaffing()은 R2 검증·최종화를 거친 StaffingProposal을 성공 결과로 반환한다.
   Fake CEO / mock Process 테스트와 실제 Codex 0.163.0 단일 직접 propose(1 Round), Repository 무변경을 확인했다.
   실제 모델의 여러 Round Inspection 품질·반복 benchmark는 검증하지 않았다.
-  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Human Approval / Scope 발급·Authorization과 LangGraph 통합은 후속 단계다.
+  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Staffing Approval / Scope 발급은 Step 3에서 연결했고 Authorization과 LangGraph 통합은 후속 단계다.
 
 ### Capability 통합 리팩토링 상태
 
@@ -277,7 +279,21 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   CEO Context와 proposal.goal.constraints에 원문 그대로 보존하며 Rule과 문자열로 연결하지 않는다.
   unverifiedHumanConstraints는 제거했고 어떤 지시도 Rule 성공으로 검증 완료 처리하지 않는다.
   역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
-  Human Staffing Approval / Scope issuance / Budget Reservation / Invocation 실행은 미구현이다.
+  Staffing Approval / Scope issuance는 아래 Step 3에서 구현했고 Budget Reservation / Invocation 실행은 미구현이다.
+
+### Step 3 — Staffing Approval & Human Delegation — Implemented
+
+- 실제 controlling-terminal 확인으로 설정한 Phase A read-only 위임을 다른 Goal에 재사용한다. 범위 내는
+  delegated ApprovalRecord, 범위 밖·미설정은 직접 Human 확인으로 분기한다. System Policy 위반, 만료·철회된
+  위임, stale confirmation / Proposal·Snapshot 변경은 Scope 발급을 차단한다.
+- 서명된 로컬 ledger는 owner UID / 권한·키·기록의 무결성을 확인하고 lock / atomic rename으로 중복 발급을
+  막는다. ApprovalRecord와 Proposal digest, 정책 version, 기존 ApprovedOperatingScope를 연결·조회한다.
+- CLI는 governance setup / delegate / revoke / approve를 제공한다. 기존 v0–v3 메뉴·Task Approval은 유지한다.
+  R2의 API 결과를 Proposal JSON으로 전달하는 명시적 operator 경로이며 전체 Goal→조직 CLI Workflow는 아니다.
+- 로컬 OS 계정과 Harness 자체를 신뢰한다. 동일 계정 공격자·root·clock 조작·backup rollback 방어와 remote
+  Human 인증은 미구현이다. 실제 Human 승인 E2E가 아닌 mock TTY + 실제 임시 Repository / signed file 테스트로 검증한다.
+- 후속 단계는 최신 권한 / Scope lifecycle과 Budget Reservation을 확보하는 Invocation Authorization이다.
+  Scope 발급은 자연어 Instructions의 의미적 충족이나 실제 Specialist 호출 허가·예산 확보가 아니다.
 
 ### Step 2.3 계약과 다음 연결점
 
@@ -288,7 +304,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 - Harness가 등록 후보·exact allowlist·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
   Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적 Enforcement Rules를 검증한다.
   업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
-  Step 3 Human Staffing Approval은 proposal.goal.constraints 전체와 제안을 검토하는 접점을 구현해야 한다.
+  Step 3은 proposal.goal.constraints 전체와 제안을 검토하는 직접 승인 접점과 사전 위임 정책 설정을 제공한다.
   ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.
 
 ### Exit Criteria

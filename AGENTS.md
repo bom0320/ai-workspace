@@ -43,7 +43,7 @@ Authority / Staffing schema, Invocation Eligibility, Snapshot 기반 Context Dis
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
 - Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js 채택 확정 / 설치·통합 미구현이며, 기존 Codex 기반 Agent Execution Runtime을 우선 재사용한다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / 해결 방향의 Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 

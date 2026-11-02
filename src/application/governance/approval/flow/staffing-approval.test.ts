@@ -37,7 +37,7 @@ import {
   type StaffingApprovalResult,
   type StaffingSystemPolicy,
   type HumanDelegationPolicyInput,
-} from "../index.js";
+} from "../../index.js";
 
 const terminal = vi.hoisted(() => ({
   home: "",
@@ -379,6 +379,30 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     if (result.status === "approved")
       expect(getApprovedStaffingScope(result.scope.id).status).toBe("denied");
   });
+  it.each(["expired", "revoked"])(
+    "direct approval remains valid with unrelated %s delegation",
+    (lifecycle) => {
+      delegate();
+      proposal.budget.maxAgentInvocations = 3;
+      const request = approveStaffingProposal(proposal);
+      const result = approveStaffingProposal(proposal, accept(request));
+      expect(result.status).toBe("approved");
+      if (lifecycle === "expired") {
+        vi.spyOn(Date, "now").mockReturnValue(
+          Date.parse(delegation.expiresAt) + 1
+        );
+      } else {
+        const revoke = configureHumanDelegation(root, null);
+        expect(
+          configureHumanDelegation(root, null, accept(revoke)).status
+        ).toBe("configured");
+      }
+      if (result.status === "approved")
+        expect(getApprovedStaffingScope(result.scope.id).status).toBe(
+          "approved"
+        );
+    }
+  );
   it("expiry stops automatic approvals", () => {
     delegate();
     vi.spyOn(Date, "now").mockReturnValue(Date.parse(delegation.expiresAt) + 1);

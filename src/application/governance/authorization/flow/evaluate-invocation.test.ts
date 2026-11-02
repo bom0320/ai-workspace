@@ -4,7 +4,7 @@ import {
   evaluateInvocationRequest,
   invocationEligibilitySchema,
   invokeSpecialistRequestSchema,
-} from "../index.js";
+} from "../../index.js";
 
 const assignment = {
   assignmentId: "review",

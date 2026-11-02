@@ -3,7 +3,10 @@ import type {
   GovernanceLedger,
   RepositoryGovernance,
 } from "../../model/approval.js";
-import { evaluateStaffingApproval } from "./evaluate-staffing-approval.js";
+import {
+  evaluateStaffingApproval,
+  validateCurrentStaffingPolicy,
+} from "./evaluate-staffing-approval.js";
 
 type StaffingIssuance = RepositoryGovernance["issuances"][number];
 
@@ -105,9 +108,16 @@ export function validateStoredIssuance(
   assertApprovalBinding(issuance, entry);
   assertScopeContents(issuance);
   assertDelegatedApprovalSource(issuance, entry);
-  const mode = evaluateStaffingApproval(issuance.proposal, entry, Date.now());
   const { approval } = issuance;
-  if (approval.source.type === "human-delegation" && mode !== "delegated")
+  // A direct approval is bound to its own Human receipt, not an unrelated
+  // delegation's lifecycle. Both sources still require current System Policy.
+  if (approval.source.type === "direct-human")
+    validateCurrentStaffingPolicy(issuance.proposal, entry);
+  if (
+    approval.source.type === "human-delegation" &&
+    evaluateStaffingApproval(issuance.proposal, entry, Date.now()) !==
+      "delegated"
+  )
     throw new Error("Current evaluation no longer permits delegated approval.");
   if (
     approval.source.type === "direct-human" &&

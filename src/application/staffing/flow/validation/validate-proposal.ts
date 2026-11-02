@@ -2,7 +2,11 @@ import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
 
-import type { StaffingContextState } from "../../model/state.js";
+import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { SpecialistDefinition } from "@/contracts/specialist.js";
+import type { GoalSpec } from "@/contracts/goal.js";
+import type { CommitFile } from "@/infrastructure/git/index.js";
+import type { StaffingInspectionLimits } from "../../protocol/context.js";
 import {
   staffingProposalPolicySchema,
   type StaffingProposalPolicy,
@@ -10,8 +14,6 @@ import {
 import type { StaffingDraft } from "../../protocol/ceo.js";
 import type { StaffingLoopOptions } from "../orchestration/run-staffing-loop.js";
 import {
-  assertContextBudget,
-  byteLength,
   isInspectablePath,
   requireFile,
 } from "../inspection/context-policy.js";
@@ -22,13 +24,24 @@ export type RunStaffingOptions = StaffingLoopOptions & {
 
 export class ProposalPolicyError extends Error {}
 
-// Internal validation; public finalization accepts only the private Loop result.
+// Snapshot facts and Harness policy, independent of CEO inspection history.
+export type ProposalValidationContext = {
+  goal: GoalSpec;
+  snapshot: RepositorySnapshot;
+  files: CommitFile[];
+  fileTree: string[];
+  allowedContextPaths: string[];
+  specialists: SpecialistDefinition[];
+  limits: StaffingInspectionLimits;
+};
+
+// Public finalization still accepts only the private Loop result.
 export function validateProposal(
   draft: StaffingDraft,
-  state: StaffingContextState,
-  specialists: StaffingLoopOptions["availableSpecialists"],
+  context: ProposalValidationContext,
   policy: StaffingProposalPolicy
-): void {
+) {
+  const { specialists, limits } = context;
   if (draft.budget.maxAgentInvocations > policy.maxAgentInvocations)
     throw new ProposalPolicyError(
       "Proposed invocation budget exceeds Harness policy."
@@ -56,7 +69,6 @@ export function validateProposal(
   }
 
   const paths = new Set<string>();
-  const { limits } = state.context;
   for (const assignment of draft.assignments) {
     if (assignment.contextPaths.length > limits.maxFilesPerRequest)
       throw new ProposalPolicyError(
@@ -71,13 +83,13 @@ export function validateProposal(
     for (const path of assignment.contextPaths) {
       if (
         !isInspectablePath(path) ||
-        !state.allowedContextPaths.includes(path) ||
-        !state.context.repository.fileTree.includes(path)
+        !context.allowedContextPaths.includes(path) ||
+        !context.fileTree.includes(path)
       )
         throw new ProposalPolicyError(
           "Assignment Context is outside the permitted Snapshot file scope."
         );
-      requireFile(state.files, path, limits);
+      requireFile(context.files, path, limits);
       paths.add(path);
     }
   }
@@ -111,9 +123,34 @@ export function validateProposal(
   // Preflight the full union before reading any blob; never trust Working Tree
   // content or a CEO-supplied file. Assignment Context limits don't consume CEO
   // inspection rounds or mutate the run's inspection state.
-  const projection = { ...state.context, inspectedFiles: [] };
+  // Assignment budget measures a deterministic validation envelope, not a
+  // reconstructed CEO Context. Include the full Harness configuration and file
+  // tree as well as proposal data; JSON escaping counts toward the same cap.
+  const { files: _commitFiles, ...facts } = context;
+  const projection = {
+    ...facts,
+    policy,
+    // Exclude Harness-issued IDs and Proposal wrapper fields so Draft and
+    // Proposal revalidation measure exactly the same assignment payload.
+    draft: {
+      intent: draft.intent,
+      assignments: draft.assignments.map(
+        ({ specialistId, objective, contextPaths, rationale }) => ({
+          specialistId,
+          objective,
+          contextPaths,
+          rationale,
+        })
+      ),
+      budget: draft.budget,
+      rationale: draft.rationale,
+    },
+    inspectedFiles: [] as { path: string; content: string }[],
+  };
+  const byteLength = (value: unknown) =>
+    Buffer.byteLength(JSON.stringify(value), "utf8");
   const bytes = [...paths].reduce(
-    (sum, path) => sum + requireFile(state.files, path, limits).size!,
+    (sum, path) => sum + requireFile(context.files, path, limits).size!,
     0
   );
   if (byteLength(projection) + bytes > limits.maxContextBytes)
@@ -121,12 +158,14 @@ export function validateProposal(
   const inspectedFiles = [...paths].map((path) => ({
     path,
     content: readRepositoryFileAtCommit(
-      state.snapshot.repositoryRoot,
-      state.snapshot.commitSha,
+      context.snapshot.repositoryRoot,
+      context.snapshot.commitSha,
       path
     ),
   }));
-  assertContextBudget({ ...projection, inspectedFiles });
+  if (byteLength({ ...projection, inspectedFiles }) > limits.maxContextBytes)
+    throw new ProposalPolicyError("Proposal Context exceeds maxContextBytes.");
+  return inspectedFiles;
 }
 
 export function prepareProposalInput(options: RunStaffingOptions) {

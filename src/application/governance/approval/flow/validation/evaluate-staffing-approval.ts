@@ -5,13 +5,12 @@ import {
 } from "@/application/staffing/index.js";
 import type { RepositoryGovernance } from "../../model/approval.js";
 
-// Inputs originate only from the authenticated local ledger in the use-case.
-// This evaluation alone is not an approval receipt or execution authorization.
-export function evaluateStaffingApproval(
+// Current proposal validity is shared by new approval and stored issuance checks.
+// It does not select an approval source or authenticate proposal issuance.
+export function validateCurrentStaffingPolicy(
   proposal: StaffingProposal,
-  repository: RepositoryGovernance,
-  now: number
-): "delegated" | "direct" {
+  repository: RepositoryGovernance
+): void {
   const system = repository.systems.at(-1);
   if (
     !system ||
@@ -25,6 +24,16 @@ export function evaluateStaffingApproval(
     ...configuration
   } = system.configuration;
   validateStaffingProposal(proposal, configuration);
+}
+
+// A new approval must also evaluate the current delegation lifecycle.
+export function evaluateStaffingApproval(
+  proposal: StaffingProposal,
+  repository: RepositoryGovernance,
+  now: number
+): "delegated" | "direct" {
+  validateCurrentStaffingPolicy(proposal, repository);
+  const system = repository.systems.at(-1)!;
   const delegation = repository.delegations.at(-1);
   if (!delegation) return "direct";
   if (

@@ -1,3 +1,4 @@
+import { assertContextBudget } from "./inspection/context-policy.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
 import type { StaffingProposalPolicy } from "../model/policy.js";
@@ -49,7 +50,22 @@ export async function runStaffing(
   }
   try {
     const draft = staffingDraftSchema.parse(result.draft);
-    validateProposal(draft, state, runOptions.availableSpecialists, policy);
+    const inspectedFiles = validateProposal(
+      draft,
+      {
+        goal: state.context.goal,
+        snapshot: state.snapshot,
+        files: state.files,
+        fileTree: state.context.repository.fileTree,
+        allowedContextPaths: state.allowedContextPaths,
+        specialists: runOptions.availableSpecialists,
+        limits: state.context.limits,
+      },
+      policy
+    );
+    // Preserve the actual CEO metadata/projection budget independently of the
+    // assignment budget. No reconstructed inspection state is needed elsewhere.
+    assertContextBudget({ ...state.context, inspectedFiles });
     assertRepositoryMatchesSnapshot(state.snapshot);
     const proposal = buildStaffingProposal(draft, state);
     assertRepositoryMatchesSnapshot(state.snapshot);

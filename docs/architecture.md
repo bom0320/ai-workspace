@@ -697,7 +697,7 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
   (상한)의 제한된 기계적 정책이다. 원문 Constraint와의 문자열 연결은 없고 모든 Rule을 함께 만족해야 한다.
   정책의 출처·신뢰성은 Harness 호출 경계가 관리하며 CEO에는 정책 작성·변경 권한을 부여하지 않는다.
   model/policy.ts의 staffingEnforcementRuleSchema / StaffingEnforcementRule은 정책 구조를 정의할 뿐,
-  자연어 지시 전체의 모델이나 의미 해석기가 아니다. validateProposal()은 void를 반환하고 위반 시 실패한다.
+  자연어 지시 전체의 모델이나 의미 해석기가 아니다. validateProposal()은 검증한 파일 내용을 내부 호출자에게 반환하고 위반 시 실패한다.
 - unverifiedHumanConstraints 결과 필드는 제거했다. Rule 성공으로 어떤 Human 지시도 검증 완료로 분류하지
   않는다. 향후 Human Approval은 proposal.goal.constraints **전체**를 검토해야 한다. proposed는 구조·명시적
   정책 검증 통과이며 자연어 지시 전체의 의미적 충족, Human 승인 또는 실행 권한의 증명이 아니다.
@@ -710,6 +710,27 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
 **proposed는 검증 범위를 통과한 제안이지 승인·실행 권한이 아니다.** Human Staffing Approval,
 ApprovedOperatingScope issuance, Budget Reservation, AuthorizedSpecialistInvocation 발급·실행은 수행하지 않는다.
 Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 연결하지 않는다.
+
+### Staffing Validation과 Governance 경계
+
+Staffing의 공통 validateProposal()은 CEO Inspection state가 아니라 원본 Goal / Snapshot,
+Commit 파일 목록, filtered fileTree, 등록 Specialist, exact allowlist, limits와 policy를 받는다.
+최초 Finalization은 private Run에서 이 사실들을 전달한다. 공개 validateStaffingProposal()은 확정된
+Proposal을 파싱하고 현재 Snapshot의 파일 목록을 조회하여 같은 규칙을 적용한다. Assignment ID 중복도
+별도로 거부한다. packageScripts나 남은 Inspection Budget을 가짜로 구성하지 않는다.
+
+두 byte budget은 독립적으로 검사한다. CEO Inspection은 실제 StaffingContext 전체의 JSON 크기를
+측정한다. Assignment Context는 Goal / Snapshot / Draft, 등록 정보·allowlist·fileTree·limits·policy 및
+고유 Context 파일 내용을 포함하는 검증 envelope의 UTF-8 JSON 크기를 측정한다. 파일 읽기 전에는
+전체 경로·mode·파일 수·크기와 envelope + 원시 파일 크기를 검사하고, 읽은 뒤 JSON escape까지 포함해
+다시 검사한다. 두 검사 모두 기존 maxContextBytes를 상한으로 사용한다. 최초 Finalization에서는 실제
+CEO Metadata를 포함한 projection에 선택 파일을 넣는 기존 검사도 유지한다. 따라서 새 공통 검사는
+추가 제한이며 CEO Context 제한을 대신하지 않는다. 서로 다른 검사 대상의 크기를 같다고 간주하지 않는다.
+
+Governance의 approval/은 신규 승인·기록·Scope 발급 및 저장된 Scope의 유효성 조회를 소유한다.
+authorization/은 개별 Invocation Eligibility 평가를 소유하며 실제 Authorization은 미구현이다.
+공유 model/authority.ts는 두 영역의 Scope 및 실행 계약을 정의한다. 기존 governance/index.ts API는 유지한다.
+Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증한 뒤 승인 근거를 확정한다.
 
 ### v4 Step 3 — Staffing Approval & Human Delegation — 구현
 
@@ -773,6 +794,17 @@ direct-human confirmation 또는 delegation ID / version / 최초 Human confirma
 Goal / Snapshot / Assignment / Context / Budget은 검증된 Proposal에서 가져온다. getApprovedStaffingScope()는
 서명된 ledger와 source / digest / Scope 필드 연결·현재 정책·Snapshot을 재확인한다. 중복 발급·같은 ID의
 변경된 Proposal·변경된 정책에 과거 confirmation 재사용은 거부한다. Scope 재발급·수정은 구현하지 않는다.
+신규 승인 방식 평가와 저장된 승인 유효성 검사는 구분한다. 저장된 direct-human Scope는 해당 Human
+receipt·Proposal digest·현재 System Policy·Snapshot에 의존하며 무관한 Delegation의 만료·철회로
+무효화하지 않는다. human-delegation Scope는 추가로 정확한 위임 ID/version/최초 승인 ID, 최신 활성 상태,
+만료 여부와 현재 위임 범위를 요구한다. 이는 이전의 직접 승인 조회가 Delegation에도 의존하던 동작을 수정한 것이다.
+발급 전 반복 평가는 Human 대기 이후와 최종 저장 직전의 최신성을 확인하며, 같은 lock transaction의
+검증 → 발급 → 저장 원자성을 유지한다. 외부 실패는 기존의 민감 정보 없는 denied 결과로 통일한다.
+
+R2 발급 출처는 여전히 미해결 신뢰 경계다. 구조 검증·현재 정책 적합성·Harness 발급 출처·Human 승인
+근거는 각각 별개다. 현재 승인 JSON의 재검증은 runStaffing()의 실제 발급 사실을 인증하지 않는다.
+Step 4 전에 최소한 Harness가 Finalization한 Proposal 전체의 digest를 신뢰된 기록에 연결하고 Approval이
+그 동일 digest를 확인하는 통합이 필요하다. 이번 변경은 그 발급 저장·인증 기능을 구현하지 않는다.
 
 Human Constraints는 Proposal과 Scope에 그대로 보존한다. 기계적 정책 검증은 자연어 지시 전체의 의미적
 충족을 증명하지 않는다. Human은 위임 최초 설정 시 그 한계를 포함한 제한된 분석 권한만 위임하며 예외

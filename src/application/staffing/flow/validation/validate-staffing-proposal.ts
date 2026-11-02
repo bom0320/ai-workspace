@@ -49,26 +49,14 @@ export function validateStaffingProposal(
   validateProposal(
     proposal,
     {
+      goal: proposal.goal,
       snapshot: proposal.snapshot,
       files,
+      fileTree,
       allowedContextPaths: config.allowedContextPaths,
-      context: {
-        goal: proposal.goal,
-        repository: {
-          name: proposal.goal.targetRepository,
-          commitSha: proposal.snapshot.commitSha,
-          fileTree,
-          packageScripts: {},
-        },
-        inspectedFiles: [],
-        availableSpecialists: config.availableSpecialists.map(
-          ({ id, role, objective }) => ({ id, role, objective })
-        ),
-        limits: config.limits,
-        remainingInspectionBudget: config.limits.maxTotalFiles,
-      },
+      specialists: config.availableSpecialists,
+      limits: config.limits,
     },
-    config.availableSpecialists,
     config.policy
   );
   assertRepositoryMatchesSnapshot(proposal.snapshot);

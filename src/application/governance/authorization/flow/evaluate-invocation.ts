@@ -5,7 +5,7 @@ import {
   invokeSpecialistRequestSchema,
   invocationEvaluationContextSchema,
   type InvocationEligibility,
-} from "../model/authority.js";
+} from "../../model/authority.js";
 
 // Governance accepts only unambiguous repository-relative file spellings.
 // This also rejects every unsafe form rejected by Decision's private loader,

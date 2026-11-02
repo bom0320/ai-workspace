@@ -5,7 +5,7 @@ import {
   approvalRecordSchema,
   type ApprovalRecord,
 } from "../../model/approval.js";
-import { approvedOperatingScopeSchema } from "../../model/authority.js";
+import { approvedOperatingScopeSchema } from "../../../model/authority.js";
 
 export function issueStaffingScope(
   proposal: StaffingProposal,

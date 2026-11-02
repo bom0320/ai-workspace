@@ -281,6 +281,10 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
   Staffing Approval / Scope issuance는 아래 Step 3에서 구현했고 Budget Reservation / Invocation 실행은 미구현이다.
 
+R2 검증 규칙은 CEO Inspection State와 분리했다. 최초 Finalization과 승인 시점 재검증은 같은 Snapshot
+파일·등록 정보·정책 기반 규칙을 사용한다. CEO Context JSON budget과 Assignment 검증 envelope JSON
+budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실제 직렬화 크기 제한을 유지한다.
+
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
 - 실제 controlling-terminal 확인으로 설정한 Phase A read-only 위임을 다른 Goal에 재사용한다. 범위 내는
@@ -334,6 +338,15 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 v4의 큰 목표와 LangGraph.js 채택은 고정한다. 구체적인 Domain 설계와 내부 구현은 위 순서로 진행하며,
 CEO Staffing 호출·Loop의 구현을 승인·재개 Workflow, Specialist 실행, 다중 직원 구현·통합 또는
 Executive Report의 완료로 해석하지 않는다. Phase B의 Assignment 모델·handoff 계약·실행 및 재작업 정책은 후속 설계 대상이다.
+
+
+Staffing / Governance 경계 정리: Approval과 Authorization은 별도 내부 책임으로 분리했으며 기존 공개 API는
+유지한다. 저장된 직접 승인 Scope는 무관한 Delegation 만료·철회에 의존하지 않는다. 위임 승인 Scope는
+정확한 최신 활성 위임과 범위를 재확인하며 두 출처 모두 현재 System Policy·Snapshot·digest 연결을 검사한다.
+Step 4 전 남은 신뢰 경계는 R2 Proposal의 실제 Harness 발급 출처다. 승인 JSON의 구조·정책 재검증과
+Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 Finalization digest 기록과 Approval의 동일
+발급 결과 확인을 최소 통합 과제로 남긴다. Authorization / Budget Reservation은 아직 구현하지 않았다.
+
 
 ## v5 — Evaluation
 

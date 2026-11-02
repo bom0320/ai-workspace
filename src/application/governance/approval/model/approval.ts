@@ -8,7 +8,7 @@ import {
   staffingProposalSchema,
   type StaffingProposal,
 } from "@/application/staffing/index.js";
-import { approvedOperatingScopeSchema } from "./authority.js";
+import { approvedOperatingScopeSchema } from "../../model/authority.js";
 
 const text = z.string().min(1);
 const date = z.iso.datetime();

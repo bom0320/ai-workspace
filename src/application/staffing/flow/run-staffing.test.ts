@@ -17,6 +17,7 @@ import * as snapshotService from "@/services/repository-snapshot/index.js";
 
 import {
   runStaffing,
+  validateStaffingProposal,
   staffingRunResultSchema,
   staffingProposalSchema,
   type CEOStaffingAgent,
@@ -376,6 +377,37 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       }).success
     ).toBe(false);
   });
+
+  it.each(["files", "bytes", "json", "specialist", "context", "budget"])(
+    "revalidates a Proposal without CEO state and rejects %s policy violations",
+    async (kind) => {
+      if (kind === "json") {
+        writeFileSync(join(root, "src/a.ts"), '"'.repeat(700));
+        git("add", ".");
+        git("commit", "--quiet", "-m", "escaped context");
+      }
+      const result = await runStaffing(options);
+      if (result.status !== "proposed") throw new Error(JSON.stringify(result));
+      const configuration = {
+        availableSpecialists: options.availableSpecialists,
+        allowedContextPaths: options.allowedContextPaths,
+        limits: structuredClone(options.limits),
+        policy: structuredClone(options.policy),
+      };
+      expect(() =>
+        validateStaffingProposal(result.proposal, configuration)
+      ).not.toThrow();
+      if (kind === "files") configuration.limits.maxTotalFiles = 0;
+      if (kind === "bytes") configuration.limits.maxFileBytes = 1;
+      if (kind === "json") configuration.limits.maxContextBytes = 2000;
+      if (kind === "specialist") configuration.availableSpecialists = [];
+      if (kind === "context") configuration.allowedContextPaths = [];
+      if (kind === "budget") configuration.policy.maxAgentInvocations = 1;
+      expect(() =>
+        validateStaffingProposal(result.proposal, configuration)
+      ).toThrow();
+    }
+  );
 
   it("rejects obsolete constraint fields and invalid policy before calling the CEO", async () => {
     options.policy.enforcementRules = [

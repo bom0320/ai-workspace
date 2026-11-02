@@ -726,8 +726,13 @@ Human-approved System Policy + optional Human Delegation Policy (local signed le
 → Proposal + ApprovalRecord + Scope를 원자적으로 보존 (Specialist 실행 없음)
 ```
 
-`flow/staffing-approval.ts`는 설정·승인·조회 진입점이다. 내부 평가와 Scope 구성은 validation /
-transformation에 둔다. `configureStaffingSystemPolicy()`와 `configureHumanDelegation()`은 최초 설정·변경도
+flow 루트의 configure-staffing-system-policy / configure-human-delegation / approve-staffing-proposal /
+get-approved-staffing-scope는 각각 설정·위임·승인·조회 Use-case다. approval-input은 입력·현재 Human 증표의
+신뢰 경계, staffing-issuance는 중복 발급·Proposal binding·Scope 내용·승인 출처 검증을 맡는다.
+orchestration/governance-transaction은 서비스의 동일 lock 안에서 ledger Schema 검사와 저장을 연결하며
+조회·검증·발급·저장을 별개 transaction으로 나누지 않는다. 내부 평가와 Scope 구성은 validation /
+transformation에 둔다. CLI 명령 해석·dispatch와 presenters/governance/approval-review의 검토 텍스트 구성도
+분리하며 터미널 확인과 기존 명령·출력은 유지한다. `configureStaffingSystemPolicy()`와 `configureHumanDelegation()`은 최초 설정·변경도
 Human 확인 없이는 저장하지 않는다. Policy ID / version, Approval ID와 Scope ID는 Harness가 발급한다.
 정책 최신 버전은 로컬 ledger가 소유하고 이전 버전은 추적용으로 보존한다. 최초 범위는 phase-a /
 read-only / shellExecution false뿐이다. policy expiry는 호출 시점의 시스템 시계로 검사한다.

@@ -1,3 +1,7 @@
+import type {
+  GovernanceLedger,
+  RepositoryGovernance,
+} from "../model/approval.js";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -112,6 +116,16 @@ function delegate() {
     configureHumanDelegation(root, delegation, accept(request)).status
   ).toBe("configured");
 }
+function alterStoredIssuance(
+  change: (issuance: RepositoryGovernance["issuances"][number]) => void
+) {
+  withGovernanceRecords((data, save) => {
+    const ledger = data as GovernanceLedger;
+    change(Object.values(ledger.repositories)[0].issuances[0]);
+    save(ledger);
+  });
+}
+
 beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), "ai-workspace-gov-home-"));
   terminal.home = home;
@@ -434,22 +448,58 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     delegate();
     const result = approveStaffingProposal(proposal);
     if (result.status !== "approved") throw new Error("Expected Scope");
-    withGovernanceRecords((data, save) => {
-      const ledger = data as {
-        repositories: Record<
-          string,
-          {
-            issuances: { scope: { budget: { maxAgentInvocations: number } } }[];
-          }
-        >;
-      };
-      Object.values(
-        ledger.repositories
-      )[0].issuances[0].scope.budget.maxAgentInvocations = 99;
-      save(ledger);
+    alterStoredIssuance(({ scope }) => {
+      scope.budget.maxAgentInvocations = 99;
     });
     expect(getApprovedStaffingScope(result.scope.id).status).toBe("denied");
   });
+  it.each([
+    "approval-link",
+    "proposal-digest",
+    "scope-contents",
+    "delegated-source",
+    "direct-uid",
+    "direct-time",
+  ])(
+    "rejects a stored issuance with invalid %s even when its envelope was signed by trusted code",
+    (caseName) => {
+      const direct = caseName.startsWith("direct-");
+      if (!direct) delegate();
+      const result = direct
+        ? approveStaffingProposal(
+            proposal,
+            accept(approveStaffingProposal(proposal))
+          )
+        : approveStaffingProposal(proposal);
+      if (result.status !== "approved") throw new Error("Expected Scope");
+      alterStoredIssuance(({ approval, scope }) => {
+        if (caseName === "approval-link")
+          scope.approvalRecordId = "unrelated-record";
+        if (caseName === "proposal-digest")
+          approval.proposalDigest = "unrelated-digest";
+        if (caseName === "scope-contents")
+          scope.goal.constraints = ["Altered instruction"];
+        if (
+          caseName === "delegated-source" &&
+          approval.source.type === "human-delegation"
+        )
+          approval.source.delegationApprovalId = "unrelated-confirmation";
+        if (
+          caseName === "direct-uid" &&
+          approval.source.type === "direct-human"
+        )
+          approval.source.confirmation.uid += 1;
+        if (
+          caseName === "direct-time" &&
+          approval.source.type === "direct-human"
+        )
+          approval.source.confirmation.confirmedAt = new Date(
+            Date.parse(approval.approvedAt) + 1000
+          ).toISOString();
+      });
+      expect(getApprovedStaffingScope(result.scope.id).status).toBe("denied");
+    }
+  );
   it("does not expose raw absolute paths or file data on failure", () => {
     proposal.snapshot.repositoryRoot = "/private/secret";
     const result = approveStaffingProposal(proposal);

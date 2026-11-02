@@ -12,6 +12,7 @@ import { approvedOperatingScopeSchema } from "./authority.js";
 
 const text = z.string().min(1);
 const date = z.iso.datetime();
+
 export const staffingSystemPolicySchema = z
   .object({
     repositoryRoot: text,

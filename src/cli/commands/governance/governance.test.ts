@@ -84,18 +84,20 @@ describe("Governance CLI Human decision surface", () => {
     ).toBe(1);
     const [binding, review] = vi.mocked(confirmHumanAction).mock.calls[0];
     expect(binding).toBe("exact-binding");
-    for (const text of [
-      "Review login",
-      "Preserve keyboard navigation",
-      "No code edits",
-      "frontend",
-      "Review feedback",
-      "src/login.ts",
-      "Invocation Budget: 2",
-      "Outside delegated Context",
-      "new validated Proposal",
-    ])
-      expect(review).toContain(text);
+    expect(review).toBe(
+      [
+        "Outside delegated Context",
+        "Goal: Review login",
+        "Human Constraints:",
+        "- Preserve keyboard navigation",
+        "- No code edits",
+        "Assignments:",
+        "- frontend: Review feedback",
+        "  Context: src/login.ts",
+        "Invocation Budget: 2",
+        "This approves staffing only, not solution direction, Tasks or execution. To change staffing, reject and create a new validated Proposal.",
+      ].join("\n")
+    );
     expect(approveStaffingProposal).toHaveBeenLastCalledWith(proposal, receipt);
   });
   it("does not request Human input for an existing delegated approval", async () => {

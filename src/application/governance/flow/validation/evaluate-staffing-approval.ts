@@ -29,15 +29,20 @@ export function evaluateStaffingApproval(
   if (!delegation) return "direct";
   if (
     delegation.repositoryRoot !== system.configuration.repositoryRoot ||
-    delegation.status !== "active" ||
-    Date.parse(delegation.expiresAt) <= now ||
-    Date.parse(delegation.approval.confirmedAt) > now ||
     delegation.systemPolicyVersion !== system.version
   )
     throw new Error(
       "Delegation is inactive, expired or no longer matches System Policy."
     );
-  const within =
+  if (
+    delegation.status !== "active" ||
+    Date.parse(delegation.expiresAt) <= now ||
+    Date.parse(delegation.approval.confirmedAt) > now
+  )
+    throw new Error(
+      "Delegation is inactive, expired or no longer matches System Policy."
+    );
+  const withinDelegatedScope =
     proposal.budget.maxAgentInvocations <= delegation.maxAgentInvocations &&
     proposal.assignments.every(
       (assignment) =>
@@ -46,5 +51,5 @@ export function evaluateStaffingApproval(
           delegation.allowedContextPaths.includes(path)
         )
     );
-  return within ? "delegated" : "direct";
+  return withinDelegatedScope ? "delegated" : "direct";
 }

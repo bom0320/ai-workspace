@@ -2,7 +2,7 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import type {
   GovernanceLedger,
   RepositoryGovernance,
-} from "../../model/approval.js";
+} from "../../../../shared/model/ledger.js";
 import {
   evaluateStaffingApproval,
   validateCurrentStaffingPolicy,

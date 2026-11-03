@@ -1,7 +1,7 @@
 import type {
   GovernanceLedger,
   RepositoryGovernance,
-} from "../model/approval.js";
+} from "../../../shared/model/ledger.js";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -37,7 +37,7 @@ import {
   type StaffingApprovalResult,
   type StaffingSystemPolicy,
   type HumanDelegationPolicyInput,
-} from "../../index.js";
+} from "../../../../index.js";
 
 const terminal = vi.hoisted(() => ({
   home: "",

@@ -1,8 +1,8 @@
-import type { StaffingApprovalResult } from "../model/approval.js";
 import {
-  withGovernanceLedger,
   deniedStaffingApproval,
-} from "./orchestration/governance-transaction.js";
+  type StaffingApprovalResult,
+} from "../../../shared/model/result.js";
+import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
 import { validateStoredIssuance } from "./validation/staffing-issuance.js";
 
 // Authenticate the stored issuance and current approval source. Reading a Scope

@@ -3,7 +3,7 @@ import {
   validateStaffingProposal,
   type StaffingProposal,
 } from "@/application/staffing/index.js";
-import type { RepositoryGovernance } from "../../model/approval.js";
+import type { RepositoryGovernance } from "../../../../shared/model/ledger.js";
 
 // Current proposal validity is shared by new approval and stored issuance checks.
 // It does not select an approval source or authenticate proposal issuance.

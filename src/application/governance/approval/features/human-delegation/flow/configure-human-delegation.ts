@@ -4,17 +4,17 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   humanDelegationPolicyInputSchema,
   humanDelegationPolicySchema,
-  type StaffingApprovalResult,
-} from "../model/approval.js";
+} from "../model/policy.js";
 import {
-  withGovernanceLedger,
   deniedStaffingApproval,
-} from "./orchestration/governance-transaction.js";
+  type StaffingApprovalResult,
+} from "../../../shared/model/result.js";
+import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
 import {
   consumeCurrentHumanConfirmation,
   resolveGovernanceRepository,
-  validateDelegationConfiguration,
-} from "./validation/approval-input.js";
+} from "../../../shared/validation/approval-input.js";
+import { validateDelegationConfiguration } from "./validation/delegation-configuration.js";
 
 export function configureHumanDelegation(
   repositoryPath: string,

@@ -747,12 +747,28 @@ Human-approved System Policy + optional Human Delegation Policy (local signed le
 → Proposal + ApprovalRecord + Scope를 원자적으로 보존 (Specialist 실행 없음)
 ```
 
-flow 루트의 configure-staffing-system-policy / configure-human-delegation / approve-staffing-proposal /
-get-approved-staffing-scope는 각각 설정·위임·승인·조회 Use-case다. approval-input은 입력·현재 Human 증표의
-신뢰 경계, staffing-issuance는 중복 발급·Proposal binding·Scope 내용·승인 출처 검증을 맡는다.
-orchestration/governance-transaction은 서비스의 동일 lock 안에서 ledger Schema 검사와 저장을 연결하며
-조회·검증·발급·저장을 별개 transaction으로 나누지 않는다. 내부 평가와 Scope 구성은 validation /
-transformation에 둔다. CLI 명령 해석·dispatch와 presenters/governance/approval-review의 검토 텍스트 구성도
+Approval 상위는 `features/`의 업무별 구현과 `shared/`의 공통 구현으로 구분한다.
+각 feature의 flow / model은 해당 업무의 흐름 / 전용 모델을 소유하며, 외부 공개 API는
+`approval/index.ts`에 유지한다. 하위 barrel이나 새로운 공개 API는 추가하지 않는다.
+
+- `features/system-policy/`: 운영 정책 모델과 등록·read-only Authority·경로 설정 검증,
+  `flow/configure-staffing-system-policy.ts`의 Human 확인 후 정책 저장.
+- `features/human-delegation/`: 위임 정책·상태·승인 근거 모델과 System Policy 범위 내 설정 검증,
+  `flow/configure-human-delegation.ts`의 설정·교체·철회.
+- `features/proposal-management/`: ApprovalRecord 모델, 신규 승인 방식 판단과 저장된 승인 유효성 검증,
+  `flow/approve-staffing-proposal.ts`와 `flow/get-approved-staffing-scope.ts`의 승인·조회.
+  내부 validation / transformation은 기존 Staffing Proposal 재검증과 Scope 발급 책임을 유지한다.
+
+`approval/shared`는 여러 업무가 공유하는 모델·기록 처리·입력 확인을 모은다.
+공통 `shared/model/ledger.ts`는 세 업무의 순수 모델을 조합하며 하위 workflow를 import하지 않는다.
+`shared/model/confirmation.ts`는 정책·위임·직접 승인에 공통인 Human 확인 증거 구조를 소유한다.
+공개 `StaffingApprovalResult`는 configured / approval-required / approved / denied를 세 업무에서
+함께 사용하므로 `shared/model/result.ts`에 유지하며 denied 결과 생성도 이곳에 둔다.
+`shared/validation/approval-input.ts`는 실제로 공유하는 Repository 확인과 일회용 Human 증표 검증만 담당한다.
+`shared/records/governance-transaction.ts`는 서비스의 동일 lock 안에서 ledger Schema 검사와 저장을 연결하며
+조회·검증·발급·저장을 별개 transaction으로 나누지 않는다. 업무별 설정 검증은 각 업무의
+flow/validation에 둔다. Approval과 Governance의 기존 index.ts 공개 API, 결과 형식과 Schema는 유지한다.
+CLI 명령 해석·dispatch와 presenters/governance/approval-review의 검토 텍스트 구성도
 분리하며 터미널 확인과 기존 명령·출력은 유지한다. `configureStaffingSystemPolicy()`와 `configureHumanDelegation()`은 최초 설정·변경도
 Human 확인 없이는 저장하지 않는다. Policy ID / version, Approval ID와 Scope ID는 Harness가 발급한다.
 정책 최신 버전은 로컬 ledger가 소유하고 이전 버전은 추적용으로 보존한다. 최초 범위는 phase-a /

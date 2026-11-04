@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+// context-paths remains an exact-file restriction on selected assignments.
+// It narrows, never extends, the separate discovery access ceiling.
 const paths = z.array(z.string().min(1));
 // Harness-authored mechanical policies, independent of Human instructions.
 // Parsing neither proves their trusted origin nor semantic constraint compliance.

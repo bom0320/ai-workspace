@@ -1,4 +1,7 @@
-import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
+import {
+  resolveContextAccessPolicy,
+  isContextScopeContained,
+} from "@/services/repository-inspection/index.js";
 import type { HumanDelegationPolicyInput } from "../../model/policy.js";
 import type { StaffingSystemPolicy } from "../../../system-policy/model/policy.js";
 
@@ -18,11 +21,11 @@ export function validateDelegationConfiguration(
     )
   )
     throw new Error("Delegation must reference unique registered Specialists.");
+  const delegated = resolveContextAccessPolicy(policy);
+  const maximum = resolveContextAccessPolicy(system);
   if (
-    policy.allowedContextPaths.some(
-      (path) =>
-        !isUnambiguousRepositoryPath(path) ||
-        !system.allowedContextPaths.includes(path)
+    delegated.allowedScopes.some(
+      (scope) => !isContextScopeContained(scope, maximum)
     )
   )
     throw new Error("Delegation Context must stay inside System Policy.");

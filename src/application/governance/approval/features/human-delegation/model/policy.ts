@@ -1,3 +1,4 @@
+import { contextAccessPolicySchema } from "@/contracts/context-access-policy.js";
 import { z } from "zod";
 import { specialistAuthoritySchema } from "@/contracts/specialist-authority.js";
 import { humanConfirmationEvidenceSchema as confirmation } from "../../../shared/model/confirmation.js";
@@ -8,7 +9,8 @@ export const humanDelegationPolicyInputSchema = specialistAuthoritySchema
   .extend({
     phase: z.literal("phase-a"),
     allowedSpecialistIds: z.array(text).min(1),
-    allowedContextPaths: z.array(text),
+    allowedContextPaths: z.array(text).default([]),
+    contextAccessPolicy: contextAccessPolicySchema.optional(),
     repositoryAccess: z.literal("read"),
     shellExecution: z.literal(false),
     maxAgentInvocations: z.number().int().positive(),

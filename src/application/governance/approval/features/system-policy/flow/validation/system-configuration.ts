@@ -1,4 +1,4 @@
-import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
+import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
@@ -22,11 +22,6 @@ export function validateSystemConfiguration(
     )
   )
     throw new Error("System Policy is restricted to read-only analysis.");
-  if (
-    configuration.allowedContextPaths.some(
-      (path) => !isUnambiguousRepositoryPath(path)
-    )
-  )
-    throw new Error("System Policy requires unambiguous Context paths.");
+  resolveContextAccessPolicy(configuration);
   return configuration;
 }

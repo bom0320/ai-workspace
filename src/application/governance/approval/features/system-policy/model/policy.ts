@@ -1,3 +1,4 @@
+import { contextAccessPolicySchema } from "@/contracts/context-access-policy.js";
 import { z } from "zod";
 import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import {
@@ -11,7 +12,8 @@ export const staffingSystemPolicySchema = z
     repositoryRoot: text,
     phase: z.literal("phase-a"),
     availableSpecialists: z.array(specialistDefinitionSchema).min(1),
-    allowedContextPaths: z.array(text),
+    allowedContextPaths: z.array(text).default([]),
+    contextAccessPolicy: contextAccessPolicySchema.optional(),
     limits: staffingInspectionLimitsSchema,
     policy: staffingProposalPolicySchema,
   })

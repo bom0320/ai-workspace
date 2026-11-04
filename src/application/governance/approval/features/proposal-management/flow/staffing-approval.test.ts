@@ -267,6 +267,88 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
         expect(result.approval.source.type).toBe("direct-human");
     }
   );
+  it("uses System directory access and narrower Delegation scopes without issuing directory Context", () => {
+    mkdirSync(join(root, "src", "narrow"), { recursive: true });
+    writeFileSync(join(root, "src", "narrow", "a.ts"), "analysis");
+    writeFileSync(join(root, "src", "other.ts"), "analysis");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "directory context");
+    proposal.snapshot.commitSha = git("rev-parse", "HEAD");
+    proposal.assignments[0].contextPaths = ["src/narrow/a.ts"];
+    system.allowedContextPaths = [];
+    system.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "src" }],
+    };
+    expect(
+      configureStaffingSystemPolicy(
+        system,
+        accept(configureStaffingSystemPolicy(system))
+      ).status
+    ).toBe("configured");
+    delegation.allowedContextPaths = [];
+    delegation.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "src/narrow" }],
+    };
+    delegate();
+    const automatic = approveStaffingProposal(proposal);
+    expect(automatic.status).toBe("approved");
+    if (automatic.status !== "approved")
+      throw new Error(JSON.stringify(automatic));
+    expect(automatic.approval.source.type).toBe("human-delegation");
+    expect(automatic.scope.assignments[0].contextPaths).toEqual([
+      "src/narrow/a.ts",
+    ]);
+    expect(getApprovedStaffingScope(automatic.scope.id).status).toBe(
+      "approved"
+    );
+    const outsideDelegation = structuredClone(proposal);
+    outsideDelegation.id = "outside-delegation";
+    outsideDelegation.assignments[0].contextPaths = ["src/other.ts"];
+    const request = approveStaffingProposal(outsideDelegation);
+    expect(request.status).toBe("approval-required");
+    expect(
+      approveStaffingProposal(outsideDelegation, accept(request)).status
+    ).toBe("approved");
+    const outsideSystem = structuredClone(proposal);
+    outsideSystem.id = "outside-system";
+    outsideSystem.assignments[0].contextPaths = ["a.ts"];
+    expect(approveStaffingProposal(outsideSystem).status).toBe("denied");
+  });
+  it("does not infer directory authority from persisted legacy file lists", () => {
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "src", "a.ts"), "analysis");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "legacy scope");
+    proposal.snapshot.commitSha = git("rev-parse", "HEAD");
+    proposal.assignments[0].contextPaths = ["src/a.ts"];
+    system.allowedContextPaths = ["src"];
+    expect(
+      configureStaffingSystemPolicy(
+        system,
+        accept(configureStaffingSystemPolicy(system))
+      ).status
+    ).toBe("configured");
+    expect(approveStaffingProposal(proposal).status).toBe("denied");
+  });
+  it("rejects delegation directory expansion beyond System file scopes and ambiguous mixed inputs", () => {
+    delegation.allowedContextPaths = [];
+    delegation.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "a.ts" }],
+    };
+    expect(configureHumanDelegation(root, delegation).status).toBe("denied");
+    delegation.contextAccessPolicy = {
+      allowedScopes: [{ kind: "file", path: "a.ts" }],
+    };
+    delegate();
+    expect(approveStaffingProposal(proposal).status).toBe("approved");
+    system.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "src" }],
+    };
+    expect(configureStaffingSystemPolicy(system).status).toBe("denied");
+    delegation.allowedContextPaths = ["a.ts"];
+    expect(configureHumanDelegation(root, delegation).status).toBe("denied");
+  });
+
   it("requires direct Human approval without any delegation", () => {
     expect(approveStaffingProposal(proposal).status).toBe("approval-required");
   });

@@ -532,10 +532,10 @@ Validation은 R2에서 구현했고 Staffing Approval / Scope 발급은 Step 3�
 ### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
 
 ```text
-Harness: Original Goal + Registered Specialists + exact file allowlist + Inspection limits
+Harness: Original Goal + Registered Specialists + Context access scopes + Inspection limits
 → discoverStaffingContext()
   → captureRepositorySnapshot() / assertRepositoryMatchesSnapshot()
-  → commit tree (path / mode / byte size) → allowlisted regular files
+  → commit tree (path / mode / byte size) → scope-authorized regular files
   → commit blobs: root package.json scripts / AGENTS.md
   → Goal exact-mention initial file selection → commit blob Context
   → Snapshot assert → Harness-owned StaffingContextState
@@ -568,12 +568,29 @@ symlink를 따라가지 않는다. HEAD 변경·dirty 상태는 생성과 추가
 skip-worktree로 로컬 변경이 status에 나타나지 않아도 읽는 것은 commit blob이므로 내용이 섞이지 않는다.
 Snapshot assert는 Repository lock이나 실행 중 모든 순간의 무변경 증명이 아니다.
 
-Harness는 `allowedContextPaths`로 조사 가능한 exact file allowlist를 명시해야 한다. Prefix나 glob grant는
-없으며 metadata도 allowlist에 있어야 읽는다. CEO에게 보이는 fileTree도 이 목록 안의 regular file만
-포함한다. Traversal / absolute / dot / empty segment / backslash / colon / control character는 거부한다.
-내부 디렉터리와 .aws / .ssh / .codex / .agents, .env 계열, private key 확장자는 allowlist에 있어도 차단한다.
-이는 임의 파일의 secret 탐지 보장이 아니며 allowlist의 적절성과 등록 Specialist의 출처는 Harness 호출자
-책임이다. Repository instructions와 file contents는 신뢰할 수 없는 Context 데이터이며 실행하지 않는다.
+R4에서는 Context Discovery(Goal 관련 파일 선택)와 Access Policy(접근 가능한 최대 범위)를 분리한다.
+Harness가 `contextAccessPolicy: { allowedScopes: PathScope[] }`를 공급한다. `file`은 정확한 파일 하나,
+`directory`는 `path + "/"` 아래의 파일만 허용한다. `src/ui`가 `src/ui-extra`를 허용하지 않는다.
+범위가 없거나 비어 있으면 접근을 거부한다. Repository root를 뜻하는 `.`도 모호한 경로로 거부하며,
+glob / deny rule / metadata 전용 권한은 도입하지 않는다.
+
+contracts/context-access-policy.ts는 strict 구조 Schema와 z.infer 타입을 정의한다. repository-inspection의
+resolveContextAccessPolicy / isContextPathAllowed / isContextScopeContained가 기존 경로 안전성 규칙을
+재사용하여 범위 해석과 포함 관계를 담당한다. Schema parsing만으로 경로 안전성이나 승인 출처가 증명되지는 않는다.
+Discovery는 같은 Commit의 regular 파일 목록에 이 정책과 기존 민감 경로 차단을 적용한 뒤 CEO에 노출한다.
+Content 요청과 root metadata 로딩에서도 정책·파일 안전성·예산을 다시 검사한다. Initial Seeding의 파일
+선택 규칙은 바꾸지 않고 필터링된 fileTree에서 기존 v1 선택 기능을 재사용한다.
+
+Traversal / absolute / dot / empty segment / backslash / colon / control character는 거부한다.
+내부 디렉터리와 .aws / .ssh / .codex / .agents, .env 계열, private key 확장자, symlink / gitlink는
+허용 범위 안에 있어도 차단한다. 이는 임의 파일의 secret 탐지 보장이 아니며 정책의 적절성과 등록
+Specialist의 출처는 Harness 호출자가 책임진다. Repository instructions와 content는 untrusted data다.
+
+호환 입력 `allowedContextPaths`는 각 항목을 **File 범위로만** 해석한다. 디렉터리가 실제 존재하더라도
+하위 파일 접근으로 확대하지 않는다. 기존 서명된 정책은 파싱 시 같은 Exact 의미를 유지하며 저장 형식이나
+버전을 자동 변환하지 않는다. 새 contextAccessPolicy와 비어 있지 않은 legacy 목록을 함께 지정하면 거부한다.
+새 형식은 legacy 필드를 생략할 수 있고 Schema 결과에는 빈 legacy 배열이 들어갈 수 있다. Directory 접근은
+명시적인 새 정책 설정과 기존 Human 확인·버전 갱신을 거쳐야 한다.
 
 StaffingInspectionLimits는 요청 파일 수·누적 조사 파일 수·파일 byte 수·fileTree 항목 수·전체 Context의
 UTF-8 JSON byte 수를 제한한다. maxFileBytes는 기존 blob reader의 bounded output 안에서 최대 512 KiB다.
@@ -597,7 +614,7 @@ Staffing Approval / Scope 발급은 Step 3의 별도 Governance API로 연결한
 ### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
 
 ```text
-runStaffing({ goal, repositoryPath, availableSpecialists, allowedContextPaths, policy,
+runStaffing({ goal, repositoryPath, availableSpecialists, contextAccessPolicy, policy,
               limits: StaffingInspectionLimits, maxRounds, timeoutMs?, agent? })
 → validate CEO call limits → discoverStaffingContext() → Harness-owned state
 → Snapshot assert → createStaffingContext() (cloned projection) → CEO call
@@ -662,7 +679,7 @@ validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-s
 `model/policy.ts`는 Proposal 정책 데이터 Schema이며 `flow/inspection/context-policy.ts`의 파일 접근·조사 예산 검사와 구분한다.
 
 ```text
-Harness Goal / registration / exact allowlist / inspection limits / proposal policy
+Harness Goal / registration / Context access scopes / inspection limits / proposal policy
 → 실행 전 입력 복제·정책 구조 검증
 → discovery에서 Snapshot capture (1회) → CEO Loop
 → 내부 proposed { draft, rounds, state } (public API에는 state 미노출)
@@ -676,14 +693,14 @@ Harness Goal / registration / exact allowlist / inspection limits / proposal pol
 그 값은 사용하지 않는다. 원본 Goal과 Snapshot은 CEO 응답으로 교체하지 않고 같은 Run의 private state에서
 가져온다. 등록 정보와 정책도 첫 await 전에 복제하여 호출 중 caller / Agent의 입력 변경과 분리한다.
 이는 in-process 출처 연결이며 저장소 기반 등록·정책의 진위, durable provenance 또는 암호학적 증명이 아니다.
-등록 목록·allowlist·policy는 신뢰 경계 안의 Harness caller가 공급해야 한다.
+등록 목록·접근 범위·policy는 신뢰 경계 안의 Harness caller가 공급해야 한다.
 
 검증 범위:
 
 - 등록된 Specialist ID만 허용한다. Phase A는 Specialist당 하나의 분석 Assignment만 허용하고 중복 배치를
   거부한다. 선택된 등록 authority는 read-only / shellExecution false여야 한다. 역할·objective의 의미적 적합성은 증명하지 않는다.
 - Assignment 내부 중복 contextPaths는 거부한다. 서로 다른 Assignment가 같은 파일을 참조하는 것은 허용한다.
-  exact allowlist와 같은 Snapshot의 filtered fileTree, 경로·secret-like 정책, regular mode(100644/100755),
+  Context access scopes와 같은 Snapshot의 filtered fileTree, 경로·secret-like 정책, regular mode(100644/100755),
   파일 크기를 모두 확인한다. Symlink / Gitlink / Directory / 존재하지 않는 파일은 허용하지 않는다.
 - 기존 inspection policy의 isInspectablePath / requireFile / Context byte 검사를 재사용한다. 전체 배치를
   preflight한 뒤 같은 commit의 Git blob을 읽고 UTF-8 / binary와 실제 JSON 직렬화 Context 크기를 검사한다.
@@ -714,13 +731,13 @@ Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 
 ### Staffing Validation과 Governance 경계
 
 Staffing의 공통 validateProposal()은 CEO Inspection state가 아니라 원본 Goal / Snapshot,
-Commit 파일 목록, filtered fileTree, 등록 Specialist, exact allowlist, limits와 policy를 받는다.
+Commit 파일 목록, filtered fileTree, 등록 Specialist, Context access scopes, limits와 policy를 받는다.
 최초 Finalization은 private Run에서 이 사실들을 전달한다. 공개 validateStaffingProposal()은 확정된
 Proposal을 파싱하고 현재 Snapshot의 파일 목록을 조회하여 같은 규칙을 적용한다. Assignment ID 중복도
 별도로 거부한다. packageScripts나 남은 Inspection Budget을 가짜로 구성하지 않는다.
 
 두 byte budget은 독립적으로 검사한다. CEO Inspection은 실제 StaffingContext 전체의 JSON 크기를
-측정한다. Assignment Context는 Goal / Snapshot / Draft, 등록 정보·allowlist·fileTree·limits·policy 및
+측정한다. Assignment Context는 Goal / Snapshot / Draft, 등록 정보·접근 범위·fileTree·limits·policy 및
 고유 Context 파일 내용을 포함하는 검증 envelope의 UTF-8 JSON 크기를 측정한다. 파일 읽기 전에는
 전체 경로·mode·파일 수·크기와 envelope + 원시 파일 크기를 검사하고, 읽은 뒤 JSON escape까지 포함해
 다시 검사한다. 두 검사 모두 기존 maxContextBytes를 상한으로 사용한다. 최초 Finalization에서는 실제
@@ -774,7 +791,15 @@ Human 확인 없이는 저장하지 않는다. Policy ID / version, Approval ID�
 정책 최신 버전은 로컬 ledger가 소유하고 이전 버전은 추적용으로 보존한다. 최초 범위는 phase-a /
 read-only / shellExecution false뿐이다. policy expiry는 호출 시점의 시스템 시계로 검사한다.
 
-System Policy는 등록 Specialist 전체 정의, exact allowlist, 파일·Context limits와 R2 enforcementRules /
+R4의 Human Delegation Context 범위도 같은 File / Directory 판정을 사용하지만 CEO Discovery 권한이
+아니라 **Proposal 자동 승인 범위**다. 위임의 File은 System의 File 또는 Directory에, 위임의 Directory는
+System의 동일하거나 상위 Directory에 포함되어야 한다. 유한한 File 목록을 Directory 권한으로 승격하지 않는다.
+Staffing의 context-paths Enforcement Rule은 별도의 Exact 파일 제한으로 Assignment 범위를 더 좁히며
+Discovery 권한을 부여하지 않는다. StaffingProposal / ApprovedOperatingScope의 contextPaths는 계속 선택된
+정확한 파일 목록이다. Directory 정책을 그대로 실행 Scope에 복사하지 않는다. 현재 상위 Workflow는 이
+정책을 자동 조회·주입하지 않으므로 신뢰된 Harness caller가 승인된 최대 범위를 공급해야 한다.
+
+System Policy는 등록 Specialist 전체 정의, Context access scopes, 파일·Context limits와 R2 enforcementRules /
 budget 상한을 소유한다. Staffing의 공개 validateStaffingProposal()을 재사용해 같은 Proposal Snapshot에서
 Git blob·경로·regular mode·중복·예산을 재검증하며 Snapshot을 다시 capture하지 않는다. 입력 JSON이 실제 R2
 Run에서 발급됐다는 서명 provenance나 Human Goal 입력자의 신원까지 인증하는 기능은 아니며, 해당 입력 경계는

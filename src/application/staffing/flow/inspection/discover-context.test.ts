@@ -134,7 +134,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     expect(context.repository).toEqual({
       name: root.split("/").at(-1),
       commitSha: state.snapshot.commitSha,
-      fileTree: [...options.allowedContextPaths].sort(),
+      fileTree: [...options.allowedContextPaths!].sort(),
       packageScripts: { test: "vitest run" },
       instructions: "Untrusted repository instructions",
     });
@@ -155,6 +155,65 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     expect(state.context.goal.constraints).toEqual(["Do not modify files"]);
     expect(state.context.repository.fileTree.length).toBe(5);
     expect(git("status", "--porcelain")).toBe("");
+  });
+
+  it("discovers directory files while hiding adjacent, sensitive and non-regular targets", () => {
+    write("src/nested/extra.ts", "extra");
+    write("src-other/hidden.ts", "hidden");
+    write("src/.env.local", "secret");
+    symlinkSync("../private.txt", join(root, "src", "link.ts"));
+    commit();
+    const state = ready(
+      discoverStaffingContext({
+        ...options,
+        allowedContextPaths: undefined,
+        contextAccessPolicy: {
+          allowedScopes: [{ kind: "directory", path: "src" }],
+        },
+      })
+    );
+    expect(state.context.repository.fileTree).toEqual([
+      "src/login.ts",
+      "src/nested/extra.ts",
+      "src/notes with spaces.md",
+      "src/other.ts",
+    ]);
+    expect(state.context.repository.packageScripts).toEqual({});
+    expect(state.context.repository.instructions).toBeUndefined();
+    expect(createStaffingContext(state)).not.toHaveProperty(
+      "contextAccessPolicy"
+    );
+    vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
+    for (const path of [
+      "src-other/hidden.ts",
+      "src/.env.local",
+      "AGENTS.md",
+      "package.json",
+      "src/../private.txt",
+    ]) {
+      failure(inspect(state, [path]), /forbidden/);
+    }
+    failure(inspect(state, ["src/link.ts"]), /not a regular/);
+    expect(gitInfrastructure.readRepositoryFileAtCommit).not.toHaveBeenCalled();
+    const next = ready(inspect(state, ["src/nested/extra.ts"]));
+    expect(next.context.inspectedFiles).toContainEqual({
+      path: "src/nested/extra.ts",
+      content: "extra",
+    });
+    expect(state.context.inspectedFiles).toHaveLength(1);
+  });
+  it("retains inspection budgets with directory access", () => {
+    const state = ready(
+      discoverStaffingContext({
+        ...options,
+        allowedContextPaths: undefined,
+        contextAccessPolicy: {
+          allowedScopes: [{ kind: "directory", path: "src" }],
+        },
+        limits: { ...options.limits, maxTotalFiles: 1 },
+      })
+    );
+    failure(inspect(state, ["src/other.ts"]), /maxTotalFiles/);
   });
 
   it("provides only allowlisted metadata and never reads unselected content", () => {
@@ -248,7 +307,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
       discoverStaffingContext({
         ...options,
         goal: { ...options.goal, objective: "Review ignored.ts" },
-        allowedContextPaths: [...options.allowedContextPaths, "ignored.ts"],
+        allowedContextPaths: [...options.allowedContextPaths!, "ignored.ts"],
       })
     );
     expect(state.context.repository.fileTree).not.toContain("ignored.ts");
@@ -307,7 +366,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, "missing.ts"],
+        allowedContextPaths: [...options.allowedContextPaths!, "missing.ts"],
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -359,7 +418,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, ...forbidden],
+        allowedContextPaths: [...options.allowedContextPaths!, ...forbidden],
       })
     );
     for (const path of forbidden) {
@@ -386,7 +445,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, ...paths],
+        allowedContextPaths: [...options.allowedContextPaths!, ...paths],
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -403,7 +462,10 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, "src/binary.dat"],
+        allowedContextPaths: [
+          ...options.allowedContextPaths!,
+          "src/binary.dat",
+        ],
       })
     );
     failure(inspect(state, ["src/other.ts", "src/binary.dat"]), /UTF-8 text/);
@@ -432,7 +494,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, "src/large.ts"],
+        allowedContextPaths: [...options.allowedContextPaths!, "src/large.ts"],
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -474,7 +536,10 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths, "src/escaped.ts"],
+        allowedContextPaths: [
+          ...options.allowedContextPaths!,
+          "src/escaped.ts",
+        ],
       })
     );
     const context = structuredClone(state.context);

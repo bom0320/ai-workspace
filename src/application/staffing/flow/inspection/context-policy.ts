@@ -1,3 +1,5 @@
+import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
+import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 import {
   isInternalInspectionComponent,
@@ -69,7 +71,10 @@ export function prepareInspection(
   if (new Set(paths).size !== paths.length)
     throw new Error("Duplicate inspection paths.");
   for (const path of paths) {
-    if (!isInspectablePath(path) || !state.allowedContextPaths.includes(path)) {
+    if (
+      !isInspectablePath(path) ||
+      !isContextPathAllowed(path, state.contextAccessPolicy)
+    ) {
       throw new Error(`Inspection path is forbidden or ambiguous: ${path}`);
     }
     requireFile(state.files, path, limits);
@@ -95,7 +100,7 @@ export function prepareInspection(
 
 export function createAllowedFileTree(
   files: CommitFile[],
-  allowed: ReadonlySet<string>,
+  accessPolicy: ContextAccessPolicy,
   limits: StaffingInspectionLimits
 ): string[] {
   const fileTree = files
@@ -103,7 +108,7 @@ export function createAllowedFileTree(
       (file) =>
         ["100644", "100755"].includes(file.mode) &&
         isInspectablePath(file.path) &&
-        allowed.has(file.path)
+        isContextPathAllowed(file.path, accessPolicy)
     )
     .map(({ path }) => path)
     .sort();
@@ -116,13 +121,21 @@ export function createAllowedFileTree(
 // but does not consume the inspected-file count budget.
 export function prepareMetadataInspection(
   files: CommitFile[],
-  context: StaffingContext
+  context: StaffingContext,
+  accessPolicy: ContextAccessPolicy
 ): string[] {
   const { fileTree } = context.repository;
   const { limits } = context;
   const metadata = ["package.json", "AGENTS.md"].filter((path) =>
     fileTree.includes(path)
   );
+  if (
+    metadata.some(
+      (path) =>
+        !isInspectablePath(path) || !isContextPathAllowed(path, accessPolicy)
+    )
+  )
+    throw new Error("Metadata access is outside Context policy.");
   const metadataBytes = metadata.reduce(
     (sum, path) => sum + requireFile(files, path, limits).size!,
     0

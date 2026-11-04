@@ -256,7 +256,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   Proposal parsing은 Human Approval이나 운영 권한 발급이 아니다.
 - **2.2 Implemented**: v1의 Goal 기반 초기 파일 선택·metadata parsing·내부 경로 제외를 공통 capability로
   재사용하고 v2 Snapshot capture/assert 및 commit blob reader로 Staffing Context를 구성한다.
-  Tree / package scripts / AGENTS.md / inspected files는 같은 commit 기준이다. Harness exact allowlist,
+  Tree / package scripts / AGENTS.md / inspected files는 같은 commit 기준이다. Harness Context access scopes(legacy exact allowlist 호환),
   regular-file mode, 파일·Context 크기·조사 예산을 검증하며 CEO-facing projection에 내부 절대경로를 추가하지 않는다.
   Planning은 Working Tree 기반 조사와 TaskContract 생성 책임을 유지하고 Staffing은 별도 Application이다.
   실제 임시 Git Repository와 기존 v1–v3 / Governance 회귀 테스트로 검증한다.
@@ -285,6 +285,17 @@ R2 검증 규칙은 CEO Inspection State와 분리했다. 최초 Finalization과
 파일·등록 정보·정책 기반 규칙을 사용한다. CEO Context JSON budget과 Assignment 검증 envelope JSON
 budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실제 직렬화 크기 제한을 유지한다.
 
+### R4 — Access Policy & Context Discovery — Implemented
+
+- File / Directory PathScope와 단일 contextAccessPolicy.allowedScopes를 추가했다. 파일 목록 노출과 Content
+  로딩 전에 같은 경로 경계·안전 규칙을 적용하며 Snapshot / 파일 mode / 민감 경로 / 예산 제한을 유지한다.
+- Discovery는 정책이 허용한 후보에서 파일을 선택한다. 정책은 신뢰된 Harness가 공급하며 CEO는 변경하지 못한다.
+- System Policy는 접근 상한, Human Delegation은 그 안의 자동 승인 범위를 소유한다. Proposal / Scope에는
+  실제 선택된 정확한 contextPaths만 남긴다. context-paths Enforcement Rule은 추가 Exact 제한이다.
+- 기존 allowedContextPaths와 저장된 정책은 File 범위로만 해석하며 Directory 권한으로 자동 변환하지 않는다.
+  새 범위와 비어 있지 않은 legacy 목록을 함께 지정하면 거부한다. 정책 변경은 기존 Human 확인·버전 절차를 따른다.
+- Glob / Deny / 별도 Metadata 권한 및 상위 Workflow 자동 연결은 구현하지 않았다.
+
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
 - 실제 controlling-terminal 확인으로 설정한 Phase A read-only 위임을 다른 Goal에 재사용한다. 범위 내는
@@ -305,7 +316,7 @@ budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실�
   Repository 내용·AGENTS.md는 untrusted data이며 inspect 성공과 propose 결과는 운영 권한이 아니다.
 - CEO 호출 수(maxRounds), Inspection 파일 수·Context 크기, Draft의 이후 활동 예산과 Approved Scope
   운영 예산을 구분한다. timeoutMs는 기본 Codex 호출에 적용하며 주입 Agent의 취소·timeout은 해당 adapter 책임이다.
-- Harness가 등록 후보·exact allowlist·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
+- Harness가 등록 후보·Context access scopes·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
   Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적 Enforcement Rules를 검증한다.
   업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
   Step 3은 proposal.goal.constraints 전체와 제안을 검토하는 직접 승인 접점과 사전 위임 정책 설정을 제공한다.

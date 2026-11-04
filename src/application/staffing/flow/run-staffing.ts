@@ -57,7 +57,7 @@ export async function runStaffing(
         snapshot: state.snapshot,
         files: state.files,
         fileTree: state.context.repository.fileTree,
-        allowedContextPaths: state.allowedContextPaths,
+        contextAccessPolicy: state.contextAccessPolicy,
         specialists: runOptions.availableSpecialists,
         limits: state.context.limits,
       },

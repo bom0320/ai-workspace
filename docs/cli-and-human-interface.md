@@ -327,7 +327,7 @@ pnpm dev governance revoke /path/to/repository
 ```
 
 System Policy JSON은 repositoryRoot, phase("phase-a"), availableSpecialists(기존 등록 정의),
-allowedContextPaths(exact 파일), limits(기존 StaffingInspectionLimits), policy(maxAgentInvocations /
+contextAccessPolicy.allowedScopes(File / Directory 범위), limits(기존 StaffingInspectionLimits), policy(maxAgentInvocations /
 enforcementRules)를 사용한다. setup은 최초 설정과 변경 모두 실제 terminal 확인을 요구한다.
 CEO에게 설정 파일이나 서명 키를 제공해서는 안 된다.
 
@@ -337,13 +337,21 @@ Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞�
 {
   "phase": "phase-a",
   "allowedSpecialistIds": ["frontend"],
-  "allowedContextPaths": ["src/login.ts"],
+  "contextAccessPolicy": {
+    "allowedScopes": [{ "kind": "directory", "path": "src/login" }]
+  },
   "repositoryAccess": "read",
   "shellExecution": false,
   "maxAgentInvocations": 2,
   "expiresAt": "2027-01-01T00:00:00.000Z"
 }
 ```
+
+Directory 위임은 System Policy의 동일하거나 상위 Directory 범위 안이어야 한다. 이 범위는 자동 승인
+조건이며 CEO의 Discovery 권한을 부여하지 않는다. 실제 Proposal과 Scope에는 정확한 파일만 들어간다.
+기존 JSON / 저장 정책의 allowedContextPaths는 계속 Exact File 목록으로 동작한다. 새 정책에서는 이를
+생략하거나 빈 배열로 둘 수 있지만, 비어 있지 않은 목록과 contextAccessPolicy를 함께 주면 거부한다.
+권한 확대를 위한 Directory 변경은 setup / delegate의 기존 Human 확인과 버전 갱신을 거친다.
 
 최초 위임·교체·철회도 실제 /dev/tty에서 표시된 `Approve <random challenge>`와 Enter로 확인한다.
 stdin의 단순 Approve·JSON의 approved 필드로 대신할 수 없다. terminal이 없거나 거절·EOF이면 실패한다.

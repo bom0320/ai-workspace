@@ -1,3 +1,5 @@
+import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
+import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
 import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
@@ -30,7 +32,7 @@ export type ProposalValidationContext = {
   snapshot: RepositorySnapshot;
   files: CommitFile[];
   fileTree: string[];
-  allowedContextPaths: string[];
+  contextAccessPolicy: ContextAccessPolicy;
   specialists: SpecialistDefinition[];
   limits: StaffingInspectionLimits;
 };
@@ -83,7 +85,7 @@ export function validateProposal(
     for (const path of assignment.contextPaths) {
       if (
         !isInspectablePath(path) ||
-        !context.allowedContextPaths.includes(path) ||
+        !isContextPathAllowed(path, context.contextAccessPolicy) ||
         !context.fileTree.includes(path)
       )
         throw new ProposalPolicyError(

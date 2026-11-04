@@ -1,3 +1,4 @@
+import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
 import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 import {
   readRepositoryFileAtCommit,
@@ -18,9 +19,10 @@ import {
 export function loadRepositoryMetadata(
   snapshot: RepositorySnapshot,
   files: CommitFile[],
-  context: StaffingContext
+  context: StaffingContext,
+  accessPolicy: ContextAccessPolicy
 ): StaffingContext {
-  const metadata = prepareMetadataInspection(files, context);
+  const metadata = prepareMetadataInspection(files, context, accessPolicy);
   const contents = new Map(
     metadata.map((path) => [
       path,

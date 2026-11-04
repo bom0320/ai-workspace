@@ -1,3 +1,5 @@
+import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
+import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { basename } from "node:path";
 
 import { z } from "zod";
@@ -12,7 +14,6 @@ import {
 } from "@/contracts/specialist.js";
 import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
-import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
 
 import type { StaffingContextState } from "../../model/state.js";
 import { ceoStaffingDecisionSchema } from "../../protocol/ceo.js";
@@ -41,9 +42,9 @@ export type DiscoverStaffingContextOptions = {
   repositoryPath: string;
   availableSpecialists: SpecialistDefinition[];
   limits: StaffingInspectionLimits;
-  // Harness-selected exact file allowlist, including metadata if it may be read.
-  // File names outside this list are not projected to the CEO either.
-  allowedContextPaths: string[];
+  // Harness-owned access ceiling; legacy lists continue to mean exact files.
+  contextAccessPolicy?: ContextAccessPolicy;
+  allowedContextPaths?: string[];
 };
 
 function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
@@ -54,12 +55,8 @@ function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
     .parse(options.availableSpecialists);
   if (new Set(specialists.map(({ id }) => id)).size !== specialists.length)
     throw new Error("Duplicate Specialist IDs.");
-  const allowedContextPaths = z
-    .array(z.string().min(1))
-    .parse(options.allowedContextPaths);
-  if (allowedContextPaths.some((path) => !isUnambiguousRepositoryPath(path)))
-    throw new Error("Invalid Harness context allowlist.");
-  return { goal, limits, specialists, allowedContextPaths };
+  const contextAccessPolicy = resolveContextAccessPolicy(options);
+  return { goal, limits, specialists, contextAccessPolicy };
 }
 
 function failed(error: unknown): StaffingContextResult {
@@ -76,7 +73,7 @@ export function discoverStaffingContext(
   options: DiscoverStaffingContextOptions
 ): StaffingContextResult {
   try {
-    const { goal, limits, specialists, allowedContextPaths } =
+    const { goal, limits, specialists, contextAccessPolicy } =
       validateDiscoveryInput(options);
     const snapshot = captureRepositorySnapshot(options.repositoryPath);
     assertRepositoryMatchesSnapshot(snapshot);
@@ -84,8 +81,7 @@ export function discoverStaffingContext(
       snapshot.repositoryRoot,
       snapshot.commitSha
     );
-    const allowed = new Set(allowedContextPaths);
-    const fileTree = createAllowedFileTree(files, allowed, limits);
+    const fileTree = createAllowedFileTree(files, contextAccessPolicy, limits);
     let context: StaffingContext = {
       goal,
       repository: {
@@ -104,12 +100,17 @@ export function discoverStaffingContext(
       remainingInspectionBudget: limits.maxTotalFiles,
     };
     assertContextBudget(context);
-    context = loadRepositoryMetadata(snapshot, files, context);
+    context = loadRepositoryMetadata(
+      snapshot,
+      files,
+      context,
+      contextAccessPolicy
+    );
     const initialState: StaffingContextState = {
       snapshot,
       context,
       files,
-      allowedContextPaths: [...allowed],
+      contextAccessPolicy,
     };
     const state = seedInitialFiles(initialState);
     assertRepositoryMatchesSnapshot(snapshot);

@@ -1,3 +1,4 @@
+import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
 import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 
@@ -8,6 +9,6 @@ import type { StaffingContext } from "../protocol/context.js";
 export type StaffingContextState = {
   snapshot: RepositorySnapshot;
   context: StaffingContext;
-  allowedContextPaths: string[];
+  contextAccessPolicy: ContextAccessPolicy;
   files: CommitFile[];
 };

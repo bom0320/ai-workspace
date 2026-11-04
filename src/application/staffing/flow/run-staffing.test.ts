@@ -273,7 +273,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     "rejects forbidden, unsafe, missing or non-regular Context %s",
     async (path) => {
       if (["missing.ts", ".env", "link", "module", "src"].includes(path))
-        options.allowedContextPaths.push(path);
+        options.allowedContextPaths!.push(path);
       draft.assignments[0].contextPaths = ["src/a.ts", path];
       const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
       expect(await runStaffing(options)).toMatchObject({
@@ -287,7 +287,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   it.each(["binary.bin", "invalid.txt"])(
     "rejects non-text Snapshot content %s",
     async (path) => {
-      options.allowedContextPaths.push(path);
+      options.allowedContextPaths!.push(path);
       draft.assignments[0].contextPaths = [path];
       const result = await runStaffing(options);
       expect(result).toMatchObject({
@@ -408,6 +408,47 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       ).toThrow();
     }
   );
+
+  it("uses directory access for Finalization and Approval revalidation without widening assignment paths", async () => {
+    options.allowedContextPaths = undefined;
+    options.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "src" }],
+    };
+    const result = await runStaffing(options);
+    expect(result.status).toBe("proposed");
+    if (result.status !== "proposed") throw new Error(JSON.stringify(result));
+    expect(result.proposal.assignments[0].contextPaths).toEqual(["src/a.ts"]);
+    const configuration = {
+      availableSpecialists: options.availableSpecialists,
+      contextAccessPolicy: options.contextAccessPolicy,
+      limits: options.limits,
+      policy: options.policy,
+    };
+    expect(() =>
+      validateStaffingProposal(result.proposal, configuration)
+    ).not.toThrow();
+    const outside = structuredClone(result.proposal);
+    outside.assignments[0].contextPaths = ["src-other/a.ts"];
+    expect(() => validateStaffingProposal(outside, configuration)).toThrow();
+    draft.assignments[0].contextPaths = ["src-other/a.ts"];
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
+    });
+  });
+  it("keeps exact context-paths enforcement narrower than directory discovery", async () => {
+    options.allowedContextPaths = undefined;
+    options.contextAccessPolicy = {
+      allowedScopes: [{ kind: "directory", path: "src" }],
+    };
+    options.policy.enforcementRules = [
+      { type: "context-paths", allowedContextPaths: ["src/b.ts"] },
+    ];
+    expect(await runStaffing(options)).toMatchObject({
+      status: "failed",
+      failure: "policy-validation",
+    });
+  });
 
   it("rejects obsolete constraint fields and invalid policy before calling the CEO", async () => {
     options.policy.enforcementRules = [

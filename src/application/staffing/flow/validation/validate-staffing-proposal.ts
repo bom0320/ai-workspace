@@ -1,8 +1,9 @@
+import { contextAccessPolicySchema } from "@/contracts/context-access-policy.js";
+import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { z } from "zod";
 import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
-import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
 import { staffingProposalSchema } from "../../model/staffing.js";
 import { staffingProposalPolicySchema } from "../../model/policy.js";
 import { staffingInspectionLimitsSchema } from "../../protocol/context.js";
@@ -12,23 +13,22 @@ import { validateProposal } from "./validate-proposal.js";
 const configurationSchema = z
   .object({
     availableSpecialists: z.array(specialistDefinitionSchema),
-    allowedContextPaths: z.array(z.string().min(1)),
+    allowedContextPaths: z.array(z.string().min(1)).default([]),
+    contextAccessPolicy: contextAccessPolicySchema.optional(),
     limits: staffingInspectionLimitsSchema,
     policy: staffingProposalPolicySchema,
   })
   .strict();
 export function validateStaffingProposal(
   input: unknown,
-  configuration: z.infer<typeof configurationSchema>
+  configuration: z.input<typeof configurationSchema>
 ): void {
   const proposal = staffingProposalSchema.parse(input);
   const config = configurationSchema.parse(configuration);
+  const contextAccessPolicy = resolveContextAccessPolicy(config);
   if (
     new Set(config.availableSpecialists.map(({ id }) => id)).size !==
-      config.availableSpecialists.length ||
-    config.allowedContextPaths.some(
-      (path) => !isUnambiguousRepositoryPath(path)
-    )
+    config.availableSpecialists.length
   )
     throw new Error("Invalid Harness staffing configuration.");
   if (
@@ -43,7 +43,7 @@ export function validateStaffingProposal(
   );
   const fileTree = createAllowedFileTree(
     files,
-    new Set(config.allowedContextPaths),
+    contextAccessPolicy,
     config.limits
   );
   validateProposal(
@@ -53,7 +53,7 @@ export function validateStaffingProposal(
       snapshot: proposal.snapshot,
       files,
       fileTree,
-      allowedContextPaths: config.allowedContextPaths,
+      contextAccessPolicy,
       specialists: config.availableSpecialists,
       limits: config.limits,
     },

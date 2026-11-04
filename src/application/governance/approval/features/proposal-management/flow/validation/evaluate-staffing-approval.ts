@@ -1,3 +1,7 @@
+import {
+  resolveContextAccessPolicy,
+  isContextPathAllowed,
+} from "@/services/repository-inspection/index.js";
 import { realpathSync } from "node:fs";
 import {
   validateStaffingProposal,
@@ -51,13 +55,14 @@ export function evaluateStaffingApproval(
     throw new Error(
       "Delegation is inactive, expired or no longer matches System Policy."
     );
+  const accessPolicy = resolveContextAccessPolicy(delegation);
   const withinDelegatedScope =
     proposal.budget.maxAgentInvocations <= delegation.maxAgentInvocations &&
     proposal.assignments.every(
       (assignment) =>
         delegation.allowedSpecialistIds.includes(assignment.specialistId) &&
         assignment.contextPaths.every((path) =>
-          delegation.allowedContextPaths.includes(path)
+          isContextPathAllowed(path, accessPolicy)
         )
     );
   return withinDelegatedScope ? "delegated" : "direct";

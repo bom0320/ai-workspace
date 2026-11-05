@@ -1,4 +1,4 @@
-import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
+import type { ContextAccessPolicy } from "@/contracts/repository/context-access-policy.js";
 import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 import {

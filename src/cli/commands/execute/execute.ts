@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 
 import type { TaskContract } from "@/contracts/task.js";
-import { loadTaskContract } from "@/contracts/task-loader.js";
+import { loadTaskContract } from "./load-task-contract.js";
 import {
   executeTask,
   type TaskExecutionOptions,

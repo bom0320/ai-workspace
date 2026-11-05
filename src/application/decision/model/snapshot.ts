@@ -2,4 +2,4 @@
 export {
   repositorySnapshotSchema,
   type RepositorySnapshot,
-} from "@/contracts/repository-snapshot.js";
+} from "@/contracts/repository/snapshot.js";

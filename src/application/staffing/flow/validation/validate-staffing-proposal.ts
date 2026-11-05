@@ -3,7 +3,7 @@ import { z } from "zod";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import { staffingProposalSchema } from "../../model/staffing.js";
-import { staffingSystemPolicySchema } from "@/contracts/staffing-system-policy.js";
+import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
 import { createAllowedFileTree } from "../inspection/context-policy.js";
 import { validateProposal } from "./validate-proposal.js";
 

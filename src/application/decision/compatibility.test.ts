@@ -3,16 +3,16 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   repositorySnapshotSchema,
   type RepositorySnapshot,
-} from "@/contracts/repository-snapshot.js";
+} from "@/contracts/repository/snapshot.js";
 import {
   specialistDefinitionSchema,
   type SpecialistDefinition,
-} from "@/contracts/specialist.js";
+} from "@/contracts/specialist/definition.js";
 import {
   specialistAuthoritySchema,
   type SpecialistAuthority,
   type RepositoryAccess,
-} from "@/contracts/specialist-authority.js";
+} from "@/contracts/specialist/authority.js";
 import * as snapshotService from "@/services/repository-snapshot/index.js";
 
 import * as publicAPI from "./index.js";

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { repositorySnapshotSchema } from "@/contracts/repository-snapshot.js";
-import { specialistDefinitionSchema } from "@/contracts/specialist.js";
+import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
+import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
-import { inspectedFileSchema } from "@/contracts/inspected-file.js";
+import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
 
 const nonEmptyString = z.string().min(1);
 

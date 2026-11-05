@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { specialistDefinitionSchema } from "@/contracts/specialist.js";
+import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
-import { inspectedFileSchema } from "@/contracts/inspected-file.js";
+import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
 
-import { staffingInspectionLimitsSchema } from "@/contracts/staffing-system-policy.js";
-export { staffingInspectionLimitsSchema } from "@/contracts/staffing-system-policy.js";
+import { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
+export { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
 const nonnegativeInteger = z.number().int().nonnegative();
 
 // Candidates are a projection of Harness registration, not CEO-defined authority.

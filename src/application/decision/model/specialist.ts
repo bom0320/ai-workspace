@@ -2,4 +2,4 @@
 export {
   specialistDefinitionSchema,
   type SpecialistDefinition,
-} from "@/contracts/specialist.js";
+} from "@/contracts/specialist/definition.js";

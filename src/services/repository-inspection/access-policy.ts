@@ -3,7 +3,7 @@ import {
   contextAccessPolicySchema,
   type ContextAccessPolicy,
   type PathScope,
-} from "@/contracts/context-access-policy.js";
+} from "@/contracts/repository/context-access-policy.js";
 import { isUnambiguousRepositoryPath } from "./discovery.js";
 
 // Legacy paths are exact files forever; never infer directories from Git or FS.

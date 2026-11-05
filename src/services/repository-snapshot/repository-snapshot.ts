@@ -4,7 +4,7 @@ import {
   resolveRepositoryRoot,
 } from "@/infrastructure/git/index.js";
 
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 
 export function captureRepositorySnapshot(
   repositoryPath: string

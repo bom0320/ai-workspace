@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { specialistAuthoritySchema } from "./specialist-authority.js";
+import { specialistAuthoritySchema } from "./authority.js";
 
 export const specialistDefinitionSchema = z
   .object({

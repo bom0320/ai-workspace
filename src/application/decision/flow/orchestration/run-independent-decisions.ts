@@ -1,8 +1,8 @@
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { InspectedFile } from "@/contracts/inspected-file.js";
+import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
-import type { SpecialistDefinition } from "@/contracts/specialist.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
+import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type { SpecialistContext } from "../../protocol/context.js";
 import type { AgentDecision } from "../../protocol/decision.js";
 import {

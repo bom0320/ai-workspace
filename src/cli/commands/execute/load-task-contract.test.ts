@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
-import { loadTaskContract } from "./task-loader.js";
+import { loadTaskContract } from "./load-task-contract.js";
 
 const temporaryDirectories: string[] = [];
 

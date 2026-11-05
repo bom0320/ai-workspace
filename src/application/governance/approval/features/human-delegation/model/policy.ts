@@ -1,6 +1,6 @@
-import { contextAccessPolicySchema } from "@/contracts/context-access-policy.js";
+import { contextAccessPolicySchema } from "@/contracts/repository/context-access-policy.js";
 import { z } from "zod";
-import { specialistAuthoritySchema } from "@/contracts/specialist-authority.js";
+import { specialistAuthoritySchema } from "@/contracts/specialist/authority.js";
 import { humanConfirmationEvidenceSchema as confirmation } from "../../../shared/model/confirmation.js";
 const text = z.string().min(1);
 const date = z.iso.datetime();

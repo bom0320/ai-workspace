@@ -51,7 +51,8 @@ Authority / Staffing schema, Invocation Eligibility, Snapshot 기반 Context Dis
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
 - `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
-- `src/contracts/`: runtime-validated contract와 TaskContract loader
+- `src/contracts/`: 여러 Application이 공유하는 도메인별 runtime-validated 데이터 계약
+- `src/cli/commands/execute/load-task-contract.ts`: Execute Command의 TaskContract 파일 로딩
 - `src/application/planning/`: Goal-to-Task Planning use-case와 public API
 - `src/application/decision/`: 독립 Decision use-case와 public API; flow/context, orchestration, validation은 실제 책임별 grouping
 - `src/application/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; Decision 실행과의 조합은 CLI command가 담당

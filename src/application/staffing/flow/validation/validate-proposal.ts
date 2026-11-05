@@ -4,13 +4,13 @@ import {
 } from "@/services/repository-inspection/index.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 import {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
-} from "@/contracts/staffing-system-policy.js";
+} from "@/contracts/staffing/system-policy.js";
 import { realpathSync } from "node:fs";
 import type { StaffingDraft } from "../../protocol/ceo.js";
 import type { StaffingLoopOptions } from "../orchestration/run-staffing-loop.js";

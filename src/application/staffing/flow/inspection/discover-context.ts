@@ -1,4 +1,4 @@
-import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
+import type { ContextAccessPolicy } from "@/contracts/repository/context-access-policy.js";
 import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { basename } from "node:path";
 
@@ -11,7 +11,7 @@ import {
 import {
   specialistDefinitionSchema,
   type SpecialistDefinition,
-} from "@/contracts/specialist.js";
+} from "@/contracts/specialist/definition.js";
 import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 

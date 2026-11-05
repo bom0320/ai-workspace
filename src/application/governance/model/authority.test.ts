@@ -3,11 +3,11 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   RepositoryAccess,
   SpecialistAuthority,
-} from "@/contracts/specialist-authority.js";
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
-import type { SpecialistDefinition } from "@/contracts/specialist.js";
+} from "@/contracts/specialist/authority.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
+import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { InspectedFile } from "@/contracts/inspected-file.js";
+import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
 import {
   approvedOperatingScopeSchema,

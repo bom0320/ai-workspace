@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { specialistDefinitionSchema } from "./specialist.js";
-import { contextAccessPolicySchema } from "./context-access-policy.js";
+import { specialistDefinitionSchema } from "../specialist/definition.js";
+import { contextAccessPolicySchema } from "../repository/context-access-policy.js";
 
 const nonnegativeInteger = z.number().int().nonnegative();
 export const staffingInspectionLimitsSchema = z

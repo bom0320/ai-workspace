@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextAccessPolicySchema } from "@/contracts/context-access-policy.js";
+import { contextAccessPolicySchema } from "@/contracts/repository/context-access-policy.js";
 import {
   isContextPathAllowed,
   isContextScopeContained,

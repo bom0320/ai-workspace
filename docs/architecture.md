@@ -128,8 +128,8 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 ### Snapshot / Context / Authority
 
 RepositorySnapshot은 `{ repositoryRoot, commitSha }`라는 governed Git state reference다.
-공유 schema / type의 소유권은 `contracts/repository-snapshot.ts`, `contracts/specialist.ts`,
-`contracts/specialist-authority.ts`에 있다. Decision / Staffing / Governance는 이 계약을 직접 참조한다.
+공유 schema / type의 소유권은 `contracts/repository/snapshot.ts`, `contracts/specialist/definition.ts`,
+`contracts/specialist/authority.ts`에 있다. Decision / Staffing / Governance는 이 계약을 직접 참조한다.
 `services/repository-snapshot`은 capture/assert 정책을 소유하고 실제 Git I/O는 infrastructure/git을 사용한다.
 Decision의 기존 public API와 model / flow/context 경로는 동일 schema·함수의 re-export로 호환성을 유지한다.
 이는 소유권 이동이며 Specialist authority, Snapshot 검사 시점·순서·실패 의미는 변경하지 않는다.
@@ -137,6 +137,12 @@ Capture는 clean 상태만 허용하며 현재 HEAD를 기록한다. Assert는 H
 Clean은 기존 `git status --porcelain --untracked-files=all` 기준이므로 ignored 파일 전체 검사가 아니다.
 호출 전후 시점 검사이며 Repository lock이나 중간에 바뀌었다 복원된 상태까지 감지하는 기능은 아니다.
 Generic checkpoint나 Repository 복사본으로 해석하지 않는다.
+
+contracts/는 Goal / Task를 루트에 유지하고 Repository(snapshot / inspected-file / context-access-policy),
+Specialist(definition / authority), Staffing(system-policy)으로 분류한다. SpecialistDefinition은 Authority를,
+StaffingSystemPolicy는 SpecialistDefinition과 ContextAccessPolicy 및 Inspection Limits를 조합한다.
+계약은 Application workflow나 파일 I/O에 의존하지 않는다. TaskContract 파일 읽기·JSON parsing·Schema
+검증을 연결하는 loadTaskContract()는 cli/commands/execute에 두고 기존 오류 전달 의미를 유지한다.
 
 `loadSnapshotFiles`는 명시적 path를 그대로 유지하고 빈 path / absolute path / `..` traversal을 거부한다.
 Git infrastructure의 `readRepositoryFileAtCommit()`은 `git cat-file blob <commitSha>:<path>`로 해당
@@ -574,7 +580,7 @@ Harness가 `contextAccessPolicy: { allowedScopes: PathScope[] }`를 공급한다
 범위가 없거나 비어 있으면 접근을 거부한다. Repository root를 뜻하는 `.`도 모호한 경로로 거부하며,
 glob / deny rule / metadata 전용 권한은 도입하지 않는다.
 
-contracts/context-access-policy.ts는 strict 구조 Schema와 z.infer 타입을 정의한다. repository-inspection의
+contracts/repository/context-access-policy.ts는 strict 구조 Schema와 z.infer 타입을 정의한다. repository-inspection의
 resolveContextAccessPolicy / isContextPathAllowed / isContextScopeContained가 기존 경로 안전성 규칙을
 재사용하여 범위 해석과 포함 관계를 담당한다. Schema parsing만으로 경로 안전성이나 승인 출처가 증명되지는 않는다.
 Discovery는 같은 Commit의 regular 파일 목록에 이 정책과 기존 민감 경로 차단을 적용한 뒤 CEO에 노출한다.
@@ -676,7 +682,7 @@ runStaffingProposal은 통합·제거했다. StaffingDraft는 CEO의 중간 산�
 flow 루트에는 run-staffing 진입점과 테스트를 두며 Context 조사는 inspection, 입력·Proposal 검사는
 validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-staffing-proposal에 둔다.
 System Policy가 등록 Specialist·접근 범위·Inspection limits·maxAgentInvocations의 단일 운영 조건이다.
-공통 `contracts/staffing-system-policy.ts`가 Schema와 타입, Inspection Limits를 소유한다. Governance는
+공통 `contracts/staffing/system-policy.ts`가 Schema와 타입, Inspection Limits를 소유한다. Governance는
 Human 설정·승인·정책 버전을 소유하고 Staffing은 이 계약을 받아 검증한다. 기존 Limits 공개 경로는
 re-export로 유지한다. 독립 StaffingProposalPolicy / Enforcement Rule Schema와 model/policy.ts는 제거했다.
 계약을 공통으로 둬서 Staffing이 Governance workflow를 import하거나 순환 의존을 만들지 않는다.
@@ -873,8 +879,8 @@ AuthorizedSpecialistInvocation 발급·집행, Phase B와 LangGraph는 여전히
 
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
 | --- | --- | --- |
-| RepositorySnapshot | Current | contracts/repository-snapshot.ts의 repositoryRoot / commitSha. Application 간 Repository provenance |
-| SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist.ts / specialist-authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
+| RepositorySnapshot | Current | contracts/repository/snapshot.ts의 repositoryRoot / commitSha. Application 간 Repository provenance |
+| SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist/definition.ts / specialist/authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
 | StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO Loop에서 재사용; 승인 / 실행 권한 없음 |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
 
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import type { AgentDecision } from "../../protocol/decision.js";
 import { runCodexSpecialist } from "../../specialist/codex-specialist.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";

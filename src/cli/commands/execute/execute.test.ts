@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import type { TaskContract } from "@/contracts/task.js";
-import { loadTaskContract } from "@/contracts/task-loader.js";
+import { loadTaskContract } from "./load-task-contract.js";
 import {
   type ExecutionResult,
   executeTask,
@@ -17,7 +17,7 @@ import { runExecutionCli as runCli } from "./execute.js";
 vi.mock("../review/index.js", () => ({ runReviewStage: vi.fn() }));
 vi.mock("../cleanup/index.js", () => ({ runWorkspaceCleanup: vi.fn() }));
 vi.mock("../delivery/index.js", () => ({ runPostExecutionDelivery: vi.fn() }));
-vi.mock("@/contracts/task-loader.js", () => ({ loadTaskContract: vi.fn() }));
+vi.mock("./load-task-contract.js", () => ({ loadTaskContract: vi.fn() }));
 vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({
   resolveRepositoryRoot: vi.fn(),

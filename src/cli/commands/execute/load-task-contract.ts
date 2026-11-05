@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { taskContractSchema, type TaskContract } from "./task.js";
+import { taskContractSchema, type TaskContract } from "@/contracts/task.js";
 
 export function loadTaskContract(path: string): TaskContract {
   const contents = readFileSync(path, "utf8");

@@ -1,5 +1,5 @@
-import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
-import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
+import type { ContextAccessPolicy } from "@/contracts/repository/context-access-policy.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
 
 import type { StaffingContext } from "../protocol/context.js";

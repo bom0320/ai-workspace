@@ -2,11 +2,11 @@ import { z } from "zod";
 import {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
-} from "@/contracts/staffing-system-policy.js";
+} from "@/contracts/staffing/system-policy.js";
 export {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
-} from "@/contracts/staffing-system-policy.js";
+} from "@/contracts/staffing/system-policy.js";
 
 // Historical data only: no legacy rule is interpreted or discarded. Old policy
 // versions remain signed history and require explicit Human reapproval.

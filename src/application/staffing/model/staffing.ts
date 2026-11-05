@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { repositorySnapshotSchema } from "@/contracts/repository-snapshot.js";
+import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 
 const nonEmptyString = z.string().min(1);

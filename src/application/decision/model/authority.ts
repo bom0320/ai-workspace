@@ -3,4 +3,4 @@ export {
   specialistAuthoritySchema,
   type SpecialistAuthority,
   type RepositoryAccess,
-} from "@/contracts/specialist-authority.js";
+} from "@/contracts/specialist/authority.js";

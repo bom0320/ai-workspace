@@ -1,7 +1,7 @@
 import { assertContextBudget } from "./inspection/context-policy.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
-import type { StaffingSystemPolicy } from "@/contracts/staffing-system-policy.js";
+import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
 import type { StaffingRunResult } from "../model/result.js";
 import { staffingDraftSchema } from "../protocol/ceo.js";
 import {

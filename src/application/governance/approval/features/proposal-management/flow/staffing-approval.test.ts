@@ -183,7 +183,9 @@ beforeEach(async () => {
         authority: { repositoryAccess: "read", shellExecution: false },
       },
     ],
-    allowedContextPaths: ["a.ts", "b.ts"],
+    contextAccessPolicy: {
+      allowedScopes: ["a.ts", "b.ts"].map((path) => ({ kind: "file", path })),
+    },
     limits: {
       maxFilesPerRequest: 2,
       maxTotalFiles: 2,
@@ -243,6 +245,18 @@ afterEach(() => {
 });
 
 describe("Human Staffing Approval and delegation — no Specialist execution", () => {
+  it("requires Context scopes and rejects legacy System input without silently discarding fields", () => {
+    const { contextAccessPolicy, ...missing } = system;
+    expect(configureStaffingSystemPolicy(missing).status).toBe("denied");
+    for (const allowedContextPaths of [[], ["a.ts"], undefined]) {
+      expect(
+        configureStaffingSystemPolicy({ ...system, allowedContextPaths }).status
+      ).toBe("denied");
+    }
+    expect(
+      configureStaffingSystemPolicy({ ...system, contextAccessPolicy }).status
+    ).toBe("approval-required");
+  });
   it("reuses Human-approved delegation across Goals without further input and persists verifiable source/Scope links", () => {
     delegate();
     const prompts = terminal.prompts;
@@ -294,7 +308,6 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     git("commit", "--quiet", "-m", "directory context");
     proposal.snapshot.commitSha = git("rev-parse", "HEAD");
     proposal.assignments[0].contextPaths = ["src/narrow/a.ts"];
-    system.allowedContextPaths = [];
     system.contextAccessPolicy = {
       allowedScopes: [{ kind: "directory", path: "src" }],
     };
@@ -332,22 +345,6 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     outsideSystem.assignments[0].contextPaths = ["a.ts"];
     expect(approveStaffingProposal(outsideSystem).status).toBe("denied");
   });
-  it("does not infer directory authority from persisted legacy file lists", () => {
-    mkdirSync(join(root, "src"));
-    writeFileSync(join(root, "src", "a.ts"), "analysis");
-    git("add", ".");
-    git("commit", "--quiet", "-m", "legacy scope");
-    proposal.snapshot.commitSha = git("rev-parse", "HEAD");
-    proposal.assignments[0].contextPaths = ["src/a.ts"];
-    system.allowedContextPaths = ["src"];
-    expect(
-      configureStaffingSystemPolicy(
-        system,
-        accept(configureStaffingSystemPolicy(system))
-      ).status
-    ).toBe("configured");
-    expect(approveStaffingProposal(proposal).status).toBe("denied");
-  });
   it("rejects delegation directory expansion beyond System file scopes and ambiguous mixed inputs", () => {
     delegation.delegatedContextScopes = [{ kind: "directory", path: "a.ts" }];
     expect(configureHumanDelegation(root, delegation).status).toBe("denied");
@@ -357,7 +354,10 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     system.contextAccessPolicy = {
       allowedScopes: [{ kind: "directory", path: "src" }],
     };
-    expect(configureStaffingSystemPolicy(system).status).toBe("denied");
+    expect(
+      configureStaffingSystemPolicy({ ...system, allowedContextPaths: [] })
+        .status
+    ).toBe("denied");
     expect(
       configureHumanDelegation(root, {
         ...delegation,
@@ -654,7 +654,14 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     delegate();
     expect(approveStaffingProposal(proposal, receipt).status).toBe("denied");
   });
-  it.each(["context-paths", "specialists", "invocation-budget", "empty"])(
+  it.each([
+    "context-paths",
+    "specialists",
+    "invocation-budget",
+    "empty",
+    "exact",
+    "mixed-empty",
+  ])(
     "preserves legacy %s restrictions as blocked history until explicit Human reapproval",
     (kind) => {
       const receipt = accept(approveStaffingProposal(proposal));
@@ -678,13 +685,28 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
             : kind === "specialists"
               ? { type: kind, allowedSpecialistIds: ["ux"] }
               : { type: "invocation-budget", maxAgentInvocations: 1 };
-        legacy = {
-          ...configuration,
-          policy: {
-            maxAgentInvocations,
-            enforcementRules: kind === "empty" ? [] : [rule],
-          },
-        };
+        legacy =
+          kind === "exact"
+            ? {
+                ...configuration,
+                allowedContextPaths: ["a.ts"],
+                maxAgentInvocations,
+              }
+            : kind === "mixed-empty"
+              ? {
+                  ...configuration,
+                  allowedContextPaths: [],
+                  maxAgentInvocations,
+                }
+              : {
+                  ...configuration,
+                  policy: {
+                    maxAgentInvocations,
+                    enforcementRules: kind === "empty" ? [] : [rule],
+                  },
+                };
+        if (kind === "exact")
+          delete (legacy as Record<string, unknown>).contextAccessPolicy;
         current.configuration = legacy as typeof current.configuration;
         save(ledger);
       });

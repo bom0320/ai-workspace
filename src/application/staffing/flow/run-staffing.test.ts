@@ -110,7 +110,12 @@ beforeEach(() => {
           authority: { repositoryAccess: "read", shellExecution: false },
         },
       ],
-      allowedContextPaths: ["src/a.ts", "src/b.ts"],
+      contextAccessPolicy: {
+        allowedScopes: ["src/a.ts", "src/b.ts"].map((path) => ({
+          kind: "file" as const,
+          path,
+        })),
+      },
       limits: {
         maxFilesPerRequest: 2,
         maxTotalFiles: 3,
@@ -224,7 +229,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       options.goal.constraints = [];
       options.systemPolicy.maxAgentInvocations = 0;
       options.systemPolicy.availableSpecialists = [];
-      options.systemPolicy.allowedContextPaths = [];
+      options.systemPolicy.contextAccessPolicy = { allowedScopes: [] };
       return { type: "propose", draft };
     };
     const result = await runStaffing(options);
@@ -279,7 +284,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     "rejects forbidden, unsafe, missing or non-regular Context %s",
     async (path) => {
       if (["missing.ts", ".env", "link", "module", "src"].includes(path))
-        options.systemPolicy.allowedContextPaths!.push(path);
+        options.systemPolicy.contextAccessPolicy.allowedScopes.push({
+          kind: "file",
+          path,
+        });
       draft.assignments[0].contextPaths = ["src/a.ts", path];
       const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
       expect(await runStaffing(options)).toMatchObject({
@@ -293,7 +301,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   it.each(["binary.bin", "invalid.txt"])(
     "rejects non-text Snapshot content %s",
     async (path) => {
-      options.systemPolicy.allowedContextPaths!.push(path);
+      options.systemPolicy.contextAccessPolicy.allowedScopes.push({
+        kind: "file",
+        path,
+      });
       draft.assignments[0].contextPaths = [path];
       const result = await runStaffing(options);
       expect(result).toMatchObject({
@@ -372,7 +383,8 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       if (kind === "bytes") configuration.limits.maxFileBytes = 1;
       if (kind === "json") configuration.limits.maxContextBytes = 2000;
       if (kind === "specialist") configuration.availableSpecialists = [];
-      if (kind === "context") configuration.allowedContextPaths = [];
+      if (kind === "context")
+        configuration.contextAccessPolicy = { allowedScopes: [] };
       if (kind === "budget") configuration.maxAgentInvocations = 1;
       expect(() =>
         validateStaffingProposal(result.proposal, configuration)
@@ -381,7 +393,6 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   );
 
   it("uses directory access for Finalization and Approval revalidation without widening assignment paths", async () => {
-    options.systemPolicy.allowedContextPaths = [];
     options.systemPolicy.contextAccessPolicy = {
       allowedScopes: [{ kind: "directory", path: "src" }],
     };
@@ -402,6 +413,40 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       failure: "policy-validation",
     });
   });
+  it.each(["missing", "exact", "mixed-empty"])(
+    "rejects %s legacy Context configuration in both Finalization and revalidation",
+    async (kind) => {
+      const result = await runStaffing(options);
+      if (result.status !== "proposed") throw new Error(JSON.stringify(result));
+      const configuration = structuredClone(options.systemPolicy) as Record<
+        string,
+        unknown
+      >;
+      if (kind !== "mixed-empty") delete configuration.contextAccessPolicy;
+      if (kind !== "missing")
+        configuration.allowedContextPaths =
+          kind === "exact" ? ["src/a.ts"] : [];
+      vi.mocked(options.agent!).mockClear();
+      expect(
+        await runStaffing({
+          ...options,
+          systemPolicy: configuration,
+        } as RunStaffingOptions)
+      ).toMatchObject({
+        status: "failed",
+        failure: "invalid-input",
+        rounds: 0,
+      });
+      expect(options.agent).not.toHaveBeenCalled();
+      expect(() =>
+        validateStaffingProposal(
+          result.proposal,
+          configuration as RunStaffingOptions["systemPolicy"]
+        )
+      ).toThrow();
+    }
+  );
+
   it("rejects old nested policy/rules and invalid System settings before calling the CEO", async () => {
     const obsolete = {
       ...options.systemPolicy,

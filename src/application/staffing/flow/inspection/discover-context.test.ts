@@ -108,13 +108,15 @@ beforeEach(() => {
       maxContextBytes: 256 * 1024,
       maxFileTreeEntries: 100,
     },
-    allowedContextPaths: [
-      "package.json",
-      "AGENTS.md",
-      "src/login.ts",
-      "src/other.ts",
-      "src/notes with spaces.md",
-    ],
+    contextAccessPolicy: {
+      allowedScopes: [
+        "package.json",
+        "AGENTS.md",
+        "src/login.ts",
+        "src/other.ts",
+        "src/notes with spaces.md",
+      ].map((path) => ({ kind: "file" as const, path })),
+    },
   };
 });
 afterEach(() => {
@@ -123,6 +125,23 @@ afterEach(() => {
 });
 
 describe("Snapshot-based Staffing Context Discovery", () => {
+  it("requires current Context policy and rejects legacy fields even beside valid scopes", () => {
+    const { contextAccessPolicy, ...missing } = options;
+    expect(
+      discoverStaffingContext(missing as DiscoverStaffingContextOptions).status
+    ).toBe("failed");
+    for (const allowedContextPaths of [[], ["src/login.ts"], undefined]) {
+      expect(
+        discoverStaffingContext({
+          ...options,
+          allowedContextPaths,
+        } as DiscoverStaffingContextOptions).status
+      ).toBe("failed");
+    }
+    expect(
+      discoverStaffingContext({ ...options, contextAccessPolicy }).status
+    ).toBe("ready");
+  });
   it("preserves Goal and constraints, seeds exact goal files and projects only CEO-facing data", () => {
     const state = ready(discoverStaffingContext(options));
     const context = createStaffingContext(state);
@@ -134,7 +153,9 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     expect(context.repository).toEqual({
       name: root.split("/").at(-1),
       commitSha: state.snapshot.commitSha,
-      fileTree: [...options.allowedContextPaths!].sort(),
+      fileTree: [
+        ...options.contextAccessPolicy.allowedScopes.map(({ path }) => path),
+      ].sort(),
       packageScripts: { test: "vitest run" },
       instructions: "Untrusted repository instructions",
     });
@@ -166,7 +187,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: undefined,
+
         contextAccessPolicy: {
           allowedScopes: [{ kind: "directory", path: "src" }],
         },
@@ -206,7 +227,7 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: undefined,
+
         contextAccessPolicy: {
           allowedScopes: [{ kind: "directory", path: "src" }],
         },
@@ -220,7 +241,12 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: ["src/login.ts"],
+        contextAccessPolicy: {
+          allowedScopes: ["src/login.ts"].map((path) => ({
+            kind: "file" as const,
+            path,
+          })),
+        },
       })
     );
     expect(state.context.repository.packageScripts).toEqual({});
@@ -307,7 +333,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
       discoverStaffingContext({
         ...options,
         goal: { ...options.goal, objective: "Review ignored.ts" },
-        allowedContextPaths: [...options.allowedContextPaths!, "ignored.ts"],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            "ignored.ts",
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     expect(state.context.repository.fileTree).not.toContain("ignored.ts");
@@ -366,7 +399,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths!, "missing.ts"],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            "missing.ts",
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -418,7 +458,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths!, ...forbidden],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            ...forbidden,
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     for (const path of forbidden) {
@@ -445,7 +492,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths!, ...paths],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            ...paths,
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -462,10 +516,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [
-          ...options.allowedContextPaths!,
-          "src/binary.dat",
-        ],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            "src/binary.dat",
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     failure(inspect(state, ["src/other.ts", "src/binary.dat"]), /UTF-8 text/);
@@ -494,7 +552,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [...options.allowedContextPaths!, "src/large.ts"],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            "src/large.ts",
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     vi.mocked(gitInfrastructure.readRepositoryFileAtCommit).mockClear();
@@ -536,10 +601,14 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     const state = ready(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: [
-          ...options.allowedContextPaths!,
-          "src/escaped.ts",
-        ],
+        contextAccessPolicy: {
+          allowedScopes: [
+            ...options.contextAccessPolicy.allowedScopes.map(
+              ({ path }) => path
+            ),
+            "src/escaped.ts",
+          ].map((path) => ({ kind: "file" as const, path })),
+        },
       })
     );
     const context = structuredClone(state.context);
@@ -582,7 +651,12 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     commit();
     const common = {
       ...options,
-      allowedContextPaths: ["a.ts", "b.ts", "c.ts", "huge.ts"],
+      contextAccessPolicy: {
+        allowedScopes: ["a.ts", "b.ts", "c.ts", "huge.ts"].map((path) => ({
+          kind: "file" as const,
+          path,
+        })),
+      },
       limits: { ...options.limits, maxFileBytes: 128 * 1024 },
     };
     const large = ready(
@@ -625,7 +699,12 @@ describe("Snapshot-based Staffing Context Discovery", () => {
     failure(
       discoverStaffingContext({
         ...options,
-        allowedContextPaths: ["../outside"],
+        contextAccessPolicy: {
+          allowedScopes: ["../outside"].map((path) => ({
+            kind: "file" as const,
+            path,
+          })),
+        },
       }),
       /Invalid Harness/
     );

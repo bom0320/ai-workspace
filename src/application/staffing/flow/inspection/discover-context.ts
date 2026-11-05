@@ -1,5 +1,5 @@
 import type { ContextAccessPolicy } from "@/contracts/repository/context-access-policy.js";
-import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
+import { validateContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { basename } from "node:path";
 
 import { z } from "zod";
@@ -42,9 +42,8 @@ export type DiscoverStaffingContextOptions = {
   repositoryPath: string;
   availableSpecialists: SpecialistDefinition[];
   limits: StaffingInspectionLimits;
-  // Harness-owned access ceiling; legacy lists continue to mean exact files.
-  contextAccessPolicy?: ContextAccessPolicy;
-  allowedContextPaths?: string[];
+  // Harness-owned access ceiling; required even when access is explicitly empty.
+  contextAccessPolicy: ContextAccessPolicy;
 };
 
 function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
@@ -55,7 +54,13 @@ function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
     .parse(options.availableSpecialists);
   if (new Set(specialists.map(({ id }) => id)).size !== specialists.length)
     throw new Error("Duplicate Specialist IDs.");
-  const contextAccessPolicy = resolveContextAccessPolicy(options);
+  if ("allowedContextPaths" in options)
+    throw new Error(
+      "Legacy allowedContextPaths is not a current Discovery input."
+    );
+  const contextAccessPolicy = validateContextAccessPolicy(
+    options.contextAccessPolicy
+  );
   return { goal, limits, specialists, contextAccessPolicy };
 }
 

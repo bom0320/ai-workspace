@@ -1,4 +1,4 @@
-import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
+import { validateContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
@@ -12,6 +12,6 @@ export function validateSystemConfiguration(
   configuration.repositoryRoot = resolveGovernanceRepository(
     configuration.repositoryRoot
   );
-  resolveContextAccessPolicy(configuration);
+  validateContextAccessPolicy(configuration.contextAccessPolicy);
   return configuration;
 }

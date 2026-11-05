@@ -38,8 +38,7 @@ export const staffingSystemPolicySchema = z
           ),
         "System Policy requires read-only, shell-disabled Specialists."
       ),
-    allowedContextPaths: z.array(z.string().min(1)).default([]),
-    contextAccessPolicy: contextAccessPolicySchema.optional(),
+    contextAccessPolicy: contextAccessPolicySchema,
     limits: staffingInspectionLimitsSchema,
     maxAgentInvocations: z.number().int().positive(),
   })

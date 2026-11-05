@@ -37,8 +37,10 @@ export function configureStaffingSystemPolicy(
           subject: configuration,
           binding,
           reason:
-            previous && "policy" in previous.configuration
-              ? "Legacy System Policy is blocked. Review replacement Specialist, Context and invocation limits; old enforcementRules are not carried forward. Explicit Human reapproval required."
+            previous &&
+            ("policy" in previous.configuration ||
+              "allowedContextPaths" in previous.configuration)
+              ? "Legacy System Policy is blocked. Review replacement Specialist, Context and invocation limits; old access representations and enforcementRules are not carried forward. Explicit Human reapproval required."
               : "Human configuration and approval required for System Policy.",
         };
       entry.systems.push({ configuration, version, approval: evidence });

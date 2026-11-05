@@ -1,4 +1,4 @@
-import { resolveContextAccessPolicy } from "@/services/repository-inspection/index.js";
+import { validateContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { z } from "zod";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -13,7 +13,9 @@ export function validateStaffingProposal(
 ): void {
   const proposal = staffingProposalSchema.parse(input);
   const config = staffingSystemPolicySchema.parse(configuration);
-  const contextAccessPolicy = resolveContextAccessPolicy(config);
+  const contextAccessPolicy = validateContextAccessPolicy(
+    config.contextAccessPolicy
+  );
   if (
     new Set(config.availableSpecialists.map(({ id }) => id)).size !==
     config.availableSpecialists.length

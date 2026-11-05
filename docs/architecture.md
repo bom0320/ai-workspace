@@ -581,7 +581,7 @@ Harness가 `contextAccessPolicy: { allowedScopes: PathScope[] }`를 공급한다
 glob / deny rule / metadata 전용 권한은 도입하지 않는다.
 
 contracts/repository/context-access-policy.ts는 strict 구조 Schema와 z.infer 타입을 정의한다. repository-inspection의
-resolveContextAccessPolicy / isContextPathAllowed / isContextScopeContained가 기존 경로 안전성 규칙을
+validateContextAccessPolicy / isContextPathAllowed / isContextScopeContained가 기존 경로 안전성 규칙을
 재사용하여 범위 해석과 포함 관계를 담당한다. Schema parsing만으로 경로 안전성이나 승인 출처가 증명되지는 않는다.
 Discovery는 같은 Commit의 regular 파일 목록에 이 정책과 기존 민감 경로 차단을 적용한 뒤 CEO에 노출한다.
 Content 요청과 root metadata 로딩에서도 정책·파일 안전성·예산을 다시 검사한다. Initial Seeding의 파일
@@ -592,11 +592,15 @@ Traversal / absolute / dot / empty segment / backslash / colon / control charact
 허용 범위 안에 있어도 차단한다. 이는 임의 파일의 secret 탐지 보장이 아니며 정책의 적절성과 등록
 Specialist의 출처는 Harness 호출자가 책임진다. Repository instructions와 content는 untrusted data다.
 
-호환 입력 `allowedContextPaths`는 각 항목을 **File 범위로만** 해석한다. 디렉터리가 실제 존재하더라도
-하위 파일 접근으로 확대하지 않는다. 기존 서명된 정책은 파싱 시 같은 Exact 의미를 유지하며 저장 형식이나
-버전을 자동 변환하지 않는다. 새 contextAccessPolicy와 비어 있지 않은 legacy 목록을 함께 지정하면 거부한다.
-새 형식은 legacy 필드를 생략할 수 있고 Schema 결과에는 빈 legacy 배열이 들어갈 수 있다. Directory 접근은
-명시적인 새 정책 설정과 기존 Human 확인·버전 갱신을 거쳐야 한다.
+신규 System Policy와 Discovery는 필수 `contextAccessPolicy` 하나만 받으며, `allowedContextPaths`는
+빈 배열이어도 거부한다. 공통 접근 검증 서비스에는 Legacy 변환을 두지 않는다.
+과거 System Policy는 별도 Historical Schema로 원형을 읽는다. Exact 목록 형식, 새 Scope와 빈 Legacy
+목록이 함께 있는 형식, nested policy / enforcementRules 형식 모두 현재 정책으로 사용할 수 없다.
+신규 Staffing 입력에서는 구조 검증에 실패하고, 저장된 현재 정책이 과거 형식이면 Approval·Scope 조회와
+새 위임 설정을 차단한다. `governance setup`에서 Human이 새 정책을 명시적으로 재승인해야 한다.
+이때 새 버전만 추가하며 서명된 이력은 변환·재작성하지 않고, 기존 위임·Scope는 자동 승계되지 않는다.
+과거 Delegation의 범위 변환은 해당 기록의 검증에만 남긴다. Exact 목록은 File로만, 기존 Scope는 원래
+자동 승인 범위로만 해석하며 System Policy 접근 상한을 확대할 수 없다.
 
 StaffingInspectionLimits는 요청 파일 수·누적 조사 파일 수·파일 byte 수·fileTree 항목 수·전체 Context의
 UTF-8 JSON byte 수를 제한한다. maxFileBytes는 기존 blob reader의 bounded output 안에서 최대 512 KiB다.

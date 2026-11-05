@@ -1,5 +1,5 @@
 import {
-  resolveContextAccessPolicy,
+  validateContextAccessPolicy,
   isContextScopeContained,
 } from "@/services/repository-inspection/index.js";
 import {
@@ -26,7 +26,7 @@ export function validateDelegationConfiguration(
     )
   )
     throw new Error("Delegation must reference unique registered Specialists.");
-  const maximum = resolveContextAccessPolicy(system);
+  const maximum = validateContextAccessPolicy(system.contextAccessPolicy);
   if (
     policy.delegatedContextScopes.some(
       (scope) => !isContextScopeContained(scope, maximum)
@@ -44,11 +44,26 @@ export function readRecordedDelegationInput(
   const scopes =
     "delegatedContextScopes" in record
       ? record.delegatedContextScopes
-      : resolveContextAccessPolicy(record).allowedScopes;
+      : readHistoricalContextScopes(record);
   return humanDelegationPolicyInputSchema.parse({
     allowedSpecialistIds: record.allowedSpecialistIds,
     delegatedContextScopes: scopes,
     maxAgentInvocations: record.maxAgentInvocations,
     expiresAt: record.expiresAt,
   });
+}
+
+// Historical projection only: exact entries never acquire directory authority.
+// Preserve the signed object unchanged, including empty legacy lists.
+function readHistoricalContextScopes(
+  record: Extract<RecordedHumanDelegationPolicy, { phase: "phase-a" }>
+) {
+  const paths = record.allowedContextPaths ?? [];
+  if (record.contextAccessPolicy !== undefined && paths.length)
+    throw new Error("Ambiguous historical Delegation Context scopes.");
+  return validateContextAccessPolicy(
+    record.contextAccessPolicy ?? {
+      allowedScopes: paths.map((path) => ({ kind: "file", path })),
+    }
+  ).allowedScopes;
 }

@@ -86,7 +86,12 @@ beforeEach(() => {
         authority: { repositoryAccess: "read", shellExecution: false },
       },
     ],
-    allowedContextPaths: ["src/login.ts", "src/other.ts"],
+    contextAccessPolicy: {
+      allowedScopes: ["src/login.ts", "src/other.ts"].map((path) => ({
+        kind: "file" as const,
+        path,
+      })),
+    },
     limits: {
       maxFilesPerRequest: 2,
       maxTotalFiles: 2,

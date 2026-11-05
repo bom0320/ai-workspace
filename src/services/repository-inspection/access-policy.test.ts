@@ -3,16 +3,14 @@ import { contextAccessPolicySchema } from "@/contracts/repository/context-access
 import {
   isContextPathAllowed,
   isContextScopeContained,
-  resolveContextAccessPolicy,
+  validateContextAccessPolicy,
 } from "./access-policy.js";
 
-const policy = resolveContextAccessPolicy({
-  contextAccessPolicy: {
-    allowedScopes: [
-      { kind: "directory", path: "src/ui" },
-      { kind: "file", path: "README.md" },
-    ],
-  },
+const policy = validateContextAccessPolicy({
+  allowedScopes: [
+    { kind: "directory", path: "src/ui" },
+    { kind: "file", path: "README.md" },
+  ],
 });
 describe("Context access scopes", () => {
   it.each(["src/ui/Form.ts", "src/ui/nested/a.ts", "README.md"])(
@@ -47,22 +45,23 @@ describe("Context access scopes", () => {
     "src\\ui",
   ])("rejects unsafe scope %s", (path) => {
     expect(() =>
-      resolveContextAccessPolicy({
-        contextAccessPolicy: { allowedScopes: [{ kind: "directory", path }] },
+      validateContextAccessPolicy({
+        allowedScopes: [{ kind: "directory", path }],
       })
     ).toThrow();
   });
-  it("treats missing/empty scopes as deny and legacy entries as files only", () => {
-    expect(isContextPathAllowed("src/a", resolveContextAccessPolicy({}))).toBe(
-      false
-    );
-    const legacy = resolveContextAccessPolicy({ allowedContextPaths: ["src"] });
-    expect(legacy).toEqual({ allowedScopes: [{ kind: "file", path: "src" }] });
-    expect(isContextPathAllowed("src/a", legacy)).toBe(false);
+  it("requires an explicit policy and treats empty scopes as deny", () => {
+    expect(() => validateContextAccessPolicy(undefined)).toThrow();
+    expect(
+      isContextPathAllowed(
+        "src/a",
+        validateContextAccessPolicy({ allowedScopes: [] })
+      )
+    ).toBe(false);
   });
   it("rejects mixed nonempty policies and unknown schema fields", () => {
     expect(() =>
-      resolveContextAccessPolicy({
+      validateContextAccessPolicy({
         contextAccessPolicy: policy,
         allowedContextPaths: ["extra"],
       })

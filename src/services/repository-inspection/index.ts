@@ -6,7 +6,7 @@ export {
   isRepositoryRelativePath,
 } from "./discovery.js";
 export {
-  resolveContextAccessPolicy,
+  validateContextAccessPolicy,
   isContextPathAllowed,
   isContextScopeContained,
 } from "./access-policy.js";

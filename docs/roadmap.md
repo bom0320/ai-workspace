@@ -292,8 +292,10 @@ budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실�
 - Discovery는 정책이 허용한 후보에서 파일을 선택한다. 정책은 신뢰된 Harness가 공급하며 CEO는 변경하지 못한다.
 - System Policy는 접근 상한, Human Delegation은 그 안의 자동 승인 범위를 소유한다. Proposal / Scope에는
   실제 선택된 정확한 contextPaths만 남긴다. 독립 Enforcement Rule 계층은 이후 정책 통합에서 제거했다.
-- 기존 allowedContextPaths와 저장된 정책은 File 범위로만 해석하며 Directory 권한으로 자동 변환하지 않는다.
-  새 범위와 비어 있지 않은 legacy 목록을 함께 지정하면 거부한다. 정책 변경은 기존 Human 확인·버전 절차를 따른다.
+- 신규 운영 입력은 contextAccessPolicy를 필수로 받으며 allowedContextPaths는 빈 배열이어도 거부한다.
+  과거 Exact 목록, Scope와 빈 Legacy 목록의 혼합, nested policy 저장 정책은 원형 이력으로만 읽고
+  사용을 차단한다. Human 재승인으로 새 버전을 발급하며 기존 위임·Scope는 자동 승계되지 않는다.
+  과거 Delegation만 별도 기록 검증에서 원래 Exact / Scope 자동 승인 범위를 유지한다.
 - Glob / Deny / 별도 Metadata 권한 및 상위 Workflow 자동 연결은 구현하지 않았다.
 
 운영 정책 통합: StaffingProposalPolicy / enforcementRules를 제거하고 System Policy의 직접

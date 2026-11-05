@@ -348,7 +348,9 @@ Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞�
 
 Directory 위임은 System Policy의 동일하거나 상위 Directory 범위 안이어야 한다. 이 범위는 자동 승인
 조건이며 CEO의 Discovery 권한을 부여하지 않는다. 실제 Proposal과 Scope에는 정확한 파일만 들어간다.
-System Policy의 기존 allowedContextPaths는 계속 Exact File로 동작한다. 신규 Delegation 입력은 위 네
+System Policy 설정에는 contextAccessPolicy가 필수이며 allowedContextPaths는 빈 배열이어도 거부한다.
+과거 Exact 목록·혼합 형식·nested policy 저장 정책은 사용이 차단된다. governance setup에서 Human이
+새 정책을 재승인해 버전을 갱신해야 하며 과거 이력은 재작성하지 않는다. 신규 Delegation 입력은 위 네
 필드만 허용하며 phase / repositoryAccess / shellExecution / allowedContextPaths / contextAccessPolicy를
 추가하면 거부한다. 실행 Phase와 Authority는 상위 System Policy가 통제한다.
 과거 서명된 Delegation은 별도 저장 Schema로 읽고, Exact 목록 또는 기존 Scope를 원래 자동 승인 범위로만

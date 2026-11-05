@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   contextAccessPolicySchema,
   type ContextAccessPolicy,
@@ -6,25 +5,12 @@ import {
 } from "@/contracts/repository/context-access-policy.js";
 import { isUnambiguousRepositoryPath } from "./discovery.js";
 
-// Legacy paths are exact files forever; never infer directories from Git or FS.
-// Empty legacy defaults coexist with a new policy, but two populated policies
-// are ambiguous and must not silently union or replace one another.
-export function resolveContextAccessPolicy(input: {
-  contextAccessPolicy?: ContextAccessPolicy;
-  allowedContextPaths?: string[];
-}): ContextAccessPolicy {
-  const legacy = z
-    .array(z.string().min(1))
-    .parse(input.allowedContextPaths ?? []);
-  if (input.contextAccessPolicy !== undefined && legacy.length)
-    throw new Error("Specify Context scopes or legacy file paths, not both.");
-  const policy = contextAccessPolicySchema.parse(
-    input.contextAccessPolicy === undefined
-      ? {
-          allowedScopes: legacy.map((path) => ({ kind: "file", path })),
-        }
-      : input.contextAccessPolicy
-  );
+// Validate the single current operating contract; historical conversion belongs
+// to the signed-record reader, never to discovery or access enforcement.
+export function validateContextAccessPolicy(
+  input: unknown
+): ContextAccessPolicy {
+  const policy = contextAccessPolicySchema.parse(input);
   if (
     policy.allowedScopes.some(({ path }) => !isUnambiguousRepositoryPath(path))
   )

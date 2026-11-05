@@ -1,6 +1,6 @@
 import {
   isContextPathAllowed,
-  resolveContextAccessPolicy,
+  validateContextAccessPolicy,
 } from "@/services/repository-inspection/index.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
 
@@ -50,7 +50,9 @@ export function validateProposal(
     throw new ProposalPolicyError(
       "System Policy does not match the Run Repository."
     );
-  const contextAccessPolicy = resolveContextAccessPolicy(systemPolicy);
+  const contextAccessPolicy = validateContextAccessPolicy(
+    systemPolicy.contextAccessPolicy
+  );
   if (draft.budget.maxAgentInvocations > systemPolicy.maxAgentInvocations)
     throw new ProposalPolicyError(
       "Proposed invocation budget exceeds Harness policy."
@@ -162,6 +164,7 @@ export function prepareProposalInput(options: RunStaffingOptions) {
     "policy",
     "enforcementRules",
     "constraintRules",
+    "allowedContextPaths",
   ];
   if (obsolete.some((field) => field in options))
     throw new ProposalPolicyError(
@@ -170,12 +173,11 @@ export function prepareProposalInput(options: RunStaffingOptions) {
   const { agent, ...input } = options;
   const captured = structuredClone(input);
   const systemPolicy = staffingSystemPolicySchema.parse(captured.systemPolicy);
-  resolveContextAccessPolicy(systemPolicy);
+  validateContextAccessPolicy(systemPolicy.contextAccessPolicy);
   const runOptions: StaffingLoopOptions = {
     goal: captured.goal,
     repositoryPath: systemPolicy.repositoryRoot,
     availableSpecialists: systemPolicy.availableSpecialists,
-    allowedContextPaths: systemPolicy.allowedContextPaths,
     contextAccessPolicy: systemPolicy.contextAccessPolicy,
     limits: systemPolicy.limits,
     maxRounds: captured.maxRounds,

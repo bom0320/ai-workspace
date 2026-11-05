@@ -296,7 +296,12 @@ describe("runCodexCEO", () => {
     await expect(
       runCodexCEO({
         ...context,
-        allowedContextPaths: ["private.txt"],
+        contextAccessPolicy: {
+          allowedScopes: ["private.txt"].map((path) => ({
+            kind: "file" as const,
+            path,
+          })),
+        },
       } as StaffingContext)
     ).rejects.toBeInstanceOf(ZodError);
     expect(command).not.toHaveBeenCalled();

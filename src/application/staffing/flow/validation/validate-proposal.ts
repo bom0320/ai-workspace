@@ -1,18 +1,17 @@
-import type { ContextAccessPolicy } from "@/contracts/context-access-policy.js";
-import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
-import { specialistDefinitionSchema } from "@/contracts/specialist.js";
+import {
+  isContextPathAllowed,
+  resolveContextAccessPolicy,
+} from "@/services/repository-inspection/index.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
-import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/index.js";
 
 import type { RepositorySnapshot } from "@/contracts/repository-snapshot.js";
-import type { SpecialistDefinition } from "@/contracts/specialist.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { CommitFile } from "@/infrastructure/git/index.js";
-import type { StaffingInspectionLimits } from "../../protocol/context.js";
 import {
-  staffingProposalPolicySchema,
-  type StaffingProposalPolicy,
-} from "../../model/policy.js";
+  staffingSystemPolicySchema,
+  type StaffingSystemPolicy,
+} from "@/contracts/staffing-system-policy.js";
+import { realpathSync } from "node:fs";
 import type { StaffingDraft } from "../../protocol/ceo.js";
 import type { StaffingLoopOptions } from "../orchestration/run-staffing-loop.js";
 import {
@@ -20,8 +19,11 @@ import {
   requireFile,
 } from "../inspection/context-policy.js";
 
-export type RunStaffingOptions = StaffingLoopOptions & {
-  policy: StaffingProposalPolicy;
+export type RunStaffingOptions = Pick<
+  StaffingLoopOptions,
+  "goal" | "maxRounds" | "timeoutMs" | "agent"
+> & {
+  systemPolicy: StaffingSystemPolicy;
 };
 
 export class ProposalPolicyError extends Error {}
@@ -32,19 +34,24 @@ export type ProposalValidationContext = {
   snapshot: RepositorySnapshot;
   files: CommitFile[];
   fileTree: string[];
-  contextAccessPolicy: ContextAccessPolicy;
-  specialists: SpecialistDefinition[];
-  limits: StaffingInspectionLimits;
 };
 
 // Public finalization still accepts only the private Loop result.
 export function validateProposal(
   draft: StaffingDraft,
   context: ProposalValidationContext,
-  policy: StaffingProposalPolicy
+  systemPolicy: StaffingSystemPolicy
 ) {
-  const { specialists, limits } = context;
-  if (draft.budget.maxAgentInvocations > policy.maxAgentInvocations)
+  const { availableSpecialists: specialists, limits } = systemPolicy;
+  if (
+    realpathSync(systemPolicy.repositoryRoot) !==
+    realpathSync(context.snapshot.repositoryRoot)
+  )
+    throw new ProposalPolicyError(
+      "System Policy does not match the Run Repository."
+    );
+  const contextAccessPolicy = resolveContextAccessPolicy(systemPolicy);
+  if (draft.budget.maxAgentInvocations > systemPolicy.maxAgentInvocations)
     throw new ProposalPolicyError(
       "Proposed invocation budget exceeds Harness policy."
     );
@@ -85,7 +92,7 @@ export function validateProposal(
     for (const path of assignment.contextPaths) {
       if (
         !isInspectablePath(path) ||
-        !isContextPathAllowed(path, context.contextAccessPolicy) ||
+        !isContextPathAllowed(path, contextAccessPolicy) ||
         !context.fileTree.includes(path)
       )
         throw new ProposalPolicyError(
@@ -98,30 +105,6 @@ export function validateProposal(
   if (paths.size > limits.maxTotalFiles)
     throw new ProposalPolicyError("Proposal Context exceeds maxTotalFiles.");
 
-  for (const rule of policy.enforcementRules) {
-    if (
-      rule.type === "context-paths" &&
-      [...paths].some((path) => !rule.allowedContextPaths.includes(path))
-    )
-      throw new ProposalPolicyError(
-        "Proposal violates Harness Context policy."
-      );
-    if (
-      rule.type === "specialists" &&
-      ids.some((id) => !rule.allowedSpecialistIds.includes(id))
-    )
-      throw new ProposalPolicyError(
-        "Proposal violates Harness Specialist policy."
-      );
-    if (
-      rule.type === "invocation-budget" &&
-      draft.budget.maxAgentInvocations > rule.maxAgentInvocations
-    )
-      throw new ProposalPolicyError(
-        "Proposal violates Harness invocation budget policy."
-      );
-  }
-
   // Preflight the full union before reading any blob; never trust Working Tree
   // content or a CEO-supplied file. Assignment Context limits don't consume CEO
   // inspection rounds or mutate the run's inspection state.
@@ -131,7 +114,7 @@ export function validateProposal(
   const { files: _commitFiles, ...facts } = context;
   const projection = {
     ...facts,
-    policy,
+    systemPolicy,
     // Exclude Harness-issued IDs and Proposal wrapper fields so Draft and
     // Proposal revalidation measure exactly the same assignment payload.
     draft: {
@@ -171,22 +154,33 @@ export function validateProposal(
 }
 
 export function prepareProposalInput(options: RunStaffingOptions) {
-  // Capture Harness input before the first await; a caller or injected Agent
-  // mutating options later cannot replace this run's registration or policy.
-  const { agent, policy: suppliedPolicy, ...input } = options;
-  const runOptions = { ...structuredClone(input), agent };
-  const policy = staffingProposalPolicySchema.parse(suppliedPolicy);
-  runOptions.availableSpecialists = specialistDefinitionSchema
-    .array()
-    .parse(runOptions.availableSpecialists);
-  for (const rule of policy.enforcementRules) {
-    if (
-      rule.type === "context-paths" &&
-      rule.allowedContextPaths.some(
-        (path) => !isUnambiguousRepositoryPath(path)
-      )
-    )
-      throw new ProposalPolicyError("Invalid Harness Context policy.");
-  }
-  return { runOptions, policy };
+  // Capture Harness input before the first await. CEO mutations cannot replace
+  // the policy or the original Goal used for this run's finalization.
+  const obsolete = [
+    ...Object.keys(staffingSystemPolicySchema.shape),
+    "repositoryPath",
+    "policy",
+    "enforcementRules",
+    "constraintRules",
+  ];
+  if (obsolete.some((field) => field in options))
+    throw new ProposalPolicyError(
+      "Supply operating conditions only through systemPolicy."
+    );
+  const { agent, ...input } = options;
+  const captured = structuredClone(input);
+  const systemPolicy = staffingSystemPolicySchema.parse(captured.systemPolicy);
+  resolveContextAccessPolicy(systemPolicy);
+  const runOptions: StaffingLoopOptions = {
+    goal: captured.goal,
+    repositoryPath: systemPolicy.repositoryRoot,
+    availableSpecialists: systemPolicy.availableSpecialists,
+    allowedContextPaths: systemPolicy.allowedContextPaths,
+    contextAccessPolicy: systemPolicy.contextAccessPolicy,
+    limits: systemPolicy.limits,
+    maxRounds: captured.maxRounds,
+    timeoutMs: captured.timeoutMs,
+    agent,
+  };
+  return { runOptions, systemPolicy };
 }

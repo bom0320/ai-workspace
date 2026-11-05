@@ -1,7 +1,7 @@
 import { assertContextBudget } from "./inspection/context-policy.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
-import type { StaffingProposalPolicy } from "../model/policy.js";
+import type { StaffingSystemPolicy } from "@/contracts/staffing-system-policy.js";
 import type { StaffingRunResult } from "../model/result.js";
 import { staffingDraftSchema } from "../protocol/ceo.js";
 import {
@@ -22,14 +22,14 @@ export async function runStaffing(
   options: RunStaffingOptions
 ): Promise<StaffingRunResult> {
   let runOptions: StaffingLoopOptions;
-  let policy: StaffingProposalPolicy;
+  let systemPolicy: StaffingSystemPolicy;
   try {
-    ({ runOptions, policy } = prepareProposalInput(options));
+    ({ runOptions, systemPolicy } = prepareProposalInput(options));
   } catch {
     return {
       status: "failed",
       failure: "invalid-input",
-      reason: "Invalid Harness proposal policy or run inputs.",
+      reason: "Invalid Harness System Policy or run inputs.",
       rounds: 0,
     };
   }
@@ -57,11 +57,8 @@ export async function runStaffing(
         snapshot: state.snapshot,
         files: state.files,
         fileTree: state.context.repository.fileTree,
-        contextAccessPolicy: state.contextAccessPolicy,
-        specialists: runOptions.availableSpecialists,
-        limits: state.context.limits,
       },
-      policy
+      systemPolicy
     );
     // Preserve the actual CEO metadata/projection budget independently of the
     // assignment budget. No reconstructed inspection state is needed elsewhere.

@@ -88,35 +88,38 @@ beforeEach(() => {
     rationale: "Focused analysis",
   };
   options = {
-    repositoryPath: root,
     goal: {
       objective: "Analyze feedback",
       targetRepository: "example",
       constraints: ["No edits"],
     },
-    availableSpecialists: [
-      {
-        id: "frontend",
-        role: "Frontend",
-        objective: "Frontend analysis",
-        authority: { repositoryAccess: "read", shellExecution: false },
+    systemPolicy: {
+      repositoryRoot: root,
+      phase: "phase-a",
+      availableSpecialists: [
+        {
+          id: "frontend",
+          role: "Frontend",
+          objective: "Frontend analysis",
+          authority: { repositoryAccess: "read", shellExecution: false },
+        },
+        {
+          id: "ux",
+          role: "UX",
+          objective: "UX analysis",
+          authority: { repositoryAccess: "read", shellExecution: false },
+        },
+      ],
+      allowedContextPaths: ["src/a.ts", "src/b.ts"],
+      limits: {
+        maxFilesPerRequest: 2,
+        maxTotalFiles: 3,
+        maxFileBytes: 65536,
+        maxContextBytes: 131072,
+        maxFileTreeEntries: 20,
       },
-      {
-        id: "ux",
-        role: "UX",
-        objective: "UX analysis",
-        authority: { repositoryAccess: "read", shellExecution: false },
-      },
-    ],
-    allowedContextPaths: ["src/a.ts", "src/b.ts"],
-    limits: {
-      maxFilesPerRequest: 2,
-      maxTotalFiles: 3,
-      maxFileBytes: 65536,
-      maxContextBytes: 131072,
-      maxFileTreeEntries: 20,
+      maxAgentInvocations: 4,
     },
-    policy: { maxAgentInvocations: 4, enforcementRules: [] },
     maxRounds: 3,
     agent: vi.fn<CEOStaffingAgent>(async () => ({ type: "propose", draft })),
   };
@@ -219,9 +222,9 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       context.goal.objective = "CEO overwrite";
       options.goal.objective = "Caller overwrite";
       options.goal.constraints = [];
-      options.policy.maxAgentInvocations = 0;
-      options.availableSpecialists = [];
-      options.allowedContextPaths = [];
+      options.systemPolicy.maxAgentInvocations = 0;
+      options.systemPolicy.availableSpecialists = [];
+      options.systemPolicy.allowedContextPaths = [];
       return { type: "propose", draft };
     };
     const result = await runStaffing(options);
@@ -242,9 +245,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     if (kind === "duplicate")
       draft.assignments.push(structuredClone(draft.assignments[0]));
     if (kind === "write-authority")
-      options.availableSpecialists[0].authority.repositoryAccess = "write";
+      options.systemPolicy.availableSpecialists[0].authority.repositoryAccess =
+        "write";
     if (kind === "shell-authority")
-      options.availableSpecialists[0].authority.shellExecution = true;
+      options.systemPolicy.availableSpecialists[0].authority.shellExecution = true;
     if (kind === "budget") draft.budget.maxAgentInvocations = 5;
     if (kind === "duplicate-path")
       draft.assignments[0].contextPaths.push("src/a.ts");
@@ -252,8 +256,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     const ids = vi.spyOn(crypto, "randomUUID");
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
-      failure: "policy-validation",
-      rounds: 1,
+      failure: kind.endsWith("authority")
+        ? "invalid-input"
+        : "policy-validation",
+      rounds: kind.endsWith("authority") ? 0 : 1,
     });
     expect(read).not.toHaveBeenCalled();
     expect(ids).not.toHaveBeenCalled();
@@ -273,7 +279,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     "rejects forbidden, unsafe, missing or non-regular Context %s",
     async (path) => {
       if (["missing.ts", ".env", "link", "module", "src"].includes(path))
-        options.allowedContextPaths!.push(path);
+        options.systemPolicy.allowedContextPaths!.push(path);
       draft.assignments[0].contextPaths = ["src/a.ts", path];
       const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
       expect(await runStaffing(options)).toMatchObject({
@@ -287,7 +293,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   it.each(["binary.bin", "invalid.txt"])(
     "rejects non-text Snapshot content %s",
     async (path) => {
-      options.allowedContextPaths!.push(path);
+      options.systemPolicy.allowedContextPaths!.push(path);
       draft.assignments[0].contextPaths = [path];
       const result = await runStaffing(options);
       expect(result).toMatchObject({
@@ -309,9 +315,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       writeFileSync(join(root, "src/a.ts"), "x".repeat(5000));
       git("add", ".");
       git("commit", "--quiet", "-m", "larger");
-      options.limits.maxContextBytes = 2000;
-    } else if (limit === "maxFileBytes") options.limits.maxFileBytes = 1;
-    else options.limits[limit] = 0;
+      options.systemPolicy.limits.maxContextBytes = 2000;
+    } else if (limit === "maxFileBytes")
+      options.systemPolicy.limits.maxFileBytes = 1;
+    else options.systemPolicy.limits[limit] = 0;
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "policy-validation",
@@ -322,7 +329,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     writeFileSync(join(root, "src/a.ts"), '\"'.repeat(700));
     git("add", ".");
     git("commit", "--quiet", "-m", "escaped text");
-    options.limits.maxContextBytes = 2000;
+    options.systemPolicy.limits.maxContextBytes = 2000;
     const read = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
     const ids = vi.spyOn(crypto, "randomUUID");
     expect(await runStaffing(options)).toMatchObject({
@@ -333,38 +340,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     expect(ids).not.toHaveBeenCalled();
   });
 
-  it.each(["context-paths", "specialists", "invocation-budget"] as const)(
-    "rejects violations of a Harness %s enforcement rule",
-    async (type) => {
-      options.policy.enforcementRules = [
-        type === "context-paths"
-          ? { type, allowedContextPaths: ["src/b.ts"] }
-          : type === "specialists"
-            ? { type, allowedSpecialistIds: ["ux"] }
-            : { type, maxAgentInvocations: 1 },
-      ];
-      expect(await runStaffing(options)).toMatchObject({
-        status: "failed",
-        failure: "policy-validation",
-      });
-    }
-  );
-
-  it("accepts structurally satisfied rules without claiming semantic proof", async () => {
-    options.policy.enforcementRules = [
-      {
-        type: "context-paths",
-        allowedContextPaths: ["src/a.ts"],
-      },
-      {
-        type: "specialists",
-        allowedSpecialistIds: ["frontend"],
-      },
-      {
-        type: "invocation-budget",
-        maxAgentInvocations: 2,
-      },
-    ];
+  it("validates System settings without claiming semantic proof of Human instructions", async () => {
     const result = await runStaffing(options);
     expect(result.status).toBe("proposed");
     if (result.status !== "proposed") throw new Error("Expected Proposal");
@@ -388,12 +364,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       }
       const result = await runStaffing(options);
       if (result.status !== "proposed") throw new Error(JSON.stringify(result));
-      const configuration = {
-        availableSpecialists: options.availableSpecialists,
-        allowedContextPaths: options.allowedContextPaths,
-        limits: structuredClone(options.limits),
-        policy: structuredClone(options.policy),
-      };
+      const configuration = structuredClone(options.systemPolicy);
       expect(() =>
         validateStaffingProposal(result.proposal, configuration)
       ).not.toThrow();
@@ -402,7 +373,7 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       if (kind === "json") configuration.limits.maxContextBytes = 2000;
       if (kind === "specialist") configuration.availableSpecialists = [];
       if (kind === "context") configuration.allowedContextPaths = [];
-      if (kind === "budget") configuration.policy.maxAgentInvocations = 1;
+      if (kind === "budget") configuration.maxAgentInvocations = 1;
       expect(() =>
         validateStaffingProposal(result.proposal, configuration)
       ).toThrow();
@@ -410,20 +381,15 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   );
 
   it("uses directory access for Finalization and Approval revalidation without widening assignment paths", async () => {
-    options.allowedContextPaths = undefined;
-    options.contextAccessPolicy = {
+    options.systemPolicy.allowedContextPaths = [];
+    options.systemPolicy.contextAccessPolicy = {
       allowedScopes: [{ kind: "directory", path: "src" }],
     };
     const result = await runStaffing(options);
     expect(result.status).toBe("proposed");
     if (result.status !== "proposed") throw new Error(JSON.stringify(result));
     expect(result.proposal.assignments[0].contextPaths).toEqual(["src/a.ts"]);
-    const configuration = {
-      availableSpecialists: options.availableSpecialists,
-      contextAccessPolicy: options.contextAccessPolicy,
-      limits: options.limits,
-      policy: options.policy,
-    };
+    const configuration = structuredClone(options.systemPolicy);
     expect(() =>
       validateStaffingProposal(result.proposal, configuration)
     ).not.toThrow();
@@ -436,36 +402,21 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       failure: "policy-validation",
     });
   });
-  it("keeps exact context-paths enforcement narrower than directory discovery", async () => {
-    options.allowedContextPaths = undefined;
-    options.contextAccessPolicy = {
-      allowedScopes: [{ kind: "directory", path: "src" }],
-    };
-    options.policy.enforcementRules = [
-      { type: "context-paths", allowedContextPaths: ["src/b.ts"] },
-    ];
-    expect(await runStaffing(options)).toMatchObject({
-      status: "failed",
-      failure: "policy-validation",
-    });
-  });
-
-  it("rejects obsolete constraint fields and invalid policy before calling the CEO", async () => {
-    options.policy.enforcementRules = [
-      {
-        type: "specialists",
-        // @ts-expect-error Obsolete natural-language binding is not a policy field.
-        constraint: "No edits",
-        allowedSpecialistIds: [],
+  it("rejects old nested policy/rules and invalid System settings before calling the CEO", async () => {
+    const obsolete = {
+      ...options.systemPolicy,
+      policy: {
+        maxAgentInvocations: 4,
+        enforcementRules: [
+          { type: "specialists", allowedSpecialistIds: ["ux"] },
+        ],
       },
-    ];
-    expect(await runStaffing(options)).toMatchObject({
-      status: "failed",
-      failure: "invalid-input",
-      rounds: 0,
-    });
+    };
+    expect(
+      await runStaffing({ ...options, systemPolicy: obsolete })
+    ).toMatchObject({ status: "failed", failure: "invalid-input", rounds: 0 });
     expect(options.agent).not.toHaveBeenCalled();
-    options.policy = { maxAgentInvocations: 0, enforcementRules: [] };
+    options.systemPolicy.maxAgentInvocations = 0;
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "invalid-input",
@@ -501,19 +452,11 @@ describe("runStaffing — same-run finalization, not authorization", () => {
 
   it("enforces policies even without any Human Constraint strings", async () => {
     delete options.goal.constraints;
-    options.policy.enforcementRules = [
-      { type: "specialists", allowedSpecialistIds: ["frontend"] },
-      { type: "context-paths", allowedContextPaths: ["src/a.ts"] },
-      { type: "invocation-budget", maxAgentInvocations: 2 },
-    ];
     expect(await runStaffing(options)).toMatchObject({ status: "proposed" });
-    options.policy.enforcementRules = [
-      { type: "specialists", allowedSpecialistIds: [] },
-    ];
+    options.systemPolicy.maxAgentInvocations = 1;
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "policy-validation",
-      reason: "Proposal violates Harness Specialist policy.",
     });
   });
 
@@ -539,12 +482,19 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     expect(ids).not.toHaveBeenCalled();
   });
 
+  it("rejects competing operating settings outside systemPolicy", async () => {
+    expect(
+      await runStaffing({
+        ...options,
+        policy: { maxAgentInvocations: 1, enforcementRules: [] },
+      } as RunStaffingOptions)
+    ).toMatchObject({ status: "failed", failure: "invalid-input", rounds: 0 });
+    expect(options.agent).not.toHaveBeenCalled();
+  });
+
   it("rejects obsolete top-level constraintRules rather than silently ignoring them", async () => {
-    options.policy = {
-      ...options.policy,
-      // @ts-expect-error Obsolete policy field is rejected at the runtime boundary.
-      constraintRules: [],
-    };
+    // @ts-expect-error Obsolete rules must fail closed, not be ignored.
+    options.systemPolicy.enforcementRules = [];
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
       failure: "invalid-input",
@@ -554,12 +504,12 @@ describe("runStaffing — same-run finalization, not authorization", () => {
   });
 
   it("rejects duplicate Harness registry IDs before the CEO", async () => {
-    options.availableSpecialists.push(
-      structuredClone(options.availableSpecialists[0])
+    options.systemPolicy.availableSpecialists.push(
+      structuredClone(options.systemPolicy.availableSpecialists[0])
     );
     expect(await runStaffing(options)).toMatchObject({
       status: "failed",
-      failure: "discovery",
+      failure: "invalid-input",
       rounds: 0,
     });
     expect(options.agent).not.toHaveBeenCalled();

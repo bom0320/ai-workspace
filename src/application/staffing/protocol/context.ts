@@ -4,20 +4,9 @@ import { specialistDefinitionSchema } from "@/contracts/specialist.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { inspectedFileSchema } from "@/contracts/inspected-file.js";
 
+import { staffingInspectionLimitsSchema } from "@/contracts/staffing-system-policy.js";
+export { staffingInspectionLimitsSchema } from "@/contracts/staffing-system-policy.js";
 const nonnegativeInteger = z.number().int().nonnegative();
-export const staffingInspectionLimitsSchema = z
-  .object({
-    maxFilesPerRequest: nonnegativeInteger,
-    maxTotalFiles: nonnegativeInteger,
-    maxFileBytes: z
-      .number()
-      .int()
-      .positive()
-      .max(512 * 1024),
-    maxContextBytes: z.number().int().positive(),
-    maxFileTreeEntries: nonnegativeInteger,
-  })
-  .strict();
 
 // Candidates are a projection of Harness registration, not CEO-defined authority.
 export const specialistCandidateSchema = specialistDefinitionSchema.pick({

@@ -327,9 +327,13 @@ pnpm dev governance revoke /path/to/repository
 ```
 
 System Policy JSON은 repositoryRoot, phase("phase-a"), availableSpecialists(기존 등록 정의),
-contextAccessPolicy.allowedScopes(File / Directory 범위), limits(기존 StaffingInspectionLimits), policy(maxAgentInvocations /
-enforcementRules)를 사용한다. setup은 최초 설정과 변경 모두 실제 terminal 확인을 요구한다.
+contextAccessPolicy.allowedScopes(File / Directory 범위), limits(기존 StaffingInspectionLimits), 직접 maxAgentInvocations를 사용한다. setup은 최초 설정과 변경 모두 실제 terminal 확인을 요구한다.
 CEO에게 설정 파일이나 서명 키를 제공해서는 안 된다.
+이전 nested policy / enforcementRules 형식은 새 setup 입력으로 받지 않는다. 기존 저장 정책은 이력으로만
+보존하며 그 형식이 최신이면 승인·위임 설정·Scope 조회를 거부한다. 새 형식으로 setup하여 실제 Human
+확인을 거쳐야 한다. 확인 화면은 이전 Rule이 승계되지 않음을 고지한다. 정책은 새 version으로 추가되고
+기존 위임도 다시 승인해야 한다. 서명 파일이나 과거 정책을 직접 편집해 마이그레이션하지 않는다.
+
 
 Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞게 지정):
 

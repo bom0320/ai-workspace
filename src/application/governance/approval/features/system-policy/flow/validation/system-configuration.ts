@@ -12,16 +12,6 @@ export function validateSystemConfiguration(
   configuration.repositoryRoot = resolveGovernanceRepository(
     configuration.repositoryRoot
   );
-  const specialists = configuration.availableSpecialists;
-  if (new Set(specialists.map(({ id }) => id)).size !== specialists.length)
-    throw new Error("System Policy requires unique Specialist registrations.");
-  if (
-    specialists.some(
-      ({ authority }) =>
-        authority.repositoryAccess !== "read" || authority.shellExecution
-    )
-  )
-    throw new Error("System Policy is restricted to read-only analysis.");
   resolveContextAccessPolicy(configuration);
   return configuration;
 }

@@ -275,7 +275,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   Snapshot capture/assert 정책은 공통 서비스가 소유한다. 기존 Decision import / public API는 호환 export를 유지한다.
 - **R2 Implemented**: 단일 runStaffing()은 private CEO Loop를 실행하고 한 번 캡처한
   Goal / Snapshot에서 Proposal을 최종화한다. 등록·중복 배치·안전한 Snapshot Context·크기·예산과 Harness의
-  enforcementRules(context-paths / specialists / invocation-budget)를 검사한 뒤 ID를 발급한다. Human Instructions는
+  System Policy의 등록 Specialist·접근 범위·limits·maxAgentInvocations를 검사한 뒤 ID를 발급한다. Human Instructions는
   CEO Context와 proposal.goal.constraints에 원문 그대로 보존하며 Rule과 문자열로 연결하지 않는다.
   unverifiedHumanConstraints는 제거했고 어떤 지시도 Rule 성공으로 검증 완료 처리하지 않는다.
   역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
@@ -291,10 +291,17 @@ budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실�
   로딩 전에 같은 경로 경계·안전 규칙을 적용하며 Snapshot / 파일 mode / 민감 경로 / 예산 제한을 유지한다.
 - Discovery는 정책이 허용한 후보에서 파일을 선택한다. 정책은 신뢰된 Harness가 공급하며 CEO는 변경하지 못한다.
 - System Policy는 접근 상한, Human Delegation은 그 안의 자동 승인 범위를 소유한다. Proposal / Scope에는
-  실제 선택된 정확한 contextPaths만 남긴다. context-paths Enforcement Rule은 추가 Exact 제한이다.
+  실제 선택된 정확한 contextPaths만 남긴다. 독립 Enforcement Rule 계층은 이후 정책 통합에서 제거했다.
 - 기존 allowedContextPaths와 저장된 정책은 File 범위로만 해석하며 Directory 권한으로 자동 변환하지 않는다.
   새 범위와 비어 있지 않은 legacy 목록을 함께 지정하면 거부한다. 정책 변경은 기존 Human 확인·버전 절차를 따른다.
 - Glob / Deny / 별도 Metadata 권한 및 상위 Workflow 자동 연결은 구현하지 않았다.
+
+운영 정책 통합: StaffingProposalPolicy / enforcementRules를 제거하고 System Policy의 직접
+maxAgentInvocations로 통합했다. runStaffing은 goal / systemPolicy / maxRounds와 Agent 설정만 받는다.
+Staffing 최초 검증과 Approval 재검증은 같은 공통 계약을 사용한다. 이전 nested policy가 저장된 경우
+제약을 버리지 않고 원문 이력으로 보존하며 사용을 차단한다. 새 형식을 governance setup으로 Human이
+명시적으로 재승인해야 하며 정책 version은 증가하고 기존 위임·Scope는 자동 승계되지 않는다.
+Ledger 정책 주입 Orchestration과 Authorization / Budget Reservation은 이번 통합 범위가 아니다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
@@ -316,8 +323,8 @@ budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실�
   Repository 내용·AGENTS.md는 untrusted data이며 inspect 성공과 propose 결과는 운영 권한이 아니다.
 - CEO 호출 수(maxRounds), Inspection 파일 수·Context 크기, Draft의 이후 활동 예산과 Approved Scope
   운영 예산을 구분한다. timeoutMs는 기본 Codex 호출에 적용하며 주입 Agent의 취소·timeout은 해당 adapter 책임이다.
-- Harness가 등록 후보·Context access scopes·Inspection limits·Proposal policy를 공급한다. R2는 같은 Run의 원본
-  Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·정책 예산·명시적 Enforcement Rules를 검증한다.
+- Harness가 하나의 System Policy로 등록 후보·Context access scopes·Inspection limits·호출 상한을 공급한다. R2는 같은 Run의 원본
+  Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·운영 예산을 검증한다.
   업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
   Step 3은 proposal.goal.constraints 전체와 제안을 검토하는 직접 승인 접점과 사전 위임 정책 설정을 제공한다.
   ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.

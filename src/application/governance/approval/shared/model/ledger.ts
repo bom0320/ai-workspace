@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import { approvedOperatingScopeSchema } from "../../../model/authority.js";
-import { staffingSystemPolicySchema } from "../../features/system-policy/model/policy.js";
+import { recordedSystemPolicySchema } from "../../features/system-policy/model/policy.js";
 import { humanDelegationPolicySchema } from "../../features/human-delegation/model/policy.js";
 import { approvalRecordSchema } from "../../features/proposal-management/model/approval.js";
 import { humanConfirmationEvidenceSchema as confirmation } from "./confirmation.js";
@@ -17,7 +17,7 @@ export const governanceLedgerSchema = z
             z
               .object({
                 version: z.number().int().positive(),
-                configuration: staffingSystemPolicySchema,
+                configuration: recordedSystemPolicySchema,
                 approval: confirmation,
               })
               .strict()

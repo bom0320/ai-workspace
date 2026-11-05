@@ -21,7 +21,8 @@ export function configureStaffingSystemPolicy(
         delegations: [],
         issuances: [],
       };
-      const version = (entry.systems.at(-1)?.version ?? 0) + 1;
+      const previous = entry.systems.at(-1);
+      const version = (previous?.version ?? 0) + 1;
       const binding = governanceDigest({
         action: "configure-system",
         configuration,
@@ -36,7 +37,9 @@ export function configureStaffingSystemPolicy(
           subject: configuration,
           binding,
           reason:
-            "Human configuration and approval required for System Policy.",
+            previous && "policy" in previous.configuration
+              ? "Legacy System Policy is blocked. Review replacement Specialist, Context and invocation limits; old enforcementRules are not carried forward. Explicit Human reapproval required."
+              : "Human configuration and approval required for System Policy.",
         };
       entry.systems.push({ configuration, version, approval: evidence });
       ledger.repositories[key] = entry;

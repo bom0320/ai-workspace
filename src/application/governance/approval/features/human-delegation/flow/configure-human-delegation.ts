@@ -1,3 +1,4 @@
+import { requireCurrentSystemPolicy } from "../../system-policy/model/policy.js";
 import { randomUUID } from "node:crypto";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
@@ -31,7 +32,11 @@ export function configureHumanDelegation(
       if (!system) return deniedStaffingApproval();
       const previous = entry.delegations.at(-1);
       if (!policy && !previous) return deniedStaffingApproval();
-      if (policy) validateDelegationConfiguration(policy, system.configuration);
+      if (policy)
+        validateDelegationConfiguration(
+          policy,
+          requireCurrentSystemPolicy(system.configuration)
+        );
       const version = (previous?.version ?? 0) + 1;
       const binding = governanceDigest({
         action: "configure-delegation",

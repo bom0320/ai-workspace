@@ -1,3 +1,4 @@
+import { requireCurrentSystemPolicy } from "../../../system-policy/model/policy.js";
 import {
   resolveContextAccessPolicy,
   isContextPathAllowed,
@@ -22,11 +23,7 @@ export function validateCurrentStaffingPolicy(
       realpathSync(proposal.snapshot.repositoryRoot)
   )
     throw new Error("Missing or mismatched System Policy.");
-  const {
-    repositoryRoot: _root,
-    phase: _phase,
-    ...configuration
-  } = system.configuration;
+  const configuration = requireCurrentSystemPolicy(system.configuration);
   validateStaffingProposal(proposal, configuration);
 }
 

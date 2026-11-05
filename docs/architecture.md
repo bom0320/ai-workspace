@@ -614,8 +614,7 @@ Staffing Approval / Scope 발급은 Step 3의 별도 Governance API로 연결한
 ### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
 
 ```text
-runStaffing({ goal, repositoryPath, availableSpecialists, contextAccessPolicy, policy,
-              limits: StaffingInspectionLimits, maxRounds, timeoutMs?, agent? })
+runStaffing({ goal, systemPolicy: StaffingSystemPolicy, maxRounds, timeoutMs?, agent? })
 → validate CEO call limits → discoverStaffingContext() → Harness-owned state
 → Snapshot assert → createStaffingContext() (cloned projection) → CEO call
 → Snapshot assert → ceoStaffingDecisionSchema validation (injected Agent도 검증)
@@ -670,21 +669,25 @@ Authorization / Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미
 
 ### R2 — Staffing Proposal Finalization & Policy Validation — 구현
 
-`runStaffing({ ...discoveryOptions, maxRounds, policy, timeoutMs?, agent? })`가 단일 Staffing Application
+`runStaffing({ goal, systemPolicy, maxRounds, timeoutMs?, agent? })`가 단일 Staffing Application
 진입점이다. private `flow/orchestration/run-staffing-loop.ts`에서 한 번의 CEO Loop를 실행하고 Draft를
 검증·최종화한 뒤 proposed(StaffingProposal) / escalated / failed를 반환한다. 이전의 Draft 전용 공개 API와
 runStaffingProposal은 통합·제거했다. StaffingDraft는 CEO의 중간 산출물이며 StaffingProposal과 별개다.
 flow 루트에는 run-staffing 진입점과 테스트를 두며 Context 조사는 inspection, 입력·Proposal 검사는
 validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-staffing-proposal에 둔다.
-`model/policy.ts`는 Proposal 정책 데이터 Schema이며 `flow/inspection/context-policy.ts`의 파일 접근·조사 예산 검사와 구분한다.
+System Policy가 등록 Specialist·접근 범위·Inspection limits·maxAgentInvocations의 단일 운영 조건이다.
+공통 `contracts/staffing-system-policy.ts`가 Schema와 타입, Inspection Limits를 소유한다. Governance는
+Human 설정·승인·정책 버전을 소유하고 Staffing은 이 계약을 받아 검증한다. 기존 Limits 공개 경로는
+re-export로 유지한다. 독립 StaffingProposalPolicy / Enforcement Rule Schema와 model/policy.ts는 제거했다.
+계약을 공통으로 둬서 Staffing이 Governance workflow를 import하거나 순환 의존을 만들지 않는다.
 
 ```text
-Harness Goal / registration / Context access scopes / inspection limits / proposal policy
+Harness Goal + System Policy (registration / Context access scopes / limits / maxAgentInvocations)
 → 실행 전 입력 복제·정책 구조 검증
 → discovery에서 Snapshot capture (1회) → CEO Loop
 → 내부 proposed { draft, rounds, state } (public API에는 state 미노출)
 → 같은 state의 Goal / Snapshot / 파일 목록으로 Finalization
-→ 등록·중복 배치·Context·예산·Harness Enforcement Rules 검사 → Snapshot assert
+→ System Policy로 등록·중복 배치·Context·예산 검사 → Snapshot assert
 → Harness Proposal / Assignment UUID 발급 → staffingProposalSchema → Snapshot assert
 → proposed { proposal, rounds }
 ```
@@ -693,7 +696,11 @@ Harness Goal / registration / Context access scopes / inspection limits / propos
 그 값은 사용하지 않는다. 원본 Goal과 Snapshot은 CEO 응답으로 교체하지 않고 같은 Run의 private state에서
 가져온다. 등록 정보와 정책도 첫 await 전에 복제하여 호출 중 caller / Agent의 입력 변경과 분리한다.
 이는 in-process 출처 연결이며 저장소 기반 등록·정책의 진위, durable provenance 또는 암호학적 증명이 아니다.
-등록 목록·접근 범위·policy는 신뢰 경계 안의 Harness caller가 공급해야 한다.
+System Policy는 신뢰 경계 안의 Harness caller가 공급해야 한다. runStaffing()은 원본 Goal과 정책을
+첫 await 전에 복제하고 Repository 경로·등록 후보·접근 범위·limits를 그 정책에서만 도출한다.
+이전에 별도 인자로 전달하던 repositoryPath / availableSpecialists / limits / policy 등은 함께 주면 거부한다.
+validateStaffingProposal(proposal, systemPolicy)도 동일한 전체 계약을 받고 Repository 일치를 확인한다.
+Ledger에서 정책을 자동 조회·주입하는 상위 Orchestration은 추가하지 않았다.
 
 검증 범위:
 
@@ -706,16 +713,15 @@ Harness Goal / registration / Context access scopes / inspection limits / propos
   preflight한 뒤 같은 commit의 Git blob을 읽고 UTF-8 / binary와 실제 JSON 직렬화 Context 크기를 검사한다.
   Assignment당 maxFilesPerRequest, Proposal의 unique 파일 합계 maxTotalFiles, maxFileBytes / maxContextBytes를
   적용한다. Finalization 파일 검사는 CEO의 남은 Inspection Budget이나 Round를 소비·변경하지 않는다.
-- Draft의 maxAgentInvocations는 Harness policy.maxAgentInvocations 이하여야 한다. 운영 예산 예약은 아니다.
+- Draft의 maxAgentInvocations는 System Policy.maxAgentInvocations 이하여야 한다. 운영 예산 예약은 아니다.
 - GoalSpec.constraints는 Human Instructions의 원문이다. 같은 Run의 원본 Goal에서 CEO StaffingContext와
   StaffingProposal.goal까지 순서·내용을 보존한다. CEO는 Goal과 Constraints를 함께 고려하고 모순·불명확함이
   있으면 escalate할 수 있다. Instruction의 보존·전달은 기계적 정책 검사와 별개이며 v1의 원본 보존 원칙을 따른다.
-- Harness policy.enforcementRules는 context-paths(exact 허용 경로), specialists(허용 ID), invocation-budget
-  (상한)의 제한된 기계적 정책이다. 원문 Constraint와의 문자열 연결은 없고 모든 Rule을 함께 만족해야 한다.
-  정책의 출처·신뢰성은 Harness 호출 경계가 관리하며 CEO에는 정책 작성·변경 권한을 부여하지 않는다.
-  model/policy.ts의 staffingEnforcementRuleSchema / StaffingEnforcementRule은 정책 구조를 정의할 뿐,
-  자연어 지시 전체의 모델이나 의미 해석기가 아니다. validateProposal()은 검증한 파일 내용을 내부 호출자에게 반환하고 위반 시 실패한다.
-- unverifiedHumanConstraints 결과 필드는 제거했다. Rule 성공으로 어떤 Human 지시도 검증 완료로 분류하지
+- 운영 제한은 System Policy의 등록 목록·Context Access Policy·limits·직접 maxAgentInvocations로만
+  표현한다. 별도 context-paths / specialists / invocation-budget Rule 배열은 없다. 역할·objective의 의미적
+  적합성이나 Human 자연어 지시 전체의 충족은 여전히 증명하지 않는다. validateProposal()은 검증한 파일
+  내용을 내부 호출자에게 반환하고 위반 시 실패한다.
+- unverifiedHumanConstraints 결과 필드는 제거했다. 정책 검증 성공으로 어떤 Human 지시도 검증 완료로 분류하지
   않는다. 향후 Human Approval은 proposal.goal.constraints **전체**를 검토해야 한다. proposed는 구조·명시적
   정책 검증 통과이며 자연어 지시 전체의 의미적 충족, Human 승인 또는 실행 권한의 증명이 아니다.
 
@@ -731,13 +737,13 @@ Decision / Comparison / Planning / Execution이나 LangGraph Workflow로 자동 
 ### Staffing Validation과 Governance 경계
 
 Staffing의 공통 validateProposal()은 CEO Inspection state가 아니라 원본 Goal / Snapshot,
-Commit 파일 목록, filtered fileTree, 등록 Specialist, Context access scopes, limits와 policy를 받는다.
+Commit 파일 목록과 filtered fileTree, 원본 Goal / Snapshot 및 하나의 System Policy를 받는다.
 최초 Finalization은 private Run에서 이 사실들을 전달한다. 공개 validateStaffingProposal()은 확정된
 Proposal을 파싱하고 현재 Snapshot의 파일 목록을 조회하여 같은 규칙을 적용한다. Assignment ID 중복도
 별도로 거부한다. packageScripts나 남은 Inspection Budget을 가짜로 구성하지 않는다.
 
 두 byte budget은 독립적으로 검사한다. CEO Inspection은 실제 StaffingContext 전체의 JSON 크기를
-측정한다. Assignment Context는 Goal / Snapshot / Draft, 등록 정보·접근 범위·fileTree·limits·policy 및
+측정한다. Assignment Context는 Goal / Snapshot / Draft, fileTree와 전체 System Policy 및
 고유 Context 파일 내용을 포함하는 검증 envelope의 UTF-8 JSON 크기를 측정한다. 파일 읽기 전에는
 전체 경로·mode·파일 수·크기와 envelope + 원시 파일 크기를 검사하고, 읽은 뒤 JSON escape까지 포함해
 다시 검사한다. 두 검사 모두 기존 maxContextBytes를 상한으로 사용한다. 최초 Finalization에서는 실제
@@ -794,13 +800,11 @@ read-only / shellExecution false뿐이다. policy expiry는 호출 시점의 시
 R4의 Human Delegation Context 범위도 같은 File / Directory 판정을 사용하지만 CEO Discovery 권한이
 아니라 **Proposal 자동 승인 범위**다. 위임의 File은 System의 File 또는 Directory에, 위임의 Directory는
 System의 동일하거나 상위 Directory에 포함되어야 한다. 유한한 File 목록을 Directory 권한으로 승격하지 않는다.
-Staffing의 context-paths Enforcement Rule은 별도의 Exact 파일 제한으로 Assignment 범위를 더 좁히며
-Discovery 권한을 부여하지 않는다. StaffingProposal / ApprovedOperatingScope의 contextPaths는 계속 선택된
+독립적인 Staffing Enforcement Rules 계층은 제거했고 Context Access Policy가 접근 상한을 단독 정의한다. StaffingProposal / ApprovedOperatingScope의 contextPaths는 계속 선택된
 정확한 파일 목록이다. Directory 정책을 그대로 실행 Scope에 복사하지 않는다. 현재 상위 Workflow는 이
 정책을 자동 조회·주입하지 않으므로 신뢰된 Harness caller가 승인된 최대 범위를 공급해야 한다.
 
-System Policy는 등록 Specialist 전체 정의, Context access scopes, 파일·Context limits와 R2 enforcementRules /
-budget 상한을 소유한다. Staffing의 공개 validateStaffingProposal()을 재사용해 같은 Proposal Snapshot에서
+System Policy는 등록 Specialist 전체 정의, Context access scopes, 파일·Context limits와 직접 maxAgentInvocations 상한을 소유한다. Staffing의 공개 validateStaffingProposal()을 재사용해 같은 Proposal Snapshot에서
 Git blob·경로·regular mode·중복·예산을 재검증하며 Snapshot을 다시 capture하지 않는다. 입력 JSON이 실제 R2
 Run에서 발급됐다는 서명 provenance나 Human Goal 입력자의 신원까지 인증하는 기능은 아니며, 해당 입력 경계는
 Harness caller가 소유한다. Human의 직접 승인도
@@ -809,6 +813,17 @@ Phase / Authority / 정책 버전·status·expiresAt을 제한한다. 위임이 
 확인한다. 반면 철회·만료·System Policy version 불일치는 불확실한 권한으로 승인하지 않도록 denied한다.
 Human이 새 정책을 다시 승인해야 한다. 호출 예산은 Proposal/Scope별 상한이며 Goal 간 누적 위임 사용량
 관리나 공유 예산 예약은 아니다. 이는 읽기 전용 분석 위임이며 해결 방향·Task·Delivery 승인이 아니다.
+
+과거 nested policy.maxAgentInvocations / enforcementRules 형식은 서명된 이력을 읽기 위한
+recordedSystemPolicySchema에서만 원형을 보존한다. Rule payload는 실행·변환하지 않으며, 빈 Rule 배열을
+포함해 과거 형식이 최신이면 신규 승인·위임 설정·Scope 유효성 조회를 거부한다. 직접 Human 확인도 이를
+우회하지 못한다. 기존 위임 철회는 허용한다. 손실된 제한을 무시하거나 자동 축소/확대 마이그레이션하지 않는다.
+
+기존 Ledger의 Lock / HMAC / Atomic Write와 모든 과거 정책·승인 이력은 유지한다. governance setup에
+새 형식의 운영 조건을 명시하면 새 Human 확인을 요청하고, Rule이 승계되지 않음을 고지한다. 실제 확인 후에만
+기존 이력을 변경하지 않고 다음 System Policy version을 추가한다. 과거 위임은 새 version에 자동 승계되지
+않으며 새 위임 승인이 필요하다. 기존 Scope도 System version 변경으로 무효화된다. 이 호환 처리는 과거 정책의
+집행 Engine이 아니라 fail-closed 이력 읽기이며, Schema parsing이나 재승인 요청 자체가 승인은 아니다.
 
 승인 출처의 신뢰 경계는 **로컬 OS 계정과 Harness / CLI 코드**다. `infrastructure/terminal`은 /dev/tty를
 직접 열어 isatty를 검사하고 임의 challenge를 포함한 정확한 입력과 Enter를 받아야 일회성 process-local

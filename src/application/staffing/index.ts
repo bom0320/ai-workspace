@@ -37,10 +37,4 @@ export {
   staffingRunResultSchema,
   type StaffingRunResult,
 } from "./model/result.js";
-export {
-  staffingProposalPolicySchema,
-  staffingEnforcementRuleSchema,
-  type StaffingProposalPolicy,
-  type StaffingEnforcementRule,
-} from "./model/policy.js";
 export { validateStaffingProposal } from "./flow/validation/validate-staffing-proposal.js";

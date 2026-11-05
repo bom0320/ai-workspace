@@ -29,6 +29,6 @@ export function validateDelegationConfiguration(
     )
   )
     throw new Error("Delegation Context must stay inside System Policy.");
-  if (policy.maxAgentInvocations > system.policy.maxAgentInvocations)
+  if (policy.maxAgentInvocations > system.maxAgentInvocations)
     throw new Error("Delegation budget exceeds System Policy.");
 }

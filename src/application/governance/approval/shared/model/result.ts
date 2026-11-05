@@ -30,6 +30,6 @@ export function deniedStaffingApproval(): StaffingApprovalResult {
   return {
     status: "denied",
     reason:
-      "Approval denied: invalid or untrusted records, System Policy violation, stale approval/delegation, duplicate Proposal or Snapshot drift.",
+      "Approval denied: invalid or untrusted records, System Policy violation, stale approval/delegation, duplicate Proposal or Snapshot drift. Legacy System Policies require explicit Human reapproval.",
   };
 }

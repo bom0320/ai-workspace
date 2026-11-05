@@ -91,7 +91,7 @@ describe("runCodexCEO", () => {
       "preserve the original Human Goal and Constraints",
       "Consider all Human Constraints",
       "mechanical checks do not prove semantic compliance",
-      "Do not generate or modify Harness enforcementRules",
+      "Do not generate or modify Harness System Policy",
       "Do not access repositories, local files, tools, shell commands, network, web",
       "generate a TaskContract",
       "execute Specialists",

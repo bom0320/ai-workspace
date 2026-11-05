@@ -165,7 +165,7 @@ beforeEach(async () => {
       maxContextBytes: 131072,
       maxFileTreeEntries: 10,
     },
-    policy: { maxAgentInvocations: 4, enforcementRules: [] },
+    maxAgentInvocations: 4,
   };
   delegation = {
     phase: "phase-a",
@@ -182,11 +182,7 @@ beforeEach(async () => {
       targetRepository: "example",
       constraints: ["Preserve all accessibility requirements"],
     },
-    repositoryPath: root,
-    availableSpecialists: system.availableSpecialists,
-    allowedContextPaths: system.allowedContextPaths,
-    limits: system.limits,
-    policy: system.policy,
+    systemPolicy: system,
     maxRounds: 1,
     agent: async () => ({
       type: "propose",
@@ -409,9 +405,7 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
           specialistId: "ux",
         });
       if (kind === "policy") {
-        system.policy.enforcementRules = [
-          { type: "specialists", allowedSpecialistIds: ["ux"] },
-        ];
+        system.maxAgentInvocations = 1;
         expect(
           configureStaffingSystemPolicy(
             system,
@@ -515,6 +509,83 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     delegate();
     expect(approveStaffingProposal(proposal, receipt).status).toBe("denied");
   });
+  it.each(["context-paths", "specialists", "invocation-budget", "empty"])(
+    "preserves legacy %s restrictions as blocked history until explicit Human reapproval",
+    (kind) => {
+      const receipt = accept(approveStaffingProposal(proposal));
+      const direct = approveStaffingProposal(proposal, receipt);
+      expect(direct.status).toBe("approved");
+      // Use another Proposal to exercise new approvals independently of duplicates.
+      const next = { ...proposal, id: "legacy-proposal" };
+      const pendingReceipt = accept(approveStaffingProposal(next));
+      delegate();
+      let legacy: unknown;
+      withGovernanceRecords((raw, save) => {
+        const ledger = raw as GovernanceLedger;
+        const entry = Object.values(ledger.repositories)[0];
+        const current = entry.systems.at(-1)!;
+        if ("policy" in current.configuration)
+          throw new Error("Expected current policy");
+        const { maxAgentInvocations, ...configuration } = current.configuration;
+        const rule =
+          kind === "context-paths"
+            ? { type: kind, allowedContextPaths: ["b.ts"] }
+            : kind === "specialists"
+              ? { type: kind, allowedSpecialistIds: ["ux"] }
+              : { type: "invocation-budget", maxAgentInvocations: 1 };
+        legacy = {
+          ...configuration,
+          policy: {
+            maxAgentInvocations,
+            enforcementRules: kind === "empty" ? [] : [rule],
+          },
+        };
+        current.configuration = legacy as typeof current.configuration;
+        save(ledger);
+      });
+      const before = readFileSync(
+        join(home, ".ai-workspace-governance", "records.json"),
+        "utf8"
+      );
+      expect(approveStaffingProposal(next).status).toBe("denied");
+      expect(approveStaffingProposal(next, pendingReceipt).status).toBe(
+        "denied"
+      );
+      expect(configureHumanDelegation(root, delegation).status).toBe("denied");
+      if (direct.status === "approved")
+        expect(getApprovedStaffingScope(direct.scope.id).status).toBe("denied");
+      // Failed evaluation never rewrites/migrates the authenticated history.
+      expect(
+        readFileSync(
+          join(home, ".ai-workspace-governance", "records.json"),
+          "utf8"
+        )
+      ).toBe(before);
+      expect(configureStaffingSystemPolicy(legacy).status).toBe("denied");
+      const request = configureStaffingSystemPolicy(system);
+      expect(request.status).toBe("approval-required");
+      if (request.status !== "approval-required")
+        throw new Error("Expected Human reapproval");
+      expect(request.reason).toContain("not carried forward");
+      expect(configureStaffingSystemPolicy(system, pendingReceipt).status).toBe(
+        "denied"
+      );
+      expect(configureStaffingSystemPolicy(system, accept(request))).toEqual({
+        status: "configured",
+        version: 2,
+      });
+      withGovernanceRecords((raw) => {
+        const entry = Object.values((raw as GovernanceLedger).repositories)[0];
+        expect(entry.systems[0].configuration).toEqual(legacy);
+        expect(entry.systems[1].configuration).toEqual(request.subject);
+      });
+      // Old delegation cannot acquire the newly approved System version silently.
+      expect(approveStaffingProposal(next).status).toBe("denied");
+      delegate();
+      expect(approveStaffingProposal(next).status).toBe("approved");
+    }
+  );
+
   it("System Policy changes require a new delegation approval", () => {
     delegate();
     expect(

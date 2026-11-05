@@ -339,13 +339,8 @@ Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞�
 
 ```json
 {
-  "phase": "phase-a",
   "allowedSpecialistIds": ["frontend"],
-  "contextAccessPolicy": {
-    "allowedScopes": [{ "kind": "directory", "path": "src/login" }]
-  },
-  "repositoryAccess": "read",
-  "shellExecution": false,
+  "delegatedContextScopes": [{ "kind": "directory", "path": "src/login" }],
   "maxAgentInvocations": 2,
   "expiresAt": "2027-01-01T00:00:00.000Z"
 }
@@ -353,15 +348,20 @@ Delegation JSON 예시(경로·ID·미래 만료 시각은 실제 정책에 맞�
 
 Directory 위임은 System Policy의 동일하거나 상위 Directory 범위 안이어야 한다. 이 범위는 자동 승인
 조건이며 CEO의 Discovery 권한을 부여하지 않는다. 실제 Proposal과 Scope에는 정확한 파일만 들어간다.
-기존 JSON / 저장 정책의 allowedContextPaths는 계속 Exact File 목록으로 동작한다. 새 정책에서는 이를
-생략하거나 빈 배열로 둘 수 있지만, 비어 있지 않은 목록과 contextAccessPolicy를 함께 주면 거부한다.
-권한 확대를 위한 Directory 변경은 setup / delegate의 기존 Human 확인과 버전 갱신을 거친다.
+System Policy의 기존 allowedContextPaths는 계속 Exact File로 동작한다. 신규 Delegation 입력은 위 네
+필드만 허용하며 phase / repositoryAccess / shellExecution / allowedContextPaths / contextAccessPolicy를
+추가하면 거부한다. 실행 Phase와 Authority는 상위 System Policy가 통제한다.
+과거 서명된 Delegation은 별도 저장 Schema로 읽고, Exact 목록 또는 기존 Scope를 원래 자동 승인 범위로만
+검증한다. 읽기 시 변환·재저장은 없다. 과거 입력 파일을 새 설정에 그대로 사용하지 말고 새 네 필드로
+명시해 Human 확인을 받아야 한다. 권한 확대나 교체는 기존 확인·버전 갱신 절차를 거친다.
 
 최초 위임·교체·철회도 실제 /dev/tty에서 표시된 `Approve <random challenge>`와 Enter로 확인한다.
 stdin의 단순 Approve·JSON의 approved 필드로 대신할 수 없다. terminal이 없거나 거절·EOF이면 실패한다.
 위임 내 제안은 추가 입력 없이 승인되며, 위임 범위 밖은 Goal·원본 Constraints 전체·배치 업무·Context·
 호출 예산과 자동 승인 불가 사유를 보여준다. 배치 변경은 거절 후 새 검증 Proposal로 제출해야 한다.
-System Policy 위반은 Human 확인으로 우회하지 않는다. 만료·철회된 위임은 새 정책 확인 전까지 거부한다.
+System Policy 위반은 Human 확인으로 우회하지 않는다. 만료·철회·Superseded·정책 버전 불일치나
+무결성/Schema 실패인 위임은 Direct Approval로 전환하지 않고 거부한다. 위임이 없거나 유효한 위임의
+범위를 벗어난 Proposal인 경우에만 직접 확인을 요청한다.
 
 승인 결과는 ApprovalRecord와 Scope를 출력하고 `~/.ai-workspace-governance/`에 서명된 기록을 보존한다.
 자세한 신뢰 경계·한계는 [Architecture의 Step 3](architecture.md#v4-step-3--staffing-approval--human-delegation--구현)을 따른다.

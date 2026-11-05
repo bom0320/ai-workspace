@@ -149,7 +149,12 @@ describe("Governance CLI Human decision surface", () => {
   it("routes delegation replacement and revocation separately from staffing approval", async () => {
     writeFileSync(
       join(root, "delegation.json"),
-      JSON.stringify({ phase: "phase-a" })
+      JSON.stringify({
+        allowedSpecialistIds: ["frontend"],
+        delegatedContextScopes: [{ kind: "file", path: "src/login.ts" }],
+        maxAgentInvocations: 2,
+        expiresAt: "2027-01-01T00:00:00.000Z",
+      })
     );
     vi.mocked(configureHumanDelegation).mockReturnValue({
       status: "configured",
@@ -164,7 +169,12 @@ describe("Governance CLI Human decision surface", () => {
     ).toBe(0);
     expect(configureHumanDelegation).toHaveBeenCalledWith(
       "/repository",
-      { phase: "phase-a" },
+      {
+        allowedSpecialistIds: ["frontend"],
+        delegatedContextScopes: [{ kind: "file", path: "src/login.ts" }],
+        maxAgentInvocations: 2,
+        expiresAt: "2027-01-01T00:00:00.000Z",
+      },
       undefined
     );
     expect(await runGovernanceCli(["revoke", "/repository"])).toBe(0);

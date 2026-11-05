@@ -305,7 +305,7 @@ Ledger 정책 주입 Orchestration과 Authorization / Budget Reservation은 이�
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
-- 실제 controlling-terminal 확인으로 설정한 Phase A read-only 위임을 다른 Goal에 재사용한다. 범위 내는
+- 실제 controlling-terminal 확인으로 설정한 자동 승인 위임을 다른 Goal에 재사용한다. Phase A / Read-only는 System Policy가 통제한다. 범위 내는
   delegated ApprovalRecord, 범위 밖·미설정은 직접 Human 확인으로 분기한다. System Policy 위반, 만료·철회된
   위임, stale confirmation / Proposal·Snapshot 변경은 Scope 발급을 차단한다.
 - 서명된 로컬 ledger는 owner UID / 권한·키·기록의 무결성을 확인하고 lock / atomic rename으로 중복 발급을
@@ -316,6 +316,12 @@ Ledger 정책 주입 Orchestration과 Authorization / Budget Reservation은 이�
   Human 인증은 미구현이다. 실제 Human 승인 E2E가 아닌 mock TTY + 실제 임시 Repository / signed file 테스트로 검증한다.
 - 후속 단계는 최신 권한 / Scope lifecycle과 Budget Reservation을 확보하는 Invocation Authorization이다.
   Scope 발급은 자연어 Instructions의 의미적 충족이나 실제 Specialist 호출 허가·예산 확보가 아니다.
+
+Human Delegation 입력은 allowedSpecialistIds / delegatedContextScopes / maxAgentInvocations / expiresAt로
+간소화했다. System의 contextAccessPolicy는 Repository 접근 상한이고 위임 Scope는 자동 승인 범위다.
+신규 입력과 과거 저장 기록의 Schema를 분리했으며, 과거 Exact / Directory 기록은 변환하지 않고 원래
+범위를 검증한다. 무효 위임은 Direct Approval로 대체하지 않는다. 기존 직접 승인 Scope와 위임 승인
+Scope의 유효성 기준은 구분해서 유지한다. 신규 교체·철회는 Human 확인과 버전 갱신을 거친다.
 
 ### Step 2.3 계약과 다음 연결점
 

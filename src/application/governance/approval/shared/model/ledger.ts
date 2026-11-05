@@ -2,7 +2,7 @@ import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import { approvedOperatingScopeSchema } from "../../../model/authority.js";
 import { recordedSystemPolicySchema } from "../../features/system-policy/model/policy.js";
-import { humanDelegationPolicySchema } from "../../features/human-delegation/model/policy.js";
+import { recordedHumanDelegationPolicySchema } from "../../features/human-delegation/model/policy.js";
 import { approvalRecordSchema } from "../../features/proposal-management/model/approval.js";
 import { humanConfirmationEvidenceSchema as confirmation } from "./confirmation.js";
 const text = z.string().min(1);
@@ -22,7 +22,7 @@ export const governanceLedgerSchema = z
               })
               .strict()
           ),
-          delegations: z.array(humanDelegationPolicySchema),
+          delegations: z.array(recordedHumanDelegationPolicySchema),
           issuances: z.array(
             z
               .object({

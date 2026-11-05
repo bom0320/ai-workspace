@@ -803,7 +803,7 @@ Human 확인 없이는 저장하지 않는다. Policy ID / version, Approval ID�
 정책 최신 버전은 로컬 ledger가 소유하고 이전 버전은 추적용으로 보존한다. 최초 범위는 phase-a /
 read-only / shellExecution false뿐이다. policy expiry는 호출 시점의 시스템 시계로 검사한다.
 
-R4의 Human Delegation Context 범위도 같은 File / Directory 판정을 사용하지만 CEO Discovery 권한이
+Human Delegation의 delegatedContextScopes도 같은 공통 PathScope / File / Directory 판정을 사용하지만 CEO Discovery 권한이
 아니라 **Proposal 자동 승인 범위**다. 위임의 File은 System의 File 또는 Directory에, 위임의 Directory는
 System의 동일하거나 상위 Directory에 포함되어야 한다. 유한한 File 목록을 Directory 권한으로 승격하지 않는다.
 독립적인 Staffing Enforcement Rules 계층은 제거했고 Context Access Policy가 접근 상한을 단독 정의한다. StaffingProposal / ApprovedOperatingScope의 contextPaths는 계속 선택된
@@ -814,9 +814,14 @@ System Policy는 등록 Specialist 전체 정의, Context access scopes, 파일�
 Git blob·경로·regular mode·중복·예산을 재검증하며 Snapshot을 다시 capture하지 않는다. 입력 JSON이 실제 R2
 Run에서 발급됐다는 서명 provenance나 Human Goal 입력자의 신원까지 인증하는 기능은 아니며, 해당 입력 경계는
 Harness caller가 소유한다. Human의 직접 승인도
-System Policy 위반을 우회하지 못한다. 위임 정책은 repository identity, 허용 Specialist·Context, 호출 상한,
-Phase / Authority / 정책 버전·status·expiresAt을 제한한다. 위임이 없으면 직접 확인하며 범위 밖도 직접
-확인한다. 반면 철회·만료·System Policy version 불일치는 불확실한 권한으로 승인하지 않도록 denied한다.
+System Policy 위반을 우회하지 못한다. 신규 Human Delegation 입력은 allowedSpecialistIds / delegatedContextScopes / maxAgentInvocations /
+expiresAt 네 필드만 갖는 strict Schema다. phase / repositoryAccess / shellExecution / allowedContextPaths /
+contextAccessPolicy는 입력에서 거부한다. Phase A·등록 Specialist의 Read-only / Shell-disabled 조건은
+System Policy가 소유하고 계속 검증한다. 위임은 실행 권한이 아니라 Proposal 자동 승인 범위다.
+Repository identity·정책 ID/version·System Policy version·상태·승인 증거는 Harness가 저장 기록에 연결한다.
+위임이 없으면 직접 확인하며 **유효한 위임의 범위 밖**인 Proposal도 직접 확인한다. 반면 철회·만료·
+Superseded·System Policy version 불일치·저장 기록 무결성 실패·System 범위를 벗어난 위임 자체는 denied한다.
+무효 위임을 없었던 것으로 취급하거나 과거 active 기록을 찾아 Direct / Delegated 승인으로 우회하지 않는다.
 Human이 새 정책을 다시 승인해야 한다. 호출 예산은 Proposal/Scope별 상한이며 Goal 간 누적 위임 사용량
 관리나 공유 예산 예약은 아니다. 이는 읽기 전용 분석 위임이며 해결 방향·Task·Delivery 승인이 아니다.
 
@@ -830,6 +835,24 @@ recordedSystemPolicySchema에서만 원형을 보존한다. Rule payload는 실�
 기존 이력을 변경하지 않고 다음 System Policy version을 추가한다. 과거 위임은 새 version에 자동 승계되지
 않으며 새 위임 승인이 필요하다. 기존 Scope도 System version 변경으로 무효화된다. 이 호환 처리는 과거 정책의
 집행 Engine이 아니라 fail-closed 이력 읽기이며, Schema parsing이나 재승인 요청 자체가 승인은 아니다.
+
+Delegation 입력과 저장 기록 검증은 별개다. humanDelegationPolicyInputSchema는 신규 네 필드만 받고,
+humanDelegationPolicySchema는 신규 기록에 Harness metadata를 더한다. Ledger는 별도의
+recordedHumanDelegationPolicySchema로 신규 기록과 과거 형식의 기록을 구분해 읽는다. 과거 phase-a /
+read / shell-disabled 필드는 역사적 구조 검증에만 남기며, allowedContextPaths는 File 범위로만,
+contextAccessPolicy.allowedScopes는 자동 승인 범위로만 해석한다. 두 legacy 범위가 모호하게 함께
+설정되었거나 안전한 경로·현재 System 포함 관계를 검증할 수 없으면 승인하지 않는다.
+
+readRecordedDelegationInput()은 검증용 projection만 만들고 원본 기록을 변환·저장하지 않는다.
+evaluateStaffingApproval()은 최신 위임의 수명주기·Repository/System version을 확인한 뒤 이 projection의
+전체 Specialist / Context / Budget 범위를 현재 System Policy와 대조한다. 유효성이 확인된 뒤에만 Proposal
+범위 초과를 Direct Approval로 분기한다. 기존 직접 승인 Scope의 조회는 무관한 위임 만료·철회와 독립적이다.
+위임 승인 Scope는 정확한 최신 ID/version/승인 증거 연결과 현재 위임 범위를 계속 확인한다.
+
+과거 기록도 이 검증을 통과하면 원래 의미대로 사용할 수 있다. 신규 설정·교체에는 반드시 새 입력을 사용하고
+Human 확인을 거친다. 교체는 과거 증거·버전·scope 필드를 보존하면서 기존 active 기록을 superseded로
+전환하고 새 형식의 다음 버전을 추가한다. 철회는 해당 기록 형식을 유지한 revoked 버전을 추가한다.
+읽기 시 자동 migration·조용한 재작성은 없으며, 무결성·Schema 실패를 기본값이나 Direct 승인으로 복구하지 않는다.
 
 승인 출처의 신뢰 경계는 **로컬 OS 계정과 Harness / CLI 코드**다. `infrastructure/terminal`은 /dev/tty를
 직접 열어 isatty를 검사하고 임의 challenge를 포함한 정확한 입력과 Enter를 받아야 일회성 process-local

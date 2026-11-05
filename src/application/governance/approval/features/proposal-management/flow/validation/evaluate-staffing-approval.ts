@@ -1,8 +1,9 @@
-import { requireCurrentSystemPolicy } from "../../../system-policy/model/policy.js";
 import {
-  resolveContextAccessPolicy,
-  isContextPathAllowed,
-} from "@/services/repository-inspection/index.js";
+  readRecordedDelegationInput,
+  validateDelegationConfiguration,
+} from "../../../human-delegation/flow/validation/delegation-configuration.js";
+import { requireCurrentSystemPolicy } from "../../../system-policy/model/policy.js";
+import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
 import { realpathSync } from "node:fs";
 import {
   validateStaffingProposal,
@@ -52,14 +53,20 @@ export function evaluateStaffingApproval(
     throw new Error(
       "Delegation is inactive, expired or no longer matches System Policy."
     );
-  const accessPolicy = resolveContextAccessPolicy(delegation);
+  const input = readRecordedDelegationInput(delegation);
+  validateDelegationConfiguration(
+    input,
+    requireCurrentSystemPolicy(system.configuration),
+    now
+  );
+  const automaticContext = { allowedScopes: input.delegatedContextScopes };
   const withinDelegatedScope =
     proposal.budget.maxAgentInvocations <= delegation.maxAgentInvocations &&
     proposal.assignments.every(
       (assignment) =>
         delegation.allowedSpecialistIds.includes(assignment.specialistId) &&
         assignment.contextPaths.every((path) =>
-          isContextPathAllowed(path, accessPolicy)
+          isContextPathAllowed(path, automaticContext)
         )
     );
   return withinDelegatedScope ? "delegated" : "direct";

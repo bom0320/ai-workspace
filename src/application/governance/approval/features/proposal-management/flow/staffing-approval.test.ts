@@ -1,3 +1,4 @@
+import { recordedHumanDelegationPolicySchema } from "../../human-delegation/model/policy.js";
 import type {
   GovernanceLedger,
   RepositoryGovernance,
@@ -116,6 +117,31 @@ function delegate() {
     configureHumanDelegation(root, delegation, accept(request)).status
   ).toBe("configured");
 }
+function installLegacyDelegation(format: "exact" | "scoped") {
+  let legacy: unknown;
+  withGovernanceRecords((raw, save) => {
+    const entry = Object.values((raw as GovernanceLedger).repositories)[0];
+    const previous = entry.delegations.at(-1)!;
+    if (!("delegatedContextScopes" in previous))
+      throw new Error("Expected new format");
+    const { delegatedContextScopes, ...metadata } = previous;
+    legacy = {
+      ...metadata,
+      phase: "phase-a",
+      repositoryAccess: "read",
+      shellExecution: false,
+      allowedContextPaths: format === "exact" ? ["a.ts"] : [],
+      ...(format === "scoped"
+        ? { contextAccessPolicy: { allowedScopes: delegatedContextScopes } }
+        : {}),
+    };
+    entry.delegations[entry.delegations.length - 1] =
+      recordedHumanDelegationPolicySchema.parse(legacy);
+    save(raw);
+  });
+  return legacy;
+}
+
 function alterStoredIssuance(
   change: (issuance: RepositoryGovernance["issuances"][number]) => void
 ) {
@@ -168,11 +194,8 @@ beforeEach(async () => {
     maxAgentInvocations: 4,
   };
   delegation = {
-    phase: "phase-a",
     allowedSpecialistIds: ["frontend"],
-    allowedContextPaths: ["a.ts"],
-    repositoryAccess: "read",
-    shellExecution: false,
+    delegatedContextScopes: [{ kind: "file", path: "a.ts" }],
     maxAgentInvocations: 2,
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
   };
@@ -281,10 +304,9 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
         accept(configureStaffingSystemPolicy(system))
       ).status
     ).toBe("configured");
-    delegation.allowedContextPaths = [];
-    delegation.contextAccessPolicy = {
-      allowedScopes: [{ kind: "directory", path: "src/narrow" }],
-    };
+    delegation.delegatedContextScopes = [
+      { kind: "directory", path: "src/narrow" },
+    ];
     delegate();
     const automatic = approveStaffingProposal(proposal);
     expect(automatic.status).toBe("approved");
@@ -327,22 +349,145 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
     expect(approveStaffingProposal(proposal).status).toBe("denied");
   });
   it("rejects delegation directory expansion beyond System file scopes and ambiguous mixed inputs", () => {
-    delegation.allowedContextPaths = [];
-    delegation.contextAccessPolicy = {
-      allowedScopes: [{ kind: "directory", path: "a.ts" }],
-    };
+    delegation.delegatedContextScopes = [{ kind: "directory", path: "a.ts" }];
     expect(configureHumanDelegation(root, delegation).status).toBe("denied");
-    delegation.contextAccessPolicy = {
-      allowedScopes: [{ kind: "file", path: "a.ts" }],
-    };
+    delegation.delegatedContextScopes = [{ kind: "file", path: "a.ts" }];
     delegate();
     expect(approveStaffingProposal(proposal).status).toBe("approved");
     system.contextAccessPolicy = {
       allowedScopes: [{ kind: "directory", path: "src" }],
     };
     expect(configureStaffingSystemPolicy(system).status).toBe("denied");
-    delegation.allowedContextPaths = ["a.ts"];
-    expect(configureHumanDelegation(root, delegation).status).toBe("denied");
+    expect(
+      configureHumanDelegation(root, {
+        ...delegation,
+        allowedContextPaths: ["a.ts"],
+      }).status
+    ).toBe("denied");
+  });
+
+  it.each(["exact", "scoped"] as const)(
+    "preserves legacy %s signed records and validates delegated approvals without migrating history",
+    (format) => {
+      delegate();
+      const legacy = installLegacyDelegation(format);
+      const result = approveStaffingProposal(proposal);
+      expect(result.status).toBe("approved");
+      if (result.status !== "approved") throw new Error(JSON.stringify(result));
+      expect(result.approval.source.type).toBe("human-delegation");
+      const path = join(home, ".ai-workspace-governance", "records.json");
+      const before = readFileSync(path, "utf8");
+      expect(getApprovedStaffingScope(result.scope.id).status).toBe("approved");
+      expect(readFileSync(path, "utf8")).toBe(before);
+      withGovernanceRecords((raw) =>
+        expect(
+          Object.values((raw as GovernanceLedger).repositories)[0]
+            .delegations[0]
+        ).toEqual(legacy)
+      );
+      expect(configureHumanDelegation(root, legacy).status).toBe("denied");
+    }
+  );
+  it.each(["replace", "revoke"])(
+    "%s of legacy delegation requires Human input and preserves its prior evidence",
+    (action) => {
+      delegate();
+      const legacy = installLegacyDelegation("scoped") as Record<
+        string,
+        unknown
+      >;
+      const replacement = action === "revoke" ? null : delegation;
+      const request = configureHumanDelegation(root, replacement);
+      expect(request.status).toBe("approval-required");
+      expect(
+        configureHumanDelegation(root, replacement, accept(request))
+      ).toEqual({ status: "configured", version: 2 });
+      withGovernanceRecords((raw) => {
+        const records = Object.values((raw as GovernanceLedger).repositories)[0]
+          .delegations;
+        expect(records[0]).toEqual({ ...legacy, status: "superseded" });
+        expect(records[1].version).toBe(2);
+        if (action === "replace") {
+          expect(records[1]).toHaveProperty("delegatedContextScopes");
+          expect(records[1]).not.toHaveProperty("phase");
+          expect(records[1]).not.toHaveProperty("contextAccessPolicy");
+        } else {
+          expect(records[1]).toMatchObject({
+            phase: "phase-a",
+            status: "revoked",
+          });
+          expect(records[1]).not.toHaveProperty("delegatedContextScopes");
+        }
+      });
+      expect(approveStaffingProposal(proposal).status).toBe(
+        action === "replace" ? "approved" : "denied"
+      );
+    }
+  );
+  it.each([
+    "expired",
+    "revoked",
+    "superseded",
+    "system-version",
+    "budget",
+    "specialist",
+    "context",
+  ])(
+    "invalid existing delegation %s cannot fall back to Direct Approval, even with a receipt",
+    (kind) => {
+      const receipt = accept(approveStaffingProposal(proposal));
+      delegate();
+      withGovernanceRecords((raw, save) => {
+        const record = Object.values(
+          (raw as GovernanceLedger).repositories
+        )[0].delegations.at(-1)!;
+        if (kind === "expired") record.expiresAt = "2000-01-01T00:00:00.000Z";
+        if (kind === "revoked" || kind === "superseded") record.status = kind;
+        if (kind === "system-version") record.systemPolicyVersion += 1;
+        if (kind === "budget")
+          record.maxAgentInvocations = system.maxAgentInvocations + 1;
+        if (kind === "specialist") record.allowedSpecialistIds = ["unknown"];
+        if (kind === "context" && "delegatedContextScopes" in record)
+          record.delegatedContextScopes = [
+            { kind: "directory", path: "outside" },
+          ];
+        save(raw);
+      });
+      expect(approveStaffingProposal(proposal).status).toBe("denied");
+      expect(approveStaffingProposal(proposal, receipt).status).toBe("denied");
+      withGovernanceRecords((raw) =>
+        expect(
+          Object.values((raw as GovernanceLedger).repositories)[0].issuances
+        ).toEqual([])
+      );
+    }
+  );
+  it("invalid or ambiguous legacy scope metadata is denied rather than treated as absent delegation", () => {
+    const receipt = accept(approveStaffingProposal(proposal));
+    delegate();
+    installLegacyDelegation("scoped");
+    withGovernanceRecords((raw, save) => {
+      const record = Object.values(
+        (raw as GovernanceLedger).repositories
+      )[0].delegations.at(-1)!;
+      if ("allowedContextPaths" in record)
+        record.allowedContextPaths = ["b.ts"];
+      save(raw);
+    });
+    expect(approveStaffingProposal(proposal, receipt).status).toBe("denied");
+  });
+  it("simplifying Delegation input does not relax System Phase/Authority validation", () => {
+    expect(
+      configureStaffingSystemPolicy({ ...system, phase: "phase-b" }).status
+    ).toBe("denied");
+    const changed = structuredClone(system);
+    changed.availableSpecialists[0].authority.shellExecution = true;
+    expect(configureStaffingSystemPolicy(changed).status).toBe("denied");
+    changed.availableSpecialists[0].authority = {
+      repositoryAccess: "write",
+      shellExecution: false,
+    };
+    expect(configureStaffingSystemPolicy(changed).status).toBe("denied");
   });
 
   it("requires direct Human approval without any delegation", () => {

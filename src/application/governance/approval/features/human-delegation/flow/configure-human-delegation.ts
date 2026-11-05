@@ -4,7 +4,7 @@ import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   humanDelegationPolicyInputSchema,
-  humanDelegationPolicySchema,
+  recordedHumanDelegationPolicySchema,
 } from "../model/policy.js";
 import {
   deniedStaffingApproval,
@@ -58,7 +58,7 @@ export function configureHumanDelegation(
             : "Human confirmation required to revoke delegation.",
         };
       if (previous?.status === "active") previous.status = "superseded";
-      const next = humanDelegationPolicySchema.parse({
+      const next = recordedHumanDelegationPolicySchema.parse({
         ...(policy ?? previous),
         id: previous?.id ?? `delegation-${randomUUID()}`,
         version,

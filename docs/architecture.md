@@ -710,7 +710,8 @@ System Policy는 신뢰 경계 안의 Harness caller가 공급해야 한다. run
 첫 await 전에 복제하고 Repository 경로·등록 후보·접근 범위·limits를 그 정책에서만 도출한다.
 이전에 별도 인자로 전달하던 repositoryPath / availableSpecialists / limits / policy 등은 함께 주면 거부한다.
 validateStaffingProposal(proposal, systemPolicy)도 동일한 전체 계약을 받고 Repository 일치를 확인한다.
-Ledger에서 정책을 자동 조회·주입하는 상위 Orchestration은 추가하지 않았다.
+독립 runStaffing()은 Ledger에 접근하지 않는다. 아래 Staffing → Approval Workflow가 Governance 공개 조회 API로
+최신 승인 정책을 가져와 주입한다.
 
 검증 범위:
 
@@ -765,6 +766,39 @@ authorization/은 개별 Invocation Eligibility 평가를 소유하며 실제 Au
 공유 model/authority.ts는 두 영역의 Scope 및 실행 계약을 정의한다. 기존 governance/index.ts API는 유지한다.
 Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증한 뒤 승인 근거를 확정한다.
 
+### v4 Staffing → Governance Approval Workflow — 구현
+
+`src/workflows/development-organization/phase-a/staffing-approval.ts`의 `runStaffingApproval()`은 개별 Application의 상위
+Orchestration이다. Workflow → Application 방향으로만 의존하며 Application은 Workflow를 import하지 않는다.
+Phase A의 첫 연결만 구현했고 Graph / Checkpoint / LangGraph runtime / 후속 Specialist 실행은 추가하지 않았다.
+
+```text
+GoalSpec + Repository
+  → Governance.getStaffingSystemPolicy()
+  → Staffing.runStaffing({ goal, systemPolicy, maxRounds, ... })
+      ├─ failed / escalated → 해당 결과 반환
+      └─ proposed → Governance.approveStaffingProposal(proposal)
+          ├─ approved / denied → 해당 결과 반환
+          └─ approval-required → CLI의 Human Confirmation 콜백
+              ├─ 거절 / terminal 불가 → rejected
+              └─ receipt → 같은 proposal로 approveStaffingProposal(proposal, receipt)
+```
+
+정책 조회는 system-policy feature가 소유한다. 기존 서명·권한·Schema·Lock 검증을 거쳐 Repository와
+최신 Human 승인 기록, 현재 정책 형식을 확인하고 복제된 configuration과 version을 반환한다.
+정책이 없거나 Legacy·무효 기록이면 CEO를 호출하지 않는다. Agent 실행과 Human 대기 동안 Ledger lock을
+유지하지 않으며 Approval은 기존 transaction 안에서 최신 정책·위임·Snapshot·confirmation binding을 재검증한다.
+시작 시점과 승인 시점의 System Policy version을 무조건 같게 하는 규칙은 추가하지 않았다. CEO 호출 중
+정책이 호환 가능하게 바뀌면 현재 정책으로 승인할 수 있다. 직접 Human 확인 후 재제출에서는 기존
+binding 검증이 현재 정책 version과 receipt의 일치를 확인한다. 실제 승인 version은 ApprovalRecord와 Scope에 남는다.
+
+CLI 명시 명령은 `staffing <repository> <goal.json>`이다. Goal의 원본 Constraints를 보존하며 기존 selector와
+Governance 명령은 유지한다. CLI가 formatGovernanceReview() / confirmHumanAction()을 제공하고 Workflow는
+파일 저장·재로딩 없이 메모리의 동일 Proposal을 재제출한다. 콜백에는 분리된 review 사본만 전달한다.
+콜백이 없으면 approval-required request를 반환한다. 이는 durable 대기·재개가 아니며 Receipt는 기존대로
+process-local / 일회용이다. 성공은 ApprovalRecord와 ApprovedOperatingScope 발급까지이며 실행은 시작하지 않는다.
+이 메모리 연결은 외부 Proposal JSON의 암호학적 발급 출처를 인증하지 않는다. 별도 Registry·서명은 추가하지 않았다.
+
 ### v4 Step 3 — Staffing Approval & Human Delegation — 구현
 
 ```text
@@ -811,8 +845,8 @@ Human Delegation의 delegatedContextScopes도 같은 공통 PathScope / File / D
 아니라 **Proposal 자동 승인 범위**다. 위임의 File은 System의 File 또는 Directory에, 위임의 Directory는
 System의 동일하거나 상위 Directory에 포함되어야 한다. 유한한 File 목록을 Directory 권한으로 승격하지 않는다.
 독립적인 Staffing Enforcement Rules 계층은 제거했고 Context Access Policy가 접근 상한을 단독 정의한다. StaffingProposal / ApprovedOperatingScope의 contextPaths는 계속 선택된
-정확한 파일 목록이다. Directory 정책을 그대로 실행 Scope에 복사하지 않는다. 현재 상위 Workflow는 이
-정책을 자동 조회·주입하지 않으므로 신뢰된 Harness caller가 승인된 최대 범위를 공급해야 한다.
+정확한 파일 목록이다. Directory 정책을 그대로 실행 Scope에 복사하지 않는다. Staffing → Approval Workflow는
+Ledger에서 조회한 승인 정책을 공급한다. 독립 Staffing API에서는 신뢰된 Harness caller가 그 경계를 소유한다.
 
 System Policy는 등록 Specialist 전체 정의, Context access scopes, 파일·Context limits와 직접 maxAgentInvocations 상한을 소유한다. Staffing의 공개 validateStaffingProposal()을 재사용해 같은 Proposal Snapshot에서
 Git blob·경로·regular mode·중복·예산을 재검증하며 Snapshot을 다시 capture하지 않는다. 입력 JSON이 실제 R2
@@ -950,6 +984,8 @@ Source 영역은 다음 기준으로 구분한다.
   `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
   `Goal + RepositorySnapshot + explicit files → AgentDecision[]`가 여기에 속한다.
   각 use-case는 독립 진입점을 가지며 CLI가 Planning과 Execution을 Human gate로 연결한다.
+- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. 현재 `development-organization/phase-a`의 Staffing → Approval만
+  연결하며 Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec, TaskContract, InspectedFile의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
 - `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로

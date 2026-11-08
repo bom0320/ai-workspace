@@ -9,6 +9,7 @@ import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
 import { askGoal } from "./prompts/planning/index.js";
 import { runGovernanceCli } from "./commands/governance/index.js";
 import { runCli } from "./cli.js";
+import { runStaffingCli } from "./commands/staffing/index.js";
 import { askDecision } from "./prompts/decision/index.js";
 import { askExecution } from "./prompts/execution/index.js";
 import { runExecutionCli } from "./commands/execute/index.js";
@@ -18,6 +19,7 @@ import {
   presentComparison,
 } from "./presenters/decision/index.js";
 
+vi.mock("./commands/staffing/index.js", () => ({ runStaffingCli: vi.fn() }));
 vi.mock("./commands/governance/index.js", () => ({
   runGovernanceCli: vi.fn(),
 }));
@@ -99,6 +101,15 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+it("routes explicit staffing independently of the v0-v3 selector", async () => {
+  vi.mocked(runStaffingCli).mockResolvedValue(0);
+  expect(await runCli(["staffing", "/repo", "goal.json"])).toBe(0);
+  expect(runStaffingCli).toHaveBeenCalledWith(["/repo", "goal.json"]);
+  expect(selectWorkflow).not.toHaveBeenCalled();
+  expect(planTask).not.toHaveBeenCalled();
+  expect(executeTask).not.toHaveBeenCalled();
 });
 
 describe("CLI approval boundary", () => {

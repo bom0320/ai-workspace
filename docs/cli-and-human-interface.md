@@ -369,3 +369,20 @@ System Policy 위반은 Human 확인으로 우회하지 않는다. 만료·철�
 자세한 신뢰 경계·한계는 [Architecture의 Step 3](architecture.md#v4-step-3--staffing-approval--human-delegation--구현)을 따른다.
 Staffing 승인·Human 사전 위임은 해결 방향 Governance, Task Approval, Change Review / Delivery의 승인이 아니다.
 Scope가 발급되어도 Specialist 호출·Budget Reservation·Authorization은 수행하지 않는다.
+
+### v4 Staffing → Approval (명시 명령)
+
+```sh
+pnpm dev staffing /path/to/repository /path/to/goal.json
+```
+
+Goal JSON은 기존 GoalSpec(`objective`, `targetRepository`, 선택적 `constraints`)이다. 원본 Constraints를
+그대로 전달한다. 먼저 `governance setup`으로 Human 승인된 현재 System Policy가 있어야 한다.
+Workflow가 Ledger에서 정책을 가져와 CEO Staffing을 실행하고 Proposal을 메모리에서 바로 Approval로 전달한다.
+유효한 위임 안이면 추가 입력 없이 승인하고, 직접 승인이 필요하면 기존 Staffing review와 /dev/tty 확인을
+사용한다. 거절·EOF·terminal 불가 시 Scope를 발급하지 않는다. 확인 후 CEO를 재실행하지 않는다.
+
+결과는 JSON으로 출력하며 `approved`만 exit code 0이다. `failed`(정책 조회·Staffing·확인 실패), `escalated`
+(질문·사유 포함), `rejected`, `denied`는 1이다. 기존 selector와 `governance approve <proposal.json>`은 유지한다.
+새 명령은 Proposal 파일을 저장·재로딩하지 않으며 Scope 발급까지만 수행한다. Specialist 호출·Authorization·
+Budget Reservation·장기 대기/재개·LangGraph는 연결하지 않는다.

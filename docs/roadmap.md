@@ -296,14 +296,24 @@ budget은 독립적으로 검사하며 기존 파일 수·파일 크기 및 실�
   과거 Exact 목록, Scope와 빈 Legacy 목록의 혼합, nested policy 저장 정책은 원형 이력으로만 읽고
   사용을 차단한다. Human 재승인으로 새 버전을 발급하며 기존 위임·Scope는 자동 승계되지 않는다.
   과거 Delegation만 별도 기록 검증에서 원래 Exact / Scope 자동 승인 범위를 유지한다.
-- Glob / Deny / 별도 Metadata 권한 및 상위 Workflow 자동 연결은 구현하지 않았다.
+- Glob / Deny / 별도 Metadata 권한은 구현하지 않았다. 상위 Workflow 연결은 아래 항목에서 구현했다.
 
 운영 정책 통합: StaffingProposalPolicy / enforcementRules를 제거하고 System Policy의 직접
 maxAgentInvocations로 통합했다. runStaffing은 goal / systemPolicy / maxRounds와 Agent 설정만 받는다.
 Staffing 최초 검증과 Approval 재검증은 같은 공통 계약을 사용한다. 이전 nested policy가 저장된 경우
 제약을 버리지 않고 원문 이력으로 보존하며 사용을 차단한다. 새 형식을 governance setup으로 Human이
 명시적으로 재승인해야 하며 정책 version은 증가하고 기존 위임·Scope는 자동 승계되지 않는다.
-Ledger 정책 주입 Orchestration과 Authorization / Budget Reservation은 이번 통합 범위가 아니다.
+Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다. Authorization / Budget Reservation은 미구현이다.
+
+### Staffing → Governance Approval — Implemented
+
+- `workflows/development-organization/phase-a`에서 최신 Human-approved System Policy 조회 → Staffing → Governance Approval을 연결했다.
+- 정책 조회 실패·Staffing 실패·Escalation·승인 대기·Human 거절·Approval 거부·Scope 발급 성공을 구분한다.
+- CLI `staffing <repository> <goal.json>`은 기존 review / terminal confirmation을 재사용한다. Human 확인 후
+  같은 Proposal을 재제출하며 CEO 재실행, Proposal 파일 저장, Agent/Human 대기 중 Ledger lock은 없다.
+- 승인 시 기존 최신 정책·위임·Snapshot·binding 검증을 유지한다. 시작 정책 version 일치는 강제하지 않는다.
+- Registry / 암호학적 Proposal provenance, Authorization / Budget Reservation, Decision / Comparison 연결과
+  LangGraph runtime은 미구현이다. 현재 연결은 Scope 발급에서 종료한다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
@@ -313,7 +323,8 @@ Ledger 정책 주입 Orchestration과 Authorization / Budget Reservation은 이�
 - 서명된 로컬 ledger는 owner UID / 권한·키·기록의 무결성을 확인하고 lock / atomic rename으로 중복 발급을
   막는다. ApprovalRecord와 Proposal digest, 정책 version, 기존 ApprovedOperatingScope를 연결·조회한다.
 - CLI는 governance setup / delegate / revoke / approve를 제공한다. 기존 v0–v3 메뉴·Task Approval은 유지한다.
-  R2의 API 결과를 Proposal JSON으로 전달하는 명시적 operator 경로이며 전체 Goal→조직 CLI Workflow는 아니다.
+  기존 Proposal JSON operator 경로는 유지하며 Goal 기반 Staffing → Approval은 별도 staffing 명령으로 연결했다.
+  Authorization 이후 전체 Goal→조직 Workflow는 미완성이다.
 - 로컬 OS 계정과 Harness 자체를 신뢰한다. 동일 계정 공격자·root·clock 조작·backup rollback 방어와 remote
   Human 인증은 미구현이다. 실제 Human 승인 E2E가 아닌 mock TTY + 실제 임시 Repository / signed file 테스트로 검증한다.
 - 후속 단계는 최신 권한 / Scope lifecycle과 Budget Reservation을 확보하는 Invocation Authorization이다.

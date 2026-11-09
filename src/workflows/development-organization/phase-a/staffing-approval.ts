@@ -3,12 +3,16 @@ import {
   approveStaffingProposal,
   type StaffingApprovalResult,
 } from "@/application/governance/index.js";
+
 import {
   runStaffing,
   type RunStaffingOptions,
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
+
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
+
+// Types
 
 type ApprovalRequest = Extract<
   StaffingApprovalResult,
@@ -37,19 +41,25 @@ export type StaffingApprovalWorkflowResult =
       rounds: number;
     };
 
-// This first Phase A workflow ends at Scope issuance, never Invocation.
-// Applications retain policy, finalization, confirmation and transaction rules.
+// Workflow
+
 export async function runStaffingApproval(
   options: StaffingApprovalWorkflowOptions
 ): Promise<StaffingApprovalWorkflowResult> {
+  // 1. Load System Policy
+
   const policy = getStaffingSystemPolicy(options.repositoryPath);
-  if (policy.status !== "ready")
+
+  if (policy.status !== "ready") {
     return {
       status: "failed",
       failure: "system-policy",
       reason: policy.reason,
       rounds: 0,
     };
+  }
+
+  // 2. Run Staffing
 
   const staffing = await runStaffing({
     goal: options.goal,
@@ -58,30 +68,54 @@ export async function runStaffingApproval(
     timeoutMs: options.timeoutMs,
     agent: options.agent,
   });
-  if (staffing.status !== "proposed") return staffing;
+
+  if (staffing.status !== "proposed") {
+    return staffing;
+  }
+
+  // 3. Evaluate Staffing Approval
 
   const proposal = staffing.proposal;
   const approval = approveStaffingProposal(proposal);
-  if (approval.status === "approved" || approval.status === "denied")
+
+  if (approval.status === "approved" || approval.status === "denied") {
     return approval;
-  if (approval.status !== "approval-required" || approval.kind !== "staffing")
-    return { status: "denied", reason: "Unexpected Staffing approval result." };
-  if (!options.confirmApproval)
-    return { status: "approval-required", request: approval };
+  }
+
+  if (approval.status !== "approval-required" || approval.kind !== "staffing") {
+    return {
+      status: "denied",
+      reason: "Unexpected Staffing approval result.",
+    };
+  }
+
+  if (!options.confirmApproval) {
+    return {
+      status: "approval-required",
+      request: approval,
+    };
+  }
+
+  // 4. Request Human Confirmation
 
   try {
-    // The UI receives a detached review, not the Proposal resubmitted below.
     const receipt = await options.confirmApproval(structuredClone(approval));
-    if (!receipt)
+
+    if (!receipt) {
       return {
         status: "rejected",
         reason: "Human rejected staffing or confirmation was unavailable.",
       };
-    // Governance rechecks the latest policy, binding and Snapshot here. Do not
-    // rerun Staffing, recapture a Snapshot or impose a start-version equality.
+    }
+
+    // 5. Revalidate and Finalize Approval
+
     const result = approveStaffingProposal(proposal, receipt);
-    if (result.status === "approved" || result.status === "denied")
+
+    if (result.status === "approved" || result.status === "denied") {
       return result;
+    }
+
     return {
       status: "denied",
       reason: "Staffing confirmation did not complete approval.",

@@ -1,11 +1,14 @@
-import { governanceDigest } from "@/services/governance-records/index.js";
-import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
-import { resolveGovernanceRepository } from "../../../shared/validation/approval-input.js";
 import {
-  requireCurrentSystemPolicy,
-  type StaffingSystemPolicy,
-} from "../model/policy.js";
-import { validateSystemConfiguration } from "./validation/system-configuration.js";
+  resolveGovernanceRepository,
+  withGovernanceLedger,
+} from "../../../../records/governance-transaction.js";
+import { governanceDigest } from "@/services/governance-records/index.js";
+
+import { type StaffingSystemPolicy } from "../model/policy.js";
+import {
+  validateSystemConfiguration,
+  requireCurrentSystemRecord,
+} from "./validation/system-configuration.js";
 
 export type StaffingSystemPolicyResult =
   | { status: "ready"; configuration: StaffingSystemPolicy; version: number }
@@ -22,15 +25,7 @@ export function getStaffingSystemPolicy(
       const system =
         ledger.repositories[governanceDigest(root)]?.systems.at(-1);
       if (!system) throw new Error("Missing System Policy.");
-      const configuration = requireCurrentSystemPolicy(system.configuration);
-      if (
-        configuration.repositoryRoot !== root ||
-        system.approval.uid !== process.getuid?.() ||
-        Date.parse(system.approval.confirmedAt) > Date.now()
-      )
-        throw new Error(
-          "Invalid System Policy approval or Repository binding."
-        );
+      const configuration = requireCurrentSystemRecord(system, root);
       return {
         status: "ready",
         configuration: validateSystemConfiguration(configuration),

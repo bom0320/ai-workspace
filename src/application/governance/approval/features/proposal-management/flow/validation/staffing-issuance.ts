@@ -1,10 +1,11 @@
+import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import type {
   GovernanceLedger,
   RepositoryGovernance,
-} from "../../../../shared/model/ledger.js";
+} from "../../../../../model/ledger.js";
 import {
-  evaluateStaffingApproval,
+  evaluateDelegationCoverage,
   validateCurrentStaffingPolicy,
 } from "./evaluate-staffing-approval.js";
 
@@ -104,18 +105,17 @@ function assertDelegatedApprovalSource(
 export function validateStoredIssuance(
   issuance: StaffingIssuance,
   entry: RepositoryGovernance
-): void {
+): InspectedFile[] {
   assertApprovalBinding(issuance, entry);
   assertScopeContents(issuance);
   assertDelegatedApprovalSource(issuance, entry);
   const { approval } = issuance;
   // A direct approval is bound to its own Human receipt, not an unrelated
   // delegation's lifecycle. Both sources still require current System Policy.
-  if (approval.source.type === "direct-human")
-    validateCurrentStaffingPolicy(issuance.proposal, entry);
+  const files = validateCurrentStaffingPolicy(issuance.proposal, entry);
   if (
     approval.source.type === "human-delegation" &&
-    evaluateStaffingApproval(issuance.proposal, entry, Date.now()) !==
+    evaluateDelegationCoverage(issuance.proposal, entry, Date.now()) !==
       "delegated"
   )
     throw new Error("Current evaluation no longer permits delegated approval.");
@@ -126,4 +126,5 @@ export function validateStoredIssuance(
         Date.parse(approval.approvedAt))
   )
     throw new Error("Direct Human confirmation does not match the issuance.");
+  return files;
 }

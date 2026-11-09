@@ -1,3 +1,7 @@
+import {
+  resolveGovernanceRepository,
+  withGovernanceLedger,
+} from "../../../../records/governance-transaction.js";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
@@ -6,11 +10,8 @@ import {
   deniedStaffingApproval,
   type StaffingApprovalResult,
 } from "../../../shared/model/result.js";
-import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
-import {
-  consumeCurrentHumanConfirmation,
-  resolveGovernanceRepository,
-} from "../../../shared/validation/approval-input.js";
+
+import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import {
   assertProposalNotIssued,
   assertIssuanceIdsUnused,

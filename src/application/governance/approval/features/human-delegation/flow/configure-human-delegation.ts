@@ -1,3 +1,7 @@
+import {
+  resolveGovernanceRepository,
+  withGovernanceLedger,
+} from "../../../../records/governance-transaction.js";
 import { requireCurrentSystemPolicy } from "../../system-policy/model/policy.js";
 import { randomUUID } from "node:crypto";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
@@ -10,11 +14,8 @@ import {
   deniedStaffingApproval,
   type StaffingApprovalResult,
 } from "../../../shared/model/result.js";
-import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
-import {
-  consumeCurrentHumanConfirmation,
-  resolveGovernanceRepository,
-} from "../../../shared/validation/approval-input.js";
+
+import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import { validateDelegationConfiguration } from "./validation/delegation-configuration.js";
 
 export function configureHumanDelegation(

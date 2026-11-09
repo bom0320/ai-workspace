@@ -4,7 +4,7 @@ import {
   deniedStaffingApproval,
   type StaffingApprovalResult,
 } from "../../../shared/model/result.js";
-import { withGovernanceLedger } from "../../../shared/records/governance-transaction.js";
+import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import { validateSystemConfiguration } from "./validation/system-configuration.js";
 

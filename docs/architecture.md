@@ -49,7 +49,7 @@ Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Sna
 R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
 실행에는 아직 연결하지 않는다.
 Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 제공한다.
-Budget Reservation / AuthorizedSpecialistInvocation 구성과 실행 Enforcement는 미구현이다.
+Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다. 실제 Specialist 실행은 미구현이다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
 ## 3. Current End-to-End Flows
@@ -495,9 +495,9 @@ v2 동작은 유지한다. 파일 읽기를 포함한 private use-case를 Govern
 파일 존재·Git blob·symlink·Snapshot 검증은 수행하지 않는다.
 
 Evaluation은 요청이 제공된 승인 범위와 사용량에 부합하는지 판단한다. eligible은 실제 실행 허가나
-예산 확보가 아니다. Budget Evaluation만 구현하며 Budget Reservation / 동시성 제어 / Usage Recording은
-미구현이다. 후속 Authorization이 최신 권한 확인, 예산의 안전한 확보와 승인된 Snapshot 기반 실행 입력
-구성을 담당해야 한다. 현재 함수는 AuthorityVerdict / Invocation을 생성하지 않으며 I/O나 상태 변경이 없다.
+예산 확보가 아니다. 이 순수 함수는 Budget Evaluation만 담당한다. Step 4 Authorization이 Ledger의
+Reservation 수로 사용량을 구성하고 lock/atomic save로 예산을 확보하며 Snapshot 기반 실행 입력을 발급한다.
+실행 결과 Usage Recording이나 자동 환불·재개는 미구현이다. 현재 함수는 AuthorityVerdict / Invocation을 생성하지 않으며 I/O나 상태 변경이 없다.
 기존 v0–v3 실행 경로에는 연결하지 않는다.
 
 ### v4 Step 2.1 — Intent & Staffing Domain / Protocol — schema만 구현
@@ -675,7 +675,7 @@ maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향�
 allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
 반복 품질이나 성공률 검증을 했다는 의미는 아니다. 원본 Goal / Snapshot과 Draft의 연결을 보존하는
 Proposal Finalization / 제한된 Policy Validation은 아래 R2, Staffing Approval / Scope issuance는 Step 3에서 구현했다.
-Authorization / Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
+Authorization은 Step 4에서 구현했다. Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
 
 ### R2 — Staffing Proposal Finalization & Policy Validation — 구현
 
@@ -762,7 +762,7 @@ CEO Metadata를 포함한 projection에 선택 파일을 넣는 기존 검사도
 추가 제한이며 CEO Context 제한을 대신하지 않는다. 서로 다른 검사 대상의 크기를 같다고 간주하지 않는다.
 
 Governance의 approval/은 신규 승인·기록·Scope 발급 및 저장된 Scope의 유효성 조회를 소유한다.
-authorization/은 개별 Invocation Eligibility 평가를 소유하며 실제 Authorization은 미구현이다.
+authorization/은 순수 Invocation Eligibility와 저장 Scope 기반 Authorization·Budget Reservation·실행 입력 발급을 소유한다.
 공유 model/authority.ts는 두 영역의 Scope 및 실행 계약을 정의한다. 기존 governance/index.ts API는 유지한다.
 Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증한 뒤 승인 근거를 확정한다.
 
@@ -826,13 +826,15 @@ Approval 상위는 `features/`의 업무별 구현과 `shared/`의 공통 구현
   `flow/approve-staffing-proposal.ts`와 `flow/get-approved-staffing-scope.ts`의 승인·조회.
   내부 validation / transformation은 기존 Staffing Proposal 재검증과 Scope 발급 책임을 유지한다.
 
-`approval/shared`는 여러 업무가 공유하는 모델·기록 처리·입력 확인을 모은다.
-공통 `shared/model/ledger.ts`는 세 업무의 순수 모델을 조합하며 하위 workflow를 import하지 않는다.
+`approval/shared`는 Approval 업무들이 공유하는 Human 확인·결과 모델과 입력 확인을 모은다.
+Governance 공통 `model/ledger.ts`는 Approval의 순수 모델과 Authorization의 Reservation Schema를 조합하며
+하위 workflow를 import하지 않는다. Step 4에서 Approval 전용 영역 밖으로 이동했다.
 `shared/model/confirmation.ts`는 정책·위임·직접 승인에 공통인 Human 확인 증거 구조를 소유한다.
 공개 `StaffingApprovalResult`는 configured / approval-required / approved / denied를 세 업무에서
 함께 사용하므로 `shared/model/result.ts`에 유지하며 denied 결과 생성도 이곳에 둔다.
-`shared/validation/approval-input.ts`는 실제로 공유하는 Repository 확인과 일회용 Human 증표 검증만 담당한다.
-`shared/records/governance-transaction.ts`는 서비스의 동일 lock 안에서 ledger Schema 검사와 저장을 연결하며
+`shared/validation/approval-input.ts`는 일회용 Human 증표 검증을 담당한다. Repository 확인은
+Governance 공통 `records/governance-transaction.ts`로 이동해 Approval/Authorization이 공유한다.
+같은 모듈의 withGovernanceLedger()는 서비스의 동일 lock 안에서 ledger Schema 검사와 저장을 연결하며
 조회·검증·발급·저장을 별개 transaction으로 나누지 않는다. 업무별 설정 검증은 각 업무의
 flow/validation에 둔다. Approval과 Governance의 기존 index.ts 공개 API, 결과 형식과 Schema는 유지한다.
 CLI 명령 해석·dispatch와 presenters/governance/approval-review의 검토 텍스트 구성도
@@ -926,15 +928,54 @@ receipt·Proposal digest·현재 System Policy·Snapshot에 의존하며 무관�
 
 R2 발급 출처는 여전히 미해결 신뢰 경계다. 구조 검증·현재 정책 적합성·Harness 발급 출처·Human 승인
 근거는 각각 별개다. 현재 승인 JSON의 재검증은 runStaffing()의 실제 발급 사실을 인증하지 않는다.
-Step 4 전에 최소한 Harness가 Finalization한 Proposal 전체의 digest를 신뢰된 기록에 연결하고 Approval이
-그 동일 digest를 확인하는 통합이 필요하다. 이번 변경은 그 발급 저장·인증 기능을 구현하지 않는다.
+이 발급 출처 인증은 후속 신뢰 경계로 남긴다. Step 4는 이미 저장된 ApprovalRecord/Scope와 그 현재
+유효성을 검증하며 별도 Proposal Registry나 Finalization 서명을 추가하지 않는다.
 
 Human Constraints는 Proposal과 Scope에 그대로 보존한다. 기계적 정책 검증은 자연어 지시 전체의 의미적
 충족을 증명하지 않는다. Human은 위임 최초 설정 시 그 한계를 포함한 제한된 분석 권한만 위임하며 예외
 직접 승인에서는 원문 전체를 검토한다. 자동 승인은 AI의 승인이 아니라 **Human의 사전 위임을 Harness가
-집행한 새 승인 기록**이다. 발급된 Scope만으로 호출하지 않으며 Budget Reservation / Usage Recording,
-AuthorizedSpecialistInvocation 발급·집행, Phase B와 LangGraph는 여전히 미구현이다. 기존 순수
- evaluateInvocationRequest()도 그대로이며 실제 인증된 lifecycle / 사용량을 연결하는 Authorization이 필요하다.
+집행한 새 승인 기록**이다. 발급된 Scope만으로 호출하지 않으며 Step 4 Authorization을 거쳐야 한다.
+Budget Reservation과 AuthorizedSpecialistInvocation 발급은 구현했고 실제 호출·실행 결과 Usage Recording,
+Phase B와 LangGraph는 미구현이다. 기존 순수 evaluateInvocationRequest()에는 I/O를 추가하지 않았다.
+
+### v4 Step 4 — Scope Validation & Invocation Authorization — 구현
+
+`application/governance/authorization/flow/authorize-invocation.ts`의
+`authorizeSpecialistInvocation(request, attempt?)`는 AuthorityVerdict의 allowed/denied를 반환한다.
+Approval은 승인된 배치를 발급하고 Authorization은 개별 실행 입력과 예약을 발급하며 실제 Specialist는 실행하지 않는다.
+
+```ts
+const attempt = createInvocationAttempt(); // 신뢰된 Harness caller가 보관
+const verdict = authorizeSpecialistInvocation(request, attempt);
+// allowed인 동일 attempt를 다시 제출하면 추가 차감 없이 denied
+```
+
+CEO Request에는 Scope ID/version, Assignment ID, requestedContextPaths만 있다. ID·Objective·Authority·Scope
+객체를 주입하면 strict Schema로 거부한다. attempt를 생략하면 새로운 논리적 호출로 처리한다.
+createInvocationAttempt()가 UUID와 frozen handle을 발급하며 WeakSet으로 실제 발급 객체를 확인한다. 같은
+Assignment/Context여도 새 attempt는 다른 호출이다. 객체 복사·직렬화로 핸들을 위조할 수 없고, ID는 Ledger
+전체에서 중복 예약하지 않는다. 핸들은 프로세스 내 재시도용이며 재시작 후 안정 ID 복원·자동 재개는 지원하지 않는다.
+
+AuthorizedSpecialistInvocation은 invocationId 외에 scopeId / scopeVersion / assignmentId / assignmentObjective를
+포함한다. Goal/Snapshot/Assignment Objective는 저장 Scope, SpecialistDefinition은 현재 승인 System Policy,
+files는 승인 Commit의 검증된 blob에서 온다. 기본 Specialist objective와 이번 Assignment objective는 별도 필드다.
+CEO가 어느 값도 덮어쓸 수 없으며, 반환된 객체의 구조만으로 이후 실제 실행 권한을 다시 증명할 수는 없다.
+
+Reservation은 authorization/model/reservation.ts의 strict Schema로 invocationId, scopeId/version, assignmentId,
+requestDigest, invocationDigest, reservedAt을 저장한다. 전체 Invocation의 canonical digest에는 파일 내용·Authority·
+Assignment Objective도 포함된다. 사용량은 Scope 전체의 Reservation 수이며 Assignment별로 나누지 않는다.
+기록 저장 실패·Lock 충돌·예산 소진·중복 ID·최종 유효성 실패는 denied이고 저장 성공 전에는 allowed를 반환하지 않는다.
+Lock 충돌 시 대기/자동 재시도는 없으며 fail closed한다. 저장 성공 뒤 응답 실패처럼 결과가 불확실한 경우도
+예약을 자동 취소하지 않는다.
+
+Governance 공통 model/ledger.ts와 records/governance-transaction.ts는 Approval·Authorization이 공유한다.
+Ledger는 각 Repository에 선택적인 reservations 배열을 추가한다. 과거 기록의 필드 누락을 빈 사용량으로
+읽되 Schema default나 읽기 시 재저장은 하지 않는다. 새 예약 저장 시에만 배열을 추가하며 이전 승인 기록은
+그대로 유지한다. 서비스의 HMAC·UID/권한·Lock·atomic rename 구현은 바꾸지 않았다.
+
+검증은 실제 임시 Git·서명 Ledger, mock controlling-terminal 및 fake CEO를 사용한다. 별도 프로세스들의
+동시 Authorization도 같은 파일 lock으로 예산 상한을 넘지 않는지 검사한다. 실제 모델 호출·Specialist 실행
+E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한 호출·재사용 경계는 9.5를 따른다.
 
 ## 6. Current and Conditional Domain Models
 
@@ -948,10 +989,11 @@ AuthorizedSpecialistInvocation 발급·집행, Phase B와 LangGraph는 여전히
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
 | ComparisonContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / AgentDecision[]만 포함 |
 | ComparisonPayload | Current | protocol/comparison.ts의 strict Zod schema와 inferred type. Comparator output의 구조 검증을 통과한 상태; Reference Validation 뒤 같은 shape를 ComparisonResult로 반환 |
-| ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema / Staffing Scope issuance implemented; invocation enforcement Planned | application/governance의 strict 구조 계약. Step 3은 승인 출처를 확인해 Scope를 발급하며 Invocation은 발급·실행하지 않음 |
+| ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema / Scope issuance / Invocation Authorization implemented; Specialist execution Planned | application/governance의 strict 구조 계약. Step 3은 Scope를, Step 4는 예약된 Invocation 입력을 발급하며 실제 Specialist 실행은 하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
 | IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Staffing Approval은 Step 3 | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| InvocationReservation | Implemented | authorization/model/reservation.ts의 발급 입력 digest와 Scope 전체 호출 예산 예약. 실행 완료·환불 기록은 아님 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
 | CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 호출·Loop는 구현; Specialist 실행·종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
@@ -1320,11 +1362,11 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | 완성된 Proposal ID·현재 설정·Snapshot 파일 재검증 | Staffing | `validateStaffingProposal()` — [validate-staffing-proposal.ts](../src/application/staffing/flow/validation/validate-staffing-proposal.ts) → `validateProposal()` | Governance의 `validateCurrentStaffingPolicy()` | 신규 Approval·저장 Scope 조회 | Schema + Policy + Lifecycle |
 | 승인된 System 설정 조회·Human 확인·Legacy 운영 차단 | Governance system-policy | `validateSystemConfiguration()`, `requireCurrentSystemPolicy()`, `configureStaffingSystemPolicy()`, `getStaffingSystemPolicy()` — `application/governance/approval/features/system-policy/` | Governance CLI, Staffing→Approval Workflow | 설정/갱신·Staffing 시작 전 조회 | Schema + Policy + Lifecycle |
 | 자동 승인 범위와 System 포함 관계·위임 수명주기 | Governance human-delegation / proposal-management | `humanDelegationPolicyInputSchema`, `recordedHumanDelegationPolicySchema`, `readRecordedDelegationInput()`, `validateDelegationConfiguration()`; `evaluateStaffingApproval()` | 위임 설정, 신규 Approval, 위임 승인 Scope 조회 | 설정·만료/철회/버전/범위 재평가 | Schema + Policy + Lifecycle |
-| Ledger 구조·저장소 무결성·Repository 분리·동일 transaction | Governance 공통 모델/기록 + Records 서비스 | `governanceLedgerSchema`, `withGovernanceLedger()` — `approval/shared/`; `withGovernanceRecords()`, `assertGovernanceStoreOutsideRepository()` — `services/governance-records/records.ts` | 모든 Governance 설정·승인·조회 | Lock 내 읽기/저장·HMAC/UID/권한/크기 확인 | Schema + Lifecycle |
+| Ledger 구조·저장소 무결성·Repository 분리·동일 transaction | Governance 공통 모델/기록 + Records 서비스 | `governanceLedgerSchema` — `application/governance/model/ledger.ts`; `withGovernanceLedger()` — `application/governance/records/governance-transaction.ts`; `withGovernanceRecords()`, `assertGovernanceStoreOutsideRepository()` — `services/governance-records/records.ts` | 모든 Governance 설정·승인·조회·예약 | Lock 내 읽기/저장·예약 참조/상한·HMAC/UID/권한/크기 확인 | Schema + Policy + Lifecycle |
 | 실제 Human 확인·binding·일회성·UID/시간 | Terminal Infrastructure + Governance 공통 입력 확인 | `confirmHumanAction()`, `consumeHumanConfirmation()` — `infrastructure/terminal/human-confirmation.ts`; `consumeCurrentHumanConfirmation()` — `approval/shared/validation/approval-input.ts` | Governance/Staffing CLI, Governance Use-case | 터미널 확인·Receipt 소비 | Policy + Lifecycle |
 | 승인 방식·중복 발급·ApprovalRecord/Scope 구성과 연결 | Governance proposal-management | `evaluateStaffingApproval()`, `assertProposalNotIssued()`, `assertIssuanceIdsUnused()`, `issueStaffingScope()` — `approval/features/proposal-management/flow/`; `approvalRecordSchema`, `approvedOperatingScopeSchema` | `approveStaffingProposal()` | 평가·발급 전·동일 transaction 저장 전 | Schema + Policy + Lifecycle |
 | 저장된 승인과 현재 Scope 유효성 | Governance proposal-management | `validateStoredIssuance()` 및 binding/content/source 검사 — [staffing-issuance.ts](../src/application/governance/approval/features/proposal-management/flow/validation/staffing-issuance.ts) | `getApprovedStaffingScope()` | 저장 Scope 조회 | Policy + Lifecycle |
-| 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/flow/evaluate-invocation.ts) | 공개 순수 API; 현재 제품 Flow 호출자는 없음 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
+| 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/flow/evaluate-invocation.ts) | `authorizeSpecialistInvocation()`이 사용; 순수 API도 유지 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
 | Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `runIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
 | Comparison source 구성·Concern별 참조 | Comparison | `comparisonPayloadSchema` — `protocol/comparison.ts`; `compareDecisions()`, `validateComparisonReferences()` — `flow/validation/validate-references.ts` | Comparator Adapter, Decision CLI 조합 | 비교 입력·응답 수신 후 | Schema + Policy |
 | 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runVerification()` — `services/verification/verification-runner.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeTask()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
@@ -1420,15 +1462,16 @@ Human 입력은 transaction 밖의 CLI에서 기다린다. Workflow는 분리된
 `approveStaffingProposal()`을 재호출한다. 설정·위임 변경도 binding / 일회성 소비 / Ledger transaction을
 재사용한다. 위임 없음·유효한 범위 초과는 direct, 무효 위임·System 위반은 denied라는 구분을 유지한다.
 
-**Stored Scope / Invocation Eligibility — 현재는 분리된 API, 연결은 Planned**
+**Stored Scope / Invocation Eligibility — 현재 Authorization에서 연결**
 
 ```text
 getApprovedStaffingScope(scopeId)
   → withGovernanceLedger → validateStoredIssuance
     → assertApprovalBinding (IDs/digest/current System version)
     → assertScopeContents → assertDelegatedApprovalSource
-    → direct-human: validateCurrentStaffingPolicy + 저장된 Human UID/time
-    → human-delegation: evaluateStaffingApproval이 delegated인지 재확인
+    → validateCurrentStaffingPolicy (검증 파일 반환)
+    → direct-human: 저장된 Human UID/time
+    → human-delegation: evaluateDelegationCoverage가 delegated인지 재확인
   → 검증된 저장 ApprovalRecord / Scope 반환
 
 evaluateInvocationRequest(request, scope, evaluationContext)   # 현재 별도 공개 순수 API
@@ -1436,10 +1479,10 @@ evaluateInvocationRequest(request, scope, evaluationContext)   # 현재 별도 �
   → 승인/요청 경로의 정규 표현·중복 → 정확한 파일 부분집합 → used < max → eligible
 ```
 
-현재 `src/` 제품 경로에는 이 조회와 평가를 잇는 호출이 없다. pure 평가의 scopeStatus / usedAgentInvocations는
-Harness가 전달해야 할 사실이며 저장소의 진위·최신성까지 평가 함수가 증명하지 않는다. Scope 철회 저장소나
-사용량 예약/차감은 구현되지 않았다. 직접 승인 Scope는 무관한 위임 만료/철회에 의존하지 않지만 현재
-System version·정책·Snapshot에는 의존한다. 위임 승인 Scope는 정확한 최신 위임 source와 현재 범위도 확인한다.
+Authorization은 아래 9.5처럼 같은 transaction의 발급 검증 결과와 Reservation 수로 평가 입력을 구성한다.
+독립적인 순수 평가 API는 여전히 출처를 인증하지 않는다. 명시적인 Scope 철회 저장 모델은 없으며 현재
+active 판단은 저장 승인 근거·현재 정책·위임·Snapshot 검증 통과를 뜻한다. 직접 승인 Scope와 위임 승인
+Scope의 다른 무효화 기준은 유지한다.
 
 **v2 Decision → Evidence / v3 Comparison → References — 현재**
 
@@ -1541,25 +1584,40 @@ Snapshot도 부분 발급 저장 없이 거부된다. 동기 변환 주변의 �
 Approval 전체 평가를 1회로 줄이지 않는다. v1 Inspection 통합, 선택된 Authority guard의 입력 전제 정리 등도
 별도 검토 후보이며 이번 변경에서 실행 계약이나 Legacy·Direct/Delegated 승인 의미는 바꾸지 않았다.
 
-### 9.5 Step 4 Authorization 재사용 원칙 — Planned
+### 9.5 Step 4 Authorization — Implemented / Step 5 실행 연결 — Planned
 
-목표 연결은 `getApprovedStaffingScope()`의 저장 발급 검증 → 신뢰된 lifecycle/usage 확보 →
-`evaluateInvocationRequest()` → 원자적 Budget Reservation/최신성 확보 → 승인 Snapshot 파일과 등록 Specialist로
-실행 입력 구성 → `AuthorizedSpecialistInvocation`이다. 이 화살표는 아직 제품 실행 경로가 아니다.
+```text
+authorizeSpecialistInvocation(request, attempt?)
+  → Request Schema / Harness attempt 확인
+  → withGovernanceLedger (HMAC·Schema·동일 lock)
+    → 동일 Invocation ID 예약 거부 / 저장 Scope 유일 조회
+    → validateStoredIssuance → 현재 승인 정책·source·Snapshot·파일 검증
+    → Scope version의 Reservation 수 → evaluateInvocationRequest
+    → 승인 Assignment + 현재 등록 Specialist + 요청한 정확한 파일로 Invocation Schema
+    → 실제 Invocation JSON byte 제한
+    → validateStoredIssuance 재실행 / 선택 파일 내용 일치 / Eligibility 재확인
+    → Reservation Schema·binding·ID·Scope 전체 budget 검사 → atomic save
+  → 저장 성공한 경우만 allowed
+```
 
-- **Approval**은 Proposal의 승인 근거와 Scope 발급을 소유한다. Invocation 검사나 예산 소비를
-  `approveStaffingProposal()`에 추가하지 않는다.
-- **Scope Validation**은 `getApprovedStaffingScope()` / `validateStoredIssuance()`를 재사용한다. Schema만
-  통과한 외부 Scope를 승인된 것으로 취급하지 않는다. 기존 source/digest/ID/현재 정책·Snapshot 검증을 복제하지 않는다.
-- **Authorization**은 개별 Request의 구조·Scope ID/version·Assignment·Context 부분집합·제공된 잔여 예산에
-  `evaluateInvocationRequest()`를 재사용한다. `eligible`은 예약도 실행 입력 발급도 아니다. 평가 함수는
-  실제 파일 존재/mode/content, 현재 등록 Authority, 사용량 출처, 저장 Scope의 진위를 확인하지 않는다.
-- 파일 로딩은 공통 경로/범위 predicate, Snapshot 서비스, Git Commit tree/blob 메커니즘을 재사용한다.
-  Staffing 소유 파일 안전 규칙까지 필요하다면 명시적인 공개 경계를 검토하며 다른 Application의 private
-  Inspection State나 내부 파일을 임의 import하지 않는다. Workflow에 같은 validator를 다시 작성하지 않는다.
-- Scope 조회, 현재 정책 조회, 순수 평가를 차례로 호출해도 원자적 Authorization은 완성되지 않는다.
-  lifecycle/usage의 신뢰된 공급·예약 동시성·조회 이후 변경 처리·현재 등록 Authority 결합은 Step 4 설계 과제다.
-  기존 Approval transaction의 원자성은 보존하되 아직 없는 예약 저장/함수를 구현된 것처럼 전제하지 않는다.
-- **Workflow**는 위 Application 호출의 순서·분기·실패를 조정한다. Invocation 평가를 Workflow로 옮기거나
-  Human의 Staffing 승인으로 Task/변경 반영/개별 실행 승인을 포괄하지 않는다. 외부 Proposal의 암호학적 발급 출처와
-  자연어 Constraints 의미 검증이라는 기존 한계도 이 연결만으로 해결되지 않는다.
+- **Approval**은 Scope와 승인 근거를 소유한다. `validateStoredIssuance()`를 Approval 공개 경계로 제공하며
+  검증한 파일도 반환한다. `validateStaffingProposal()` → `validateCurrentStaffingPolicy()`도 같은 로딩 결과를
+  반환하도록 확장했다. 기존 호출자는 이를 무시할 수 있다. 저장된 위임 승인 검증은 공통
+  evaluateDelegationCoverage()로 범위를 평가해 파일을 중복 로딩하지 않는다. 신규 Approval의 전체 평가 3회는 유지한다.
+- **Authorization**은 공개 Scope 조회를 중첩 호출해 lock을 다시 잡지 않는다. 공통 Ledger transaction에서
+  저장된 발급을 검증하고 같은 transaction 안에서 예산 평가·예약을 저장한다. System 승인 기록의 Repository/UID/time
+  검사는 requireCurrentSystemRecord()로 정책 조회와 Proposal/Scope 검증이 공유한다.
+- 경로·regular mode·민감 파일·파일 수/크기·Assignment envelope budget과 Commit blob 로딩은 기존 Staffing
+  Proposal 검증을 통해 재사용한다. Authorization은 비공개 Inspection State를 만들거나 import하지 않는다.
+  이미 읽은 검증 파일에서 요청한 부분집합만 고르고, 최종 재검증 파일 내용과 일치해야 한다. 전체 Authorized
+  Invocation JSON도 maxContextBytes로 제한하며 Snapshot 검사나 최종 파일 검증을 생략하지 않는다.
+- Lifecycle 입력은 검증된 저장 Scope의 active 판정과 해당 scopeId/version의 예약 수다. Ledger Schema가
+  Reservation의 Scope/Assignment 참조·ID 중복·발급 시각 관계·Scope 예산 상한을 검사한다. 실패 기록을 무시해
+  예산을 되살리지 않는다. 예약 후 실패/미실행도 소비한 예산이며 환불·재개·실행 결과 기록은 없다.
+- **Workflow**에는 이번 Authorization 호출을 추가하지 않았다. Step 5는 승인된 입력을 실행하기 전에 저장
+  Reservation의 invocationId / scopeId / version / assignmentId와 전체 invocationDigest를 확인하고 당시
+  Scope·정책·Snapshot 유효성을 검토해야 한다. Schema parsing이나 임의 객체만으로 실제 Specialist를 호출하면 안 된다.
+  중복 실행 방지·실행 상태 기록·재개 정책은 Step 5 이후의 별도 책임이다.
+- Ledger lock은 외부 Repository를 잠그지 않는다. 최종 검사와 실제 실행 사이의 TOCTOU, 같은 OS 계정/root,
+  clock 조작·저장소 rollback이라는 기존 한계는 남는다. 외부 Proposal의 발급 출처·자연어 Constraints의
+  의미적 충족도 Reservation이나 Invocation Schema로 증명하지 않는다.

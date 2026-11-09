@@ -1,5 +1,6 @@
 export {
   staffingSystemPolicySchema,
+  requireCurrentSystemPolicy,
   type StaffingSystemPolicy,
 } from "./features/system-policy/model/policy.js";
 export {
@@ -21,3 +22,5 @@ export {
 export { configureHumanDelegation } from "./features/human-delegation/flow/configure-human-delegation.js";
 export { approveStaffingProposal } from "./features/proposal-management/flow/approve-staffing-proposal.js";
 export { getApprovedStaffingScope } from "./features/proposal-management/flow/get-approved-staffing-scope.js";
+// Reusable issuance validation for callers already inside a trusted Ledger transaction.
+export { validateStoredIssuance } from "./features/proposal-management/flow/validation/staffing-issuance.js";

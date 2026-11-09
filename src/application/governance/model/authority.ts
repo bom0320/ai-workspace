@@ -46,10 +46,15 @@ export const invokeSpecialistRequestSchema = z
   .strict();
 
 // Harness-owned execution data, not an authorization token obtainable by parsing.
-// File contents must later be loaded from the approved snapshot by enforcement.
+// Authorization loads file contents from the approved Snapshot before reservation.
+// Step 5 must verify the persisted reservation/digest before actual execution.
 export const authorizedSpecialistInvocationSchema = z
   .object({
     invocationId: nonEmptyString,
+    scopeId: nonEmptyString,
+    scopeVersion: z.number().int().positive(),
+    assignmentId: nonEmptyString,
+    assignmentObjective: nonEmptyString,
     goal: goalSpecSchema.strict(),
     snapshot: repositorySnapshotSchema,
     specialist: specialistDefinitionSchema,

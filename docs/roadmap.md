@@ -279,7 +279,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   CEO Context와 proposal.goal.constraints에 원문 그대로 보존하며 Rule과 문자열로 연결하지 않는다.
   unverifiedHumanConstraints는 제거했고 어떤 지시도 Rule 성공으로 검증 완료 처리하지 않는다.
   역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
-  Staffing Approval / Scope issuance는 아래 Step 3에서 구현했고 Budget Reservation / Invocation 실행은 미구현이다.
+  Staffing Approval / Scope issuance는 아래 Step 3, Budget Reservation은 Step 4에서 구현했으며 실제 Invocation 실행은 미구현이다.
 
 R2 검증 규칙은 CEO Inspection State와 분리했다. 최초 Finalization과 승인 시점 재검증은 같은 Snapshot
 파일·등록 정보·정책 기반 규칙을 사용한다. CEO Context JSON budget과 Assignment 검증 envelope JSON
@@ -303,7 +303,7 @@ maxAgentInvocations로 통합했다. runStaffing은 goal / systemPolicy / maxRou
 Staffing 최초 검증과 Approval 재검증은 같은 공통 계약을 사용한다. 이전 nested policy가 저장된 경우
 제약을 버리지 않고 원문 이력으로 보존하며 사용을 차단한다. 새 형식을 governance setup으로 Human이
 명시적으로 재승인해야 하며 정책 version은 증가하고 기존 위임·Scope는 자동 승계되지 않는다.
-Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다. Authorization / Budget Reservation은 미구현이다.
+Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다. Authorization / Budget Reservation은 아래 Step 4에서 구현했다.
 
 ### Staffing → Governance Approval — Implemented
 
@@ -312,8 +312,18 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - CLI `staffing <repository> <goal.json>`은 기존 review / terminal confirmation을 재사용한다. Human 확인 후
   같은 Proposal을 재제출하며 CEO 재실행, Proposal 파일 저장, Agent/Human 대기 중 Ledger lock은 없다.
 - 승인 시 기존 최신 정책·위임·Snapshot·binding 검증을 유지한다. 시작 정책 version 일치는 강제하지 않는다.
-- Registry / 암호학적 Proposal provenance, Authorization / Budget Reservation, Decision / Comparison 연결과
+- Registry / 암호학적 Proposal provenance, Workflow의 Authorization 호출 및 Decision / Comparison 연결과
   LangGraph runtime은 미구현이다. 현재 연결은 Scope 발급에서 종료한다.
+
+### Step 4 — Scope Validation & Invocation Authorization — Implemented
+
+- 저장 Scope의 source/digest/현재 정책·위임·Snapshot 검증과 순수 Eligibility를 같은 Ledger transaction에서 연결했다.
+- Authorized Invocation은 승인 Assignment Objective·현재 등록 Specialist·Commit 파일을 포함한다. 최종 파일/Scope
+  재검증 후 Scope 전체 Reservation을 atomic save하고 성공해야 allowed를 반환한다.
+- Invocation ID는 Harness attempt handle로 발급한다. 같은 handle의 중복 예약은 거부하며 같은 Context의 새 호출은
+  새 예산을 사용한다. 과거 Ledger의 reservations 누락은 읽기 호환으로 보존하고 자동 재작성하지 않는다.
+- Step 5는 저장된 Reservation/Invocation digest와 최신 유효성 확인 뒤 실제 v2 Specialist를 연결해야 한다.
+  실제 호출·Workflow 연결·실행 결과·자동 환불/재개·LangGraph는 미구현이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
@@ -327,7 +337,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   Authorization 이후 전체 Goal→조직 Workflow는 미완성이다.
 - 로컬 OS 계정과 Harness 자체를 신뢰한다. 동일 계정 공격자·root·clock 조작·backup rollback 방어와 remote
   Human 인증은 미구현이다. 실제 Human 승인 E2E가 아닌 mock TTY + 실제 임시 Repository / signed file 테스트로 검증한다.
-- 후속 단계는 최신 권한 / Scope lifecycle과 Budget Reservation을 확보하는 Invocation Authorization이다.
+- Step 4는 최신 Scope 검증·Budget Reservation·Invocation 입력 발급을 구현했다. 후속 실행 연결은 Step 5다.
   Scope 발급은 자연어 Instructions의 의미적 충족이나 실제 Specialist 호출 허가·예산 확보가 아니다.
 
 Human Delegation 입력은 allowedSpecialistIds / delegatedContextScopes / maxAgentInvocations / expiresAt로
@@ -380,9 +390,9 @@ Executive Report의 완료로 해석하지 않는다. Phase B의 Assignment 모�
 Staffing / Governance 경계 정리: Approval과 Authorization은 별도 내부 책임으로 분리했으며 기존 공개 API는
 유지한다. 저장된 직접 승인 Scope는 무관한 Delegation 만료·철회에 의존하지 않는다. 위임 승인 Scope는
 정확한 최신 활성 위임과 범위를 재확인하며 두 출처 모두 현재 System Policy·Snapshot·digest 연결을 검사한다.
-Step 4 전 남은 신뢰 경계는 R2 Proposal의 실제 Harness 발급 출처다. 승인 JSON의 구조·정책 재검증과
+R2 Proposal의 실제 Harness 발급 출처는 여전히 남은 신뢰 경계다. 승인 JSON의 구조·정책 재검증과
 Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 Finalization digest 기록과 Approval의 동일
-발급 결과 확인을 최소 통합 과제로 남긴다. Authorization / Budget Reservation은 아직 구현하지 않았다.
+발급 결과 확인은 별도 과제로 남긴다. Step 4는 이미 저장된 승인 Scope에서 Invocation을 예약·발급한다.
 
 
 ## v5 — Evaluation

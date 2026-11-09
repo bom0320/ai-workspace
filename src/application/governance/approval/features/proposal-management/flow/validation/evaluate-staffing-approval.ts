@@ -1,3 +1,5 @@
+import { requireCurrentSystemRecord } from "../../../system-policy/flow/validation/system-configuration.js";
+import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 import {
   readRecordedDelegationInput,
   validateDelegationConfiguration,
@@ -9,23 +11,21 @@ import {
   validateStaffingProposal,
   type StaffingProposal,
 } from "@/application/staffing/index.js";
-import type { RepositoryGovernance } from "../../../../shared/model/ledger.js";
+import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 
 // Current proposal validity is shared by new approval and stored issuance checks.
 // It does not select an approval source or authenticate proposal issuance.
 export function validateCurrentStaffingPolicy(
   proposal: StaffingProposal,
   repository: RepositoryGovernance
-): void {
+): InspectedFile[] {
   const system = repository.systems.at(-1);
-  if (
-    !system ||
-    system.configuration.repositoryRoot !==
-      realpathSync(proposal.snapshot.repositoryRoot)
-  )
-    throw new Error("Missing or mismatched System Policy.");
-  const configuration = requireCurrentSystemPolicy(system.configuration);
-  validateStaffingProposal(proposal, configuration);
+  if (!system) throw new Error("Missing System Policy.");
+  const configuration = requireCurrentSystemRecord(
+    system,
+    realpathSync(proposal.snapshot.repositoryRoot)
+  );
+  return validateStaffingProposal(proposal, configuration);
 }
 
 // A new approval must also evaluate the current delegation lifecycle.
@@ -35,6 +35,16 @@ export function evaluateStaffingApproval(
   now: number
 ): "delegated" | "direct" {
   validateCurrentStaffingPolicy(proposal, repository);
+  return evaluateDelegationCoverage(proposal, repository, now);
+}
+
+// Internal policy evaluation after current Proposal validation. Both new and
+// stored approval reuse this rule; file validation remains a separate concern.
+export function evaluateDelegationCoverage(
+  proposal: StaffingProposal,
+  repository: RepositoryGovernance,
+  now: number
+): "delegated" | "direct" {
   const system = repository.systems.at(-1)!;
   const delegation = repository.delegations.at(-1);
   if (!delegation) return "direct";

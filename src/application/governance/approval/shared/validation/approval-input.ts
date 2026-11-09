@@ -1,16 +1,7 @@
-import { realpathSync } from "node:fs";
-import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import {
   consumeHumanConfirmation,
   type HumanConfirmation,
 } from "@/infrastructure/terminal/index.js";
-import { assertGovernanceStoreOutsideRepository } from "@/services/governance-records/index.js";
-
-export function resolveGovernanceRepository(input: string): string {
-  const root = realpathSync(resolveRepositoryRoot(input));
-  assertGovernanceStoreOutsideRepository(root);
-  return root;
-}
 
 // Consuming is intentional even when the binding, UID or time check fails:
 // a rejected receipt must not be reusable by another approval attempt.

@@ -2,7 +2,7 @@ import { recordedHumanDelegationPolicySchema } from "../../human-delegation/mode
 import type {
   GovernanceLedger,
   RepositoryGovernance,
-} from "../../../shared/model/ledger.js";
+} from "../../../../model/ledger.js";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -305,8 +305,9 @@ describe("Human Staffing Approval and delegation — no Specialist execution", (
           staffingValidation,
           "validateStaffingProposal"
         ).mockImplementationOnce((...args) => {
-          validate(...args);
+          const files = validate(...args);
           expire();
+          return files;
         });
       else
         issuance.mockImplementation((...args) => {

@@ -49,6 +49,10 @@ const request = {
 };
 const invocation = {
   invocationId: "invocation-1",
+  scopeId: scope.id,
+  scopeVersion: scope.version,
+  assignmentId: assignment.assignmentId,
+  assignmentObjective: assignment.objective,
   goal,
   snapshot,
   specialist: {
@@ -199,6 +203,10 @@ describe("authorizedSpecialistInvocationSchema", () => {
 
   it.each([
     { ...invocation, invocationId: "" },
+    { ...invocation, scopeId: "" },
+    { ...invocation, scopeVersion: 0 },
+    { ...invocation, assignmentId: "" },
+    { ...invocation, assignmentObjective: "" },
     { ...invocation, files: [] },
     { ...invocation, files: [{ path: "", content: "" }] },
     { ...invocation, files: [{ path: "a.ts", content: "", extra: true }] },

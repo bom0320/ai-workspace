@@ -1,4 +1,9 @@
-import { withGovernanceRecords } from "@/services/governance-records/index.js";
+import { realpathSync } from "node:fs";
+import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
+import {
+  assertGovernanceStoreOutsideRepository,
+  withGovernanceRecords,
+} from "@/services/governance-records/index.js";
 import {
   governanceLedgerSchema,
   type GovernanceLedger,
@@ -13,4 +18,10 @@ export function withGovernanceLedger<T>(
     const ledger = governanceLedgerSchema.parse(raw);
     return action(ledger, () => persist(governanceLedgerSchema.parse(ledger)));
   });
+}
+
+export function resolveGovernanceRepository(input: string): string {
+  const root = realpathSync(resolveRepositoryRoot(input));
+  assertGovernanceStoreOutsideRepository(root);
+  return root;
 }

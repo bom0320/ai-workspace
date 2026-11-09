@@ -2,9 +2,9 @@ import * as fileSystem from "node:fs";
 import { spawn } from "node:child_process";
 import { runStaffing } from "@/application/staffing/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import type { GovernanceLedger } from "../../model/ledger.js";
+import type { GovernanceLedger } from "../../../../model/ledger.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";
-import * as approvalValidation from "../../approval/index.js";
+import * as approvalValidation from "../../../../approval/index.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,

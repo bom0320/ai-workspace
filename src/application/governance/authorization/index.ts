@@ -1,10 +1,10 @@
-export { evaluateInvocationRequest } from "./flow/evaluate-invocation.js";
+export { evaluateInvocationRequest } from "./features/specialist-invocation/flow/validation/evaluate-invocation.js";
+export { authorizeSpecialistInvocation } from "./features/specialist-invocation/flow/authorize-invocation.js";
 export {
-  authorizeSpecialistInvocation,
   createInvocationAttempt,
   type InvocationAttempt,
-} from "./flow/authorize-invocation.js";
+} from "./features/specialist-invocation/model/invocation-attempt.js";
 export {
   invocationReservationSchema,
   type InvocationReservation,
-} from "./model/reservation.js";
+} from "./features/specialist-invocation/model/reservation.js";

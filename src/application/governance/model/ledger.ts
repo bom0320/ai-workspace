@@ -1,4 +1,4 @@
-import { invocationReservationSchema } from "../authorization/model/reservation.js";
+import { invocationReservationSchema } from "../authorization/features/specialist-invocation/model/reservation.js";
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import { approvedOperatingScopeSchema } from "./authority.js";

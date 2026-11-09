@@ -5,7 +5,7 @@ import {
   invokeSpecialistRequestSchema,
   invocationEvaluationContextSchema,
   type InvocationEligibility,
-} from "../../model/authority.js";
+} from "../../../../../model/authority.js";
 
 // Validate unique, unambiguous repository-relative paths.
 

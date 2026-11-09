@@ -17,11 +17,6 @@ export function validateStaffingProposal(
     config.contextAccessPolicy
   );
   if (
-    new Set(config.availableSpecialists.map(({ id }) => id)).size !==
-    config.availableSpecialists.length
-  )
-    throw new Error("Invalid Harness staffing configuration.");
-  if (
     new Set(proposal.assignments.map(({ assignmentId }) => assignmentId))
       .size !== proposal.assignments.length
   )

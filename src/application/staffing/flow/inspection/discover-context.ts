@@ -2,14 +2,12 @@ import type { ContextAccessPolicy } from "@/contracts/repository/context-access-
 import { validateContextAccessPolicy } from "@/services/repository-inspection/index.js";
 import { basename } from "node:path";
 
-import { z } from "zod";
-
 import {
   assertRepositoryMatchesSnapshot,
   captureRepositorySnapshot,
 } from "@/services/repository-snapshot/index.js";
 import {
-  specialistDefinitionSchema,
+  specialistDefinitionsSchema,
   type SpecialistDefinition,
 } from "@/contracts/specialist/definition.js";
 import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
@@ -49,11 +47,9 @@ export type DiscoverStaffingContextOptions = {
 function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
   const goal = goalSpecSchema.strict().parse(options.goal);
   const limits = staffingInspectionLimitsSchema.parse(options.limits);
-  const specialists = z
-    .array(specialistDefinitionSchema)
-    .parse(options.availableSpecialists);
-  if (new Set(specialists.map(({ id }) => id)).size !== specialists.length)
-    throw new Error("Duplicate Specialist IDs.");
+  const specialists = specialistDefinitionsSchema.parse(
+    options.availableSpecialists
+  );
   if ("allowedContextPaths" in options)
     throw new Error(
       "Legacy allowedContextPaths is not a current Discovery input."

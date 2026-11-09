@@ -365,7 +365,15 @@ describe("runStaffing — same-run finalization, not authorization", () => {
     ).toBe(false);
   });
 
-  it.each(["files", "bytes", "json", "specialist", "context", "budget"])(
+  it.each([
+    "files",
+    "bytes",
+    "json",
+    "specialist",
+    "duplicate-specialist",
+    "context",
+    "budget",
+  ])(
     "revalidates a Proposal without CEO state and rejects %s policy violations",
     async (kind) => {
       if (kind === "json") {
@@ -383,6 +391,10 @@ describe("runStaffing — same-run finalization, not authorization", () => {
       if (kind === "bytes") configuration.limits.maxFileBytes = 1;
       if (kind === "json") configuration.limits.maxContextBytes = 2000;
       if (kind === "specialist") configuration.availableSpecialists = [];
+      if (kind === "duplicate-specialist")
+        configuration.availableSpecialists.push(
+          structuredClone(configuration.availableSpecialists[0])
+        );
       if (kind === "context")
         configuration.contextAccessPolicy = { allowedScopes: [] };
       if (kind === "budget") configuration.maxAgentInvocations = 1;

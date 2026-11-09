@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { specialistDefinitionSchema } from "../specialist/definition.js";
+import { specialistDefinitionsSchema } from "../specialist/definition.js";
 import { contextAccessPolicySchema } from "../repository/context-access-policy.js";
 
 const nonnegativeInteger = z.number().int().nonnegative();
@@ -23,13 +23,8 @@ export const staffingSystemPolicySchema = z
   .object({
     repositoryRoot: z.string().min(1),
     phase: z.literal("phase-a"),
-    availableSpecialists: z
-      .array(specialistDefinitionSchema)
+    availableSpecialists: specialistDefinitionsSchema
       .min(1)
-      .refine(
-        (items) => new Set(items.map(({ id }) => id)).size === items.length,
-        "System Policy requires unique Specialist registrations."
-      )
       .refine(
         (items) =>
           items.every(

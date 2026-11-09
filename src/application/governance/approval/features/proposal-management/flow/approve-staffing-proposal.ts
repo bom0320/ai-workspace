@@ -59,6 +59,8 @@ export function approveStaffingProposal(
           reason:
             "No active delegation covers this Specialist, Context or invocation budget. Review all original Human Constraints; changes require a new validated Proposal.",
         };
+      // Re-read policy/file facts as well as time-dependent delegation state.
+      // The Ledger lock does not lock the external Repository or its Git objects.
       // Keep both freshness checks, before issuance and again before persistence.
       if (evaluateStaffingApproval(proposal, entry, Date.now()) !== mode)
         return deniedStaffingApproval();

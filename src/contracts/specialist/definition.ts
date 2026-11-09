@@ -12,3 +12,12 @@ export const specialistDefinitionSchema = z
   .strict();
 
 export type SpecialistDefinition = z.infer<typeof specialistDefinitionSchema>;
+
+// Shared registration-list invariant, independent of System Policy authority or
+// a minimum candidate count. Discovery also accepts this list on its own.
+export const specialistDefinitionsSchema = z
+  .array(specialistDefinitionSchema)
+  .refine(
+    (items) => new Set(items.map(({ id }) => id)).size === items.length,
+    "Duplicate Specialist IDs."
+  );

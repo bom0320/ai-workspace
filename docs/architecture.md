@@ -1344,7 +1344,8 @@ Worktree 생성/삭제·Diff 크기 제한·임시 자원 cleanup도 각 서비�
 ```text
 contracts/specialist/authority.ts → specialist/definition.ts
 contracts/repository/context-access-policy.ts: PathScope → ContextAccessPolicy
-SpecialistDefinition + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
+SpecialistDefinition → specialistDefinitionsSchema (등록 목록 ID 고유성)
+specialistDefinitionsSchema + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
 GoalSpec + RepositorySnapshot + Intent/Assignment/Budget → StaffingProposal
 StaffingAssignment.omit(assignmentId) → StaffingAssignmentDraft
 StaffingProposal.omit(id, goal, snapshot) + Draft assignments → StaffingDraft → CEOStaffingDecision
@@ -1357,7 +1358,8 @@ Comparison position/finding/gap schemas → ComparisonPayload
 ```
 
 Schema의 omit/pick은 구조 재사용이며 발급·승인 근거가 아니다.
-System Policy의 `.refine()`은 ID 고유성과 Phase A Authority라는 Policy도 포함하는 혼합 책임이다.
+ID 고유성은 `contracts/specialist/definition.ts`의 `specialistDefinitionsSchema.refine()`가 소유한다.
+System Policy는 이를 합성하고 최소 1개 및 Phase A Authority 조건을 추가하므로 Schema와 Policy의 혼합 책임이다.
 반면 SpecialistDefinition 단독으로는 none/read/write를 표현하며 등록의 진위나 특정 runtime에서의 실행 가능성을 증명하지 않는다.
 Decision Payload의 path/line 구조를 파싱한 뒤 Context에 대한 존재·행 범위·순서를 검사하고,
 Comparison의 nonnegative index를 파싱한 뒤 원본 Decision에 대한 범위·중복을 검사한다.
@@ -1506,16 +1508,38 @@ v1/v0의 `approveTask()`는 stdin의 Approve/Reject/EOF를 처리하며 Governan
 | 필요한 재검증 | Context raw-size preflight와 로딩 후 JSON size, CEO Context와 Assignment envelope | 전자는 로딩 전 batch 제한, 후자는 escaping/overhead 포함 실제 제한이다. Proposal envelope는 원본 Goal/Snapshot·설정·tree·assignment payload·선택 파일을 측정하고 CEO Context는 metadata/조사 파일을 측정한다. 같은 maxContextBytes를 써도 같은 데이터 검사가 아니다. |
 | 필요한 재검증 | Approval 요청 후 CLI 확인·재제출, 저장 Scope의 현재 정책/위임/파일 재검증 | 대기 중 상태가 달라진다. 신규 승인 방식 선택과 기존 승인 근거의 유효성은 다른 판단이다. direct Scope를 무관한 위임 만료 때문에 거부하도록 합치지 않는다. |
 | 필요한 재검증 | Worker 뒤와 Verification 뒤 `runScopeStage()` | 둘 사이에 명령이 파일을 바꾸거나 commit할 수 있다. 같은 Scope 규칙을 변경된 Evidence에 다시 적용하는 정상 구조다. |
-| 중복 구현 후보 | System Schema의 Specialist ID `.refine()`와 `validateDiscoveryInput()`의 Set 검사 | Discovery는 전체 System Policy 없이도 호출되는 공개 경계이므로 자체 고유성 보장이 필요하다. 동일 규칙 구현의 공통화 가능성을 검토하되 검사 자체를 없애거나 System 전용 Authority 제약을 모든 Discovery에 강제하지 않는다. |
-| 중복 구현 후보 | `validateStaffingProposal()`의 Specialist Set 검사는 같은 함수의 System Schema parse 직후에도 존재 | 현재 동일 데이터의 고유성을 Schema가 이미 보장한다. 가장 명확한 재검토 후보지만 다른 typed 호출의 보호와 분리해서 판단한다. `validateProposal()`의 선택된 Authority guard도 System Schema 보장과 겹치나 내부 입력 전제 확인이 먼저다. |
+| 공통화 완료 | System Schema와 `validateDiscoveryInput()`이 `contracts/specialist/definition.ts`의 `specialistDefinitionsSchema`를 재사용 | ID 고유성 구현은 공통 목록 Schema 한 곳에 둔다. 독립 Discovery의 입력 파싱은 유지한다. 목록 자체에는 최소 개수·Phase A Authority를 강제하지 않고 System Policy만 해당 제한을 추가한다. |
+| 제거 완료 / 별도 guard 유지 | `validateStaffingProposal()`의 System Schema parse 직후 Specialist Set 검사 제거 | 같은 설정의 고유성을 Schema가 이미 보장하므로 별도 검사는 불필요하다. Assignment ID 중복 검사는 다른 대상이므로 유지한다. `validateProposal()`의 선택된 Authority guard는 내부 typed 입력 전제를 바꾸지 않기 위해 유지했다. |
 | 서로 다른 규칙 | 등록 ID 고유성, Draft Specialist 중복 배치, 발급 Assignment ID 충돌, Invocation의 승인 Assignment ID 중복 | 서로 다른 식별 대상과 신뢰 경계다. 하나의 duplicate 검사로 합치지 않는다. v2 source ID·v3 finding별 source 중복도 별도 규칙이다. |
 | 독립 계약 / 공통화 검토 | v1 Working Tree `inspectFiles()`와 Staffing Snapshot Inspection | v1은 resolve/normalize·stat/read와 조사 수 제한, Staffing은 canonical path·access scopes·Commit regular mode·민감 경로·실제 JSON budget이다. 초기 seeding의 64/128 KiB 정책은 유사하지만 Snapshot/Working Tree 로딩은 다르다. 보안 동등성이나 통합 가능성을 이름만 보고 단정하지 않는다. |
-| 반복 비용 검토 후보 | 성공하는 `approveStaffingProposal()` 한 호출에서 `evaluateStaffingApproval()`이 총 3회; 각각 Proposal tree/blob 재검증 포함 | 최초 승인 방식, 근거 확보 후 발급 전, 최종 저장 전을 보호한다. 같은 lock 안의 Ledger는 같아도 시각과 외부 Repository는 변할 수 있다. Human 대기는 이 호출 내부가 아니라 transaction 종료 후다. 정적 검사와 동적 최신성 검사의 분리 가능성·I/O 비용을 측정한 뒤 검토하며 최신성 검사를 삭제하지 않는다. |
+| 측정 후 유지 | 성공하는 `approveStaffingProposal()` 한 호출에서 `evaluateStaffingApproval()` 3회 및 각 Proposal tree/blob 재검증 | 최초 승인 방식, 근거 확보 후 발급 전, 최종 저장 전을 보호한다. Ledger Lock은 외부 Git을 잠그지 않는다. 발급 직전/저장 직전 위임 만료와 Git blob 변경 회귀 테스트를 보강했으며, 전체 평가를 캐시하거나 Snapshot/시간 검사만 남기지 않았다. |
 | 반복 비용 검토 후보 | Finalization 주변의 연속 Snapshot assert, Approval의 별도 assert와 중첩된 Proposal assert | 일부 구간은 동기 Schema/변환만 수행하지만 Git은 다른 프로세스가 변경할 수 있다. 어떤 상태와 I/O를 끼고 있는지 먼저 명시해야 하며, 호출 횟수만으로 불필요하다고 확정하지 않는다. |
 
-우선 검토 순서는 **동일 함수 안에서 Schema가 이미 보장한 고유성**, **공개 경계마다 복제된 고유성 구현**,
-**Approval 전체 평가의 반복 I/O**다. 후자는 먼저 비용과 freshness 보장 범위를 확인해야 한다.
-이 목록은 리팩토링 검토 근거이며 결함 확정이나 이번 작업에서의 최적화 결정이 아니다.
+측정은 `approval/features/proposal-management/flow/staffing-approval.test.ts`의 실제 임시 Git Repository와
+서명된 Ledger에서 수행했다. 선택 파일 1개인 성공한 직접/위임 승인 트랜잭션 각각에 대해 API를 spy했다.
+Fixture 생성과 직접 승인 확인을 위한 최초 approval-required 호출은 측정에서 제외한다.
+
+| 측정 항목 | 리팩토링 전 | 리팩토링 후 | 판단 |
+| --- | --- | --- | --- |
+| 한 `validateStaffingProposal()` 내부의 동일 등록 목록 고유성 검사 | 2회(Schema + 별도 Set) | 1회(Schema) | 보장이 같은 명백한 중복 제거 |
+| 대상 세 위치의 고유성 규칙 구현 | 3곳 | 공통 목록 Schema 1곳 | 두 공개 입력 경계의 파싱은 유지 |
+| 성공 Approval의 `validateStaffingProposal()` 호출 | 3회 | 3회 | 현재 외부 파일 사실 재검증 유지 |
+| Commit tree 조회 | 3회 | 3회 | 재조회 유지 |
+| 선택 파일 blob 로딩 | 3회 | 3회 | 재조회 유지 |
+| Snapshot assert | 7회 | 7회 | HEAD/Clean 최신성 검사 유지 |
+
+이는 호출 횟수 측정이며 시간/처리량 벤치마크나 전체 Git 명령 수가 아니다. Approval I/O 감소를 주장하지 않는다.
+테스트에서는 Scope 구성 뒤 Git replacement와 index/Working Tree를 함께 바꾸어 같은 HEAD 및 Clean 상태를
+유지하면서 binary blob으로 대체했다. Snapshot assert만으로는 통과하지만 최종 전체 Proposal 검증의 blob
+reader가 거부하고 발급 기록은 저장되지 않는다. Git 사실 전체를 정적이라고 가정하는 캐시는 현재 보장과 같지 않다.
+
+위임 만료도 최초 평가 이후 발급 전, Scope 구성 이후 저장 전 각각 거부됨을 확인했다. Scope 구성 뒤 Dirty
+Snapshot도 부분 발급 저장 없이 거부된다. 동기 변환 주변의 연속 assert는 외부 Git 변경과 TOCTOU 부재를
+증명하지 못했으므로 삭제하지 않았다. Snapshot 함수의 구현·호출 시점과 Ledger transaction은 그대로다.
+
+후속 검토는 읽은 Git 사실을 어떤 조건에서 불변으로 취급할 수 있는지와 비용 측정이 먼저다. 그 보장 없이
+Approval 전체 평가를 1회로 줄이지 않는다. v1 Inspection 통합, 선택된 Authority guard의 입력 전제 정리 등도
+별도 검토 후보이며 이번 변경에서 실행 계약이나 Legacy·Direct/Delegated 승인 의미는 바꾸지 않았다.
 
 ### 9.5 Step 4 Authorization 재사용 원칙 — Planned
 

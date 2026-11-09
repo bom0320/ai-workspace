@@ -40,6 +40,11 @@ import {
   type HumanDelegationPolicyInput,
 } from "../../../../index.js";
 
+import * as staffingValidation from "@/application/staffing/index.js";
+import * as gitInfrastructure from "@/infrastructure/git/index.js";
+import * as snapshotValidation from "@/services/repository-snapshot/index.js";
+import * as scopeIssuance from "./transformation/issue-staffing-scope.js";
+
 const terminal = vi.hoisted(() => ({
   home: "",
   line: "",
@@ -245,6 +250,147 @@ afterEach(() => {
 });
 
 describe("Human Staffing Approval and delegation — no Specialist execution", () => {
+  it.each(["delegated", "direct"])(
+    "measures repository validation I/O for one successful %s approval transaction",
+    (mode) => {
+      if (mode === "delegated") delegate();
+      const receipt =
+        mode === "direct"
+          ? accept(approveStaffingProposal(proposal))
+          : undefined;
+      const validation = vi.spyOn(
+        staffingValidation,
+        "validateStaffingProposal"
+      );
+      const trees = vi.spyOn(gitInfrastructure, "listRepositoryFilesAtCommit");
+      const blobs = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
+      const snapshots = vi.spyOn(
+        snapshotValidation,
+        "assertRepositoryMatchesSnapshot"
+      );
+      expect(approveStaffingProposal(proposal, receipt).status).toBe(
+        "approved"
+      );
+      const counts = {
+        proposalValidations: validation.mock.calls.length,
+        trees: trees.mock.calls.length,
+        blobs: blobs.mock.calls.length,
+        snapshots: snapshots.mock.calls.length,
+      };
+      expect(counts).toEqual({
+        proposalValidations: 3,
+        trees: 3,
+        blobs: 3,
+        snapshots: 7,
+      });
+      console.info(
+        `Approval I/O (${mode}, one selected file): ${JSON.stringify(counts)}`
+      );
+    }
+  );
+
+  it.each(["before-issuance", "before-persistence"])(
+    "rejects Delegation expiry %s within the same transaction",
+    (stage) => {
+      delegate();
+      const issue = scopeIssuance.issueStaffingScope;
+      const validate = staffingValidation.validateStaffingProposal;
+      const expire = () =>
+        vi
+          .spyOn(Date, "now")
+          .mockReturnValue(Date.parse(delegation.expiresAt) + 1);
+      const issuance = vi.spyOn(scopeIssuance, "issueStaffingScope");
+      if (stage === "before-issuance")
+        vi.spyOn(
+          staffingValidation,
+          "validateStaffingProposal"
+        ).mockImplementationOnce((...args) => {
+          validate(...args);
+          expire();
+        });
+      else
+        issuance.mockImplementation((...args) => {
+          const result = issue(...args);
+          expire();
+          return result;
+        });
+      expect(approveStaffingProposal(proposal).status).toBe("denied");
+      expect(issuance).toHaveBeenCalledTimes(
+        stage === "before-issuance" ? 0 : 1
+      );
+      withGovernanceRecords((raw) =>
+        expect(
+          Object.values((raw as GovernanceLedger).repositories)[0].issuances
+        ).toEqual([])
+      );
+    }
+  );
+
+  it("rejects Snapshot drift after Scope construction without persisting partial issuance", () => {
+    delegate();
+    const issue = scopeIssuance.issueStaffingScope;
+    vi.spyOn(scopeIssuance, "issueStaffingScope").mockImplementation(
+      (...args) => {
+        const result = issue(...args);
+        writeFileSync(join(root, "a.ts"), "drift during issuance");
+        return result;
+      }
+    );
+    expect(approveStaffingProposal(proposal).status).toBe("denied");
+    withGovernanceRecords((raw) =>
+      expect(
+        Object.values((raw as GovernanceLedger).repositories)[0].issuances
+      ).toEqual([])
+    );
+  });
+
+  it("rechecks Git blob facts when replacement objects leave HEAD and Clean unchanged", () => {
+    delegate();
+    const bytes = Buffer.from([0, 1, 2]);
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], {
+      cwd: root,
+      input: bytes,
+      encoding: "utf8",
+    }).trim();
+    const tree =
+      git("ls-tree", "HEAD")
+        .split("\n")
+        .map((line) =>
+          line.endsWith("\ta.ts") ? `100644 blob ${blob}\ta.ts` : line
+        )
+        .join("\n") + "\n";
+    const treeId = execFileSync("git", ["mktree"], {
+      cwd: root,
+      input: tree,
+      encoding: "utf8",
+    }).trim();
+    const replacement = git("commit-tree", treeId, "-m", "replacement blob");
+    const issue = scopeIssuance.issueStaffingScope;
+    vi.spyOn(scopeIssuance, "issueStaffingScope").mockImplementation(
+      (...args) => {
+        const result = issue(...args);
+        git("replace", proposal.snapshot.commitSha, replacement);
+        git("read-tree", replacement);
+        writeFileSync(join(root, "a.ts"), bytes);
+        expect(git("rev-parse", "HEAD")).toBe(proposal.snapshot.commitSha);
+        expect(git("status", "--porcelain")).toBe("");
+        expect(() =>
+          snapshotValidation.assertRepositoryMatchesSnapshot(proposal.snapshot)
+        ).not.toThrow();
+        return result;
+      }
+    );
+    const blobs = vi.spyOn(gitInfrastructure, "readRepositoryFileAtCommit");
+    expect(approveStaffingProposal(proposal).status).toBe("denied");
+    expect(blobs).toHaveBeenCalledTimes(3);
+    expect(blobs.mock.results.at(-1)?.type).toBe("throw");
+    withGovernanceRecords((raw) =>
+      expect(
+        Object.values((raw as GovernanceLedger).repositories)[0].issuances
+      ).toEqual([])
+    );
+  });
+
   it("requires Context scopes and rejects legacy System input without silently discarding fields", () => {
     const { contextAccessPolicy, ...missing } = system;
     expect(configureStaffingSystemPolicy(missing).status).toBe("denied");

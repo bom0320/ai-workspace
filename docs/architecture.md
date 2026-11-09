@@ -1287,3 +1287,255 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.
 - 실제 domain 의미 없는 Run / Round 복제나 별도 Coordinator를 선행 구현하지 않는다. v4 CEO 역할의 구체 설계는 단계적으로 진행한다.
 - Runtime boundary는 Zod validation을 사용하며 현재 요청에 필요하지 않은 추상화를 만들지 않는다.
+
+## 9. Validation Responsibility & Ownership
+
+이 절은 테스트를 제외한 현재 `src/`의 Schema, `parse` / `safeParse` / `refine`, assert와 조건문 기반
+검증의 책임 지도다. 세부 정책·제한 값은 앞 절과 실제 구현을 따르며, 아래 호출 관계는 현재 연결과
+**Planned** 연결을 구분한다. 하나의 규칙은 소유 모듈에서 구현하고 다른 경계에서는 재사용한다.
+같은 함수를 다시 호출하는 것과 같은 규칙을 다른 함수에 구현하는 것은 별도로 판단한다.
+
+- **Schema**: 구조·타입·필수 필드·열거형·숫자 범위 검증. Schema에 들어간 domain refinement는 Policy도 병기한다.
+- **Policy**: 등록·권한·Context·예산·참조 등 운영 의미와 데이터 간 관계 검증.
+- **Lifecycle**: 실행 시점의 Snapshot·정책·위임·저장 기록·사용량·프로세스 상태 검증.
+- 타입 선언, Prompt의 지시, JSON 파싱, Schema 통과만으로 승인 출처·자연어 지시 충족·실행 허가를 증명하지 않는다.
+  Goal / Task의 기본 Object Schema는 strict가 아니며 Staffing·Governance에서는 필요한 경계에 `.strict()`를 적용한다.
+
+### 9.1 검증 책임 매트릭스
+
+표의 경로는 `src/` 기준이다. 경로를 줄인 행은 연결된 대표 구현 파일과 아래 호출 지도를 함께 참조한다.
+
+| 검증 규칙 | 소유 모듈 | 대표 Schema / 함수와 구현 위치 | 호출자 | 검증 시점 | 분류 |
+| --- | --- | --- | --- | --- | --- |
+| Goal / Task 구조, 실행 명세 필드 | Contracts | `goalSpecSchema`, `taskContractSchema` — `contracts/goal.ts`, `contracts/task.ts` | CLI, Planning Finalizer, Staffing, Governance | Goal 입력·Task 로딩/최종화 | Schema |
+| Snapshot / 파일 / Specialist / PathScope 공통 구조 | Contracts | `repositorySnapshotSchema`, `inspectedFileSchema`, `specialistDefinitionSchema`, `specialistAuthoritySchema`, `contextAccessPolicySchema` — `contracts/repository/`, `contracts/specialist/` | 각 Application의 합성 Schema·접근 검증 | 입력·Context/기록 구성 | Schema |
+| System 설정, 등록 ID 고유성, Phase A read-only / shell-disabled | Staffing 공통 계약 | `staffingSystemPolicySchema`, `staffingInspectionLimitsSchema` — `contracts/staffing/system-policy.ts` | Governance 설정/조회, Staffing 입력·Proposal 재검증 | 정책 설정·Staffing·Approval | Schema + Policy |
+| Repository 실체와 Commit 파일 데이터의 기술적 유효성 | Git Infrastructure | `resolveRepositoryRoot()`, `readRepositoryFileAtCommit()` — `infrastructure/git/repository/repository.ts`; `listRepositoryFilesAtCommit()` — `commit-files.ts` | Planning, Snapshot 서비스, Staffing, Decision, Governance 경로 확인 | Repository 해석·Commit tree/blob 로딩 | Policy + Lifecycle |
+| HEAD·Clean 상태와 Snapshot 일치 | Repository Snapshot 서비스 | `captureRepositorySnapshot()`, `assertRepositoryMatchesSnapshot()` — `services/repository-snapshot/repository-snapshot.ts` | Decision, Staffing, Governance Approval/Scope 조회 | Capture·Agent/파일 로딩 전후·발급 전 | Lifecycle |
+| 상대경로·정규 표현, File/Directory 포함 관계 | Repository Inspection 서비스 | `isRepositoryRelativePath()`, `isUnambiguousRepositoryPath()` — `discovery.ts`; `validateContextAccessPolicy()`, `isContextPathAllowed()`, `isContextScopeContained()` — `services/repository-inspection/access-policy.ts` | Decision loader, Staffing, Delegation, Invocation 평가 | 경로 입력·목록 노출·내용 요청·범위 포함 검사 | Schema + Policy |
+| Working Tree 조사 경로, 내부 디렉터리 차단, 파일 여부·조사 한도 | Planning | `inspectFiles()`, `inspectInitialFiles()` — `application/planning/flow/inspection/`; `hasValidLimits()`, `prepareInspection()` — `flow/orchestration/planning-loop.ts` | `planTask()`, Planning Loop | 초기 seeding·추가 조사·round 제어 | Policy + Lifecycle |
+| Context 접근·민감 경로·regular mode·파일 수/크기·실제 JSON byte 제한 | Staffing Inspection | `isInspectablePath()`, `requireFile()`, `prepareInspection()`, `createAllowedFileTree()`, `prepareMetadataInspection()`, `assertContextBudget()` — [context-policy.ts](../src/application/staffing/flow/inspection/context-policy.ts) | Discovery, Metadata/Initial Seeding/추가 Inspection, Proposal Validation | 파일 목록 노출 전·batch 로딩 전·직렬화 후 | Policy |
+| CEO-facing 구조·응답 분기·호출/조사 한도 | Staffing Protocol / Flow | `staffingContextSchema`, `ceoStaffingDecisionSchema`; `validateDiscoveryInput()` — `flow/inspection/discover-context.ts`; `callLimitsSchema` — `flow/orchestration/run-staffing-loop.ts` | Discovery, CEO Adapter, Staffing Loop | Context 투영·모델 응답·최종 propose/escalate | Schema + Policy + Lifecycle |
+| Assignment 등록·중복·Context·예산과 원본 Run 연결 | Staffing Finalization | `staffingDraftSchema`, `staffingProposalSchema`; `prepareProposalInput()`, `validateProposal()` — [validate-proposal.ts](../src/application/staffing/flow/validation/validate-proposal.ts); `buildStaffingProposal()` | `runStaffing()` | Draft 수신·ID 발급 전후 | Schema + Policy |
+| 완성된 Proposal ID·현재 설정·Snapshot 파일 재검증 | Staffing | `validateStaffingProposal()` — [validate-staffing-proposal.ts](../src/application/staffing/flow/validation/validate-staffing-proposal.ts) → `validateProposal()` | Governance의 `validateCurrentStaffingPolicy()` | 신규 Approval·저장 Scope 조회 | Schema + Policy + Lifecycle |
+| 승인된 System 설정 조회·Human 확인·Legacy 운영 차단 | Governance system-policy | `validateSystemConfiguration()`, `requireCurrentSystemPolicy()`, `configureStaffingSystemPolicy()`, `getStaffingSystemPolicy()` — `application/governance/approval/features/system-policy/` | Governance CLI, Staffing→Approval Workflow | 설정/갱신·Staffing 시작 전 조회 | Schema + Policy + Lifecycle |
+| 자동 승인 범위와 System 포함 관계·위임 수명주기 | Governance human-delegation / proposal-management | `humanDelegationPolicyInputSchema`, `recordedHumanDelegationPolicySchema`, `readRecordedDelegationInput()`, `validateDelegationConfiguration()`; `evaluateStaffingApproval()` | 위임 설정, 신규 Approval, 위임 승인 Scope 조회 | 설정·만료/철회/버전/범위 재평가 | Schema + Policy + Lifecycle |
+| Ledger 구조·저장소 무결성·Repository 분리·동일 transaction | Governance 공통 모델/기록 + Records 서비스 | `governanceLedgerSchema`, `withGovernanceLedger()` — `approval/shared/`; `withGovernanceRecords()`, `assertGovernanceStoreOutsideRepository()` — `services/governance-records/records.ts` | 모든 Governance 설정·승인·조회 | Lock 내 읽기/저장·HMAC/UID/권한/크기 확인 | Schema + Lifecycle |
+| 실제 Human 확인·binding·일회성·UID/시간 | Terminal Infrastructure + Governance 공통 입력 확인 | `confirmHumanAction()`, `consumeHumanConfirmation()` — `infrastructure/terminal/human-confirmation.ts`; `consumeCurrentHumanConfirmation()` — `approval/shared/validation/approval-input.ts` | Governance/Staffing CLI, Governance Use-case | 터미널 확인·Receipt 소비 | Policy + Lifecycle |
+| 승인 방식·중복 발급·ApprovalRecord/Scope 구성과 연결 | Governance proposal-management | `evaluateStaffingApproval()`, `assertProposalNotIssued()`, `assertIssuanceIdsUnused()`, `issueStaffingScope()` — `approval/features/proposal-management/flow/`; `approvalRecordSchema`, `approvedOperatingScopeSchema` | `approveStaffingProposal()` | 평가·발급 전·동일 transaction 저장 전 | Schema + Policy + Lifecycle |
+| 저장된 승인과 현재 Scope 유효성 | Governance proposal-management | `validateStoredIssuance()` 및 binding/content/source 검사 — [staffing-issuance.ts](../src/application/governance/approval/features/proposal-management/flow/validation/staffing-issuance.ts) | `getApprovedStaffingScope()` | 저장 Scope 조회 | Policy + Lifecycle |
+| 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/flow/evaluate-invocation.ts) | 공개 순수 API; 현재 제품 Flow 호출자는 없음 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
+| Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `runIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
+| Comparison source 구성·Concern별 참조 | Comparison | `comparisonPayloadSchema` — `protocol/comparison.ts`; `compareDecisions()`, `validateComparisonReferences()` — `flow/validation/validate-references.ts` | Comparator Adapter, Decision CLI 조합 | 비교 입력·응답 수신 후 | Schema + Policy |
+| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runVerification()` — `services/verification/verification-runner.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeTask()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
+| 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `runCodexSpecialist()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
+| Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `approveTask()`, `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 기존 Planning/Execution CLI | Task 승인·Apply·Commit·Push | Policy + Lifecycle |
+| 상위 실행 분기·실패/승인 대기 전달 | Development Organization Workflow | `runStaffingApproval()` — `workflows/development-organization/phase-a/staffing-approval.ts` | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval | Lifecycle 조정; 업무 검증은 Application 재사용 |
+
+Git blob reader는 NUL / invalid UTF-8를 거부하지만 접근 권한·regular mode·민감 경로를 자체 승인하지 않는다.
+Commit tree loader는 full SHA·entry 형식·size를 검사한다. Snapshot Schema의 non-empty commitSha와는
+서로 다른 보장이다. Execution의 Evidence / Result와 Comparison의 domain type 등에는 TypeScript 타입도
+있으며 전부 Zod로 재검증되는 것은 아니다. Verification은 명령 exit/error/timeout의 결과이지 Acceptance
+Criteria나 자연어 Constraints 전체의 판정기가 아니다. Artifact 서비스의 Run 디렉터리 생성·보존 오류 처리,
+Worktree 생성/삭제·Diff 크기 제한·임시 자원 cleanup도 각 서비스/Infrastructure의 기술적 경계로 유지한다.
+
+### 9.2 Schema 조합과 의미 검증의 경계
+
+```text
+contracts/specialist/authority.ts → specialist/definition.ts
+contracts/repository/context-access-policy.ts: PathScope → ContextAccessPolicy
+SpecialistDefinition + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
+GoalSpec + RepositorySnapshot + Intent/Assignment/Budget → StaffingProposal
+StaffingAssignment.omit(assignmentId) → StaffingAssignmentDraft
+StaffingProposal.omit(id, goal, snapshot) + Draft assignments → StaffingDraft → CEOStaffingDecision
+SpecialistDefinition.pick(id, role, objective) + Goal/Files/Limits → StaffingContext
+GoalSpec + Snapshot + ApprovedAssignment/Budget → ApprovedOperatingScope
+Proposal + ApprovalRecord + Scope + current/historical policy schemas → GovernanceLedger
+TaskContract.omit(id, goalId) → TaskDraft → PlannerDecision
+AgentDecision.omit(specialistId) → AgentDecisionPayload
+Comparison position/finding/gap schemas → ComparisonPayload
+```
+
+Schema의 omit/pick은 구조 재사용이며 발급·승인 근거가 아니다.
+System Policy의 `.refine()`은 ID 고유성과 Phase A Authority라는 Policy도 포함하는 혼합 책임이다.
+반면 SpecialistDefinition 단독으로는 none/read/write를 표현하며 등록의 진위나 특정 runtime에서의 실행 가능성을 증명하지 않는다.
+Decision Payload의 path/line 구조를 파싱한 뒤 Context에 대한 존재·행 범위·순서를 검사하고,
+Comparison의 nonnegative index를 파싱한 뒤 원본 Decision에 대한 범위·중복을 검사한다.
+Staffing Context Schema는 source root나 Authority를 투영하지 않지만, 파일 내용 자체의 신뢰성을 보증하지 않는다.
+과거 System / Delegation 기록은 별도 Historical Schema로 보존하며 읽을 수 있다는 사실과 현재 운영 가능 여부를
+구분한다. System Legacy 차단과 Delegation의 원래 Exact/Scope 해석은 각 Governance feature가 소유한다.
+
+### 9.3 실제 검증 호출 지도
+
+아래는 주요 검증 지점만 표시한다. `assertSnapshot`은 공통 `assertRepositoryMatchesSnapshot()`의 약칭이며,
+실제 코드에서 별도 함수나 새로운 Workflow를 뜻하지 않는다.
+
+**Goal → Staffing Discovery → Proposal Finalization — 현재**
+
+```text
+runStaffingApproval()
+  → getStaffingSystemPolicy(): withGovernanceLedger → requireCurrentSystemPolicy / validateSystemConfiguration
+  → runStaffing(): prepareProposalInput (설정 Schema·입력 복제)
+    → runStaffingLoop: callLimitsSchema
+      → discoverStaffingContext: validateDiscoveryInput
+        → captureRepositorySnapshot → assertSnapshot → Commit tree / createAllowedFileTree
+        → assertContextBudget → Metadata preflight/load/JSON budget
+        → seedInitialFiles → 필요 시 prepareInspection / addInspectedFiles → assertSnapshot
+      → 각 CEO 호출 전 assertSnapshot → createStaffingContext → agent
+        → 호출 후 assertSnapshot → ceoStaffingDecisionSchema.safeParse (주입 Agent도 포함)
+        → inspect: inspectStaffingContext의 Schema·Snapshot 전후 검사 + batch/실제 JSON budget → 반복
+        → propose / escalate: 최종 Snapshot 검사 후 반환
+    → proposed만: assertSnapshot → staffingDraftSchema → validateProposal
+      → 실제 CEO Context의 assertContextBudget → assertSnapshot
+      → buildStaffingProposal (ID 충돌 검사·원본 Goal/Snapshot 연결·Schema) → assertSnapshot
+```
+
+`validateProposal()`은 등록·Authority·Assignment·정책 Context·파일 mode/크기·예산의 공통 규칙이다.
+입력은 Goal/Snapshot/Commit files/filtered fileTree라는 검증 사실이며 CEO Inspection State가 아니다.
+완성된 Proposal의 `validateStaffingProposal()`은 Schema·Assignment ID 중복 검사와 Snapshot assert 전후,
+Commit tree 조회를 추가한 뒤 같은 `validateProposal()`을 호출한다. 첫 Finalization은 같은 Run의 원본을
+연결하지만 외부 Proposal 재검증은 원본 Goal의 발급 출처를 별도로 인증하지 않는다.
+
+**Proposal → Governance Approval → Scope Issuance — 현재**
+
+```text
+approveStaffingProposal: Proposal Schema → resolveGovernanceRepository
+  → withGovernanceLedger (서비스 lock + HMAC 검증 후 Ledger Schema)
+    → assertProposalNotIssued
+    → evaluateStaffingApproval
+      → validateCurrentStaffingPolicy → requireCurrentSystemPolicy → validateStaffingProposal
+      → 현재 Delegation의 Repository/System version/status/time
+      → readRecordedDelegationInput → validateDelegationConfiguration → Proposal 범위 판정
+    → direct: binding에 대한 consumeCurrentHumanConfirmation
+      → Receipt 없으면 approval-required 반환하고 transaction 종료
+    → 승인 근거 확보: evaluateStaffingApproval 재검사
+    → issueStaffingScope: ApprovalRecord/Scope Schema + Proposal digest/IDs/source 구성
+    → assertSnapshot → evaluateStaffingApproval 재검사 → assertIssuanceIdsUnused
+    → Ledger Schema → 동일 transaction 저장
+```
+
+Human 입력은 transaction 밖의 CLI에서 기다린다. Workflow는 분리된 Review를 콜백에 주고 동일 Proposal로
+`approveStaffingProposal()`을 재호출한다. 설정·위임 변경도 binding / 일회성 소비 / Ledger transaction을
+재사용한다. 위임 없음·유효한 범위 초과는 direct, 무효 위임·System 위반은 denied라는 구분을 유지한다.
+
+**Stored Scope / Invocation Eligibility — 현재는 분리된 API, 연결은 Planned**
+
+```text
+getApprovedStaffingScope(scopeId)
+  → withGovernanceLedger → validateStoredIssuance
+    → assertApprovalBinding (IDs/digest/current System version)
+    → assertScopeContents → assertDelegatedApprovalSource
+    → direct-human: validateCurrentStaffingPolicy + 저장된 Human UID/time
+    → human-delegation: evaluateStaffingApproval이 delegated인지 재확인
+  → 검증된 저장 ApprovalRecord / Scope 반환
+
+evaluateInvocationRequest(request, scope, evaluationContext)   # 현재 별도 공개 순수 API
+  → 세 입력 safeParse → Scope ID/version/status → Assignment ID 고유성/선택
+  → 승인/요청 경로의 정규 표현·중복 → 정확한 파일 부분집합 → used < max → eligible
+```
+
+현재 `src/` 제품 경로에는 이 조회와 평가를 잇는 호출이 없다. pure 평가의 scopeStatus / usedAgentInvocations는
+Harness가 전달해야 할 사실이며 저장소의 진위·최신성까지 평가 함수가 증명하지 않는다. Scope 철회 저장소나
+사용량 예약/차감은 구현되지 않았다. 직접 승인 Scope는 무관한 위임 만료/철회에 의존하지 않지만 현재
+System version·정책·Snapshot에는 의존한다. 위임 승인 Scope는 정확한 최신 위임 source와 현재 범위도 확인한다.
+
+**v2 Decision → Evidence / v3 Comparison → References — 현재**
+
+```text
+runDecision: 입력 필수값 → captureRepositorySnapshot → goalSpecSchema
+  → loadSnapshotFiles: isRepositoryRelativePath → Git blob/text 확인
+  → runIndependentDecisions: Specialist ID 중복 검사
+    → 각 Specialist 전 assertSnapshot → runCodexSpecialist (read-only Authority guard)
+      → Process/JSON → agentDecisionPayloadSchema → Harness specialistId + agentDecisionSchema
+    → assertSnapshot → validateDecisionEvidence → 다음 Specialist
+
+Decision CLI의 별도 조합 → compareDecisions
+  → 입력 Decision 2개 이상·source Specialist 중복·commit SHA 공백 검사
+  → runCodexComparator → Process/JSON/comparisonPayloadSchema
+  → validateComparisonReferences → 결과
+```
+
+Evidence 검증은 supplied path와 line 범위/순서이고, Reference 검증은 source ID·Evidence index·중복과
+finding/gap의 최소 source 수다. 내용의 진실성·비교의 완전성은 증명하지 않는다. Comparison 자체는
+Repository를 조사하거나 Snapshot drift를 다시 검사하지 않는다.
+
+**v1 Planning → TaskContract — 현재**
+
+```text
+CLI 입력/goalSpecSchema → planTask: resolveRepositoryRoot → Working Tree metadata / inspectInitialFiles
+  ├─ createFastPathTaskDraft의 대상/목표 조건 → buildTaskContract
+  └─ runPlanningLoop: hasValidLimits → planner (기본 Adapter는 Process/JSON/plannerDecisionSchema)
+      ├─ inspect: 요청 수·resolve 기준 중복·총 조사 수 → inspectFiles의 경로/내부 폴더/파일 검사
+      └─ complete → buildTaskContract: Harness ID/targetRepository, 원본 Constraints와 Draft 제약 합집합
+        → taskContractSchema → Task 표시 → 실행을 선택한 CLI에서 Human Task Approval
+```
+
+`planTask()`는 typed Goal 입력을 받으며 자체적으로 Goal Schema를 다시 파싱하지 않는다. 주입 Planner를
+Loop가 `plannerDecisionSchema`로 다시 파싱하는 구조도 아니다. 실제 Runtime Schema 적용 위치는 기본
+Codex Planner와 최종 TaskContract 경계다. 모든 내부 typed 함수를 동일한 unknown 입력 validator로 설명하지 않는다.
+
+**v0 Execution → Scope → Verification → Delivery — 현재**
+
+```text
+Task 로더의 taskContractSchema 또는 Planning Finalizer → executeTask
+  → Artifact/Worktree/base commit → runWorkerStage (Process failure/timeout)
+  → Worker 성공 시 runScopeStage: collectChangedPaths → checkScope
+    → 통과 시 runVerificationStage: 각 명령 exit/error/timeout
+    → Verification 후 runScopeStage로 변경 경로 재수집·재검사 (실패 결과/예외 후도 포함)
+  → 변경 보존 → finalizeExecutionResult (누적 실패로 passed 결정·보고 저장 실패 반영)
+  → CLI Review / Apply: 실행·Verification 성공·patch 존재·Human 확인
+    → applyPatch: Clean → git apply --check → apply
+    → Commit: Human 확인·메시지·changedPaths → stagePaths의 경로/기존 staged 검사 → commitChanges
+    → Push: Human 확인 → branch/HEAD/upstream/refspec/no-force 검사
+```
+
+Worker 실패 시에는 변경 Evidence를 수집하고 Verification은 시작하지 않는다. `executeTask()` 자체는
+TaskContract Schema를 다시 파싱하지 않으며 Scope는 실제 변경 경로의 Exact membership이다.
+Verification은 shell command를 실행하므로 파일을 바꿀 수 있다. 실행·전달·Human gate는 분리된 보장이다.
+v1/v0의 `approveTask()`는 stdin의 Approve/Reject/EOF를 처리하며 Governance의 `/dev/tty` binding Receipt와
+다른 계약이다. Presenter의 표시·Schema parse를 어느 쪽 Approval의 성공으로도 간주하지 않는다.
+
+### 9.4 재사용·재검증과 중복 검토 후보
+
+| 구분 | 실제 코드와 보호 경계 | 판단 / 향후 확인 사항 |
+| --- | --- | --- |
+| 공통 규칙 재사용 | `validateProposal()`을 최초 Run Finalization과 `validateStaffingProposal()`이 공유; Governance는 후자를 호출 | Proposal 의미는 Staffing 소유. Governance에 동일 등록·Context·Budget validator를 복제하지 않는다. |
+| 공통 규칙 재사용 | 경로/범위 predicate, `requireFile()`, Snapshot assert, Proposal/Task에서 파생한 Draft Schema | Policy 로직은 재사용하고 I/O·승인 근거·실행 상태의 책임은 분리한다. `parsePackageScripts()`와 Goal mention 선택도 v1/Staffing이 실제 공유한다. |
+| 필요한 재검증 | CEO/Specialist 전후, inspect 전후, 파일/정책 검사 전후와 최종 결과 직전 Snapshot assert | Agent의 await와 외부 Git/Working Tree 변화 가능성을 보호한다. 같은 commit blob을 읽는 것과 현재 HEAD/Clean 상태가 유지되는 것은 별개다. assert는 lock이나 무변경의 연속 증명이 아니다. |
+| 필요한 재검증 | CEO Adapter Schema + Staffing Loop safeParse + Finalizer Draft Schema | Adapter 교체/주입 경계와 최종 발급 경계를 각각 보호한다. 단순히 default Adapter가 이미 파싱했다고 Loop 검증을 제거할 수 없다. |
+| 필요한 재검증 | Context raw-size preflight와 로딩 후 JSON size, CEO Context와 Assignment envelope | 전자는 로딩 전 batch 제한, 후자는 escaping/overhead 포함 실제 제한이다. Proposal envelope는 원본 Goal/Snapshot·설정·tree·assignment payload·선택 파일을 측정하고 CEO Context는 metadata/조사 파일을 측정한다. 같은 maxContextBytes를 써도 같은 데이터 검사가 아니다. |
+| 필요한 재검증 | Approval 요청 후 CLI 확인·재제출, 저장 Scope의 현재 정책/위임/파일 재검증 | 대기 중 상태가 달라진다. 신규 승인 방식 선택과 기존 승인 근거의 유효성은 다른 판단이다. direct Scope를 무관한 위임 만료 때문에 거부하도록 합치지 않는다. |
+| 필요한 재검증 | Worker 뒤와 Verification 뒤 `runScopeStage()` | 둘 사이에 명령이 파일을 바꾸거나 commit할 수 있다. 같은 Scope 규칙을 변경된 Evidence에 다시 적용하는 정상 구조다. |
+| 중복 구현 후보 | System Schema의 Specialist ID `.refine()`와 `validateDiscoveryInput()`의 Set 검사 | Discovery는 전체 System Policy 없이도 호출되는 공개 경계이므로 자체 고유성 보장이 필요하다. 동일 규칙 구현의 공통화 가능성을 검토하되 검사 자체를 없애거나 System 전용 Authority 제약을 모든 Discovery에 강제하지 않는다. |
+| 중복 구현 후보 | `validateStaffingProposal()`의 Specialist Set 검사는 같은 함수의 System Schema parse 직후에도 존재 | 현재 동일 데이터의 고유성을 Schema가 이미 보장한다. 가장 명확한 재검토 후보지만 다른 typed 호출의 보호와 분리해서 판단한다. `validateProposal()`의 선택된 Authority guard도 System Schema 보장과 겹치나 내부 입력 전제 확인이 먼저다. |
+| 서로 다른 규칙 | 등록 ID 고유성, Draft Specialist 중복 배치, 발급 Assignment ID 충돌, Invocation의 승인 Assignment ID 중복 | 서로 다른 식별 대상과 신뢰 경계다. 하나의 duplicate 검사로 합치지 않는다. v2 source ID·v3 finding별 source 중복도 별도 규칙이다. |
+| 독립 계약 / 공통화 검토 | v1 Working Tree `inspectFiles()`와 Staffing Snapshot Inspection | v1은 resolve/normalize·stat/read와 조사 수 제한, Staffing은 canonical path·access scopes·Commit regular mode·민감 경로·실제 JSON budget이다. 초기 seeding의 64/128 KiB 정책은 유사하지만 Snapshot/Working Tree 로딩은 다르다. 보안 동등성이나 통합 가능성을 이름만 보고 단정하지 않는다. |
+| 반복 비용 검토 후보 | 성공하는 `approveStaffingProposal()` 한 호출에서 `evaluateStaffingApproval()`이 총 3회; 각각 Proposal tree/blob 재검증 포함 | 최초 승인 방식, 근거 확보 후 발급 전, 최종 저장 전을 보호한다. 같은 lock 안의 Ledger는 같아도 시각과 외부 Repository는 변할 수 있다. Human 대기는 이 호출 내부가 아니라 transaction 종료 후다. 정적 검사와 동적 최신성 검사의 분리 가능성·I/O 비용을 측정한 뒤 검토하며 최신성 검사를 삭제하지 않는다. |
+| 반복 비용 검토 후보 | Finalization 주변의 연속 Snapshot assert, Approval의 별도 assert와 중첩된 Proposal assert | 일부 구간은 동기 Schema/변환만 수행하지만 Git은 다른 프로세스가 변경할 수 있다. 어떤 상태와 I/O를 끼고 있는지 먼저 명시해야 하며, 호출 횟수만으로 불필요하다고 확정하지 않는다. |
+
+우선 검토 순서는 **동일 함수 안에서 Schema가 이미 보장한 고유성**, **공개 경계마다 복제된 고유성 구현**,
+**Approval 전체 평가의 반복 I/O**다. 후자는 먼저 비용과 freshness 보장 범위를 확인해야 한다.
+이 목록은 리팩토링 검토 근거이며 결함 확정이나 이번 작업에서의 최적화 결정이 아니다.
+
+### 9.5 Step 4 Authorization 재사용 원칙 — Planned
+
+목표 연결은 `getApprovedStaffingScope()`의 저장 발급 검증 → 신뢰된 lifecycle/usage 확보 →
+`evaluateInvocationRequest()` → 원자적 Budget Reservation/최신성 확보 → 승인 Snapshot 파일과 등록 Specialist로
+실행 입력 구성 → `AuthorizedSpecialistInvocation`이다. 이 화살표는 아직 제품 실행 경로가 아니다.
+
+- **Approval**은 Proposal의 승인 근거와 Scope 발급을 소유한다. Invocation 검사나 예산 소비를
+  `approveStaffingProposal()`에 추가하지 않는다.
+- **Scope Validation**은 `getApprovedStaffingScope()` / `validateStoredIssuance()`를 재사용한다. Schema만
+  통과한 외부 Scope를 승인된 것으로 취급하지 않는다. 기존 source/digest/ID/현재 정책·Snapshot 검증을 복제하지 않는다.
+- **Authorization**은 개별 Request의 구조·Scope ID/version·Assignment·Context 부분집합·제공된 잔여 예산에
+  `evaluateInvocationRequest()`를 재사용한다. `eligible`은 예약도 실행 입력 발급도 아니다. 평가 함수는
+  실제 파일 존재/mode/content, 현재 등록 Authority, 사용량 출처, 저장 Scope의 진위를 확인하지 않는다.
+- 파일 로딩은 공통 경로/범위 predicate, Snapshot 서비스, Git Commit tree/blob 메커니즘을 재사용한다.
+  Staffing 소유 파일 안전 규칙까지 필요하다면 명시적인 공개 경계를 검토하며 다른 Application의 private
+  Inspection State나 내부 파일을 임의 import하지 않는다. Workflow에 같은 validator를 다시 작성하지 않는다.
+- Scope 조회, 현재 정책 조회, 순수 평가를 차례로 호출해도 원자적 Authorization은 완성되지 않는다.
+  lifecycle/usage의 신뢰된 공급·예약 동시성·조회 이후 변경 처리·현재 등록 Authority 결합은 Step 4 설계 과제다.
+  기존 Approval transaction의 원자성은 보존하되 아직 없는 예약 저장/함수를 구현된 것처럼 전제하지 않는다.
+- **Workflow**는 위 Application 호출의 순서·분기·실패를 조정한다. Invocation 평가를 Workflow로 옮기거나
+  Human의 Staffing 승인으로 Task/변경 반영/개별 실행 승인을 포괄하지 않는다. 외부 Proposal의 암호학적 발급 출처와
+  자연어 Constraints 의미 검증이라는 기존 한계도 이 연결만으로 해결되지 않는다.

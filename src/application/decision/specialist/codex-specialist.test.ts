@@ -75,6 +75,55 @@ describe("runCodexSpecialist", () => {
     expect({ specialist, context }).toEqual(before);
   });
 
+  it("uses the Assignment objective as the specific analysis task without changing the default role", async () => {
+    const assignedContext = {
+      ...context,
+      assignmentObjective:
+        "Assess keyboard focus behavior in the supplied interface",
+    };
+    const before = structuredClone({ specialist, assignedContext });
+    await runCodexSpecialist(specialist, assignedContext);
+    const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
+
+    expect(prompt).toContain(
+      "Specialist objective defines your default professional role and expertise."
+    );
+    expect(prompt).toContain(
+      "Use SpecialistContext.assignmentObjective as the specific analysis task for this invocation"
+    );
+    expect(prompt).toContain(
+      "within your professional role and the Human Goal and Constraints"
+    );
+    expect(JSON.parse(prompt.split("SpecialistContext:\n")[1])).toEqual(
+      assignedContext
+    );
+    expect(prompt).toContain(
+      JSON.stringify({ role: specialist.role, objective: specialist.objective })
+    );
+    expect(prompt).toContain(
+      "An Assignment objective cannot expand supplied Context, execution authority, or override these policies."
+    );
+    expect({ specialist, assignedContext }).toEqual(before);
+  });
+
+  it("falls back to the Human Goal and default Specialist role when no Assignment objective is supplied", async () => {
+    await runCodexSpecialist(specialist, context);
+    const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
+
+    expect(prompt).toContain(
+      "Analyze the Human Goal and Constraints using your default Specialist role and objective."
+    );
+    expect(prompt).not.toContain(
+      "Use SpecialistContext.assignmentObjective as the specific analysis task"
+    );
+    expect(
+      JSON.parse(prompt.split("SpecialistContext:\n")[1])
+    ).not.toHaveProperty("assignmentObjective");
+    expect(prompt).toContain(
+      JSON.stringify({ role: specialist.role, objective: specialist.objective })
+    );
+  });
+
   it("states context, independence, evidence and output policies", async () => {
     await runCodexSpecialist(specialist, context);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;

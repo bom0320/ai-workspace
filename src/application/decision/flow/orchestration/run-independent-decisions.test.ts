@@ -110,6 +110,7 @@ describe("runIndependentDecisions", () => {
       expect(context.goal).toBe(goal);
       expect(context.files).toBe(inputs[index].files);
       expect(context).not.toHaveProperty("repositoryRoot");
+      expect(context).not.toHaveProperty("assignmentObjective");
       expect(JSON.stringify(context)).not.toContain(
         decisions[0].recommendation
       );
@@ -118,6 +119,52 @@ describe("runIndependentDecisions", () => {
       );
     }
     expect({ snapshot, goal, inputs }).toEqual(before);
+  });
+
+  it("passes each Assignment objective independently with the same Goal and Snapshot", async () => {
+    const assignedInputs = inputs.map((input, index) => ({
+      ...input,
+      assignmentObjective: [
+        "Assess implementation risks",
+        "Assess user interaction",
+      ][index],
+    }));
+    const before = structuredClone({ snapshot, goal, assignedInputs });
+
+    await expect(
+      runIndependentDecisions(snapshot, goal, assignedInputs)
+    ).resolves.toEqual(decisions);
+
+    const contexts = runSpecialistMock.mock.calls.map((call) => call[1]);
+    expect(contexts[0]).not.toBe(contexts[1]);
+    for (const [index, context] of contexts.entries()) {
+      expect(context).toEqual({
+        goal,
+        assignmentObjective: assignedInputs[index].assignmentObjective,
+        repositoryCommitSha: snapshot.commitSha,
+        files: assignedInputs[index].files,
+      });
+      expect(context.goal).toBe(goal);
+      expect(context.files).toBe(assignedInputs[index].files);
+      expect(validateEvidenceMock.mock.calls[index][0]).toBe(context);
+    }
+    for (const [actualSnapshot] of assertSnapshotMock.mock.calls)
+      expect(actualSnapshot).toBe(snapshot);
+    expect({ snapshot, goal, assignedInputs }).toEqual(before);
+  });
+
+  it("omits an undefined Assignment objective without affecting another Specialist's objective", async () => {
+    await runIndependentDecisions(snapshot, goal, [
+      { ...inputs[0], assignmentObjective: "Assess implementation risks" },
+      { ...inputs[1], assignmentObjective: undefined },
+    ]);
+
+    expect(runSpecialistMock.mock.calls[0][1].assignmentObjective).toBe(
+      "Assess implementation risks"
+    );
+    expect(runSpecialistMock.mock.calls[1][1]).not.toHaveProperty(
+      "assignmentObjective"
+    );
   });
 
   it("validates Snapshot before and after every Specialist, then validates Evidence", async () => {

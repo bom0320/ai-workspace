@@ -14,6 +14,7 @@ import { validateDecisionEvidence } from "../validation/validate-evidence.js";
 
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;
+  assignmentObjective?: string;
   files: InspectedFile[];
 };
 
@@ -35,6 +36,9 @@ export async function runIndependentDecisions(
   for (const input of inputs) {
     const context: SpecialistContext = {
       goal,
+      ...(input.assignmentObjective !== undefined
+        ? { assignmentObjective: input.assignmentObjective }
+        : {}),
       repositoryCommitSha: snapshot.commitSha,
       files: input.files,
     };

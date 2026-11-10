@@ -16,28 +16,16 @@ import {
 import * as snapshotService from "@/services/repository-snapshot/index.js";
 
 import * as publicAPI from "./index.js";
-import * as legacySnapshot from "./model/snapshot.js";
-import * as legacySpecialist from "./model/specialist.js";
-import * as legacyAuthority from "./model/authority.js";
 import * as legacySnapshotFlow from "./flow/context/repository-snapshot.js";
 
-// Existing consumers can retain both public and historical direct imports.
+// Public contracts and the retained Snapshot flow path share their original exports.
 describe("Decision shared contract compatibility", () => {
-  it("re-exports the same schema instances from both legacy paths", () => {
+  it("re-exports the same schema instances through the public API", () => {
     expect(publicAPI.repositorySnapshotSchema).toBe(repositorySnapshotSchema);
-    expect(legacySnapshot.repositorySnapshotSchema).toBe(
-      repositorySnapshotSchema
-    );
     expect(publicAPI.specialistDefinitionSchema).toBe(
       specialistDefinitionSchema
     );
-    expect(legacySpecialist.specialistDefinitionSchema).toBe(
-      specialistDefinitionSchema
-    );
     expect(publicAPI.specialistAuthoritySchema).toBe(specialistAuthoritySchema);
-    expect(legacyAuthority.specialistAuthoritySchema).toBe(
-      specialistAuthoritySchema
-    );
   });
 
   it("re-exports the same capture/assert functions without wrappers", () => {
@@ -57,13 +45,11 @@ describe("Decision shared contract compatibility", () => {
 
   it("retains inferred public types and their existing fields", () => {
     expectTypeOf<publicAPI.RepositorySnapshot>().toEqualTypeOf<RepositorySnapshot>();
-    expectTypeOf<legacySnapshot.RepositorySnapshot>().toEqualTypeOf<RepositorySnapshot>();
     expectTypeOf<RepositorySnapshot>().toEqualTypeOf<{
       repositoryRoot: string;
       commitSha: string;
     }>();
     expectTypeOf<publicAPI.SpecialistDefinition>().toEqualTypeOf<SpecialistDefinition>();
-    expectTypeOf<legacySpecialist.SpecialistDefinition>().toEqualTypeOf<SpecialistDefinition>();
     expectTypeOf<SpecialistDefinition>().toEqualTypeOf<{
       id: string;
       role: string;
@@ -71,9 +57,7 @@ describe("Decision shared contract compatibility", () => {
       authority: SpecialistAuthority;
     }>();
     expectTypeOf<publicAPI.SpecialistAuthority>().toEqualTypeOf<SpecialistAuthority>();
-    expectTypeOf<legacyAuthority.SpecialistAuthority>().toEqualTypeOf<SpecialistAuthority>();
     expectTypeOf<publicAPI.RepositoryAccess>().toEqualTypeOf<RepositoryAccess>();
-    expectTypeOf<legacyAuthority.RepositoryAccess>().toEqualTypeOf<RepositoryAccess>();
     expectTypeOf<SpecialistAuthority>().toEqualTypeOf<{
       repositoryAccess: "none" | "read" | "write";
       shellExecution: boolean;

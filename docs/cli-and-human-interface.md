@@ -41,7 +41,7 @@ pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 # 독립 Decision → Structured Comparison, 명시적 Context files
 pnpm decision . "Evaluate the current decision architecture" \
   src/application/decision/flow/run-decision.ts \
-  src/application/decision/model/authority.ts
+  src/contracts/specialist/authority.ts
 
 # 기존 TaskContract JSON Execution
 pnpm dev execute tasks/example.json .
@@ -140,7 +140,7 @@ Enter one repository-relative file path per line.
 Submit an empty line when finished.
 
 > src/application/decision/flow/run-decision.ts
-> src/application/decision/model/authority.ts
+> src/contracts/specialist/authority.ts
 >
 ```
 

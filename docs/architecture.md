@@ -131,7 +131,9 @@ RepositorySnapshot은 `{ repositoryRoot, commitSha }`라는 governed Git state r
 공유 schema / type의 소유권은 `contracts/repository/snapshot.ts`, `contracts/specialist/definition.ts`,
 `contracts/specialist/authority.ts`에 있다. Decision / Staffing / Governance는 이 계약을 직접 참조한다.
 `services/repository-snapshot`은 capture/assert 정책을 소유하고 실제 Git I/O는 infrastructure/git을 사용한다.
-Decision의 기존 public API와 model / flow/context 경로는 동일 schema·함수의 re-export로 호환성을 유지한다.
+Decision의 기존 public API는 contracts/의 동일 schema·type을 직접 re-export하며,
+flow/context 경로는 동일 Snapshot 함수의 re-export로 호환성을 유지한다.
+불필요한 decision/model/ 호환성 경로는 제거했다.
 이는 소유권 이동이며 Specialist authority, Snapshot 검사 시점·순서·실패 의미는 변경하지 않는다.
 Capture는 clean 상태만 허용하며 현재 HEAD를 기록한다. Assert는 HEAD 일치와 clean 상태를 확인한다.
 Clean은 기존 `git status --porcelain --untracked-files=all` 기준이므로 ignored 파일 전체 검사가 아니다.

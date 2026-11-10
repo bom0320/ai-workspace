@@ -3,18 +3,22 @@ export {
   type RunDecisionInput,
   type RunDecisionResult,
 } from "./flow/run-decision.js";
-export type { RepositorySnapshot } from "./model/snapshot.js";
+export {
+  runIndependentDecisions,
+  type IndependentDecisionInput,
+} from "./flow/orchestration/run-independent-decisions.js";
+export type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 export type { AgentDecision, EvidenceReference } from "./protocol/decision.js";
-export { repositorySnapshotSchema } from "./model/snapshot.js";
+export { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 export {
   specialistDefinitionSchema,
   type SpecialistDefinition,
-} from "./model/specialist.js";
+} from "@/contracts/specialist/definition.js";
 export {
   specialistAuthoritySchema,
   type SpecialistAuthority,
   type RepositoryAccess,
-} from "./model/authority.js";
+} from "@/contracts/specialist/authority.js";
 export {
   captureRepositorySnapshot,
   assertRepositoryMatchesSnapshot,

@@ -7,7 +7,10 @@ import {
   runIndependentDecisions,
   type AgentDecision,
 } from "@/application/decision/index.js";
-import { runAuthorizedSpecialistDecision } from "./index.js";
+import {
+  runAuthorizedSpecialistDecision,
+  InvocationClaimError,
+} from "./index.js";
 
 vi.mock("@/application/governance/index.js", () => ({
   claimAuthorizedInvocation: vi.fn(),
@@ -78,9 +81,9 @@ describe("Authorized single Specialist Decision", () => {
       status: "denied",
       reason: "Already claimed",
     });
-    await expect(runAuthorizedSpecialistDecision(invocation)).rejects.toThrow(
-      "Already claimed"
-    );
+    const result = runAuthorizedSpecialistDecision(invocation);
+    await expect(result).rejects.toThrow("Already claimed");
+    await expect(result).rejects.toBeInstanceOf(InvocationClaimError);
     expect(runIndependentDecisions).not.toHaveBeenCalled();
   });
   it("propagates v2 failures without retry or a second Claim", async () => {

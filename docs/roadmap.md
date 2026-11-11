@@ -327,7 +327,10 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - Step 5.3은 Phase A의 `runAuthorizedSpecialistDecision()`에서 성공한 Claim의 반환 입력을
   기존 `runIndependentDecisions()`에 연결해 검증된 AgentDecision 한 개를 반환한다.
   실패는 전파하고 Claim을 유지한다. 추가 Authorization·Reservation·자동 재시도·환불은 없다.
-  묶음 실행·Comparison은 Step 5.4이며 CLI 자동 연결·실행 결과 저장·복구·LangGraph는 미구현이다.
+- Step 5.4는 `runSpecialistDecisions({ scopeId, requests })`로 승인된 동적 Assignment를 사전 검증 후
+  순차 Authorization·Step 5.3 실행하며, Decision 두 개 이상이면 기존 v3 Comparison을 연결한다.
+  실패는 preflight / authorization / claim / decision / comparison으로 구분하고 부분 성공 결과를 반환하지 않는다.
+  Claim 세부 거부 원인은 구분하지 않는다. CLI 자동 연결·실행 결과 저장·재시도/복구·LangGraph는 미구현이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 

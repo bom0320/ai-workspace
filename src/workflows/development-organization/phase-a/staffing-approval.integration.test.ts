@@ -1,6 +1,9 @@
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
-import { runAuthorizedSpecialistDecision } from "./index.js";
+import {
+  runAuthorizedSpecialistDecision,
+  runSpecialistDecisions,
+} from "./index.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -585,5 +588,232 @@ describe("Reserved Invocation → existing v2 Decision integration", () => {
       "Invocation claim denied"
     );
     expect(command).toHaveBeenCalledTimes(kind === "snapshot-before" ? 0 : 1);
+  });
+});
+
+describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () => {
+  async function batch(budget = 2) {
+    writeFileSync(join(root, "b.ts"), "export const b = 2;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "second Context");
+    system.availableSpecialists.push({
+      ...system.availableSpecialists[0],
+      id: "ux",
+      role: "UX",
+      objective: "Review interactions",
+    });
+    system.contextAccessPolicy.allowedScopes.push({
+      kind: "file",
+      path: "b.ts",
+    });
+    draft.assignments.push({
+      specialistId: "ux",
+      objective: "Assess interaction risks",
+      contextPaths: ["b.ts"],
+      rationale: "UX knowledge",
+    });
+    draft.budget.maxAgentInvocations = budget;
+    configure();
+    options.confirmApproval = (request) => accept(request);
+    const approval = await runStaffingApproval(options);
+    if (approval.status !== "approved")
+      throw new Error(JSON.stringify(approval));
+    return {
+      scope: approval.scope,
+      input: {
+        scopeId: approval.scope.id,
+        requests: approval.scope.assignments.map((assignment) => ({
+          scopeId: approval.scope.id,
+          scopeVersion: approval.scope.version,
+          assignmentId: assignment.assignmentId,
+          requestedContextPaths: assignment.contextPaths,
+        })),
+      },
+    };
+  }
+  function reservations() {
+    return withGovernanceRecords(
+      (raw) =>
+        Object.values(
+          (
+            raw as {
+              repositories: Record<
+                string,
+                { reservations?: governance.InvocationReservation[] }
+              >;
+            }
+          ).repositories
+        )[0].reservations ?? []
+    );
+  }
+  function runtime(mode: "success" | "decision" | "comparison" = "success") {
+    return vi
+      .spyOn(processRuntime, "runCommand")
+      .mockImplementation(async (_name, args) => {
+        const prompt = args.at(-1)!;
+        if (prompt.includes("ComparisonContext:\n")) {
+          const context = JSON.parse(prompt.split("ComparisonContext:\n")[1]);
+          const specialistIds = context.decisions.map(
+            (decision: { specialistId: string }) => decision.specialistId
+          );
+          return {
+            stdout: JSON.stringify({
+              findings: [],
+              gaps: [
+                {
+                  concern: "Coverage",
+                  kind: "uncertainty",
+                  specialistIds:
+                    mode === "comparison" ? ["unknown"] : specialistIds,
+                  reason: "More evidence needed",
+                },
+              ],
+            }),
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+          };
+        }
+        const context = JSON.parse(prompt.split("SpecialistContext:\n")[1]);
+        return {
+          stdout: JSON.stringify({
+            recommendation: context.assignmentObjective,
+            evidence: [
+              {
+                path:
+                  mode === "decision" ? "missing.ts" : context.files[0].path,
+                lineStart: 1,
+                description: "Provided implementation",
+              },
+            ],
+            risks: [],
+            uncertainty: [],
+          }),
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+        };
+      });
+  }
+  it("runs approved dynamic Assignments in order and passes original Goal/SHA/Decisions to v3", async () => {
+    const { scope, input } = await batch();
+    const command = runtime();
+    const result = await runSpecialistDecisions(input);
+    expect(result.status).toBe("completed");
+    if (result.status !== "completed") throw new Error(JSON.stringify(result));
+    expect(
+      result.decisions.map(({ specialistId, recommendation, evidence }) => ({
+        specialistId,
+        recommendation,
+        path: evidence[0].path,
+      }))
+    ).toEqual(
+      scope.assignments.map(({ specialistId, objective, contextPaths }) => ({
+        specialistId,
+        recommendation: objective,
+        path: contextPaths[0],
+      }))
+    );
+    expect(command).toHaveBeenCalledTimes(3);
+    for (const [index, [, args]] of command.mock.calls.slice(0, 2).entries()) {
+      const context = JSON.parse(args.at(-1)!.split("SpecialistContext:\n")[1]);
+      expect(context.goal).toEqual(scope.goal);
+      expect(context.repositoryCommitSha).toBe(scope.snapshot.commitSha);
+      expect(context.assignmentObjective).toBe(
+        scope.assignments[index].objective
+      );
+    }
+    const comparisonContext = JSON.parse(
+      command.mock.calls[2][1].at(-1)!.split("ComparisonContext:\n")[1]
+    );
+    expect(comparisonContext).toEqual({
+      goal: scope.goal,
+      repositoryCommitSha: scope.snapshot.commitSha,
+      decisions: result.decisions,
+    });
+    expect(result.comparison?.gaps[0].specialistIds).toEqual([
+      "frontend",
+      "ux",
+    ]);
+    expect(reservations()).toHaveLength(2);
+    expect(
+      reservations().every(({ claimedAt }) => claimedAt !== undefined)
+    ).toBe(true);
+  });
+  it("does not reserve anything if a later request fails preflight", async () => {
+    const { input } = await batch();
+    input.requests[1] = structuredClone(input.requests[0]);
+    const command = runtime();
+    expect(await runSpecialistDecisions(input)).toMatchObject({
+      status: "failed",
+      stage: "preflight",
+      assignmentId: input.requests[0].assignmentId,
+    });
+    expect(reservations()).toHaveLength(0);
+    expect(command).not.toHaveBeenCalled();
+  });
+  it("leaves individual Context authorization to Governance", async () => {
+    const { input } = await batch();
+    input.requests[0].requestedContextPaths = ["unapproved.ts"];
+    const command = runtime();
+    expect(await runSpecialistDecisions(input)).toMatchObject({
+      status: "failed",
+      stage: "authorization",
+      assignmentId: input.requests[0].assignmentId,
+    });
+    expect(reservations()).toHaveLength(0);
+    expect(command).not.toHaveBeenCalled();
+  });
+  it("stops after budget denial without executing or comparing remaining work", async () => {
+    const { input } = await batch(1);
+    const command = runtime();
+    expect(await runSpecialistDecisions(input)).toMatchObject({
+      status: "failed",
+      stage: "authorization",
+      assignmentId: input.requests[1].assignmentId,
+    });
+    expect(reservations()).toHaveLength(1);
+    expect(command).toHaveBeenCalledTimes(1);
+  });
+  it("reports an opaque Claim denial without executing Codex or reserving the next Assignment", async () => {
+    const { input } = await batch();
+    vi.spyOn(governance, "claimAuthorizedInvocation").mockReturnValueOnce({
+      status: "denied",
+      reason: "Invocation claim denied",
+    });
+    const command = runtime();
+    expect(await runSpecialistDecisions(input)).toEqual({
+      status: "failed",
+      stage: "claim",
+      reason: "Invocation claim denied",
+      assignmentId: input.requests[0].assignmentId,
+    });
+    expect(reservations()).toHaveLength(1);
+    expect(reservations()[0]).not.toHaveProperty("claimedAt");
+    expect(command).not.toHaveBeenCalled();
+  });
+  it("retains the Claim and stops remaining work on v2 Evidence failure", async () => {
+    const { input } = await batch();
+    const command = runtime("decision");
+    expect(await runSpecialistDecisions(input)).toMatchObject({
+      status: "failed",
+      stage: "decision",
+      assignmentId: input.requests[0].assignmentId,
+    });
+    expect(reservations()).toHaveLength(1);
+    expect(reservations()[0].claimedAt).toEqual(expect.any(String));
+    expect(command).toHaveBeenCalledTimes(1);
+  });
+  it("reports v3 Reference Validation failure separately after all Decisions succeed", async () => {
+    const { input } = await batch();
+    const command = runtime("comparison");
+    const result = await runSpecialistDecisions(input);
+    expect(result).toMatchObject({ status: "failed", stage: "comparison" });
+    expect(result).not.toHaveProperty("decisions");
+    expect(command).toHaveBeenCalledTimes(3);
+    expect(reservations()).toHaveLength(2);
+    expect(
+      reservations().every(({ claimedAt }) => claimedAt !== undefined)
+    ).toBe(true);
   });
 });

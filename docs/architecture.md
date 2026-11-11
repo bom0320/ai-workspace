@@ -50,7 +50,8 @@ R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통
 실행에는 아직 연결하지 않는다.
 Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 제공한다.
 Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다.
-Step 5.2는 실행 전 Reservation 검증·일회 Claim을 제공하며 Step 5.3은 단일 Invocation을 기존 v2 Specialist에 연결한다.
+Step 5.2는 실행 전 Reservation 검증·일회 Claim, Step 5.3은 단일 Invocation의 v2 실행,
+Step 5.4는 승인 Scope의 동적 Specialist 순차 실행과 v3 Comparison 연결을 제공한다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
 ## 3. Current End-to-End Flows
@@ -1652,10 +1653,41 @@ authorizeSpecialistInvocation(request, attempt?)
   기존 Codex Specialist와 실행 전후 Snapshot·Evidence 검증을 유지하며 검증된 AgentDecision 한 개를 반환한다.
   Claim은 반환 시 Ledger Lock을 해제하므로 Codex는 Lock 밖에서 실행한다. 추가 Authorization·Reservation은 없다.
   Snapshot·Evidence·Codex 오류는 그대로 전파하고 Claim은 유지한다. 동일 Invocation 재호출은 Claim에서 거부한다.
-  여러 Invocation의 묶음 실행·Comparison은 Step 5.4이며 Staffing Approval/CLI에 자동 연결하지 않는다.
+  묶음 실행·Comparison은 아래 Step 5.4에서 연결하며 Staffing Approval/CLI에는 자동 연결하지 않는다.
   Claim 저장 후 실행 전 실패·프로세스 종료에도 자동 해제·재시도·환불·실행 복구는 없다.
   Ledger Lock은 외부 Git을 잠그지 않으므로 최종 검증·Claim·실제 실행 사이 TOCTOU는 남는다.
   저장 후 응답 실패로 결과가 불확실해도 자동 해제하지 않으며 정확히 한 번의 실행 완료를 보장하지 않는다.
 - Ledger lock은 외부 Repository를 잠그지 않는다. 최종 검사와 실제 실행 사이의 TOCTOU, 같은 OS 계정/root,
   clock 조작·저장소 rollback이라는 기존 한계는 남는다. 외부 Proposal의 발급 출처·자연어 Constraints의
   의미적 충족도 Reservation이나 Invocation Schema로 증명하지 않는다.
+
+
+### 9.6 Step 5.4 — Phase A Multi-Specialist Decision & Comparison — Implemented
+
+`workflows/development-organization/phase-a/specialist-decisions.ts`의
+`runSpecialistDecisions({ scopeId, requests })`는 승인된 동적 Assignment 요청 묶음을 실행한다.
+`runStaffingApproval()` 이후 받은 Scope ID로 별도 호출하며 외부 Scope 객체를 권한 근거로 받지 않는다.
+
+1. `getApprovedStaffingScope()`로 현재 유효한 저장 Scope를 조회한다. 전체 요청을 기존 Request Schema로
+   파싱·복제하고 비어 있지 않은 목록, 동일 Scope ID/version, Scope 소속 Assignment,
+   Assignment ID와 Specialist ID 중복 부재를 예약 전에 확인한다. Goal과 Snapshot은 이 원본 Scope를 기준으로 한다.
+2. 요청 순서대로 `authorizeSpecialistInvocation()` → allowed Invocation →
+   `runAuthorizedSpecialistDecision()` → 검증된 AgentDecision을 수집한다.
+   개별 Context·권한·예산은 Authorization, Claim·Snapshot·Evidence는 기존 Step 5.3/v2가 검증한다.
+   다음 요청은 현재 Decision이 완료된 뒤에만 예약한다.
+3. Decision 한 개면 Comparison을 생략한다. 두 개 이상이면 원본 Scope Goal·Snapshot Commit SHA와
+   수집한 Decision 배열로 기존 `compareDecisions()`를 호출한다. Comparator와 Reference Validation은 그대로다.
+
+성공은 `{ status: "completed", decisions, comparison? }`이며 실패는
+`{ status: "failed", stage, reason, assignmentId? }`이다. stage는 preflight / authorization / claim /
+decision / comparison이며, 실패 시 이후 예약·실행·Comparison을 중단한다. 실패 결과에는 부분 Decision을
+성공 결과로 노출하지 않는다. comparison 실패는 모든 Decision 실행이 완료됐으나 비교가 실패했음을 뜻한다.
+Step 5.3의 `InvocationClaimError`만 Claim 거부를 표시하고 v2 오류는 기존 객체 그대로 전파한다.
+Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원인은 현재 API의 일반적인 reason뿐이므로
+이미 사용됨·Scope 무효·입력 변조·저장소 오류 등 세부 원인을 구분하지 않는다.
+
+묶음 예약 transaction이나 durable Workflow 상태는 없다. 예약된 예산과 Claim은 실패 후에도 유지한다.
+자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장·LangGraph는 구현하지 않았다.
+묶음 Workflow를 다시 호출하면 새 Authorization으로 새 예약을 만들 수 있으므로 호출자는 이를 자동 재개로
+취급하면 안 된다. Step 5.3의 동일 Invocation 일회 Claim과 묶음의 재호출 의미는 다르다.
+외부 Git·정책 변경과 실행 사이의 TOCTOU 및 정확히 한 번의 실행 완료를 보장하지 않는 한계는 유지한다.

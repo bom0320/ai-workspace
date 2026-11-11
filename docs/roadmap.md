@@ -322,7 +322,9 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   재검증 후 Scope 전체 Reservation을 atomic save하고 성공해야 allowed를 반환한다.
 - Invocation ID는 Harness attempt handle로 발급한다. 같은 handle의 중복 예약은 거부하며 같은 Context의 새 호출은
   새 예산을 사용한다. 과거 Ledger의 reservations 누락은 읽기 호환으로 보존하고 자동 재작성하지 않는다.
-- Step 5는 저장된 Reservation/Invocation digest와 최신 유효성 확인 뒤 실제 v2 Specialist를 연결해야 한다.
+- Step 5.2는 저장된 Reservation의 binding·Invocation/Request digest·최신 승인/정책/Snapshot/Context를 검증하고
+  같은 Ledger Lock에서 선택적인 claimedAt을 저장한다. 재사용은 거부하며 Budget은 예약 시 소비하는 정책을 유지한다.
+- Step 5.3은 성공한 Claim 이후 실제 v2 Specialist를 연결해야 한다.
   실제 호출·Workflow 연결·실행 결과·자동 환불/재개·LangGraph는 미구현이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented

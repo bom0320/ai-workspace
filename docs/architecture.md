@@ -49,7 +49,8 @@ Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Sna
 R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
 실행에는 아직 연결하지 않는다.
 Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 제공한다.
-Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다. 실제 Specialist 실행은 미구현이다.
+Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다.
+Step 5.2는 실행 전 Reservation 검증·일회 Claim을 제공하며 실제 Specialist 실행 연결은 미구현이다.
 Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
 
 ## 3. Current End-to-End Flows
@@ -982,7 +983,7 @@ files는 승인 Commit의 검증된 blob에서 온다. 기본 Specialist objecti
 CEO가 어느 값도 덮어쓸 수 없으며, 반환된 객체의 구조만으로 이후 실제 실행 권한을 다시 증명할 수는 없다.
 
 Reservation은 authorization/features/specialist-invocation/model/reservation.ts의 strict Schema로 invocationId, scopeId/version, assignmentId,
-requestDigest, invocationDigest, reservedAt을 저장한다. 전체 Invocation의 canonical digest에는 파일 내용·Authority·
+requestDigest, invocationDigest, reservedAt과 선택적인 claimedAt을 저장한다. 전체 Invocation의 canonical digest에는 파일 내용·Authority·
 Assignment Objective도 포함된다. 사용량은 Scope 전체의 Reservation 수이며 Assignment별로 나누지 않는다.
 기록 저장 실패·Lock 충돌·예산 소진·중복 ID·최종 유효성 실패는 denied이고 저장 성공 전에는 allowed를 반환하지 않는다.
 Lock 충돌 시 대기/자동 재시도는 없으며 fail closed한다. 저장 성공 뒤 응답 실패처럼 결과가 불확실한 경우도
@@ -1604,7 +1605,7 @@ Snapshot도 부분 발급 저장 없이 거부된다. 동기 변환 주변의 �
 Approval 전체 평가를 1회로 줄이지 않는다. v1 Inspection 통합, 선택된 Authority guard의 입력 전제 정리 등도
 별도 검토 후보이며 이번 변경에서 실행 계약이나 Legacy·Direct/Delegated 승인 의미는 바꾸지 않았다.
 
-### 9.5 Step 4 Authorization — Implemented / Step 5 실행 연결 — Planned
+### 9.5 Step 4 Authorization / Step 5.2 Claim — Implemented / Step 5.3 실행 연결 — Planned
 
 ```text
 authorizeSpecialistInvocation(request, attempt?)
@@ -1634,10 +1635,21 @@ authorizeSpecialistInvocation(request, attempt?)
 - Lifecycle 입력은 검증된 저장 Scope의 active 판정과 해당 scopeId/version의 예약 수다. Ledger Schema가
   Reservation의 Scope/Assignment 참조·ID 중복·발급 시각 관계·Scope 예산 상한을 검사한다. 실패 기록을 무시해
   예산을 되살리지 않는다. 예약 후 실패/미실행도 소비한 예산이며 환불·재개·실행 결과 기록은 없다.
-- **Workflow**에는 이번 Authorization 호출을 추가하지 않았다. Step 5는 승인된 입력을 실행하기 전에 저장
-  Reservation의 invocationId / scopeId / version / assignmentId와 전체 invocationDigest를 확인하고 당시
-  Scope·정책·Snapshot 유효성을 검토해야 한다. Schema parsing이나 임의 객체만으로 실제 Specialist를 호출하면 안 된다.
-  중복 실행 방지·실행 상태 기록·재개 정책은 Step 5 이후의 별도 책임이다.
+- **Step 5.2 Claim**은 Authorization의 `claimAuthorizedInvocation(invocation)`으로 제공한다.
+  같은 `withGovernanceLedger()` Lock 안에서 저장 Reservation의 유일한 Invocation ID,
+  Scope ID/version·Assignment ID·invocationDigest를 확인한다. Invocation files의 순서대로 원본
+  Request를 재구성해 requestDigest도 확인하고, 같은 Repository의 유일한 Scope를 조회한다.
+  `validateStoredIssuance()`로 최신 승인·정책·위임·Snapshot을 검증하고 Authorization과 공유하는
+  `validateInvocationContext()`로 현재 검증 파일과 Invocation 파일의 digest를 비교한다.
+  claimedAt이 있으면 거부하며 없으면 현재 시각을 저장한 뒤에만 `{ status: "claimed", invocation }`을 반환한다.
+  입력·검증·Lock·저장 실패는 denied다. 신규 Authorization이나 Eligibility 평가는 호출하지 않아
+  잔여 예산이 0이어도 예약된 입력을 Claim할 수 있다. Budget은 여전히 예약 수로만 소비한다.
+  기존 Ledger의 claimedAt 누락은 미사용 예약이며 읽기 시 default·재저장은 하지 않는다.
+- **Workflow / Step 5.3**의 실제 실행 연결은 미구현이다. Claim 안에서 Codex를 호출하지 않는다.
+  Claim 저장 후 실행 전 실패·프로세스 종료도 Claim을 되돌리지 않으며 자동 재시도·환불·실행 복구는 없다.
+  동시 Claim은 최대 하나만 성공하지만, 반환 객체 자체의 재사용이나 실제 실행 횟수를 제어하는 Runner는 없다.
+  후속 실행 연결이 성공한 Claim에서 한 번만 실행을 시작해야 한다. Ledger Lock은 외부 Git을 잠그지 않으므로
+  최종 검증·Claim·실제 실행 사이 TOCTOU는 남는다. 저장 후 응답 실패로 결과가 불확실해도 자동 해제하지 않는다.
 - Ledger lock은 외부 Repository를 잠그지 않는다. 최종 검사와 실제 실행 사이의 TOCTOU, 같은 OS 계정/root,
   clock 조작·저장소 rollback이라는 기존 한계는 남는다. 외부 Proposal의 발급 출처·자연어 Constraints의
   의미적 충족도 Reservation이나 Invocation Schema로 증명하지 않는다.

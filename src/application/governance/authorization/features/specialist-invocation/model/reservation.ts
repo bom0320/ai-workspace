@@ -14,6 +14,13 @@ export const invocationReservationSchema = z
     requestDigest: digest,
     invocationDigest: digest,
     reservedAt: z.iso.datetime(),
+    claimedAt: z.iso.datetime().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ reservedAt, claimedAt }) =>
+      claimedAt === undefined ||
+      Date.parse(claimedAt) >= Date.parse(reservedAt),
+    { message: "Claim cannot precede reservation." }
+  );
 export type InvocationReservation = z.infer<typeof invocationReservationSchema>;

@@ -1,11 +1,16 @@
 import { z } from "zod";
 
-import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
-import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
+import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
+import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
 
 const nonEmptyString = z.string().min(1);
+const positiveInteger = z.number().int().positive();
+
+// 1. Approved Scope
+// Defines the operating boundary issued after Staffing Approval.
+// Schema validation alone does not prove approval or current validity.
 
 const approvedAssignmentSchema = z
   .object({
@@ -16,12 +21,10 @@ const approvedAssignmentSchema = z
   })
   .strict();
 
-// Issued scopes are immutable records by domain convention: issue a new version
-// for changed authority. Parsing neither enforces lifecycle nor proves approval.
 export const approvedOperatingScopeSchema = z
   .object({
     id: nonEmptyString,
-    version: z.number().int().positive(),
+    version: positiveInteger,
     proposalId: nonEmptyString,
     approvalRecordId: nonEmptyString,
     policyVersion: nonEmptyString,
@@ -29,30 +32,64 @@ export const approvedOperatingScopeSchema = z
     snapshot: repositorySnapshotSchema,
     assignments: z.array(approvedAssignmentSchema).min(1),
     budget: z
-      .object({ maxAgentInvocations: z.number().int().positive() })
+      .object({
+        maxAgentInvocations: positiveInteger,
+      })
       .strict(),
   })
   .strict();
 
-// CEO-owned request data; authority and objective must come from trusted sources.
-// Context subset checks are performed by Harness authority evaluation.
+// 2. Invocation Request
+// CEO selects an approved Assignment and Context subset.
+// Specialist identity, objective, and authority cannot be overridden.
+
 export const invokeSpecialistRequestSchema = z
   .object({
     scopeId: nonEmptyString,
-    scopeVersion: z.number().int().positive(),
+    scopeVersion: positiveInteger,
     assignmentId: nonEmptyString,
     requestedContextPaths: z.array(nonEmptyString).min(1),
   })
   .strict();
 
-// Harness-owned execution data, not an authorization token obtainable by parsing.
-// Authorization loads file contents from the approved Snapshot before reservation.
-// Step 5 must verify the persisted reservation/digest before actual execution.
+// 3. Invocation Eligibility
+// Evaluates a request against the approved Scope and Harness facts.
+// Eligibility does not grant authority or reserve execution budget.
+
+export const invocationEvaluationContextSchema = z
+  .object({
+    scopeStatus: z.enum(["active", "revoked", "superseded"]),
+    // Total reservations for the Scope version, across all Assignments.
+    usedAgentInvocations: z.number().int().nonnegative().safe(),
+  })
+  .strict();
+
+export const invocationEligibilitySchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("eligible") }).strict(),
+  z
+    .object({
+      status: z.literal("reapproval-required"),
+      reason: nonEmptyString,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("denied"),
+      reason: nonEmptyString,
+    })
+    .strict(),
+]);
+
+// 4. Authorized Invocation
+// Harness assembles execution input from the validated Scope,
+// current System Policy, and approved Repository Snapshot.
+// Step 5 must verify the persisted Reservation before execution.
+
 export const authorizedSpecialistInvocationSchema = z
   .object({
     invocationId: nonEmptyString,
     scopeId: nonEmptyString,
-    scopeVersion: z.number().int().positive(),
+    scopeVersion: positiveInteger,
     assignmentId: nonEmptyString,
     assignmentObjective: nonEmptyString,
     goal: goalSpecSchema.strict(),
@@ -62,6 +99,10 @@ export const authorizedSpecialistInvocationSchema = z
   })
   .strict();
 
+// 5. Authorization Verdict
+// Represents the Harness authorization result.
+// Only an allowed verdict contains an Authorized Invocation.
+
 export const authorityVerdictSchema = z.discriminatedUnion("status", [
   z
     .object({
@@ -70,49 +111,36 @@ export const authorityVerdictSchema = z.discriminatedUnion("status", [
     })
     .strict(),
   z
-    .object({ status: z.literal("approval-required"), reason: nonEmptyString })
+    .object({
+      status: z.literal("approval-required"),
+      reason: nonEmptyString,
+    })
     .strict(),
-  z.object({ status: z.literal("denied"), reason: nonEmptyString }).strict(),
+  z
+    .object({
+      status: z.literal("denied"),
+      reason: nonEmptyString,
+    })
+    .strict(),
 ]);
+
+// Inferred Types
 
 export type ApprovedAssignment = z.infer<typeof approvedAssignmentSchema>;
 export type ApprovedOperatingScope = z.infer<
   typeof approvedOperatingScopeSchema
 >;
+
 export type InvokeSpecialistRequest = z.infer<
   typeof invokeSpecialistRequestSchema
 >;
-export type AuthorizedSpecialistInvocation = z.infer<
-  typeof authorizedSpecialistInvocationSchema
->;
-export type AuthorityVerdict = z.infer<typeof authorityVerdictSchema>;
-
-// Caller-supplied Harness facts, not CEO request data. Parsing cannot prove trust
-// or freshness; usage is scope-version usage, not per-assignment usage.
-export const invocationEvaluationContextSchema = z
-  .object({
-    scopeStatus: z.enum(["active", "revoked", "superseded"]),
-    usedAgentInvocations: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(Number.MAX_SAFE_INTEGER),
-  })
-  .strict();
-
-// Eligibility never grants execution authority or reserves invocation budget.
-export const invocationEligibilitySchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("eligible") }).strict(),
-  z
-    .object({
-      status: z.literal("reapproval-required"),
-      reason: nonEmptyString,
-    })
-    .strict(),
-  z.object({ status: z.literal("denied"), reason: nonEmptyString }).strict(),
-]);
 
 export type InvocationEvaluationContext = z.infer<
   typeof invocationEvaluationContextSchema
 >;
 export type InvocationEligibility = z.infer<typeof invocationEligibilitySchema>;
+
+export type AuthorizedSpecialistInvocation = z.infer<
+  typeof authorizedSpecialistInvocationSchema
+>;
+export type AuthorityVerdict = z.infer<typeof authorityVerdictSchema>;

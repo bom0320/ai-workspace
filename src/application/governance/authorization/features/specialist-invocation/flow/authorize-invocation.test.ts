@@ -20,6 +20,7 @@ import {
   configureStaffingSystemPolicy,
   approveStaffingProposal,
   authorizeSpecialistInvocation,
+  claimAuthorizedInvocation,
   createInvocationAttempt,
   type ApprovedOperatingScope,
   type InvokeSpecialistRequest,
@@ -541,5 +542,218 @@ describe("Scope-backed Invocation Authorization, no Specialist execution", () =>
     const results = await Promise.all([call(), call(), call()]);
     expect(results.filter((status) => status === "allowed")).toHaveLength(1);
     expect(reservations()).toHaveLength(1);
+  });
+});
+
+describe("Reserved Invocation single-use Claim", () => {
+  function reserve(mode: "direct" | "delegated" = "direct") {
+    const scope = approve(mode);
+    const result = authorizeSpecialistInvocation(request(scope));
+    if (result.status !== "allowed") throw new Error(JSON.stringify(result));
+    return { scope, invocation: result.invocation };
+  }
+
+  it("rejects an unreserved Invocation without creating reservation history", () => {
+    const { invocation } = reserve();
+    withGovernanceRecords((raw, save) => {
+      delete Object.values((raw as GovernanceLedger).repositories)[0]
+        .reservations;
+      save(raw);
+    });
+    const before = readFileSync(recordPath(), "utf8");
+    expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+    expect(readFileSync(recordPath(), "utf8")).toBe(before);
+  });
+
+  it("reconstructs the exact request from ordered Context paths", () => {
+    const scope = approve();
+    const result = authorizeSpecialistInvocation({
+      ...request(scope),
+      requestedContextPaths: ["b.ts", "a.ts"],
+    });
+    if (result.status !== "allowed") throw new Error(JSON.stringify(result));
+    expect(claimAuthorizedInvocation(result.invocation).status).toBe("claimed");
+  });
+
+  it("preserves direct approval after unrelated Delegation revocation", () => {
+    const { invocation } = reserve();
+    delegate();
+    configureHumanDelegation(
+      root,
+      null,
+      accept(configureHumanDelegation(root, null))
+    );
+    expect(claimAuthorizedInvocation(invocation).status).toBe("claimed");
+  });
+
+  it.each(["direct", "delegated"] as const)(
+    "claims a historical unclaimed %s reservation once with no additional budget",
+    (mode) => {
+      const { scope, invocation } = reserve(mode);
+      expect(reservations()[0]).not.toHaveProperty("claimedAt");
+      expect(authorizeSpecialistInvocation(request(scope)).status).toBe(
+        "allowed"
+      );
+      expect(authorizeSpecialistInvocation(request(scope)).status).toBe(
+        "allowed"
+      );
+      expect(authorizeSpecialistInvocation(request(scope)).status).toBe(
+        "denied"
+      );
+      expect(claimAuthorizedInvocation(invocation)).toEqual({
+        status: "claimed",
+        invocation,
+      });
+      const stored = reservations();
+      expect(stored).toHaveLength(3);
+      expect(stored[0].claimedAt).toEqual(expect.any(String));
+      expect(stored[1]).not.toHaveProperty("claimedAt");
+      const before = readFileSync(recordPath(), "utf8");
+      expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+      expect(readFileSync(recordPath(), "utf8")).toBe(before);
+    }
+  );
+
+  it.each([
+    "missing",
+    "scope",
+    "version",
+    "assignment",
+    "objective",
+    "goal",
+    "snapshot",
+    "specialist",
+    "files",
+    "extra",
+  ])("rejects %s input mutation", (kind) => {
+    const { invocation } = reserve();
+    const input = structuredClone(invocation);
+    if (kind === "missing") input.invocationId = "missing";
+    if (kind === "scope") input.scopeId = "other";
+    if (kind === "version") input.scopeVersion++;
+    if (kind === "assignment") input.assignmentId = "other";
+    if (kind === "objective") input.assignmentObjective = "changed";
+    if (kind === "goal") input.goal.objective = "changed";
+    if (kind === "snapshot") input.snapshot.commitSha = "changed";
+    if (kind === "specialist") input.specialist.authority.shellExecution = true;
+    if (kind === "files") input.files[0].content = "changed";
+    if (kind === "extra") Object.assign(input, { extra: true });
+    const before = readFileSync(recordPath(), "utf8");
+    expect(claimAuthorizedInvocation(input).status).toBe("denied");
+    expect(readFileSync(recordPath(), "utf8")).toBe(before);
+  });
+
+  it.each([
+    "requestDigest",
+    "invocationDigest",
+    "scopeId",
+    "scopeVersion",
+    "assignmentId",
+  ] as const)("rejects stored %s mismatch", (kind) => {
+    const { scope, invocation } = reserve();
+    withGovernanceRecords((raw, save) => {
+      const records = Object.values((raw as GovernanceLedger).repositories)[0]
+        .reservations!;
+      if (kind === "requestDigest" || kind === "invocationDigest")
+        records[0][kind] = "a".repeat(64);
+      if (kind === "scopeId") records[0].scopeId = "other";
+      if (kind === "scopeVersion") records[0].scopeVersion++;
+      if (kind === "assignmentId")
+        records[0].assignmentId = scope.assignments[1].assignmentId;
+      save(raw);
+    });
+    const before = readFileSync(recordPath(), "utf8");
+    expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+    expect(readFileSync(recordPath(), "utf8")).toBe(before);
+  });
+
+  it.each(["expired", "revoked", "superseded", "policy"])(
+    "rejects %s approval at Claim",
+    (kind) => {
+      const { invocation } = reserve("delegated");
+      if (kind === "expired")
+        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 2 * 86400000);
+      if (kind === "revoked")
+        configureHumanDelegation(
+          root,
+          null,
+          accept(configureHumanDelegation(root, null))
+        );
+      if (kind === "superseded") delegate();
+      if (kind === "policy") configure();
+      const before = readFileSync(recordPath(), "utf8");
+      expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+      expect(readFileSync(recordPath(), "utf8")).toBe(before);
+    }
+  );
+
+  it.each(["dirty", "head", "content"])(
+    "rejects %s Snapshot/Context changes",
+    (kind) => {
+      const { invocation } = reserve();
+      if (kind === "content") {
+        vi.spyOn(
+          gitInfrastructure,
+          "readRepositoryFileAtCommit"
+        ).mockImplementation(() => "changed");
+      } else {
+        writeFileSync(join(root, "a.ts"), "changed");
+        if (kind === "head") {
+          git("add", ".");
+          git("commit", "--quiet", "-m", "drift");
+        }
+      }
+      const before = readFileSync(recordPath(), "utf8");
+      expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+      expect(readFileSync(recordPath(), "utf8")).toBe(before);
+    }
+  );
+
+  it("does not claim on save failure and permits retry when nothing persisted", () => {
+    const { invocation } = reserve();
+    const before = readFileSync(recordPath(), "utf8");
+    vi.spyOn(fileSystem, "renameSync").mockImplementationOnce(() => {
+      throw new Error("Write failed");
+    });
+    expect(claimAuthorizedInvocation(invocation).status).toBe("denied");
+    expect(readFileSync(recordPath(), "utf8")).toBe(before);
+    expect(claimAuthorizedInvocation(invocation).status).toBe("claimed");
+  });
+
+  it("allows exactly one Claim across real competing processes", async () => {
+    const { invocation } = reserve();
+    const script = `import { claimAuthorizedInvocation } from './src/application/governance/index.ts'; console.log(JSON.stringify(claimAuthorizedInvocation(${JSON.stringify(invocation)})));`;
+    const call = () =>
+      new Promise<string>((resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          ["--import", "tsx", "--input-type=module", "-e", script],
+          {
+            cwd: process.cwd(),
+            env: {
+              ...process.env,
+              HOME: home,
+              TSX_TSCONFIG_PATH: join(process.cwd(), "tsconfig.json"),
+            },
+          }
+        );
+        let out = "",
+          error = "";
+        child.stdout.on("data", (chunk) => (out += chunk));
+        child.stderr.on("data", (chunk) => (error += chunk));
+        child.on("error", reject);
+        child.on("close", (code) =>
+          code === 0
+            ? resolve(JSON.parse(out).status)
+            : reject(new Error(error))
+        );
+      });
+    expect((await Promise.all([call(), call(), call()])).sort()).toEqual([
+      "claimed",
+      "denied",
+      "denied",
+    ]);
+    expect(reservations()).toHaveLength(1);
+    expect(reservations()[0].claimedAt).toEqual(expect.any(String));
   });
 });

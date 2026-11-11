@@ -324,8 +324,10 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   새 예산을 사용한다. 과거 Ledger의 reservations 누락은 읽기 호환으로 보존하고 자동 재작성하지 않는다.
 - Step 5.2는 저장된 Reservation의 binding·Invocation/Request digest·최신 승인/정책/Snapshot/Context를 검증하고
   같은 Ledger Lock에서 선택적인 claimedAt을 저장한다. 재사용은 거부하며 Budget은 예약 시 소비하는 정책을 유지한다.
-- Step 5.3은 성공한 Claim 이후 실제 v2 Specialist를 연결해야 한다.
-  실제 호출·Workflow 연결·실행 결과·자동 환불/재개·LangGraph는 미구현이다.
+- Step 5.3은 Phase A의 `runAuthorizedSpecialistDecision()`에서 성공한 Claim의 반환 입력을
+  기존 `runIndependentDecisions()`에 연결해 검증된 AgentDecision 한 개를 반환한다.
+  실패는 전파하고 Claim을 유지한다. 추가 Authorization·Reservation·자동 재시도·환불은 없다.
+  묶음 실행·Comparison은 Step 5.4이며 CLI 자동 연결·실행 결과 저장·복구·LangGraph는 미구현이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 

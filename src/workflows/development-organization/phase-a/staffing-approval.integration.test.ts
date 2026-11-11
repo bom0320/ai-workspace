@@ -1,3 +1,6 @@
+import * as governance from "@/application/governance/index.js";
+import * as processRuntime from "@/infrastructure/process/index.js";
+import { runAuthorizedSpecialistDecision } from "./index.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -398,5 +401,189 @@ describe("Real Staffing and Governance composition", () => {
     expect((await runStaffingApproval(options)).status).toBe("denied");
     expect(options.confirmApproval).not.toHaveBeenCalled();
     expect(issuanceCount()).toBe(0);
+  });
+});
+
+describe("Reserved Invocation → existing v2 Decision integration", () => {
+  async function reserve() {
+    configure();
+    delegate();
+    const approval = await runStaffingApproval(options);
+    if (approval.status !== "approved")
+      throw new Error(JSON.stringify(approval));
+    const authorized = governance.authorizeSpecialistInvocation({
+      scopeId: approval.scope.id,
+      scopeVersion: approval.scope.version,
+      assignmentId: approval.scope.assignments[0].assignmentId,
+      requestedContextPaths: ["a.ts"],
+    });
+    if (authorized.status !== "allowed")
+      throw new Error(JSON.stringify(authorized));
+    return authorized.invocation;
+  }
+  function ledger() {
+    return withGovernanceRecords(
+      (raw) =>
+        raw as {
+          repositories: Record<
+            string,
+            { reservations?: governance.InvocationReservation[] }
+          >;
+        }
+    );
+  }
+  const payload = {
+    recommendation: "Preserve UI behavior",
+    evidence: [
+      { path: "a.ts", lineStart: 1, description: "Current implementation" },
+    ],
+    risks: [],
+    uncertainty: [],
+  };
+  function codex() {
+    return vi.spyOn(processRuntime, "runCommand").mockResolvedValue({
+      stdout: JSON.stringify(payload),
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    });
+  }
+  it("executes the approved Specialist with its Assignment, outside the Ledger lock, and blocks reuse", async () => {
+    const invocation = await reserve();
+    const before = ledger();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
+    const command = codex().mockImplementation(async (name, args, runtime) => {
+      expect(name).toBe("codex");
+      expect(runtime.cwd).not.toBe(root);
+      // The real signed read acquires the same Lock: execution holds no Ledger lock.
+      expect(
+        Object.values(ledger().repositories)[0].reservations![0].claimedAt
+      ).toEqual(expect.any(String));
+      const prompt = args.at(-1)!;
+      expect(JSON.parse(prompt.split("SpecialistContext:\n")[1])).toEqual({
+        goal: invocation.goal,
+        assignmentObjective: invocation.assignmentObjective,
+        repositoryCommitSha: invocation.snapshot.commitSha,
+        files: invocation.files,
+      });
+      expect(prompt).toContain(
+        JSON.stringify({
+          role: invocation.specialist.role,
+          objective: invocation.specialist.objective,
+        })
+      );
+      return {
+        stdout: JSON.stringify(payload),
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+      };
+    });
+    expect(await runAuthorizedSpecialistDecision(invocation)).toEqual({
+      specialistId: invocation.specialist.id,
+      ...payload,
+    });
+    const after = ledger();
+    const reservations = Object.values(after.repositories)[0].reservations!;
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0].claimedAt).toEqual(expect.any(String));
+    delete reservations[0].claimedAt;
+    expect(after).toEqual(before);
+    await expect(runAuthorizedSpecialistDecision(invocation)).rejects.toThrow(
+      "Invocation claim denied"
+    );
+    expect(command).toHaveBeenCalledTimes(1);
+    expect(authorize).not.toHaveBeenCalled();
+  });
+  it("never starts Codex after Claim rejection", async () => {
+    const invocation = await reserve();
+    invocation.assignmentObjective = "Tampered task";
+    const command = codex();
+    await expect(runAuthorizedSpecialistDecision(invocation)).rejects.toThrow(
+      "Invocation claim denied"
+    );
+    expect(command).not.toHaveBeenCalled();
+  });
+  it.each([
+    "snapshot-before",
+    "snapshot-after",
+    "evidence",
+    "codex",
+    "timeout",
+    "protocol",
+  ])("propagates %s failure and retains the single-use Claim", async (kind) => {
+    const invocation = await reserve();
+    const command = codex();
+    if (kind === "snapshot-before") {
+      const claim = governance.claimAuthorizedInvocation;
+      vi.spyOn(governance, "claimAuthorizedInvocation").mockImplementationOnce(
+        (input) => {
+          const result = claim(input);
+          expect(result.status).toBe("claimed");
+          writeFileSync(join(root, "a.ts"), "drift after Claim");
+          return result;
+        }
+      );
+    }
+    if (kind === "snapshot-after")
+      command.mockImplementationOnce(async () => {
+        writeFileSync(join(root, "a.ts"), "drift during Codex");
+        return {
+          stdout: JSON.stringify(payload),
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+        };
+      });
+    if (kind === "evidence")
+      command.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          ...payload,
+          evidence: [{ path: "not-supplied.ts", description: "Invalid" }],
+        }),
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+      });
+    if (kind === "codex")
+      command.mockResolvedValueOnce({
+        stdout: "",
+        stderr: "Codex unavailable",
+        exitCode: 1,
+        timedOut: false,
+      });
+    if (kind === "timeout")
+      command.mockResolvedValueOnce({
+        stdout: "",
+        stderr: "",
+        exitCode: null,
+        timedOut: true,
+      });
+    if (kind === "protocol")
+      command.mockResolvedValueOnce({
+        stdout: "not JSON",
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+      });
+    const expected = kind.startsWith("snapshot")
+      ? /working tree/
+      : kind === "evidence"
+        ? /Evidence/
+        : kind === "codex"
+          ? /Codex unavailable/
+          : kind === "timeout"
+            ? /timed out/
+            : /malformed JSON/;
+    await expect(runAuthorizedSpecialistDecision(invocation)).rejects.toThrow(
+      expected
+    );
+    const reservations = Object.values(ledger().repositories)[0].reservations!;
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0].claimedAt).toEqual(expect.any(String));
+    await expect(runAuthorizedSpecialistDecision(invocation)).rejects.toThrow(
+      "Invocation claim denied"
+    );
+    expect(command).toHaveBeenCalledTimes(kind === "snapshot-before" ? 0 : 1);
   });
 });

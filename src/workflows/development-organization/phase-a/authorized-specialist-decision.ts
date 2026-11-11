@@ -18,9 +18,13 @@ export class InvocationClaimError extends Error {
 export async function runAuthorizedSpecialistDecision(
   input: AuthorizedSpecialistInvocation
 ): Promise<AgentDecision> {
+  // 1. Claim Authorized Invocation
   const claim = claimAuthorizedInvocation(input);
   if (claim.status !== "claimed") throw new InvocationClaimError(claim.reason);
 
+  // 2. Execute Specialist Decision
+  // Use the Claim-returned input. A later v2 failure leaves the Claim consumed,
+  // so propagate it without retrying or re-authorizing this Invocation.
   const { snapshot, goal, specialist, assignmentObjective, files } =
     claim.invocation;
   const [decision] = await runIndependentDecisions(snapshot, goal, [

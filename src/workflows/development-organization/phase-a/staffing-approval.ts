@@ -8,11 +8,10 @@ import {
   runStaffing,
   type RunStaffingOptions,
   type StaffingRunResult,
+  type StaffingProposal,
 } from "@/application/staffing/index.js";
 
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
-
-// Types
 
 type ApprovalRequest = Extract<
   StaffingApprovalResult,
@@ -41,29 +40,25 @@ export type StaffingApprovalWorkflowResult =
       rounds: number;
     };
 
-// Workflow
-
 export async function runStaffingApproval(
   options: StaffingApprovalWorkflowOptions
 ): Promise<StaffingApprovalWorkflowResult> {
   // 1. Load System Policy
+  const systemPolicy = getStaffingSystemPolicy(options.repositoryPath);
 
-  const policy = getStaffingSystemPolicy(options.repositoryPath);
-
-  if (policy.status !== "ready") {
+  if (systemPolicy.status !== "ready") {
     return {
       status: "failed",
       failure: "system-policy",
-      reason: policy.reason,
+      reason: systemPolicy.reason,
       rounds: 0,
     };
   }
 
   // 2. Run Staffing
-
   const staffing = await runStaffing({
     goal: options.goal,
-    systemPolicy: policy.configuration,
+    systemPolicy: systemPolicy.configuration,
     maxRounds: options.maxRounds,
     timeoutMs: options.timeoutMs,
     agent: options.agent,
@@ -74,7 +69,6 @@ export async function runStaffingApproval(
   }
 
   // 3. Evaluate Staffing Approval
-
   const proposal = staffing.proposal;
   const approval = approveStaffingProposal(proposal);
 
@@ -89,17 +83,37 @@ export async function runStaffingApproval(
     };
   }
 
+  // 4. Request Human Confirmation
+  // 5. Revalidate and Finalize Approval
+  return confirmAndFinalizeStaffingApproval(
+    proposal,
+    approval,
+    options,
+    staffing.rounds
+  );
+}
+
+async function confirmAndFinalizeStaffingApproval(
+  proposal: StaffingProposal,
+  approvalRequest: ApprovalRequest,
+  options: StaffingApprovalWorkflowOptions,
+  rounds: number
+): Promise<StaffingApprovalWorkflowResult> {
+  // 1. Check Human Confirmation Availability
   if (!options.confirmApproval) {
     return {
       status: "approval-required",
-      request: approval,
+      request: approvalRequest,
     };
   }
 
-  // 4. Request Human Confirmation
-
+  // Approval's transaction has returned; Human input must not hold its Ledger lock.
+  // Isolate the review copy so UI mutations cannot change the approved Proposal.
   try {
-    const receipt = await options.confirmApproval(structuredClone(approval));
+    // 2. Request Human Confirmation
+    const receipt = await options.confirmApproval(
+      structuredClone(approvalRequest)
+    );
 
     if (!receipt) {
       return {
@@ -108,12 +122,16 @@ export async function runStaffingApproval(
       };
     }
 
-    // 5. Revalidate and Finalize Approval
+    // 3. Revalidate and Finalize Approval
+    // The receipt is bound to the reviewed Proposal, so finalization reuses it.
+    // Governance revalidates current policy after the Human wait.
+    const finalApproval = approveStaffingProposal(proposal, receipt);
 
-    const result = approveStaffingProposal(proposal, receipt);
-
-    if (result.status === "approved" || result.status === "denied") {
-      return result;
+    if (
+      finalApproval.status === "approved" ||
+      finalApproval.status === "denied"
+    ) {
+      return finalApproval;
     }
 
     return {
@@ -125,7 +143,7 @@ export async function runStaffingApproval(
       status: "failed",
       failure: "confirmation",
       reason: "Human Staffing confirmation failed.",
-      rounds: staffing.rounds,
+      rounds,
     };
   }
 }

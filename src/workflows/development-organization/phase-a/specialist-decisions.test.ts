@@ -197,11 +197,19 @@ describe("Phase A dynamic Specialist Decisions", () => {
         status: "denied",
         reason: "No approval",
       });
-    expect(await runSpecialistDecisions(input)).toMatchObject({
+    const result = await runSpecialistDecisions(input);
+    expect(result).toMatchObject({
       status: "failed",
       stage: "preflight",
       reason: expect.any(String),
     });
+    if (["empty", "sparse", "unapproved"].includes(kind)) {
+      expect(result).not.toHaveProperty("assignmentId");
+    } else {
+      expect(result).toMatchObject({
+        assignmentId: input.requests[1].assignmentId,
+      });
+    }
     expect(governance.authorizeSpecialistInvocation).not.toHaveBeenCalled();
     expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
     expect(compareDecisions).not.toHaveBeenCalled();

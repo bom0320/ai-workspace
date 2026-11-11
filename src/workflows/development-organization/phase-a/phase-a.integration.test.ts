@@ -32,7 +32,7 @@ import type {
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
-} from "./staffing-approval.js";
+} from "./staffing-approval/staffing-approval.js";
 
 // Real receipts, signed storage and Git; only controlling-terminal I/O is fake.
 const terminal = vi.hoisted(() => ({ home: "", line: "", offset: 0 }));

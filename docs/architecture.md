@@ -772,7 +772,7 @@ Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증
 
 ### v4 Staffing → Governance Approval Workflow — 구현
 
-`src/workflows/development-organization/phase-a/staffing-approval.ts`의 `runStaffingApproval()`은 개별 Application의 상위
+`src/workflows/development-organization/phase-a/staffing-approval/staffing-approval.ts`의 `runStaffingApproval()`은 개별 Application의 상위
 Orchestration이다. Workflow → Application 방향으로만 의존하며 Application은 Workflow를 import하지 않는다.
 Phase A의 첫 연결만 구현했고 Graph / Checkpoint / LangGraph runtime / 후속 Specialist 실행은 추가하지 않았다.
 
@@ -1394,7 +1394,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runVerification()` — `services/verification/verification-runner.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeTask()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
 | 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `runCodexSpecialist()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
 | Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `approveTask()`, `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 기존 Planning/Execution CLI | Task 승인·Apply·Commit·Push | Policy + Lifecycle |
-| 상위 실행 분기·실패/승인 대기 전달 | Development Organization Workflow | `runStaffingApproval()` — `workflows/development-organization/phase-a/staffing-approval.ts` | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval | Lifecycle 조정; 업무 검증은 Application 재사용 |
+| 상위 실행 분기·실패/승인 대기 전달 | Development Organization Workflow | `runStaffingApproval()` — `workflows/development-organization/phase-a/staffing-approval/staffing-approval.ts` | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval | Lifecycle 조정; 업무 검증은 Application 재사용 |
 
 Git blob reader는 NUL / invalid UTF-8를 거부하지만 접근 권한·regular mode·민감 경로를 자체 승인하지 않는다.
 Commit tree loader는 full SHA·entry 형식·size를 검사한다. Snapshot Schema의 non-empty commitSha와는
@@ -1646,7 +1646,7 @@ authorizeSpecialistInvocation(request, attempt?)
   입력·검증·Lock·저장 실패는 denied다. 신규 Authorization이나 Eligibility 평가는 호출하지 않아
   잔여 예산이 0이어도 예약된 입력을 Claim할 수 있다. Budget은 여전히 예약 수로만 소비한다.
   기존 Ledger의 claimedAt 누락은 미사용 예약이며 읽기 시 default·재저장은 하지 않는다.
-- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/authorized-specialist-decision.ts`의
+- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/specialist-decisions/execution/authorized-specialist-decision.ts`의
   `runAuthorizedSpecialistDecision(invocation)`으로 단일 호출을 연결한다. 실행 직전 Claim이 거부되면
   오류로 종료하고 v2를 호출하지 않는다. 성공하면 반환된 Invocation의 snapshot·goal과
   specialist·assignmentObjective·files 한 개를 `runIndependentDecisions()`에 전달한다.
@@ -1664,7 +1664,7 @@ authorizeSpecialistInvocation(request, attempt?)
 
 ### 9.6 Step 5.4 — Phase A Multi-Specialist Decision & Comparison — Implemented
 
-`workflows/development-organization/phase-a/specialist-decisions.ts`의
+`workflows/development-organization/phase-a/specialist-decisions/specialist-decisions.ts`의
 `runSpecialistDecisions({ scopeId, requests })`는 승인된 동적 Assignment 요청 묶음을 실행한다.
 `runStaffingApproval()` 이후 받은 Scope ID로 별도 호출하며 외부 Scope 객체를 권한 근거로 받지 않는다.
 

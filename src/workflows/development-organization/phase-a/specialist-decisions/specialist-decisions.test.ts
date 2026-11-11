@@ -5,7 +5,7 @@ import type { AgentDecision } from "@/application/decision/index.js";
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "./authorized-specialist-decision.js";
+} from "./execution/authorized-specialist-decision.js";
 import { runSpecialistDecisions } from "./specialist-decisions.js";
 
 vi.mock("@/application/governance/index.js", async (original) => ({
@@ -16,8 +16,10 @@ vi.mock("@/application/governance/index.js", async (original) => ({
 vi.mock("@/application/comparison/index.js", () => ({
   compareDecisions: vi.fn(),
 }));
-vi.mock("./authorized-specialist-decision.js", async (original) => ({
-  ...(await original<typeof import("./authorized-specialist-decision.js")>()),
+vi.mock("./execution/authorized-specialist-decision.js", async (original) => ({
+  ...(await original<
+    typeof import("./execution/authorized-specialist-decision.js")
+  >()),
   runAuthorizedSpecialistDecision: vi.fn(),
 }));
 const scope: governance.ApprovedOperatingScope = {

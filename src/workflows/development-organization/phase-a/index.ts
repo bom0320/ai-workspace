@@ -2,13 +2,13 @@ export {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
   type StaffingApprovalWorkflowResult,
-} from "./staffing-approval.js";
+} from "./staffing-approval/staffing-approval.js";
 export {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "./authorized-specialist-decision.js";
+} from "./specialist-decisions/execution/authorized-specialist-decision.js";
 export {
   runSpecialistDecisions,
   type SpecialistDecisionsWorkflowInput,
   type SpecialistDecisionsWorkflowResult,
-} from "./specialist-decisions.js";
+} from "./specialist-decisions/specialist-decisions.js";

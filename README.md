@@ -40,9 +40,11 @@ CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 �
 여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
 현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
 Workflow Runtime은 **LangGraph.js를 설치하고 Minimal Integration Step 1을 구현**했다.
-현재 Graph는 `START → load-system-policy → END`로 Human-approved System Policy만 조회한다.
-Graph 종료는 Phase A 완료가 아니며 기존 Phase A Workflow와 CLI에는 아직 연결하지 않았다.
-Graph State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
+현재 Phase A Graph는 `START → load-system-policy → END`로 Human-approved System Policy만 조회한다.
+Graph 종료는 Phase A 완료가 아니며 기존 Staffing·Decision Workflow와 CLI에는 아직 연결하지 않았다.
+Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력과 policyLookup 결과를 소유한다.
+상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
+State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 
 LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
 소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.
@@ -112,7 +114,7 @@ Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행�
 | `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
 | `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
 | Phase A `runSpecialistDecisions({ scopeId, requests })` API | 저장 Scope 조회·Preflight → 순차 Authorization·Claim·v2 Decision → v3 Comparison |
-| `createDevelopmentOrganizationGraph().invoke({ goal, repositoryPath })` API | 정책 조회 Node만 실행; CLI 명령 없음 |
+| `createPhaseAGraph().invoke({ goal, repositoryPath })` API | Phase A 정책 조회 Node만 실행; CLI 명령 없음 |
 
 Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
 API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

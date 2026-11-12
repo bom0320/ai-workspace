@@ -181,7 +181,7 @@ CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded 
 상태: **In progress — 기반 기능 일부 구현, 전체 Workflow 미완성**.
 **Workflow Runtime은 LangGraph.js 채택으로 확정**했다.
 기존 Codex 기반 Agent Execution Runtime과 v0–v3 Application API / Domain Model을 우선 재사용한다.
-LangGraph.js 설치와 정책 조회 Graph만 통합했다. CEO Staffing·Approval·Authorization·Claim·동적 Specialist Decision/Comparison은 별도 API로 구현했으며 전체 조직 Graph·CLI는 미연결이다.
+LangGraph.js 설치와 Phase A 정책 조회 Graph만 통합했다. CEO Staffing·Approval·Authorization·Claim·동적 Specialist Decision/Comparison은 별도 API로 구현했으며 전체 조직 Graph·CLI는 미연결이다.
 
 기존 Runtime Framework Evaluation checkpoint와 별도 선행 Runtime Spike는 제거한다.
 채택 여부를 다시 결정하는 단계 없이 아래 구현 과정의 필요한 시점에 LangGraph.js를 통합하고,
@@ -342,10 +342,13 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 ### LangGraph Minimal Integration — Step 1 Implemented / 다음 Step 2 Planned
 
 - `@langchain/langgraph` / `@langchain/core` 설치. 기존 NodeNext / TypeScript / Zod를 유지했다.
-- 상위 `workflows/development-organization/graph/`에 State / Graph / Node를 분리하고
-  `START → load-system-policy → END`만 컴파일·실행한다. 정책은 기존 Governance API로 조회한다.
-- State는 Goal·Repository 경로와 정책 조회 결과만 담으며 승인 Ledger·Reservation·Claim을 대체하지 않는다.
-  policy-ready는 정책 조회 성공이며 Phase A 완료가 아니다.
+- `workflows/development-organization/phase-a/`에 Graph / State / nodes/load-system-policy를 두고
+  `createPhaseAGraph()`에서 `START → load-system-policy → END`만 컴파일·실행한다. 정책은 기존 Governance API로 조회한다.
+- Organization의 state.ts는 Goal·Repository 경로만 소유한다. Phase A State는 이 공통 입력을 재사용하고
+  policyLookup(ready의 configuration/version 또는 denied의 reason)을 단일 결과로 관리한다.
+  State는 승인 Ledger·Reservation·Claim을 대체하지 않으며 ready는 정책 조회 성공만 뜻한다.
+- 상위 Organization Graph·Subgraph 조합·Phase 간 Handoff는 아직 없다. 기존 전체 조직 Graph 이름의
+  공개 factory는 Phase A 전용 createPhaseAGraph로 교체했으며 호환 Wrapper는 추가하지 않았다.
 - **Tested**: 실제 compiled Graph.invoke와 모의 Governance API로 정상·거부·빈 경로·기존 State 재조회 검증.
   기존 Application / Governance / Phase A 회귀 테스트도 별도로 실행한다.
 - **Not integrated**: Graph의 CEO Staffing·Human Approval·Decision·Comparison·CLI 연결, Checkpoint,

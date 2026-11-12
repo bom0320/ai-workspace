@@ -393,7 +393,7 @@ Authorization·Reservation·Claim·v2 Decision과 v3 Comparison을 연결한다.
 selector 항목은 아직 없다. 기존 `decision` 명령은 고정 Frontend / UX의 v2 → v3 경로를 유지하며
 v4의 승인 Scope나 Reservation을 자동으로 발급하지 않는다.
 
-LangGraph Minimal Integration Step 1은 `createDevelopmentOrganizationGraph()` API로 정책 조회만 수행한다.
-Graph는 CLI / 기존 Staffing·Decision Workflow와 미연결이며 Graph 명령·Interrupt·Resume·Checkpoint는 없다.
+LangGraph Minimal Integration Step 1은 `phase-a/index.ts`의 `createPhaseAGraph()` API로 정책 조회만 수행한다.
+Phase A Graph는 CLI / 기존 Staffing·Decision Workflow와 미연결이며 Graph 명령·Interrupt·Resume·Checkpoint는 없다.
 Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.
 API 실패 계약과 신뢰 경계는 [Architecture](architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

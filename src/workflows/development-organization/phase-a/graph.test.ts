@@ -1,12 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
   type StaffingSystemPolicy,
+  type StaffingSystemPolicyResult,
+  approveStaffingProposal,
+  authorizeSpecialistInvocation,
+  claimAuthorizedInvocation,
 } from "@/application/governance/index.js";
-import { createDevelopmentOrganizationGraph } from "../index.js";
+import { createPhaseAGraph, type PhaseAState } from "./index.js";
+import { developmentOrganizationState } from "../state.js";
 
 vi.mock("@/application/governance/index.js", () => ({
   getStaffingSystemPolicy: vi.fn(),
+  approveStaffingProposal: vi.fn(),
+  authorizeSpecialistInvocation: vi.fn(),
+  claimAuthorizedInvocation: vi.fn(),
 }));
 
 const goal = {
@@ -38,14 +46,24 @@ const systemPolicy: StaffingSystemPolicy = {
 
 beforeEach(() => vi.resetAllMocks());
 
-describe("Development Organization policy lookup Graph", () => {
+describe("Phase A policy lookup Graph", () => {
+  it("keeps Organization inputs separate from Phase A results and reuses Governance result types", () => {
+    expect(Object.keys(developmentOrganizationState.fields)).toEqual([
+      "goal",
+      "repositoryPath",
+    ]);
+    expectTypeOf<
+      NonNullable<PhaseAState["policyLookup"]>
+    >().toEqualTypeOf<StaffingSystemPolicyResult>();
+  });
+
   it("compiles and invokes START → policy lookup → END without completing Phase A", async () => {
     vi.mocked(getStaffingSystemPolicy).mockReturnValue({
       status: "ready",
       configuration: systemPolicy,
       version: 2,
     });
-    const result = await createDevelopmentOrganizationGraph().invoke({
+    const result = await createPhaseAGraph().invoke({
       goal,
       repositoryPath: "/repository",
     });
@@ -55,11 +73,16 @@ describe("Development Organization policy lookup Graph", () => {
     expect(result).toMatchObject({
       goal,
       repositoryPath: "/repository",
-      systemPolicy,
-      policyVersion: 2,
-      status: "policy-ready",
+      policyLookup: {
+        status: "ready",
+        configuration: systemPolicy,
+        version: 2,
+      },
     });
-    expect(result.failure).toBeUndefined();
+    expect(result.policyLookup).not.toHaveProperty("reason");
+    expect(approveStaffingProposal).not.toHaveBeenCalled();
+    expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    expect(claimAuthorizedInvocation).not.toHaveBeenCalled();
   });
 
   it("reports Governance denial and clears policy data supplied by a caller", async () => {
@@ -67,27 +90,34 @@ describe("Development Organization policy lookup Graph", () => {
       status: "denied",
       reason: "System Policy unavailable",
     });
-    const result = await createDevelopmentOrganizationGraph().invoke({
+    const result = await createPhaseAGraph().invoke({
       goal,
       repositoryPath: "/repository",
-      systemPolicy,
-      policyVersion: 1,
-      status: "policy-ready",
+      policyLookup: {
+        status: "ready",
+        configuration: systemPolicy,
+        version: 1,
+      },
     });
-    expect(result.status).toBe("policy-unavailable");
-    expect(result.failure).toBe("System Policy unavailable");
-    expect(result.systemPolicy).toBeUndefined();
-    expect(result.policyVersion).toBeUndefined();
+    expect(result).toMatchObject({
+      goal,
+      repositoryPath: "/repository",
+      policyLookup: { status: "denied", reason: "System Policy unavailable" },
+    });
+    expect(result.policyLookup).not.toHaveProperty("configuration");
+    expect(result.policyLookup).not.toHaveProperty("version");
     expect(getStaffingSystemPolicy).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a blank Repository path without consulting Governance", async () => {
-    const result = await createDevelopmentOrganizationGraph().invoke({
+    const result = await createPhaseAGraph().invoke({
       goal,
       repositoryPath: "   ",
     });
-    expect(result.status).toBe("policy-unavailable");
-    expect(result.failure).toBe("Repository path is required.");
+    expect(result.policyLookup).toEqual({
+      status: "denied",
+      reason: "Repository path is required.",
+    });
     expect(getStaffingSystemPolicy).not.toHaveBeenCalled();
   });
 
@@ -102,17 +132,24 @@ describe("Development Organization policy lookup Graph", () => {
         status: "denied",
         reason: "Policy no longer available",
       });
-    const graph = createDevelopmentOrganizationGraph();
+    const graph = createPhaseAGraph();
     const first = await graph.invoke({
       goal,
       repositoryPath: "/repository",
-      failure: "Old failure",
+      policyLookup: { status: "denied", reason: "Old failure" },
     });
-    expect(first.failure).toBeUndefined();
+    expect(first.policyLookup).toEqual({
+      status: "ready",
+      configuration: systemPolicy,
+      version: 1,
+    });
     const second = await graph.invoke(first);
-    expect(second.status).toBe("policy-unavailable");
-    expect(second.systemPolicy).toBeUndefined();
-    expect(second.policyVersion).toBeUndefined();
+    expect(second.policyLookup).toEqual({
+      status: "denied",
+      reason: "Policy no longer available",
+    });
+    expect(second.policyLookup).not.toHaveProperty("configuration");
+    expect(second.policyLookup).not.toHaveProperty("version");
     expect(getStaffingSystemPolicy).toHaveBeenCalledTimes(2);
   });
 });

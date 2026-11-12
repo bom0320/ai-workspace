@@ -52,7 +52,7 @@ Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance�
 Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다.
 Step 5.2는 실행 전 Reservation 검증·일회 Claim, Step 5.3은 단일 Invocation의 v2 실행,
 Step 5.4는 승인 Scope의 동적 Specialist 순차 실행과 v3 Comparison 연결을 제공한다.
-LangGraph 상위 Graph는 정책 조회만 수행한다. Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)과 [Runtime Foundation](#97-langgraph-minimal-integration-step-1--runtime-foundation)을 따른다.
+LangGraph Phase A Graph는 정책 조회만 수행하며 상위 Organization Graph는 아직 없다. Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)과 [Runtime Foundation](#97-langgraph-minimal-integration-step-1--runtime-foundation)을 따른다.
 
 ## 3. Current End-to-End Flows
 
@@ -114,7 +114,7 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 ```text
 CLI staffing → runStaffingApproval → System Policy 조회 → runStaffing → Approval → Scope
 별도 Phase A API → 저장 Scope Preflight → 순차 Authorization → Claim → v2 Decision → v3 Comparison
-별도 LangGraph API → START → load-system-policy(getStaffingSystemPolicy) → END
+별도 Phase A Graph API → START → load-system-policy(getStaffingSystemPolicy) → END
 ```
 
 이 세 연결 단위를 하나의 전체 조직 E2E로 표현하지 않는다. CLI staffing은 Scope에서 종료하며,
@@ -127,7 +127,7 @@ Decision 묶음 API는 Scope ID / 요청을 별도로 받는다. 정책 조회 G
 | Human / CLI adapter | workflow·입력, Task Approval, Review / Delivery / Cleanup, 결과 표시 | application 내부 flow / Domain 검증을 소유하지 않음 |
 | Governance application | System Policy·위임·승인 근거·Scope와 Authorization·Reservation·Claim | 상태 조회나 Schema parsing을 승인·실행 권한으로 해석하지 않음 |
 | Phase A Workflow | Staffing→Approval 및 승인 Scope의 순차 Decision→Comparison API 조합 | Governance 정책·v2 Evidence·v3 참조 검증을 재구현하지 않음 |
-| LangGraph Runtime Foundation | State / Node / START→정책 조회→END 실행 | 현재 조회만 연결; State는 Governance Ledger나 전체 Phase A 완료를 대체하지 않음 |
+| LangGraph Runtime Foundation | Phase A State / Node / START→정책 조회→END 실행 | 현재 조회만 연결; State는 Governance Ledger나 전체 Phase A 완료를 대체하지 않음 |
 | Planning application / Codex Planner | 조사·limits·계약 생성 / supplied PlannerContext로 inspect 또는 complete | inspection은 수정 권한이 아니며 Planner는 별도 cwd·제한된 도구 설정으로 실행 |
 | Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository, Zod validation | AI가 시스템 ID나 Human 제약을 소유하지 않음 |
 | Execution application / Codex Worker | workspace와 Worker / Scope / Verification / artifacts 연결 / scoped 수정 | 정상 종료 때 workspace를 지우지 않으며 verification command는 Harness가 실행 |
@@ -444,7 +444,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 - CEO 판단 품질과 runtime 실행 안정성을 별도로 검증한다. Schema / reference 통과가 recommendation의
   의미적 타당성을 증명하지 않으며 workflow 완료가 Agent 품질이나 Multi-Agent 우위를 입증하지 않는다.
 
-현재 graph / State / Node 배치는 Runtime Foundation 절의 실제 구현을 따른다. 후속 Node / checkpoint backend / Domain type은 이 문서에서 선행 확정하지 않는다. 실제 책임과 요구가 생길 때 설계하며 generic SpecialistRunner,
+현재 Organization State와 Phase A graph / State / Node 배치는 Runtime Foundation 절의 실제 구현을 따른다. 후속 Node / checkpoint backend / Domain type은 이 문서에서 선행 확정하지 않는다. 실제 책임과 요구가 생길 때 설계하며 generic SpecialistRunner,
 provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도입 원칙은
 [Project Direction](project-direction.md#build-vs-adopt), 단계별 구현과 완료 기준은
 [Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
@@ -1061,7 +1061,7 @@ Source 영역은 다음 기준으로 구분한다.
   `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
   `Goal + RepositorySnapshot + explicit files → AgentDecision[]`가 여기에 속한다.
   각 use-case는 독립 진입점을 가지며 CLI가 Planning과 Execution을 Human gate로 연결한다.
-- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. 상위 `graph/`는 Phase A·향후 Phase B를 포괄할 Runtime이며 현재 정책 조회만 실행한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
+- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. Organization state.ts는 공통 입력을, phase-a/graph.ts는 Phase A 내부 순서를 소유하며 현재 정책 조회만 실행한다. 상위 Organization Graph는 Phase 간 Handoff 정의 이후 구성한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec, TaskContract, InspectedFile의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
 - `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로
@@ -1305,13 +1305,13 @@ src/
 ├─ workflows/
 │  └─ development-organization/
 │     ├─ index.ts
-│     ├─ graph/
-│     │  ├─ graph.ts
-│     │  ├─ state.ts
-│     │  ├─ graph.test.ts
-│     │  └─ nodes/load-system-policy.ts
+│     ├─ state.ts  # 공통 goal / repositoryPath만 소유
 │     └─ phase-a/
 │        ├─ index.ts
+│        ├─ graph.ts
+│        ├─ state.ts  # 공통 입력 + policyLookup
+│        ├─ graph.test.ts
+│        ├─ nodes/load-system-policy.ts
 │        ├─ phase-a.integration.test.ts
 │        ├─ staffing-approval/staffing-approval.ts
 │        └─ specialist-decisions/
@@ -1717,7 +1717,7 @@ Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원�
 이미 사용됨·Scope 무효·입력 변조·저장소 오류 등 세부 원인을 구분하지 않는다.
 
 묶음 예약 transaction이나 durable Workflow 상태는 없다. 예약된 예산과 Claim은 실패 후에도 유지한다.
-자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장은 구현하지 않았다. 이 Decision Workflow는 정책 조회만 있는 상위 LangGraph와 아직 미연결이다.
+자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장은 구현하지 않았다. 이 Decision Workflow는 정책 조회만 있는 Phase A Graph와 아직 미연결이다.
 묶음 Workflow를 다시 호출하면 새 Authorization으로 새 예약을 만들 수 있으므로 호출자는 이를 자동 재개로
 취급하면 안 된다. Step 5.3의 동일 Invocation 일회 Claim과 묶음의 재호출 의미는 다르다.
 외부 Git·정책 변경과 실행 사이의 TOCTOU 및 정확히 한 번의 실행 완료를 보장하지 않는 한계는 유지한다.
@@ -1725,40 +1725,55 @@ Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원�
 
 ### 9.7 LangGraph Minimal Integration Step 1 — Runtime Foundation
 
-LangGraph.js는 Development Organization의 상위 Workflow Runtime이다. `graph/`를 `phase-a/` 밖에 두어
-향후 Phase B도 같은 상위 흐름에서 연결할 수 있게 했으며, 이번 구현은 정책 조회 Node 하나뿐이다.
+LangGraph.js는 최종적으로 Development Organization 전체 실행 Runtime을 맡는다. 실행 책임은
+Organization Graph의 Phase 간 순서·데이터 전달과 Phase A Graph의 내부 Node 순서·조건부 분기로 나눈다.
+현재 실행 가능한 Graph는 Phase A 정책 조회뿐이다. 상위 Organization Graph는 Phase 간 Handoff 계약이
+정의된 시점에 구성하며 단순히 Phase A를 다시 감싸는 Wrapper는 만들지 않았다.
 [공식 Graph API](https://docs.langchain.com/oss/javascript/langgraph/graph-api)의 StateSchema / StateGraph / compile / invoke를 사용한다.
 Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반 Agent Runtime을 유지한다.
 
+아래 경로는 `src/workflows/development-organization/` 기준이다.
+
 | 파일 | 현재 책임 |
 | --- | --- |
-| `src/workflows/development-organization/index.ts` | Graph factory와 State 타입의 공개 export; 기존 phase-a/index.ts는 유지 |
-| `graph/state.ts` | 기존 GoalSpec·StaffingSystemPolicy Zod 계약을 재사용한 StateSchema |
-| `graph/graph.ts` | `createDevelopmentOrganizationGraph()`의 Node 등록 → START/END Edge 연결 → compile |
-| `graph/nodes/load-system-policy.ts` | Repository 경로 확인 → 기존 Governance API 호출 → 정책 조회 상태 반환 |
-| `graph/graph.test.ts` | 실제 compiled Graph.invoke, Governance API를 모의한 정상/거부/State 재조회 검증 |
+| `index.ts`, `state.ts` | Organization State 타입 공개와 원본 GoalSpec·repositoryPath 공통 입력 소유; Organization Graph는 없음 |
+| `phase-a/index.ts` | createPhaseAGraph·PhaseAState와 기존 Phase A Workflow 공개 API |
+| `phase-a/state.ts` | Organization 입력 schema 재사용, 기존 StaffingSystemPolicy Schema를 사용하는 policyLookup 판별 union |
+| `phase-a/graph.ts` | createPhaseAGraph의 Node 등록 → START/END Edge 연결 → compile |
+| `phase-a/nodes/load-system-policy.ts` | Repository 경로 확인 → 기존 Governance API 호출 → 조회 결과 반환 |
+| `phase-a/graph.test.ts` | 실제 compiled Graph.invoke, Governance API를 모의한 정상/거부/State 재조회 검증 |
 
 ```ts
-import { createDevelopmentOrganizationGraph } from "@/workflows/development-organization/index.js";
+import { createPhaseAGraph } from "@/workflows/development-organization/phase-a/index.js";
 
-const graph = createDevelopmentOrganizationGraph();
+const graph = createPhaseAGraph();
 const state = await graph.invoke({ goal, repositoryPath });
-// state.status: "policy-ready" | "policy-unavailable"
+// state.policyLookup: { status: "ready", configuration, version } | { status: "denied", reason }
 ```
 
-State는 goal / repositoryPath / systemPolicy / policyVersion / status / failure만 가진다.
-정책 조회 이전에는 결과 필드가 없고, 성공하면 정책과 version을 기록하고 failure를 지운다.
-거부·빈 경로에서는 policy-unavailable과 reason을 기록하고 이전 정책·version을 지운다.
-호출자가 State에 정책을 넣어도 Node는 Governance를 다시 조회한다. Graph State와 구조 검증은
+Organization State는 goal / repositoryPath만 소유한다. Phase A State는 동일 입력 schema를 재사용하고
+조회 이전에는 생략 가능한 policyLookup 하나를 추가한다. policyLookup은 기존 Governance API의
+StaffingSystemPolicyResult와 같은 ready / denied 구조이며 configuration은 기존 Domain Schema를 그대로 쓴다.
+Node는 정책 조회 결과 전체를 교체하므로 denied 뒤에 이전 configuration/version이 남거나
+ready 결과와 과거 failure가 동시에 존재하지 않는다. Organization State에 정책·Proposal·Decision·Comparison이나
+미래 phaseAOutcome / Phase B 필드를 미리 넣지 않는다. 범용 State Mapper나 Adapter도 추가하지 않았다.
+
+호출자가 이전 policyLookup을 전달해도 Node는 Governance를 다시 조회한다. Graph State와 구조 검증은
 승인 출처나 실행 권한의 증거가 아니며, 서명된 Governance Ledger가 계속 승인·권한 기록을 소유한다.
-END와 policy-ready는 정책 조회 완료만 뜻하고 Phase A 성공·전체 조직 완료를 뜻하지 않는다.
+Application / Governance가 도메인 기능·정책·Context·Evidence·Reservation·Claim 검증을 소유한다.
+END와 policyLookup.ready는 정책 조회 완료만 뜻하고 Phase A 성공·전체 조직 완료를 뜻하지 않는다.
+
+기존 createDevelopmentOrganizationGraph의 저장소 사용처는 테스트·문서뿐이었다. 이를 createPhaseAGraph로
+갱신하고 기존 factory export는 제거했다. 반환 State의 systemPolicy / policyVersion / status / failure는
+policyLookup으로 교체했으며 root의 DevelopmentOrganizationState는 공통 입력만 가진다.
+기존 runStaffingApproval / runSpecialistDecisions / runAuthorizedSpecialistDecision 및 CLI 계약은 유지한다.
 
 설치 버전은 `@langchain/langgraph` 1.7.3 / `@langchain/core` 1.3.7이며 lockfile로 고정한다.
 실제 패키지 조건은 graph의 core ^1.3.4, Zod ^3.25.32 또는 ^4.2.0이다. 기존 Zod 4.6.5와
 TypeScript 5.9.3 / NodeNext를 그대로 사용하며, core의 Node >=20 조건을 Node 23.9.0에서 검증했다.
 패키지의 SDK·checkpoint·LangSmith 전이 dependency가 설치되어도 해당 기능을 연결한 것은 아니다.
 
-별도 Runtime Manager / Provider Registry / Subgraph / 재시도·복구·Checkpoint·Interrupt/Resume는 없다.
+별도 Runtime Manager / Provider Registry / 상위 Organization Graph·Subgraph 조합 / 재시도·복구·Checkpoint·Interrupt/Resume는 없다.
 CLI·CEO Staffing·Human Approval·Specialist Decision·Comparison Node는 아직 연결하지 않았다.
 다음 Step 2에서 정책 조회 다음의 CEO Staffing 연결을 다루며 후속 승인·대기·실행 Node는 해당 단계에서 설계한다.
 Graph 테스트는 실제 LangGraph 런타임과 모의 Governance API를 조합한다. 기존 Governance의 signed Ledger·정책 검증은

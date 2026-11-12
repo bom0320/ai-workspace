@@ -12,3 +12,5 @@ export {
   type SpecialistDecisionsWorkflowInput,
   type SpecialistDecisionsWorkflowResult,
 } from "./specialist-decisions/specialist-decisions.js";
+export { createPhaseAGraph } from "./graph.js";
+export type { PhaseAState } from "./state.js";

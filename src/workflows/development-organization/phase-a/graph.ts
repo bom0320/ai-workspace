@@ -1,10 +1,10 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { developmentOrganizationState } from "./state.js";
+import { phaseAState } from "./state.js";
 import { loadSystemPolicy } from "./nodes/load-system-policy.js";
 
-export function createDevelopmentOrganizationGraph() {
+export function createPhaseAGraph() {
   // 1. Register Workflow Nodes
-  const graph = new StateGraph(developmentOrganizationState).addNode(
+  const graph = new StateGraph(phaseAState).addNode(
     "load-system-policy",
     loadSystemPolicy
   );

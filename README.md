@@ -29,17 +29,20 @@ Agent discussion / synthesis / CEO 전체 조직 운영 / Coordinator, 공유 �
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
 **v4 — CEO Governance / AI Organization Orchestration은 진행 중이며 전체 Workflow는 미완성**이다.
-Authority / Staffing schema, Invocation Eligibility Evaluation, CEO propose / inspect / escalate protocol과
-Snapshot 기반 Staffing Context Discovery / 추가 Inspection 및 공통 repository-inspection 재사용이 구현되어 있다.
-Step 2.3의 Codex CEO Adapter / Staffing Loop는 제한된 inspect / propose / escalate를 처리하며
-R2의 검증·Finalization까지 조합한 단일 runStaffing()은 StaffingProposal 또는 Escalation / Failure를 반환한다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope 발급을 제공한다.
-실제 Authorization·Specialist 실행 연결은 아직 없다.
+CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffing Approval·Delegation,
+Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
+동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
+CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
+CEO Synthesis·해결 방향 Human Governance·Phase B와 전체 조직 E2E는 아직 없다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
 여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
 현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
-Workflow Runtime은 **LangGraph.js 채택 확정 / 설치·통합 미구현**이고 기존 Codex 실행과 v0–v3 API를 재사용한다.
+Workflow Runtime은 **LangGraph.js를 설치하고 Minimal Integration Step 1을 구현**했다.
+현재 Graph는 `START → load-system-policy → END`로 Human-approved System Policy만 조회한다.
+Graph 종료는 Phase A 완료가 아니며 기존 Phase A Workflow와 CLI에는 아직 연결하지 않았다.
+Graph State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 
 LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
 소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.
@@ -51,7 +54,7 @@ LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evi
 
 ## 사전 준비
 
-- Node.js와 pnpm
+- Node.js 20 이상과 pnpm (설치된 LangChain core의 Node 요구사항)
 - Git과 하나 이상의 commit이 있는 대상 Repository
 - PATH에서 실행할 수 있고 인증이 완료된 `codex` CLI
 - 대상 Repository의 검증 명령이 요구하는 도구와 dependency
@@ -101,6 +104,18 @@ pnpm dev execute ./tasks/example.json /absolute/path/to/target-repository
 
 Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행된다.
 원본 작업 디렉터리 반영은 실행 후 별도의 Apply 승인으로만 진행한다.
+
+## v4 현재 진입점
+
+| 진입점 | 현재 연결 범위 |
+| --- | --- |
+| `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
+| `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
+| Phase A `runSpecialistDecisions({ scopeId, requests })` API | 저장 Scope 조회·Preflight → 순차 Authorization·Claim·v2 Decision → v3 Comparison |
+| `createDevelopmentOrganizationGraph().invoke({ goal, repositoryPath })` API | 정책 조회 Node만 실행; CLI 명령 없음 |
+
+Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
+API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.
 
 ## Decision quick example
 

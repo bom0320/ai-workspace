@@ -72,7 +72,7 @@ boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture
 여러 provider 지원, Synthesis, Human governance history는 현재 기능이 아니다.
 현재 CLI는 독립 Decision 생성과 Structured Comparison을 별도 application use-case로 조합한다.
 v4는 진행 중이며 Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing Context
-Discovery와 CEO Staffing Agent / Loop가 구현되어 있다. 전체 조직 운영 Workflow는 아직 연결되지 않았다.
+Discovery와 CEO Staffing Agent / Loop, Approval / Authorization / Claim 및 동적 Specialist Decision·Comparison 연결이 구현되어 있다. LangGraph는 정책 조회 Graph까지이며 전체 조직 운영 Workflow는 아직 연결되지 않았다.
 
 현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
 방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
@@ -142,7 +142,7 @@ Workflow Runtime을 채택하는 것이 Codex나 기존 v0–v3 Domain Model / A
 
 채택 여부를 결정하는 별도 Framework Evaluation / 선행 Runtime Spike는 생략한다.
 LangGraph.js 통합은 v4의 필요한 단계에서 진행하고, 구체적 기능의 실제 작동 여부와 소유권 보존은
-구현·통합 테스트·전체 E2E에서 검증한다. **기술 선택은 확정됐지만 패키지 설치·코드 통합은 미구현**이다.
+구현·통합 테스트·전체 E2E에서 검증한다. **패키지 설치와 System Policy 조회 Graph(Step 1)는 구현**했다. 전체 조직 Graph·Human 대기/재개·복구가 검증됐다는 뜻은 아니다.
 구체적인 책임과 전체 목표는 [v4 Architecture](architecture.md#5-target-responsibility-model)에 둔다.
 
 ### Library vs Framework / Runtime
@@ -164,15 +164,16 @@ Pydantic AI 역시 단순 validation library로 분류하지 않으며 현재 Ty
 
 ### 외부 기술과의 관계 및 도입 시점
 
-현재 stack은 Node.js, TypeScript, pnpm, tsx, Vitest, Zod와 외부 Codex CLI다.
-LangGraph.js는 **v4 Workflow Runtime으로 채택 확정 / 설치·통합 미구현**이다.
-OpenAI Agents SDK, OPA, Temporal, Restate, CrewAI, LangSmith도 현재 dependency가 아니며,
+현재 stack은 Node.js, TypeScript, pnpm, tsx, Vitest, Zod, LangGraph.js와 외부 Codex CLI다.
+LangGraph.js는 **v4 Workflow Runtime으로 채택하고 정책 조회 Graph만 통합**했다.
+OpenAI Agents SDK, OPA, Temporal, Restate, CrewAI는 채택하지 않았다. LangSmith SDK는 LangChain core의
+전이 dependency로 설치되지만 Tracing backend 연결·운영은 도입하지 않았다.
 LangGraph.js 외 기술의 채택을 이번 결정으로 확정하지 않는다.
 
 | 범용 책임 | 현재 결정 / 구현 상태 | 도입·검증 조건 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 확정; 통합 미구현 | v4 단계별 구현에서 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합 및 E2E 검증 |
-| Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | CEO의 구체적 호출 방식은 v4에서 설계; OpenAI Agents SDK 등으로 교체하는 결정은 없음 |
+| Workflow Runtime | LangGraph.js 설치·정책 조회 Graph 통합; 전체 조직 흐름 미연결 | v4 단계별 구현에서 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합 및 E2E 검증 |
+| Agent Execution Runtime | 기존 Codex 기반 실행 재사용 | CEO Staffing·v2 Specialist·v3 Comparator의 Codex Adapter 구현; OpenAI Agents SDK 등으로 교체하는 결정은 없음 |
 | Tracing / Observability | 현재 duration telemetry 사용 | v4 흐름의 관찰 요구에 따라 instrumentation / backend 평가; OpenTelemetry / LangSmith 등은 미채택 |
 | Generic policy evaluation | 현재 별도 engine 불필요 | Role × Action × Resource 규칙이 동적으로 복잡해질 때 OPA 등 평가 |
 | 추가 durable execution infrastructure | 현재 미채택 | LangGraph.js 통합 후에도 남는 장기 HITL / crash recovery / durable scheduling 요구를 근거로 Temporal / Restate 등 필요성 판단 |
@@ -234,7 +235,7 @@ v3는 Concern별 Agreement / Conflict / Trade-off와 Gap을 구조화하고 원�
 v4의 recommendation은 원래 Decision / Evidence / Verification까지 추적 가능해야 한다.
 v4는 CEO가 판단·종합 이후에도 개발 업무 분해·배치·진행 평가·재작업·보고를 맡고 LangGraph.js가
 전체 workflow를 실행하도록 설계한다. Authority / Staffing 기반 schema, Context Discovery와 CEO Staffing
-Adapter / Loop와 제한된 정책 검증·Proposal Finalization은 구현되어 있다. Synthesis, 실행 조정과 전체 Workflow는 아직
+Adapter / Loop와 제한된 정책 검증·Proposal Finalization, 승인 Scope의 순차 Decision·Comparison 연결은 구현되어 있다. Synthesis, Phase B 실행 조정과 전체 Workflow는 아직
 미구현이며 후속 Domain / protocol과 실행 연결은 단계적으로 정한다.
 
 ### 5. Human Governance

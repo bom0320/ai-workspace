@@ -309,8 +309,7 @@ v4의 Phase A(해결 방향 판단·승인) / Phase B(상세 설계·실행)는
 다른 단계의 포괄 실행 권한이 아니다. 현재 Plan & Execute의 TaskContract 표시 → Approve / Reject는
 Standalone v1의 접점이며 v4의 앞선 승인 단계를 수행한 것으로 간주하지 않는다.
 다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
-현재 CLI의 governance 명령은 아래 Staffing 승인만 제공하며 CEO 실행 / 해결 방향의 Human Governance
-명령은 없다. 기존 Decision 명령은 독립 판단과 비교까지만 수행한다. 전체 조직 인터페이스 형태와 구현 순서는
+현재 CLI의 governance 명령은 아래 정책·위임·Staffing 승인을 제공하며, CEO Staffing은 별도 staffing 명령으로 실행한다. 해결 방향의 Human Governance 명령은 없다. 기존 Decision 명령은 독립 판단과 비교까지만 수행한다. 전체 조직 인터페이스 형태와 구현 순서는
 [Roadmap](roadmap.md)에 두며 새로운 명령·화면을 현재 기능으로 확정하지 않는다.
 
 
@@ -368,7 +367,7 @@ System Policy 위반은 Human 확인으로 우회하지 않는다. 만료·철�
 승인 결과는 ApprovalRecord와 Scope를 출력하고 `~/.ai-workspace-governance/`에 서명된 기록을 보존한다.
 자세한 신뢰 경계·한계는 [Architecture의 Step 3](architecture.md#v4-step-3--staffing-approval--human-delegation--구현)을 따른다.
 Staffing 승인·Human 사전 위임은 해결 방향 Governance, Task Approval, Change Review / Delivery의 승인이 아니다.
-Scope가 발급되어도 Specialist 호출·Budget Reservation·Authorization은 수행하지 않는다.
+이 Governance CLI는 Scope가 발급되어도 Specialist 호출·Budget Reservation·Authorization을 수행하지 않는다. 해당 API와 별도 Phase A Decision Workflow는 구현되어 있다.
 
 ### v4 Staffing → Approval (명시 명령)
 
@@ -385,4 +384,16 @@ Workflow가 Ledger에서 정책을 가져와 CEO Staffing을 실행하고 Propos
 결과는 JSON으로 출력하며 `approved`만 exit code 0이다. `failed`(정책 조회·Staffing·확인 실패), `escalated`
 (질문·사유 포함), `rejected`, `denied`는 1이다. 기존 selector와 `governance approve <proposal.json>`은 유지한다.
 새 명령은 Proposal 파일을 저장·재로딩하지 않으며 Scope 발급까지만 수행한다. Specialist 호출·Authorization·
-Budget Reservation·장기 대기/재개·LangGraph는 연결하지 않는다.
+Budget Reservation·장기 대기/재개·LangGraph는 이 명령에 연결하지 않는다.
+
+### Application / Workflow API와 CLI 경계
+
+별도 Phase A `runSpecialistDecisions({ scopeId, requests })`는 저장 승인 Scope를 조회한 뒤 순차
+Authorization·Reservation·Claim·v2 Decision과 v3 Comparison을 연결한다. 이 API를 호출하는 CLI 명령이나
+selector 항목은 아직 없다. 기존 `decision` 명령은 고정 Frontend / UX의 v2 → v3 경로를 유지하며
+v4의 승인 Scope나 Reservation을 자동으로 발급하지 않는다.
+
+LangGraph Minimal Integration Step 1은 `createDevelopmentOrganizationGraph()` API로 정책 조회만 수행한다.
+Graph는 CLI / 기존 Staffing·Decision Workflow와 미연결이며 Graph 명령·Interrupt·Resume·Checkpoint는 없다.
+Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.
+API 실패 계약과 신뢰 경계는 [Architecture](architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

@@ -11,7 +11,7 @@
 | v1 | Goal-to-Task Planning | Implemented |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
-| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 1.x / 2.1–2.3 / R2 Staffing 및 Step 3 승인 구현; 전체 Workflow 미완성 |
+| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 3~5.4 / R1·R2 및 LangGraph Step 1 구현; 전체 Workflow 미완성 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
@@ -181,7 +181,7 @@ CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded 
 상태: **In progress — 기반 기능 일부 구현, 전체 Workflow 미완성**.
 **Workflow Runtime은 LangGraph.js 채택으로 확정**했다.
 기존 Codex 기반 Agent Execution Runtime과 v0–v3 Application API / Domain Model을 우선 재사용한다.
-LangGraph.js는 아직 설치·통합되지 않았다. CEO Staffing Adapter / Loop는 구현했지만 전체 조직 Workflow는 미구현이다.
+LangGraph.js 설치와 정책 조회 Graph만 통합했다. CEO Staffing·Approval·Authorization·Claim·동적 Specialist Decision/Comparison은 별도 API로 구현했으며 전체 조직 Graph·CLI는 미연결이다.
 
 기존 Runtime Framework Evaluation checkpoint와 별도 선행 Runtime Spike는 제거한다.
 채택 여부를 다시 결정하는 단계 없이 아래 구현 과정의 필요한 시점에 LangGraph.js를 통합하고,
@@ -208,8 +208,7 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
 구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
-다음은 Budget Reservation / 최신 lifecycle·사용량 검증을 포함한 Authorization이다. 아래는
-전체 내부 마일스톤이며 미구현 모델의 이름·Schema나 병렬 실행 방식을 선행 확정하지 않는다.
+Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. 다음은 LangGraph의 단계별 연결과 Step 6 CEO Synthesis다. 아래 목록은 현재 구현과 예정 마일스톤을 구분하며 미구현 모델·병렬 실행 방식을 선행 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
@@ -217,12 +216,12 @@ Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finaliza
    inspect / propose / escalate와 제한된 Staffing Loop를 연결했다. R2에서 Proposal Finalization / 제한된 Policy Validation을 구현했다.
 3. **Human Staffing Approval — Implemented**: owner-private signed ledger의 Human 위임·직접 승인 근거를 검증하고 Scope를 발급한다.
    로컬 OS 계정 / CLI 신뢰 경계이며 외부 IAM·분산 audit 보장은 아니다.
-4. **Context Routing & Authorization**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
-   Authorized Specialist Invocation 구성·실행 Enforcement를 연결한다.
-5. **Independent Decision & Comparison — Phase A**: 기존 v2 / v3를 재사용하고 원본 Evidence 참조와 독립성 유지.
-6. **CEO Synthesis**: Recommendation, Rationale / Evidence, Trade-off, Unresolved Issues / Escalation 표현.
+4. **Context Routing & Authorization — Implemented**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
+   Authorized Specialist Invocation 발급. Step 5.2 Claim과 Step 5.3 실행 Workflow가 사용을 연결한다.
+5. **Independent Decision & Comparison — Phase A, 5.1–5.4 Implemented**: 기존 v2 / v3와 원본 Evidence 참조·독립성 유지. 5.5의 별도 검증 단계는 생략하고 후속 통합 검증으로 이관한다.
+6. **CEO Synthesis — Planned**: Recommendation, Rationale / Evidence, Trade-off, Unresolved Issues / Escalation 표현.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
-7. **Human Governance**: 해결 방향의 Approve / Override / Reject 대상·효과를 검증하고 Approved Decision만 handoff.
+7. **Human Governance — Planned**: 해결 방향의 Approve / Override / Reject 대상·효과를 검증하고 Approved Decision만 handoff.
 8. **CEO Work Decomposition — Phase B (Planned)**: 승인된 방향에서 설계·구현·QA·리뷰 업무의 목적·산출물·담당자·
    의존성·진행 순서를 정한다. 현재 Phase A StaffingAssignment와 향후 Phase B Work Assignment를 동일 모델로 가정하지 않는다.
 9. **Detailed Design & Planning Handoff (Planned)**: 승인된 Decision + 개별 구현 Assignment + Repository
@@ -247,8 +246,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 - **1.3 Implemented — schema only**: ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest /
   AuthorizedSpecialistInvocation / AuthorityVerdict의 구조 계약. Scope 발급이나 실행 허가를 제공하지 않는다.
 - **1.4 Implemented — Eligibility only**: Scope identity / version / lifecycle, Assignment, Context 부분집합,
-  사용량 기반 Budget availability를 순수 평가한다. Scope issuance, Budget Reservation / Usage Persistence,
-  AuthorizedSpecialistInvocation 구성·실행 Enforcement는 미구현이다.
+  사용량 기반 Budget availability를 순수 평가한다. 이 함수 자체는 Scope 발급·예약·실행을 하지 않으며 해당 연결은 Step 3~5.4가 담당한다.
 
 ### Step 2 진행 상태
 
@@ -256,7 +254,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   Proposal parsing은 Human Approval이나 운영 권한 발급이 아니다.
 - **2.2 Implemented**: v1의 Goal 기반 초기 파일 선택·metadata parsing·내부 경로 제외를 공통 capability로
   재사용하고 v2 Snapshot capture/assert 및 commit blob reader로 Staffing Context를 구성한다.
-  Tree / package scripts / AGENTS.md / inspected files는 같은 commit 기준이다. Harness Context access scopes(legacy exact allowlist 호환),
+  Tree / package scripts / AGENTS.md / inspected files는 같은 commit 기준이다. Harness Context access scopes(신규 입력의 legacy exact allowlist는 거부),
   regular-file mode, 파일·Context 크기·조사 예산을 검증하며 CEO-facing projection에 내부 절대경로를 추가하지 않는다.
   Planning은 Working Tree 기반 조사와 TaskContract 생성 책임을 유지하고 Staffing은 별도 Application이다.
   실제 임시 Git Repository와 기존 v1–v3 / Governance 회귀 테스트로 검증한다.
@@ -267,19 +265,19 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   현재 runStaffing()은 R2 검증·최종화를 거친 StaffingProposal을 성공 결과로 반환한다.
   Fake CEO / mock Process 테스트와 실제 Codex 0.163.0 단일 직접 propose(1 Round), Repository 무변경을 확인했다.
   실제 모델의 여러 Round Inspection 품질·반복 benchmark는 검증하지 않았다.
-  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Staffing Approval / Scope 발급은 Step 3에서 연결했고 Authorization과 LangGraph 통합은 후속 단계다.
+  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Staffing Approval / Scope 발급은 Step 3, Authorization은 Step 4, 실행 연결은 Step 5.3–5.4가 담당한다. LangGraph Step 1은 정책 조회만 연결했다.
 
 ### Capability 통합 리팩토링 상태
 
 - **R1 Implemented**: RepositorySnapshot / SpecialistDefinition / SpecialistAuthority를 공통 contracts로 이동하고
-  Snapshot capture/assert 정책은 공통 서비스가 소유한다. 기존 Decision import / public API는 호환 export를 유지한다.
+  Snapshot capture/assert 정책은 공통 서비스가 소유한다. Decision 공개 API와 기존 Snapshot flow export는 유지하고 불필요한 decision/model/ 호환 reexport는 제거했다.
 - **R2 Implemented**: 단일 runStaffing()은 private CEO Loop를 실행하고 한 번 캡처한
   Goal / Snapshot에서 Proposal을 최종화한다. 등록·중복 배치·안전한 Snapshot Context·크기·예산과 Harness의
   System Policy의 등록 Specialist·접근 범위·limits·maxAgentInvocations를 검사한 뒤 ID를 발급한다. Human Instructions는
   CEO Context와 proposal.goal.constraints에 원문 그대로 보존하며 Rule과 문자열로 연결하지 않는다.
   unverifiedHumanConstraints는 제거했고 어떤 지시도 Rule 성공으로 검증 완료 처리하지 않는다.
   역할·자연어 제약의 의미적 충족, 등록·정책 출처의 진위는 증명하지 않는다.
-  Staffing Approval / Scope issuance는 아래 Step 3, Budget Reservation은 Step 4에서 구현했으며 실제 Invocation 실행은 미구현이다.
+  Staffing Approval / Scope issuance는 아래 Step 3, Budget Reservation은 Step 4, 실제 Invocation의 Claim·단일/복수 v2 실행 연결은 Step 5.2–5.4에서 구현했다.
 
 R2 검증 규칙은 CEO Inspection State와 분리했다. 최초 Finalization과 승인 시점 재검증은 같은 Snapshot
 파일·등록 정보·정책 기반 규칙을 사용한다. CEO Context JSON budget과 Assignment 검증 envelope JSON
@@ -312,8 +310,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - CLI `staffing <repository> <goal.json>`은 기존 review / terminal confirmation을 재사용한다. Human 확인 후
   같은 Proposal을 재제출하며 CEO 재실행, Proposal 파일 저장, Agent/Human 대기 중 Ledger lock은 없다.
 - 승인 시 기존 최신 정책·위임·Snapshot·binding 검증을 유지한다. 시작 정책 version 일치는 강제하지 않는다.
-- Registry / 암호학적 Proposal provenance, Workflow의 Authorization 호출 및 Decision / Comparison 연결과
-  LangGraph runtime은 미구현이다. 현재 연결은 Scope 발급에서 종료한다.
+- 이 Staffing Approval Workflow와 CLI는 Scope 발급에서 종료한다. 별도 Decision Workflow는 Step 5.4에서 Authorization·Claim·v2·v3를 연결했다. LangGraph Step 1은 정책 조회만 수행하며 두 Phase A API와 미연결이다. Registry / 암호학적 Proposal provenance는 미구현이다.
 
 ### Step 4 — Scope Validation & Invocation Authorization — Implemented
 
@@ -322,15 +319,38 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   재검증 후 Scope 전체 Reservation을 atomic save하고 성공해야 allowed를 반환한다.
 - Invocation ID는 Harness attempt handle로 발급한다. 같은 handle의 중복 예약은 거부하며 같은 Context의 새 호출은
   새 예산을 사용한다. 과거 Ledger의 reservations 누락은 읽기 호환으로 보존하고 자동 재작성하지 않는다.
-- Step 5.2는 저장된 Reservation의 binding·Invocation/Request digest·최신 승인/정책/Snapshot/Context를 검증하고
+
+### Step 5 — Independent Decision & Comparison — 5.1–5.4 Implemented
+
+- **5.1 Implemented — Decision 실행 계약**: IndependentDecisionInput / SpecialistContext의 선택적인
+  assignmentObjective를 기존 v2에 전달한다. 승인 Assignment의 분석 목적과 Specialist의 기본 역할 objective를 구분하고,
+  실행 권한·공급 Context·Human Goal/Constraints를 확대하지 않는다. 기존 v2 호출에서는 생략 가능하다.
+- **5.2 Implemented — Reservation Claim**: 저장된 Reservation의 binding·Invocation/Request digest·최신 승인/정책/Snapshot/Context를 검증하고
   같은 Ledger Lock에서 선택적인 claimedAt을 저장한다. 재사용은 거부하며 Budget은 예약 시 소비하는 정책을 유지한다.
-- Step 5.3은 Phase A의 `runAuthorizedSpecialistDecision()`에서 성공한 Claim의 반환 입력을
+- **5.3 Implemented — 단일 실행 연결**: Phase A의 `runAuthorizedSpecialistDecision()`에서 성공한 Claim의 반환 입력을
   기존 `runIndependentDecisions()`에 연결해 검증된 AgentDecision 한 개를 반환한다.
   실패는 전파하고 Claim을 유지한다. 추가 Authorization·Reservation·자동 재시도·환불은 없다.
-- Step 5.4는 `runSpecialistDecisions({ scopeId, requests })`로 승인된 동적 Assignment를 사전 검증 후
+- **5.4 Implemented — 복수 실행·Comparison**: `runSpecialistDecisions({ scopeId, requests })`로 승인된 동적 Assignment를 사전 검증 후
   순차 Authorization·Step 5.3 실행하며, Decision 두 개 이상이면 기존 v3 Comparison을 연결한다.
   실패는 preflight / authorization / claim / decision / comparison으로 구분하고 부분 성공 결과를 반환하지 않는다.
-  Claim 세부 거부 원인은 구분하지 않는다. CLI 자동 연결·실행 결과 저장·재시도/복구·LangGraph는 미구현이다.
+  Claim 세부 거부 원인은 구분하지 않는다. CLI 자동 연결·실행 결과 저장·재시도/복구는 미구현이며 이 API는 LangGraph와 아직 미연결이다.
+- **5.5 — 별도 검증 단계 생략 / 후속 통합 검증으로 이관**: 구현 완료로 표시하지 않는다.
+  기존 단위·통합 테스트는 signed Ledger / mock TTY / v2·v3 실제 검증 코드와 모의 Codex process로
+  순차 실행·실패 단계·Claim 유지·Comparison 참조를 확인한다. 실제 Human+Codex+전체 조직 Graph E2E,
+  장기 대기/재개·복구와 모델 판단 품질은 이 테스트로 검증되지 않았다.
+
+### LangGraph Minimal Integration — Step 1 Implemented / 다음 Step 2 Planned
+
+- `@langchain/langgraph` / `@langchain/core` 설치. 기존 NodeNext / TypeScript / Zod를 유지했다.
+- 상위 `workflows/development-organization/graph/`에 State / Graph / Node를 분리하고
+  `START → load-system-policy → END`만 컴파일·실행한다. 정책은 기존 Governance API로 조회한다.
+- State는 Goal·Repository 경로와 정책 조회 결과만 담으며 승인 Ledger·Reservation·Claim을 대체하지 않는다.
+  policy-ready는 정책 조회 성공이며 Phase A 완료가 아니다.
+- **Tested**: 실제 compiled Graph.invoke와 모의 Governance API로 정상·거부·빈 경로·기존 State 재조회 검증.
+  기존 Application / Governance / Phase A 회귀 테스트도 별도로 실행한다.
+- **Not integrated**: Graph의 CEO Staffing·Human Approval·Decision·Comparison·CLI 연결, Checkpoint,
+  Interrupt/Resume·재시도·복구·Phase B. Step 2에서 정책 조회 뒤 CEO Staffing 연결을 다룬다.
+  Step 6 Synthesis / Step 7 Human Governance / Phase B Planning Handoff는 여전히 예정이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
 
@@ -344,7 +364,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   Authorization 이후 전체 Goal→조직 Workflow는 미완성이다.
 - 로컬 OS 계정과 Harness 자체를 신뢰한다. 동일 계정 공격자·root·clock 조작·backup rollback 방어와 remote
   Human 인증은 미구현이다. 실제 Human 승인 E2E가 아닌 mock TTY + 실제 임시 Repository / signed file 테스트로 검증한다.
-- Step 4는 최신 Scope 검증·Budget Reservation·Invocation 입력 발급을 구현했다. 후속 실행 연결은 Step 5다.
+- Step 4는 최신 Scope 검증·Budget Reservation·Invocation 입력 발급을, Step 5.2–5.4는 Claim과 실행·Comparison 연결을 구현했다.
   Scope 발급은 자연어 Instructions의 의미적 충족이나 실제 Specialist 호출 허가·예산 확보가 아니다.
 
 Human Delegation 입력은 allowedSpecialistIds / delegatedContextScopes / maxAgentInvocations / expiresAt로
@@ -363,7 +383,7 @@ Scope의 유효성 기준은 구분해서 유지한다. 신규 교체·철회는
   Goal / Snapshot과 Draft를 연결하고 등록 ID·Context·운영 예산을 검증한다.
   업무 적합성과 자유 문자열 Constraints의 의미적 검증은 완료된 것으로 간주하지 않는다.
   Step 3은 proposal.goal.constraints 전체와 제안을 검토하는 직접 승인 접점과 사전 위임 정책 설정을 제공한다.
-  ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI / UI 연결과 취소·재개 Workflow는 아직 없다.
+  ID 발급과 Approval / Authorization은 별도 책임으로 유지한다. CLI staffing은 Staffing → Approval까지 연결하며 전체 조직 UI·취소·재개 Workflow는 아직 없다.
 
 ### Exit Criteria
 

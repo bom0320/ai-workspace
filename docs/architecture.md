@@ -7,9 +7,10 @@
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 
-현재 구현은 v0–v3와 v4 Step 1.x / 2.1 / 2.2 / 2.3 / R2의 Staffing과 Step 3의 승인 기능을 포함한다. Future responsibility는 현재
-runtime이나 추가할 폴더의 명세가 아니다. v4는 진행 중이며 전체 CEO Workflow는 미완성이다.
-LangGraph.js Workflow Runtime 채택은 확정됐지만 설치·통합은 없고 아래 목표 흐름과 현재 실행을 구분한다.
+현재 구현은 v0–v3와 v4 R1/R2 Staffing·Step 3 승인·Step 4 Authorization·Step 5.1–5.4 Decision/Comparison 연결을 포함한다.
+LangGraph.js Minimal Integration Step 1은 System Policy 조회 Node만 구현했다. 기존 Phase A API는 Graph·CLI
+전체 흐름과 별도로 존재한다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
+v4는 진행 중이며 CEO Synthesis·해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
 
 ## 2. Current Architecture
 
@@ -34,25 +35,24 @@ Codex role implementations / Git and Process infrastructure → Target Repositor
 - Decision: clean RepositorySnapshot, commit의 explicit files, Frontend / UX 구성,
   순차 독립 실행, JSON schema / Evidence invariant 검증, 결과 반환.
 - Comparison: supplied AgentDecision[]의 Concern별 관계를 strict JSON으로 구조화하고 source reference 검증.
-- CLI: 인자 없는 workflow selector, 명시적 plan / decision / execute, Task Approval과
+- CLI: 인자 없는 workflow selector, 명시적 plan / decision / execute / staffing / governance, Task Approval과
   Review / Apply / Commit / Push / Cleanup 및 결과 presentation.
 
-현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod다. Codex CLI는 외부 실행 도구이며
-package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 generic
-runtime layer는 없다. Synthesis / Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
+현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod / LangGraph.js와 필수 LangChain core다. Codex CLI는 외부 실행 도구이며
+package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 자체 범용 Agent runtime layer는 없다. Synthesis / Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
 automatic retry / crash resume는 미구현이다. Decision / Comparison 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
-Decision과 Comparison은 독립 application capability이고 두 use-case의 실행 조합은 CLI command가 담당한다.
+Decision과 Comparison은 독립 application capability다. 기존 CLI command와 v4 Phase A Workflow가 각각 공개 API를 조합한다.
 
 v4 기반으로 Governance의 Authority schema / 순수 Invocation Eligibility Evaluation과 Staffing의
 Intent / Draft / Proposal schema, CEO propose / inspect / escalate protocol, Snapshot 기반 Context Discovery /
 추가 Inspection이 구현되어 있다. Step 2.3의 Codex CEO Adapter와 runStaffing()이 이 API들을 연결해
-R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며 CLI·기존 Decision
-실행에는 아직 연결하지 않는다.
+R2 검증·최종화 후 Proposal / Escalation / Failure를 반환한다. 공통 repository-inspection 정책을 재사용하며
+CLI staffing → runStaffingApproval()에 연결했다. 기존 v2 Decision CLI의 고정 Frontend / UX 진입점과는 별도다.
 Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 제공한다.
 Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다.
 Step 5.2는 실행 전 Reservation 검증·일회 Claim, Step 5.3은 단일 Invocation의 v2 실행,
 Step 5.4는 승인 Scope의 동적 Specialist 순차 실행과 v3 Comparison 연결을 제공한다.
-Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)에 둔다.
+LangGraph 상위 Graph는 정책 조회만 수행한다. Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)과 [Runtime Foundation](#97-langgraph-minimal-integration-step-1--runtime-foundation)을 따른다.
 
 ## 3. Current End-to-End Flows
 
@@ -109,11 +109,25 @@ CLI command가 `compareDecisions()`를 호출하고 두 결과를 표시한다. 
 Planning / Execution 자동 연결, Synthesis / Review / Git Delivery와 결과 persistence는 없다.
 Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 표시하지 않는다.
 
+### v4 현재 연결 단위
+
+```text
+CLI staffing → runStaffingApproval → System Policy 조회 → runStaffing → Approval → Scope
+별도 Phase A API → 저장 Scope Preflight → 순차 Authorization → Claim → v2 Decision → v3 Comparison
+별도 LangGraph API → START → load-system-policy(getStaffingSystemPolicy) → END
+```
+
+이 세 연결 단위를 하나의 전체 조직 E2E로 표현하지 않는다. CLI staffing은 Scope에서 종료하며,
+Decision 묶음 API는 Scope ID / 요청을 별도로 받는다. 정책 조회 Graph는 두 기존 Phase A API를 아직 호출하지 않는다.
+
 ## 4. Current Responsibility Boundaries
 
 | 소유자 | 현재 책임 | 경계 |
 | --- | --- | --- |
 | Human / CLI adapter | workflow·입력, Task Approval, Review / Delivery / Cleanup, 결과 표시 | application 내부 flow / Domain 검증을 소유하지 않음 |
+| Governance application | System Policy·위임·승인 근거·Scope와 Authorization·Reservation·Claim | 상태 조회나 Schema parsing을 승인·실행 권한으로 해석하지 않음 |
+| Phase A Workflow | Staffing→Approval 및 승인 Scope의 순차 Decision→Comparison API 조합 | Governance 정책·v2 Evidence·v3 참조 검증을 재구현하지 않음 |
+| LangGraph Runtime Foundation | State / Node / START→정책 조회→END 실행 | 현재 조회만 연결; State는 Governance Ledger나 전체 Phase A 완료를 대체하지 않음 |
 | Planning application / Codex Planner | 조사·limits·계약 생성 / supplied PlannerContext로 inspect 또는 complete | inspection은 수정 권한이 아니며 Planner는 별도 cwd·제한된 도구 설정으로 실행 |
 | Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository, Zod validation | AI가 시스템 ID나 Human 제약을 소유하지 않음 |
 | Execution application / Codex Worker | workspace와 Worker / Scope / Verification / artifacts 연결 / scoped 수정 | 정상 종료 때 workspace를 지우지 않으며 verification command는 Harness가 실행 |
@@ -251,7 +265,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 | 패키지 설치·코드 통합 없음 |
+| Workflow Runtime | LangGraph.js 채택 | 설치·System Policy 조회 Graph 구현; 기존 Phase A / CLI 미연결 |
 | Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
@@ -260,7 +274,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 ### v4 Target Workflow — Planned
 
 다음은 두 Phase로 구성한 목표 Workflow다. 기반 schema와 Context Discovery의 구현이 전체 Workflow의
-완료를 뜻하지 않는다. 현재 CLI는 v0–v3 경로만 제공한다.
+완료를 뜻하지 않는다. CLI는 v0–v3와 명시적 Staffing / Governance 명령을 제공한다. 승인 Scope의 Decision·Comparison API는 구현했지만 CEO Synthesis 이후와 전체 Graph 연결은 예정 상태다.
 
 #### Phase A — Decision & Approval
 
@@ -430,8 +444,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 - CEO 판단 품질과 runtime 실행 안정성을 별도로 검증한다. Schema / reference 통과가 recommendation의
   의미적 타당성을 증명하지 않으며 workflow 완료가 Agent 품질이나 Multi-Agent 우위를 입증하지 않는다.
 
-LangGraph.js의 구체적인 graph / state schema / checkpoint backend / Domain type / 파일 배치는
-이 문서에서 선행 확정하지 않는다. 실제 책임과 요구가 생길 때 설계하며 generic SpecialistRunner,
+현재 graph / State / Node 배치는 Runtime Foundation 절의 실제 구현을 따른다. 후속 Node / checkpoint backend / Domain type은 이 문서에서 선행 확정하지 않는다. 실제 책임과 요구가 생길 때 설계하며 generic SpecialistRunner,
 provider registry, 공통 Codex abstraction도 미리 만들지 않는다. 도입 원칙은
 [Project Direction](project-direction.md#build-vs-adopt), 단계별 구현과 완료 기준은
 [Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
@@ -537,7 +550,7 @@ ApprovedOperatingScope를 발급하지 않으며 inspection parsing도 파일 �
 
 Step 2.1은 schema / inferred type / unit test / public API를 구현했다. Repository Context Discovery는
 아래 Step 2.2에서 구현했고 CEO Staffing 호출·Loop는 Step 2.3에서 연결했다. Finalization / 제한된 Policy
-Validation은 R2에서 구현했고 Staffing Approval / Scope 발급은 Step 3에서 연결했다. LangGraph 연결은 미구현이다.
+Validation은 R2에서 구현했고 Staffing Approval / Scope 발급은 Step 3에서 연결했다. 이 Staffing protocol·Loop의 LangGraph Node 연결은 아직 없다.
 
 ### v4 Step 2.2 — Snapshot 기반 Staffing Context Discovery — 구현
 
@@ -580,7 +593,7 @@ Snapshot assert는 Repository lock이나 실행 중 모든 순간의 무변경 �
 
 R4에서는 Context Discovery(Goal 관련 파일 선택)와 Access Policy(접근 가능한 최대 범위)를 분리한다.
 Harness가 `contextAccessPolicy: { allowedScopes: PathScope[] }`를 공급한다. `file`은 정확한 파일 하나,
-`directory`는 `path + "/"` 아래의 파일만 허용한다. `src/ui`가 `src/ui-extra`를 허용하지 않는다.
+`directory`는 `path + "/"` 아래의 파일만 허용한다. 예시 경로인 `src/ui`가 `src/ui-extra`를 허용하지 않는다.
 범위가 없거나 비어 있으면 접근을 거부한다. Repository root를 뜻하는 `.`도 모호한 경로로 거부하며,
 glob / deny rule / metadata 전용 권한은 도입하지 않는다.
 
@@ -623,7 +636,7 @@ projection에서 제외한다. 원본 GoalSpec.targetRepository 자체의 값은
 Budget은 Context 파일 수에 관한 값이며 Agent invocation Budget Reservation이나 운영 권한이 아니다.
 
 Step 2.3은 이 public API를 아래 Staffing Loop와 연결하고 R2는 같은 Run의 Proposal을 최종화한다.
-Staffing Approval / Scope 발급은 Step 3의 별도 Governance API로 연결한다. Specialist 실행과 LangGraph 연결은 아직 없다.
+Staffing Approval / Scope 발급은 Step 3의 별도 Governance API로 연결한다. 이 Context Discovery 함수는 Specialist나 Graph를 실행하지 않으며, 후속 Specialist 실행은 Step 5.3–5.4 Workflow가 담당한다.
 
 ### v4 Step 2.3 — CEO Staffing Agent & Staffing Loop — 구현
 
@@ -679,7 +692,7 @@ maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향�
 allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
 반복 품질이나 성공률 검증을 했다는 의미는 아니다. 원본 Goal / Snapshot과 Draft의 연결을 보존하는
 Proposal Finalization / 제한된 Policy Validation은 아래 R2, Staffing Approval / Scope issuance는 Step 3에서 구현했다.
-Authorization은 Step 4에서 구현했다. Specialist 실행 / Synthesis / Phase B / 전체 Workflow는 미구현이다.
+Authorization은 Step 4, 단일·복수 Specialist 실행 연결은 Step 5.3–5.4에서 구현했다. CEO Synthesis / Phase B / 전체 Workflow는 미구현이다.
 
 ### R2 — Staffing Proposal Finalization & Policy Validation — 구현
 
@@ -774,7 +787,7 @@ Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증
 
 `src/workflows/development-organization/phase-a/staffing-approval/staffing-approval.ts`의 `runStaffingApproval()`은 개별 Application의 상위
 Orchestration이다. Workflow → Application 방향으로만 의존하며 Application은 Workflow를 import하지 않는다.
-Phase A의 첫 연결만 구현했고 Graph / Checkpoint / LangGraph runtime / 후속 Specialist 실행은 추가하지 않았다.
+이 함수는 Scope 발급까지만 연결한다. 별도 Step 5.3–5.4가 Specialist 실행·Comparison을 연결하며, LangGraph Step 1은 정책 조회만 수행한다. 이 승인 Workflow를 Graph나 후속 실행에 자동 연결하지 않았다.
 
 ```text
 GoalSpec + Repository
@@ -940,7 +953,7 @@ Human Constraints는 Proposal과 Scope에 그대로 보존한다. 기계적 정�
 직접 승인에서는 원문 전체를 검토한다. 자동 승인은 AI의 승인이 아니라 **Human의 사전 위임을 Harness가
 집행한 새 승인 기록**이다. 발급된 Scope만으로 호출하지 않으며 Step 4 Authorization을 거쳐야 한다.
 Budget Reservation과 AuthorizedSpecialistInvocation 발급 및 Step 5.3 단일 v2 Decision 실행 연결은 구현했다.
-실행 결과 Usage Recording, Phase B와 LangGraph는 미구현이다. 기존 순수 evaluateInvocationRequest()에는 I/O를 추가하지 않았다.
+실행 결과 Usage Recording과 Phase B는 미구현이다. LangGraph는 정책 조회 Node만 구현했다. 기존 순수 evaluateInvocationRequest()에는 I/O를 추가하지 않았다.
 
 ### v4 Step 4 — Scope Validation & Invocation Authorization — 구현
 
@@ -1006,7 +1019,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | RepositorySnapshot | Current | contracts/repository/snapshot.ts의 repositoryRoot / commitSha. Application 간 Repository provenance |
 | SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist/definition.ts / specialist/authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
 | StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO Loop에서 재사용; 승인 / 실행 권한 없음 |
-| SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[] |
+| SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[]와 선택적 assignmentObjective; 기본 역할 objective와 승인 Assignment 목적을 구분 |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
 | ComparisonRelation / ComparisonGapKind / ComparisonPosition / ComparisonFinding / ComparisonGap / ComparisonResult | Current | model/comparison.ts. Concern은 string, Finding relation과 Gap kind를 분리. Position은 specialistId / statement / 원본 Decision의 0-based evidenceIndexes로 참조 |
 | ComparisonContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / AgentDecision[]만 포함 |
@@ -1018,7 +1031,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | InvocationReservation | Implemented | authorization/features/specialist-invocation/model/reservation.ts의 발급 입력 digest와 Scope 전체 호출 예산 예약. 실행 완료·환불 기록은 아님 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
-| CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 호출·Loop는 구현; Specialist 실행·종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
+| CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 및 승인 Scope의 Specialist 실행·Comparison은 구현; CEO 종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
 | Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
@@ -1048,8 +1061,7 @@ Source 영역은 다음 기준으로 구분한다.
   `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
   `Goal + RepositorySnapshot + explicit files → AgentDecision[]`가 여기에 속한다.
   각 use-case는 독립 진입점을 가지며 CLI가 Planning과 Execution을 Human gate로 연결한다.
-- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. 현재 `development-organization/phase-a`의 Staffing → Approval만
-  연결하며 Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
+- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. 상위 `graph/`는 Phase A·향후 Phase B를 포괄할 Runtime이며 현재 정책 조회만 실행한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec, TaskContract, InspectedFile의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
 - `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로
@@ -1070,7 +1082,7 @@ application/
    └─ index.ts
 ```
 
-현재 use-case는 `planning`, `execution`, `decision`이다. 모든 application에 위 폴더를 미리 만들거나
+현재 use-case는 `planning`, `execution`, `decision`, `comparison`, `staffing`, `governance`다. 모든 application에 위 폴더를 미리 만들거나
 같은 파일 수와 폴더 모양을 강제하지 않는다. 같은 책임 분류 기준을 적용하는 것이 중요하다.
 
 #### flow
@@ -1272,6 +1284,8 @@ src/
 │  │  ├─ model/
 │  │  ├─ worker/
 │  │  └─ index.ts
+│  ├─ staffing/  # CEO Loop / Context / Finalization
+│  ├─ governance/  # approval / authorization / records / model
 │  └─ decision/
 │     ├─ flow/
 │     │  ├─ context/
@@ -1282,30 +1296,46 @@ src/
 │     │  ├─ validation/
 │     │  │  └─ validate-evidence.ts
 │     │  └─ run-decision.ts
-│     ├─ model/
-│     │  ├─ snapshot.ts
-│     │  ├─ authority.ts
-│     │  └─ specialist.ts
 │     ├─ protocol/
 │     │  ├─ context.ts
 │     │  └─ decision.ts
 │     ├─ specialist/
 │     │  └─ codex-specialist.ts
 │     └─ index.ts
-├─ contracts/
+├─ workflows/
+│  └─ development-organization/
+│     ├─ index.ts
+│     ├─ graph/
+│     │  ├─ graph.ts
+│     │  ├─ state.ts
+│     │  ├─ graph.test.ts
+│     │  └─ nodes/load-system-policy.ts
+│     └─ phase-a/
+│        ├─ index.ts
+│        ├─ phase-a.integration.test.ts
+│        ├─ staffing-approval/staffing-approval.ts
+│        └─ specialist-decisions/
+│           ├─ specialist-decisions.ts
+│           ├─ validation/preflight-specialist-decisions.ts
+│           └─ execution/authorized-specialist-decision.ts
+├─ contracts/  # goal / task / repository / specialist / staffing
 ├─ services/
 │  ├─ artifacts/
 │  ├─ evidence/
 │  ├─ scope/
+│  ├─ repository-snapshot/
+│  ├─ repository-inspection/
+│  ├─ governance-records/
 │  └─ verification/
 └─ infrastructure/
    ├─ git/
+   ├─ terminal/
    └─ process/
 ```
 
 Execution의 일부 단계는 이미 services의 독립 capability로 분리되어 있다.
 Planning의 inspection과 transformation은 아직 Planning flow와 강하게 결합되어 있다.
-따라서 세 application의 구조가 대칭이 아니거나 Planning flow가 더 커 보이는 것은 문제가 아니다.
+따라서 application의 구조가 대칭이 아니거나 Planning flow가 더 커 보이는 것은 문제가 아니다.
 맞춰야 하는 것은 파일 개수, 폴더 개수, 모양이 아니라 책임을 판단하는 기준이다.
 
 ### 7.7 Placement Checklist
@@ -1345,7 +1375,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
 - Evidence와 Telemetry, TaskContract와 file content, 내부 상태와 역할 간 protocol을 구분한다.
 - Scope / verification 통과를 자연어 요구 충족의 증명으로 과장하지 않는다.
-- v2 독립 Decision 생성과 v3 Structured Comparison은 별도 use-case이며 CLI가 조합한다. Synthesis / Human governance history는 미구현이다.
+- v2 독립 Decision 생성과 v3 Structured Comparison은 별도 use-case이며 CLI와 Phase A Workflow가 공개 API를 조합한다. Synthesis / Human governance history는 미구현이다.
 - Decision Context는 Snapshot commit의 explicit files이며 다른 Specialist의 Decision을 포함하지 않는다.
 - Schema 및 Evidence path / line 검증을 Decision의 의미적 정확성 보장으로 과장하지 않는다.
 - Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.
@@ -1687,7 +1717,49 @@ Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원�
 이미 사용됨·Scope 무효·입력 변조·저장소 오류 등 세부 원인을 구분하지 않는다.
 
 묶음 예약 transaction이나 durable Workflow 상태는 없다. 예약된 예산과 Claim은 실패 후에도 유지한다.
-자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장·LangGraph는 구현하지 않았다.
+자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장은 구현하지 않았다. 이 Decision Workflow는 정책 조회만 있는 상위 LangGraph와 아직 미연결이다.
 묶음 Workflow를 다시 호출하면 새 Authorization으로 새 예약을 만들 수 있으므로 호출자는 이를 자동 재개로
 취급하면 안 된다. Step 5.3의 동일 Invocation 일회 Claim과 묶음의 재호출 의미는 다르다.
 외부 Git·정책 변경과 실행 사이의 TOCTOU 및 정확히 한 번의 실행 완료를 보장하지 않는 한계는 유지한다.
+
+
+### 9.7 LangGraph Minimal Integration Step 1 — Runtime Foundation
+
+LangGraph.js는 Development Organization의 상위 Workflow Runtime이다. `graph/`를 `phase-a/` 밖에 두어
+향후 Phase B도 같은 상위 흐름에서 연결할 수 있게 했으며, 이번 구현은 정책 조회 Node 하나뿐이다.
+[공식 Graph API](https://docs.langchain.com/oss/javascript/langgraph/graph-api)의 StateSchema / StateGraph / compile / invoke를 사용한다.
+Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반 Agent Runtime을 유지한다.
+
+| 파일 | 현재 책임 |
+| --- | --- |
+| `src/workflows/development-organization/index.ts` | Graph factory와 State 타입의 공개 export; 기존 phase-a/index.ts는 유지 |
+| `graph/state.ts` | 기존 GoalSpec·StaffingSystemPolicy Zod 계약을 재사용한 StateSchema |
+| `graph/graph.ts` | `createDevelopmentOrganizationGraph()`의 Node 등록 → START/END Edge 연결 → compile |
+| `graph/nodes/load-system-policy.ts` | Repository 경로 확인 → 기존 Governance API 호출 → 정책 조회 상태 반환 |
+| `graph/graph.test.ts` | 실제 compiled Graph.invoke, Governance API를 모의한 정상/거부/State 재조회 검증 |
+
+```ts
+import { createDevelopmentOrganizationGraph } from "@/workflows/development-organization/index.js";
+
+const graph = createDevelopmentOrganizationGraph();
+const state = await graph.invoke({ goal, repositoryPath });
+// state.status: "policy-ready" | "policy-unavailable"
+```
+
+State는 goal / repositoryPath / systemPolicy / policyVersion / status / failure만 가진다.
+정책 조회 이전에는 결과 필드가 없고, 성공하면 정책과 version을 기록하고 failure를 지운다.
+거부·빈 경로에서는 policy-unavailable과 reason을 기록하고 이전 정책·version을 지운다.
+호출자가 State에 정책을 넣어도 Node는 Governance를 다시 조회한다. Graph State와 구조 검증은
+승인 출처나 실행 권한의 증거가 아니며, 서명된 Governance Ledger가 계속 승인·권한 기록을 소유한다.
+END와 policy-ready는 정책 조회 완료만 뜻하고 Phase A 성공·전체 조직 완료를 뜻하지 않는다.
+
+설치 버전은 `@langchain/langgraph` 1.7.3 / `@langchain/core` 1.3.7이며 lockfile로 고정한다.
+실제 패키지 조건은 graph의 core ^1.3.4, Zod ^3.25.32 또는 ^4.2.0이다. 기존 Zod 4.6.5와
+TypeScript 5.9.3 / NodeNext를 그대로 사용하며, core의 Node >=20 조건을 Node 23.9.0에서 검증했다.
+패키지의 SDK·checkpoint·LangSmith 전이 dependency가 설치되어도 해당 기능을 연결한 것은 아니다.
+
+별도 Runtime Manager / Provider Registry / Subgraph / 재시도·복구·Checkpoint·Interrupt/Resume는 없다.
+CLI·CEO Staffing·Human Approval·Specialist Decision·Comparison Node는 아직 연결하지 않았다.
+다음 Step 2에서 정책 조회 다음의 CEO Staffing 연결을 다루며 후속 승인·대기·실행 Node는 해당 단계에서 설계한다.
+Graph 테스트는 실제 LangGraph 런타임과 모의 Governance API를 조합한다. 기존 Governance의 signed Ledger·정책 검증은
+기존 테스트가 담당하며, 전체 Graph+실제 Human+Codex E2E나 Phase B·복구 보장은 아직 검증하지 않았다.

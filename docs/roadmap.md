@@ -181,7 +181,7 @@ CEO / Coordinator, discussion / consensus loop, automatic resolution, unbounded 
 상태: **In progress — 기반 기능 일부 구현, 전체 Workflow 미완성**.
 **Workflow Runtime은 LangGraph.js 채택으로 확정**했다.
 기존 Codex 기반 Agent Execution Runtime과 v0–v3 Application API / Domain Model을 우선 재사용한다.
-LangGraph.js 설치와 Phase A 정책 조회 Graph만 통합했다. CEO Staffing·Approval·Authorization·Claim·동적 Specialist Decision/Comparison은 별도 API로 구현했으며 전체 조직 Graph·CLI는 미연결이다.
+LangGraph.js 설치와 Phase A 정책 조회·CEO Staffing·Approval 평가 Graph를 통합했다. CEO Staffing·Approval·Authorization·Claim·동적 Specialist Decision/Comparison은 별도 API로 구현했으며 전체 조직 Graph·CLI는 미연결이다.
 
 기존 Runtime Framework Evaluation checkpoint와 별도 선행 Runtime Spike는 제거한다.
 채택 여부를 다시 결정하는 단계 없이 아래 구현 과정의 필요한 시점에 LangGraph.js를 통합하고,
@@ -265,7 +265,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
   현재 runStaffing()은 R2 검증·최종화를 거친 StaffingProposal을 성공 결과로 반환한다.
   Fake CEO / mock Process 테스트와 실제 Codex 0.163.0 단일 직접 propose(1 Round), Repository 무변경을 확인했다.
   실제 모델의 여러 Round Inspection 품질·반복 benchmark는 검증하지 않았다.
-  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Staffing Approval / Scope 발급은 Step 3, Authorization은 Step 4, 실행 연결은 Step 5.3–5.4가 담당한다. LangGraph Step 1은 정책 조회만 연결했다.
+  R2에서 같은 Run의 Proposal Finalization / 제한된 Policy Validation을 연결했다. Staffing Approval / Scope 발급은 Step 3, Authorization은 Step 4, 실행 연결은 Step 5.3–5.4가 담당한다. LangGraph Step 2는 정책 조회·Staffing·Approval 평가를 연결했으며 직접 Human 확인·Decision은 미연결이다.
 
 ### Capability 통합 리팩토링 상태
 
@@ -310,7 +310,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - CLI `staffing <repository> <goal.json>`은 기존 review / terminal confirmation을 재사용한다. Human 확인 후
   같은 Proposal을 재제출하며 CEO 재실행, Proposal 파일 저장, Agent/Human 대기 중 Ledger lock은 없다.
 - 승인 시 기존 최신 정책·위임·Snapshot·binding 검증을 유지한다. 시작 정책 version 일치는 강제하지 않는다.
-- 이 Staffing Approval Workflow와 CLI는 Scope 발급에서 종료한다. 별도 Decision Workflow는 Step 5.4에서 Authorization·Claim·v2·v3를 연결했다. LangGraph Step 1은 정책 조회만 수행하며 두 Phase A API와 미연결이다. Registry / 암호학적 Proposal provenance는 미구현이다.
+- 이 Staffing Approval Workflow와 CLI는 Scope 발급에서 종료한다. 별도 Decision Workflow는 Step 5.4에서 Authorization·Claim·v2·v3를 연결했다. LangGraph Step 2는 Staffing / Approval Application을 직접 호출한다. 기존 두 Phase A Workflow API를 통째로 호출하거나 CLI를 전환하지 않았다. Registry / 암호학적 Proposal provenance는 미구현이다.
 
 ### Step 4 — Scope Validation & Invocation Authorization — Implemented
 
@@ -339,20 +339,26 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   순차 실행·실패 단계·Claim 유지·Comparison 참조를 확인한다. 실제 Human+Codex+전체 조직 Graph E2E,
   장기 대기/재개·복구와 모델 판단 품질은 이 테스트로 검증되지 않았다.
 
-### LangGraph Minimal Integration — Step 1 Implemented / 다음 Step 2 Planned
+### LangGraph Minimal Integration — Step 1·2 Implemented / Step 3 Planned
 
 - `@langchain/langgraph` / `@langchain/core` 설치. 기존 NodeNext / TypeScript / Zod를 유지했다.
 - `workflows/development-organization/phase-a/`에 Graph / State / nodes/load-system-policy를 두고
-  `createPhaseAGraph()`에서 `START → load-system-policy → END`만 컴파일·실행한다. 정책은 기존 Governance API로 조회한다.
+  Step 1의 정책 조회에 Step 2의 run-staffing / evaluate-staffing-approval Node를 추가했다. 기존 Application을 재사용한다.
 - Organization의 state.ts는 Goal·Repository 경로만 소유한다. Phase A State는 이 공통 입력을 재사용하고
   policyLookup(ready의 configuration/version 또는 denied의 reason)을 단일 결과로 관리한다.
   State는 승인 Ledger·Reservation·Claim을 대체하지 않으며 ready는 정책 조회 성공만 뜻한다.
 - 상위 Organization Graph·Subgraph 조합·Phase 간 Handoff는 아직 없다. 기존 전체 조직 Graph 이름의
   공개 factory는 Phase A 전용 createPhaseAGraph로 교체했으며 호환 Wrapper는 추가하지 않았다.
-- **Tested**: 실제 compiled Graph.invoke와 모의 Governance API로 정상·거부·빈 경로·기존 State 재조회 검증.
-  기존 Application / Governance / Phase A 회귀 테스트도 별도로 실행한다.
-- **Not integrated**: Graph의 CEO Staffing·Human Approval·Decision·Comparison·CLI 연결, Checkpoint,
-  Interrupt/Resume·재시도·복구·Phase B. Step 2에서 정책 조회 뒤 CEO Staffing 연결을 다룬다.
+- Step 2 State는 staffingRunResultSchema 기반 staffingResult와 승인 평가용 approvalResult를 추가한다.
+  정책 ready만 Staffing, proposed만 Approval로 진행한다. approved / approval-required / denied에서 종료하며
+  직접 Human 확인이 필요한 경우 원본 Proposal과 Binding을 보존하고 자동 승인하지 않는다.
+- Agent / maxRounds / timeoutMs는 Graph 생성 옵션으로 전달하며 State에는 함수를 저장하지 않는다.
+- **Tested**: compiled Graph.invoke의 정상·거부·실패·Escalation·승인 대기 분기와 호출 횟수 검증.
+  실제 Staffing·서명 Ledger·Governance와 테스트용 CEO Agent / mock TTY를 조합해 위임 승인·직접 확인 대기·위임 철회 거부도 검증한다.
+  기존 Application / Governance / Phase A / CLI 회귀 테스트를 유지한다. 실제 Codex·Human·Checkpoint E2E는 아니다.
+- **Not integrated**: 직접 Human 확인, Interrupt/Resume·Checkpoint·재시도·복구, Decision·Comparison Node·CLI 전환·Phase B.
+  Step 3에서 동일 Proposal·Binding의 Human 확인과 재개 경계를 다룬다. Graph 재실행은 새 Staffing·Scope를 만들 수 있어
+  복구나 일회 실행으로 간주하지 않는다. CLI와 Graph의 중복 조정 책임은 이후 Human 연결·CLI 전환 시 정리한다.
   Step 6 Synthesis / Step 7 Human Governance / Phase B Planning Handoff는 여전히 예정이다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented

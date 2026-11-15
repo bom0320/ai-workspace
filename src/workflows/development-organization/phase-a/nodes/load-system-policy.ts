@@ -5,6 +5,8 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
     return {
+      staffingResult: undefined,
+      approvalResult: undefined,
       policyLookup: {
         status: "denied",
         reason: "Repository path is required.",
@@ -19,5 +21,6 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // 3. Return Policy Lookup Result
   // Replace the whole result so a denial cannot retain stale successful policy data.
   // This completes policy lookup only, not Phase A or the organization workflow.
-  return { policyLookup };
+  // A fresh invocation cannot reuse downstream results from an earlier run.
+  return { policyLookup, staffingResult: undefined, approvalResult: undefined };
 }

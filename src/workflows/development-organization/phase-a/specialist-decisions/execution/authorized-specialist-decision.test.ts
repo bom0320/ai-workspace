@@ -12,7 +12,8 @@ import {
   InvocationClaimError,
 } from "../../index.js";
 
-vi.mock("@/application/governance/index.js", () => ({
+vi.mock("@/application/governance/index.js", async (original) => ({
+  ...(await original<typeof import("@/application/governance/index.js")>()),
   claimAuthorizedInvocation: vi.fn(),
 }));
 vi.mock("@/application/decision/index.js", () => ({

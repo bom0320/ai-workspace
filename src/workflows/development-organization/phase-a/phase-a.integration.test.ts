@@ -1,6 +1,7 @@
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import {
+  createPhaseAGraph,
   runAuthorizedSpecialistDecision,
   runSpecialistDecisions,
 } from "./index.js";
@@ -815,5 +816,75 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(
       reservations().every(({ claimedAt }) => claimedAt !== undefined)
     ).toBe(true);
+  });
+});
+
+describe("Phase A Graph → real Staffing and Governance Approval", () => {
+  it.each(["delegated", "direct"] as const)(
+    "preserves %s Approval semantics without a Human callback",
+    async (mode) => {
+      configure();
+      if (mode === "delegated") delegate();
+      const state = await createPhaseAGraph({
+        maxRounds: options.maxRounds,
+        agent: options.agent,
+      }).invoke({ goal: options.goal, repositoryPath: root });
+      expect(state.staffingResult?.status).toBe("proposed");
+      if (state.staffingResult?.status !== "proposed")
+        throw new Error(JSON.stringify(state));
+      const originalProposal = state.staffingResult.proposal;
+      expect(originalProposal.goal).toEqual(options.goal);
+      expect(state.goal).toEqual(options.goal);
+      expect(options.agent).toHaveBeenCalledTimes(1);
+      if (mode === "delegated") {
+        expect(state.approvalResult?.status).toBe("approved");
+        if (state.approvalResult?.status !== "approved")
+          throw new Error(JSON.stringify(state));
+        expect(state.approvalResult.approval.source.type).toBe(
+          "human-delegation"
+        );
+        expect(state.approvalResult.scope.proposalId).toBe(originalProposal.id);
+        expect(
+          getApprovedStaffingScope(state.approvalResult.scope.id).status
+        ).toBe("approved");
+        expect(issuanceCount()).toBe(1);
+      } else {
+        expect(state.approvalResult?.status).toBe("approval-required");
+        if (state.approvalResult?.status !== "approval-required")
+          throw new Error(JSON.stringify(state));
+        expect(state.approvalResult.subject).toEqual(originalProposal);
+        expect(state.approvalResult.binding).toEqual(expect.any(String));
+        expect(issuanceCount()).toBe(0);
+      }
+      withGovernanceRecords((raw) => {
+        const records = raw as {
+          repositories: Record<string, { reservations?: unknown[] }>;
+        };
+        expect(
+          Object.values(records.repositories)[0].reservations ?? []
+        ).toHaveLength(0);
+      });
+    }
+  );
+
+  it("uses current Governance validation when policy changes during CEO execution", async () => {
+    configure();
+    delegate();
+    const agent = vi.fn(async () => {
+      configureHumanDelegation(
+        root,
+        null,
+        accept(configureHumanDelegation(root, null))
+      );
+      return { type: "propose" as const, draft };
+    });
+    const state = await createPhaseAGraph({ maxRounds: 1, agent }).invoke({
+      goal: options.goal,
+      repositoryPath: root,
+    });
+    expect(state.staffingResult?.status).toBe("proposed");
+    expect(state.approvalResult?.status).toBe("denied");
+    expect(agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(0);
   });
 });

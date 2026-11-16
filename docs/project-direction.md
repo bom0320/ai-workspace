@@ -72,7 +72,7 @@ boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture
 여러 provider 지원, Synthesis, Human governance history는 현재 기능이 아니다.
 현재 CLI는 독립 Decision 생성과 Structured Comparison을 별도 application use-case로 조합한다.
 v4는 진행 중이며 Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing Context
-Discovery와 CEO Staffing Agent / Loop, Approval / Authorization / Claim 및 동적 Specialist Decision·Comparison 연결이 구현되어 있다. LangGraph Phase A Graph는 정책 조회·Staffing·Approval 평가까지이며 전체 조직 운영 Workflow는 아직 연결되지 않았다.
+Discovery와 CEO Staffing Agent / Loop, Approval / Authorization / Claim 및 동적 Specialist Decision·Comparison 연결이 구현되어 있다. LangGraph Phase A Graph는 정책 조회·Staffing·Approval과 콜백 기반 Human 확인까지 조정하며 CLI는 독립 Staffing Setup Graph만 사용하고 Phase A는 이를 Subgraph로 재사용한다. 전체 조직 운영 Workflow는 아직 연결되지 않았다.
 
 현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
 방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
@@ -142,7 +142,7 @@ Workflow Runtime을 채택하는 것이 Codex나 기존 v0–v3 Domain Model / A
 
 채택 여부를 결정하는 별도 Framework Evaluation / 선행 Runtime Spike는 생략한다.
 LangGraph.js 통합은 v4의 필요한 단계에서 진행하고, 구체적 기능의 실제 작동 여부와 소유권 보존은
-구현·통합 테스트·전체 E2E에서 검증한다. **패키지 설치·정책 조회(Step 1)와 Staffing·Approval 평가 연결(Step 2)은 구현**했다. 전체 조직 Graph·Human 대기/재개·복구가 검증됐다는 뜻은 아니다.
+구현·통합 테스트·전체 E2E에서 검증한다. **패키지 설치·정책 조회(Step 1), Staffing·Approval 평가 연결(Step 2), 콜백 기반 Human 승인·CLI 실행 책임 통합(Step 2.5)을 구현**했다. 전체 조직 Graph·Human 대기/재개·복구가 검증됐다는 뜻은 아니다.
 구체적인 책임과 전체 목표는 [v4 Architecture](architecture.md#5-target-responsibility-model)에 둔다.
 
 ### Library vs Framework / Runtime

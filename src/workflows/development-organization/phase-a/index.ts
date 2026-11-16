@@ -2,7 +2,7 @@ export {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
   type StaffingApprovalWorkflowResult,
-} from "./staffing-approval/staffing-approval.js";
+} from "./entrypoints/run-staffing-approval.js";
 export {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
@@ -14,3 +14,4 @@ export {
 } from "./specialist-decisions/specialist-decisions.js";
 export { createPhaseAGraph } from "./graph.js";
 export type { PhaseAState } from "./state.js";
+export { createStaffingSetupGraph } from "./staffing-setup/graph.js";

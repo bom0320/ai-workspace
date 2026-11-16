@@ -39,12 +39,13 @@ CEO Synthesis·해결 방향 Human Governance·Phase B와 전체 조직 E2E는 �
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
 여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
 현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
-Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2를 구현**했다.
+Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2와 Step 2.5 실행 책임 통합을 구현**했다.
 Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 조건부 Edge로 연결한다.
-정책 거부·Staffing 실패/Escalation이면 중단하며, Approval의 approved / approval-required / denied 결과에서 종료한다.
-직접 Human 확인·Decision·Comparison은 아직 Graph에 연결하지 않았다. CLI는 기존 runStaffingApproval() 경로를 유지한다.
-Graph 종료는 Staffing·승인 평가의 종료이며 Phase A 전체 완료가 아니다.
-Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력과 policyLookup / staffingResult / approvalResult를 소유한다.
+정책 거부·Staffing 실패/Escalation이면 중단하며, 직접 승인이 필요한 경우에만 Human Confirmation 콜백과 Governance 최종 승인으로 진행한다.
+콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter를 통해 독립 Staffing Setup Graph만 실행한다. Phase A Graph는 같은 Setup을 Subgraph로 재사용한다.
+Decision·Comparison은 아직 Graph에 연결하지 않았다. Graph 종료는 Staffing·승인 단계의 종료이며 Phase A 전체 완료가 아니다.
+Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력과 staffingSetupResult를 소유한다.
+정책 조회·Staffing·Approval 중간 상태는 Staffing Setup State에만 둔다.
 상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
 State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 
@@ -116,7 +117,7 @@ Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행�
 | `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
 | `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
 | Phase A `runSpecialistDecisions({ scopeId, requests })` API | 저장 Scope 조회·Preflight → 순차 Authorization·Claim·v2 Decision → v3 Comparison |
-| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | Phase A 정책 조회 → Staffing → Approval 평가; CLI 미연결, Human 확인 시 대기 결과로 종료 |
+| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | Staffing Setup Subgraph 재사용; 부모에는 최종 결과만 전달. CLI는 부모를 거치지 않고 Setup만 실행 |
 
 Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
 API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

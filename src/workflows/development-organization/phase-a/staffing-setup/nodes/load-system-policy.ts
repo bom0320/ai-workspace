@@ -1,10 +1,13 @@
 import { getStaffingSystemPolicy } from "@/application/governance/index.js";
-import type { PhaseAState } from "../state.js";
+import type { StaffingSetupState } from "../state.js";
 
-export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
+export function loadSystemPolicy(
+  state: StaffingSetupState
+): Partial<StaffingSetupState> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
     return {
+      staffingSetupResult: undefined,
       staffingResult: undefined,
       approvalResult: undefined,
       policyLookup: {
@@ -22,5 +25,10 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // Replace the whole result so a denial cannot retain stale successful policy data.
   // This completes policy lookup only, not Phase A or the organization workflow.
   // A fresh invocation cannot reuse downstream results from an earlier run.
-  return { policyLookup, staffingResult: undefined, approvalResult: undefined };
+  return {
+    policyLookup,
+    staffingSetupResult: undefined,
+    staffingResult: undefined,
+    approvalResult: undefined,
+  };
 }

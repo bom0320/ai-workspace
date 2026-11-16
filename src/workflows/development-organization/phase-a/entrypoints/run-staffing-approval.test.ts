@@ -11,13 +11,17 @@ import {
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
-} from "./staffing-approval.js";
+} from "./run-staffing-approval.js";
 
-vi.mock("@/application/governance/index.js", () => ({
+vi.mock("@/application/governance/index.js", async (original) => ({
+  ...(await original<typeof import("@/application/governance/index.js")>()),
   getStaffingSystemPolicy: vi.fn(),
   approveStaffingProposal: vi.fn(),
 }));
-vi.mock("@/application/staffing/index.js", () => ({ runStaffing: vi.fn() }));
+vi.mock("@/application/staffing/index.js", async (original) => ({
+  ...(await original<typeof import("@/application/staffing/index.js")>()),
+  runStaffing: vi.fn(),
+}));
 const goal = {
   objective: "Review login",
   targetRepository: "repo",
@@ -75,6 +79,40 @@ const required = () => ({
   binding: "binding",
   reason: "Direct approval required",
 });
+const approved: Extract<StaffingApprovalResult, { status: "approved" }> = {
+  status: "approved",
+  approval: {
+    id: "approval",
+    proposalId: proposal.id,
+    proposalDigest: "digest",
+    approvedAt: "2026-11-16T00:00:00.000Z",
+    systemPolicyVersion: 1,
+    source: {
+      type: "human-delegation",
+      delegationPolicyId: "delegation",
+      delegationPolicyVersion: 1,
+      delegationApprovalId: "delegation-approval",
+    },
+  },
+  scope: {
+    id: "scope",
+    version: 1,
+    proposalId: proposal.id,
+    approvalRecordId: "approval",
+    policyVersion: "1",
+    goal,
+    snapshot: proposal.snapshot,
+    assignments: [
+      {
+        assignmentId: "assignment",
+        specialistId: "frontend",
+        objective: "Analyze",
+        contextPaths: ["a.ts"],
+      },
+    ],
+    budget: proposal.budget,
+  },
+};
 let options: StaffingApprovalWorkflowOptions;
 beforeEach(() => {
   vi.resetAllMocks();
@@ -100,7 +138,7 @@ beforeEach(() => {
     reason: "Denied",
   });
 });
-describe("Staffing → Approval orchestration", () => {
+describe("Staffing Approval Graph adapter", () => {
   it("passes only the trusted configuration into Staffing and the exact returned Proposal into Approval", async () => {
     await runStaffingApproval(options);
     expect(getStaffingSystemPolicy).toHaveBeenCalledWith("/repo");
@@ -111,7 +149,9 @@ describe("Staffing → Approval orchestration", () => {
       timeoutMs: 1000,
       agent: options.agent,
     });
-    expect(vi.mocked(approveStaffingProposal).mock.calls[0][0]).toBe(proposal);
+    expect(vi.mocked(approveStaffingProposal).mock.calls[0][0]).toEqual(
+      proposal
+    );
   });
   it("never starts Staffing or Approval when policy retrieval fails", async () => {
     vi.mocked(getStaffingSystemPolicy).mockReturnValue({
@@ -144,21 +184,20 @@ describe("Staffing → Approval orchestration", () => {
               rounds: 1,
             };
       vi.mocked(runStaffing).mockResolvedValue(result);
-      expect(await runStaffingApproval(options)).toBe(result);
+      expect(await runStaffingApproval(options)).toEqual(result);
       expect(approveStaffingProposal).not.toHaveBeenCalled();
     }
   );
   it.each(["approved", "denied"] as const)(
     "returns immediate %s without requesting Human input",
     async (status) => {
-      const result = (
+      const result =
         status === "approved"
-          ? { status, approval: {}, scope: {} }
-          : { status, reason: "Invalid delegation" }
-      ) as StaffingApprovalResult;
+          ? approved
+          : { status, reason: "Invalid delegation" };
       vi.mocked(approveStaffingProposal).mockReturnValue(result);
       options.confirmApproval = vi.fn();
-      expect(await runStaffingApproval(options)).toBe(result);
+      expect(await runStaffingApproval(options)).toEqual(result);
       expect(options.confirmApproval).not.toHaveBeenCalled();
     }
   );
@@ -174,11 +213,6 @@ describe("Staffing → Approval orchestration", () => {
   it("resubmits the same Proposal once after confirmation and isolates it from UI mutations", async () => {
     const original = structuredClone(proposal);
     const receipt = { token: "receipt" };
-    const approved = {
-      status: "approved",
-      approval: {},
-      scope: {},
-    } as StaffingApprovalResult;
     vi.mocked(approveStaffingProposal)
       .mockReturnValueOnce(required())
       .mockReturnValueOnce(approved);
@@ -188,10 +222,12 @@ describe("Staffing → Approval orchestration", () => {
         request.subject.goal.constraints = ["UI overwrite"];
       return receipt;
     });
-    expect(await runStaffingApproval(options)).toBe(approved);
+    expect(await runStaffingApproval(options)).toEqual(approved);
     expect(runStaffing).toHaveBeenCalledTimes(1);
     expect(approveStaffingProposal).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(approveStaffingProposal).mock.calls[1][0]).toBe(proposal);
+    expect(vi.mocked(approveStaffingProposal).mock.calls[1][0]).toEqual(
+      proposal
+    );
     expect(approveStaffingProposal).toHaveBeenLastCalledWith(proposal, receipt);
     expect(proposal).toEqual(original);
     expect(options.goal).toEqual(goal);
@@ -216,5 +252,44 @@ describe("Staffing → Approval orchestration", () => {
       rounds: 1,
     });
     expect(approveStaffingProposal).toHaveBeenCalledTimes(1);
+  });
+  it("does not treat an incomplete final approval as success", async () => {
+    vi.mocked(approveStaffingProposal)
+      .mockReturnValueOnce(required())
+      .mockReturnValueOnce({
+        status: "configured",
+        version: 1,
+      });
+    options.confirmApproval = () => ({ token: "receipt" });
+    expect(await runStaffingApproval(options)).toEqual({
+      status: "denied",
+      reason: "Staffing confirmation did not complete approval.",
+    });
+    expect(approveStaffingProposal).toHaveBeenCalledTimes(2);
+    expect(runStaffing).toHaveBeenCalledTimes(1);
+  });
+  it("reports asynchronous confirmation or finalization exceptions without retrying", async () => {
+    for (const failure of ["callback", "finalization"]) {
+      vi.mocked(approveStaffingProposal)
+        .mockReset()
+        .mockReturnValueOnce(required());
+      options.confirmApproval = async () => {
+        if (failure === "callback") throw new Error("private failure");
+        return { token: "receipt" };
+      };
+      if (failure === "finalization")
+        vi.mocked(approveStaffingProposal).mockImplementationOnce(() => {
+          throw new Error("storage failure");
+        });
+      expect(await runStaffingApproval(options)).toEqual({
+        status: "failed",
+        failure: "confirmation",
+        rounds: 1,
+        reason: "Human Staffing confirmation failed.",
+      });
+      expect(approveStaffingProposal).toHaveBeenCalledTimes(
+        failure === "callback" ? 1 : 2
+      );
+    }
   });
 });

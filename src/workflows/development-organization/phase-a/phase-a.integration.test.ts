@@ -1,3 +1,7 @@
+import * as staffingApplication from "@/application/staffing/index.js";
+import * as phaseAGraph from "./graph.js";
+import * as staffingSetupGraph from "./staffing-setup/graph.js";
+import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import {
@@ -33,7 +37,7 @@ import type {
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
-} from "./staffing-approval/staffing-approval.js";
+} from "./entrypoints/run-staffing-approval.js";
 
 // Real receipts, signed storage and Git; only controlling-terminal I/O is fake.
 const terminal = vi.hoisted(() => ({ home: "", line: "", offset: 0 }));
@@ -829,31 +833,26 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
         maxRounds: options.maxRounds,
         agent: options.agent,
       }).invoke({ goal: options.goal, repositoryPath: root });
-      expect(state.staffingResult?.status).toBe("proposed");
-      if (state.staffingResult?.status !== "proposed")
-        throw new Error(JSON.stringify(state));
-      const originalProposal = state.staffingResult.proposal;
-      expect(originalProposal.goal).toEqual(options.goal);
+      const outcome = state.staffingSetupResult;
       expect(state.goal).toEqual(options.goal);
       expect(options.agent).toHaveBeenCalledTimes(1);
       if (mode === "delegated") {
-        expect(state.approvalResult?.status).toBe("approved");
-        if (state.approvalResult?.status !== "approved")
+        expect(outcome?.status).toBe("approved");
+        if (outcome?.status !== "approved")
           throw new Error(JSON.stringify(state));
-        expect(state.approvalResult.approval.source.type).toBe(
-          "human-delegation"
+        expect(outcome.approval.source.type).toBe("human-delegation");
+        expect(outcome.scope.proposalId).toBe(outcome.approval.proposalId);
+        expect(outcome.scope.goal).toEqual(options.goal);
+        expect(getApprovedStaffingScope(outcome.scope.id).status).toBe(
+          "approved"
         );
-        expect(state.approvalResult.scope.proposalId).toBe(originalProposal.id);
-        expect(
-          getApprovedStaffingScope(state.approvalResult.scope.id).status
-        ).toBe("approved");
         expect(issuanceCount()).toBe(1);
       } else {
-        expect(state.approvalResult?.status).toBe("approval-required");
-        if (state.approvalResult?.status !== "approval-required")
+        expect(outcome?.status).toBe("approval-required");
+        if (outcome?.status !== "approval-required")
           throw new Error(JSON.stringify(state));
-        expect(state.approvalResult.subject).toEqual(originalProposal);
-        expect(state.approvalResult.binding).toEqual(expect.any(String));
+        expect(outcome.request.subject?.goal).toEqual(options.goal);
+        expect(outcome.request.binding).toEqual(expect.any(String));
         expect(issuanceCount()).toBe(0);
       }
       withGovernanceRecords((raw) => {
@@ -882,9 +881,78 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
       goal: options.goal,
       repositoryPath: root,
     });
-    expect(state.staffingResult?.status).toBe("proposed");
-    expect(state.approvalResult?.status).toBe("denied");
+    expect(state.staffingSetupResult?.status).toBe("denied");
     expect(agent).toHaveBeenCalledTimes(1);
     expect(issuanceCount()).toBe(0);
+  });
+});
+
+it("finalizes direct Human approval through the parent without exposing Setup internals", async () => {
+  configure();
+  const confirmApproval = vi.fn((request: Parameters<typeof accept>[0]) =>
+    accept(request)
+  );
+  const state = await createPhaseAGraph({ ...options, confirmApproval }).invoke(
+    { goal: options.goal, repositoryPath: root }
+  );
+  expect(state.staffingSetupResult?.status).toBe("approved");
+  expect(Object.keys(state).sort()).toEqual([
+    "goal",
+    "repositoryPath",
+    "staffingSetupResult",
+  ]);
+  expect(options.agent).toHaveBeenCalledTimes(1);
+  expect(confirmApproval).toHaveBeenCalledTimes(1);
+  expect(issuanceCount()).toBe(1);
+});
+
+describe("Graph approval concurrency boundary", () => {
+  it("does not issue a second Scope if the reviewed Proposal was approved during the Human wait", async () => {
+    configure();
+    options.confirmApproval = (request) => {
+      const receipt = accept(request);
+      expect(request.subject).not.toBeNull();
+      const proposal =
+        request.subject as import("@/application/staffing/index.js").StaffingProposal;
+      expect(governance.approveStaffingProposal(proposal, receipt).status).toBe(
+        "approved"
+      );
+      return receipt;
+    };
+    const result = await runStaffingApproval(options);
+    expect(result.status).toBe("denied");
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(1);
+  });
+});
+
+describe("CLI through Staffing Setup only", () => {
+  it("executes the real Setup Graph without the parent and finalizes terminal confirmation once", async () => {
+    configure();
+    const executeStaffing = staffingApplication.runStaffing;
+    vi.spyOn(staffingApplication, "runStaffing").mockImplementation((input) =>
+      executeStaffing({ ...input, agent: options.agent })
+    );
+    const createGraph = vi.spyOn(
+      staffingSetupGraph,
+      "createStaffingSetupGraph"
+    );
+    // A future parent implementation must not expand this CLI's execution scope.
+    const parent = vi
+      .spyOn(phaseAGraph, "createPhaseAGraph")
+      .mockImplementation(() => {
+        throw new Error("Parent Graph must never run from Staffing CLI");
+      });
+    const output = vi.spyOn(console, "log").mockImplementation(() => {});
+    writeFileSync(join(home, "goal.json"), JSON.stringify(options.goal));
+    expect(await runStaffingCli([root, join(home, "goal.json")])).toBe(0);
+    expect(createGraph).toHaveBeenCalledTimes(1);
+    expect(parent).not.toHaveBeenCalled();
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    const result = JSON.parse(output.mock.calls[0][0]);
+    expect(result.status).toBe("approved");
+    expect(result.approval.source.type).toBe("direct-human");
+    expect(result.scope.goal).toEqual(options.goal);
+    expect(issuanceCount()).toBe(1);
   });
 });

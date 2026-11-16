@@ -78,7 +78,7 @@ Organization은 Domain 검증을 Graph의 조건문으로 다시 구현하지 �
 | Human 거부 | 거부된 대상에 근거한 후속 실행을 시작하지 않음. 거부를 자동 재시도로 바꾸지 않음 |
 | CEO Escalation | 질문·불확실성·판단 필요 사항을 보존하고 필요한 Human 판단 이전에 임의 진행하지 않음 |
 | 검증 또는 실행 실패 | 실패 단계·원인을 보존하고 해당 결과를 성공으로 취급하지 않음. 재시도·복구 허용 정책은 별도 검토 |
-| 명시적 생략 | 실행하지 않은 이유와 후속 진행 가능 여부를 구분해야 함. 성공 결과로 간주하지 않으며 구체적인 결과 계약은 후속 검토 |
+| 명시적 생략 | 실행하지 않은 이유와 후속 진행 가능 여부를 구분. 현재 Stage 4의 단일 비교는 skipped / insufficient-decisions이며 실행 성공과는 다름. 다른 생략 계약은 후속 검토 |
 
 Phase A 승인 대기·거부·Escalation·실패는 Phase B 진입 조건을 충족하지 않는다.
 Phase B의 `Complete`라는 CEO 판단 역시 Harness의 검증과 Human Change Review / Delivery를 대신하지 않는다.
@@ -107,10 +107,10 @@ Human Goal / Constraints
 → Approved Decision
 ```
 
-여섯 업무 Stage의 계약과 현재 Result 결합의 한계는
+여섯 업무 Stage의 계약과 Result 분리의 판단 이력은
 [Phase A Stage 사례](workflow-responsibility-boundaries.md#phase-a의-여섯-업무-목적과-진행-조건)에 모은다.
 현재 단일 Decision 경로는 Comparison을 호출하지 않고 선택적 comparison 필드를 생략한다.
-별도 skipped Result는 아직 없다.
+Stage 3 완료 후 Stage 4가 skipped / insufficient-decisions를 명시한다.
 
 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이다. Direction Governance는 종합된
 해결 방향에 대한 승인이다. 두 승인은 서로 다르며 Staffing Scope만으로 해결 방향이 승인됐다고 보지 않는다.
@@ -122,8 +122,9 @@ Override도 변경 대상의 검증과 필요한 승인을 충족해야 하며, 
 ```text
 preflight-specialist-decisions
 → execute-next-specialist ← remaining Assignment Edge
-→ 1 Decision: complete-specialist-decisions
-→ 2+ Decisions: compare-specialist-decisions → complete-specialist-decisions
+→ complete-specialist-decisions (Stage 3 완료)
+→ compare-specialist-decisions (Stage 4: completed / skipped / failed)
+→ END
 ```
 
 Preflight Node는 저장 Scope의 ID / Version을 승인 결과와 대조하고 모든 Assignment의 요청을 구성한 뒤
@@ -225,14 +226,15 @@ Organization State에 모든 Phase의 중간 데이터나 중복 상태 플래�
 `phaseAOutcome`, `phaseBOutcome`, Organization Result 등은 제안 명칭·의미다.
 현재 코드 필드나 확정된 타입·Schema로 해석하지 않는다.
 
-### 현재 Phase A StateSchema와 Stage 결과의 결합
+### 현재 Phase A StateSchema와 Stage별 결과
 
 | 코드 | 현재 실제 필드 / 관계 |
 | --- | --- |
 | [developmentOrganizationState](../src/workflows/development-organization/state.ts) | `goal`, `repositoryPath`만 정의. 전체 진행 상태·Organization Graph는 없음 |
-| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `staffingApprovalResult`, `specialistDecisionsResult`와 준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
+| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `staffingApprovalResult`, `specialistDecisionsResult`, `decisionComparisonResult`와 준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
 | 같은 파일의 `staffingApprovalResultSchema` | Staffing 실패·Escalation과 Approval 결과를 함께 표현하는 결합 계약. 최종 Phase A Outcome이 아님 |
-| 같은 파일의 `specialistDecisionsResult` | Decision 배열과 선택적 Comparison을 함께 표현. comparison 실패도 이 결과의 failed로 기록 |
+| 같은 파일의 `specialistDecisionsResult` | Stage 3: completed와 비어 있지 않은 AgentDecision[] 또는 failed / preflight·authorization·claim·decision / reason·assignmentId? |
+| 같은 파일의 `decisionComparisonResult` | Stage 4: completed / comparison, skipped / insufficient-decisions, failed / reason. 기존 Comparison Schema 재사용 |
 
 이전 staffingSetupState / staffingSetupOutput의 내부 상태·결과 Schema를 Phase A에 통합했다.
 현재 Graph.invoke는 Phase A State를 반환하며 별도 Output StateSchema는 없다. 향후 Organization에 공개할
@@ -242,18 +244,30 @@ Organization State에 모든 Phase의 중간 데이터나 중복 상태 플래�
 `proposed`만을 이 결합 경로의 성공 결과로 반환하지 않는다.
 `staffingApprovalResult`는 approved / approval-required / denied / rejected / failed / escalated를 구분한다.
 승인 대기는 원본 Proposal과 Binding을 담은 request를 보존한다. 이 결과는 Staffing 승인 단계만 표현하며
-Phase A 전체 성공이나 Phase B 진입 승인이 아니다. `specialistDecisionsResult`는 기존 Workflow의 completed /
-failed(stage / reason / optional assignmentId)를 보존한다. completed도 현재 분석·비교 완료만 의미한다.
-Decision / Comparison의 기존 Schema를 공개 API로 재사용하며 Graph는 결과 envelope만 정의한다.
-새 invoke에서는 준비 요청·Index·수집 Decision·Comparison 입력/결과·Specialist 결과를 모두 비워 과거 실행을 재사용하지 않는다.
-`preparedSpecialistRequests`는 전체 검증을 통과한 요청 목록, `currentSpecialistIndex`는 다음 위치,
-`collectedDecisions`는 중간 Decision이다. `specialistComparisonContext`는 저장 Scope의 원본 Goal / SHA만
-전달하며 `specialistComparison`은 v3 결과를 완료 Node에 전달한다. 실패 시 수집 Decision을 비우고 완료 Node로
-가지 않으므로 부분 성공이나 유효한 Comparison으로 공개하지 않는다. 이는 최종 Phase A Outcome 계약이 아니다.
+Phase A 전체 성공이나 Phase B 진입 승인이 아니다.
 
-Stage별 완료 의미와 외부 결과를 분리하는 이유·트레이드오프는
-[결합 계약과 분리 이유](workflow-responsibility-boundaries.md#현재-결합-계약과-분리-이유)를 따른다.
-구체적인 새 Result / Output Schema는 아직 정하지 않았다.
+Stage 3은 전체 준비 요청의 Decision 생성·검증이 끝나고 비어 있지 않은 묶음일 때만 완료한다.
+Preflight·Authorization·Claim·Decision 실패는 즉시 종료하고 이후 Invocation / Stage 4를 실행하지 않는다.
+완료되지 않은 묶음은 성공으로 노출하지 않으며 중간 collectedDecisions를 비운다.
+
+Stage 4는 Stage 3의 완료 결과를 입력받는다. 단일 Decision이면 기존 compareDecisions()를 호출하지 않고
+skipped / insufficient-decisions를 기록한다. 복수 Decision은 기존 v3 Comparison / Reference 검증을 거쳐
+completed / comparison 또는 failed / reason을 기록한다. Comparison 실패 시 Stage 3의 completed와 검증된
+Decision 및 collectedDecisions를 보존하며 Stage 3을 실패로 바꾸지 않는다.
+이 경우 전체 성공으로 판단하거나 향후 Synthesis / 승인으로 진행해서는 안 된다. 현재 Graph는 Stage 4의
+모든 결과에서 END로 종료하며 최종 Phase A Outcome이나 후속 Node는 아직 없다.
+
+preparedSpecialistRequests와 currentSpecialistIndex는 전체 Preflight를 통과한 요청과 다음 실행 위치,
+collectedDecisions는 Stage 3의 중간 수집 데이터다. specialistComparisonContext는 저장 Scope에서 확인한
+원본 Goal / SHA를 Stage 4에 전달한다. 기존 specialistComparison 채널은 Stage 4 결과와 중복되어 제거했다.
+새 invoke의 정책 조회 Node는 Stage 3·4 결과와 준비 요청·Index·수집 Decision·Comparison Context를 모두
+초기화하므로 이전 성공 결과나 Claim을 재사용하지 않는다.
+
+**공개 State 계약 변경:** specialistDecisionsResult에서 comparison 필드와 comparison 실패 단계를 제거했다.
+Comparison 소비자는 decisionComparisonResult를 확인해야 한다. 기존 SpecialistDecisionsWorkflowResult 이름은
+Stage 3 의미로 유지하고 DecisionComparisonStageResult 타입을 공개한다. runStaffingApproval과 Staffing CLI의
+승인 전용 범위·반환 계약은 유지한다. Domain Schema와 Governance 정책은 변경하지 않았다.
+분리 이유와 이전 계약은 [결합 계약과 분리 이유](workflow-responsibility-boundaries.md#현재-결합-계약과-분리-이유)에 남긴다.
 
 Agent, timeout, maxRounds, Human 콜백, executionTarget은 실행 옵션이며 Graph 생성 시 Node closure로 전달한다.
 일회용 HumanConfirmation은 Node의 지역 변수에서 소비하고 State에 저장·직렬화하지 않는다.
@@ -317,7 +331,7 @@ features/ 아래 staffing / governance / decision / comparison 영역의 nodes/�
 Workflow 전용 Preflight 검증과 단일 실행 보조 함수는 features/decision/validation, features/decision/execution에 둔다.
 entrypoints/는 외부 Graph 호출 인터페이스, features/는 기능별 내부 실행 모듈을 분류한다.
 features/는 새 Application 계층이 아니며 이번 이동은 실행 구조가 아닌 디렉터리 분류 기준의 정리다.
-이 구조 정리에서 Stage 결과·완료 시점·Edge·Preflight 중복 조회는 변경하지 않았다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
+당시 디렉터리 정리에서는 실행 계약을 유지했다. 후속 Step 2에서 Stage 3 / 4의 결과·완료 순서를 분리했으며 Preflight 중복 조회는 유지한다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
 이 배치가 Stage별 디렉터리나 Application 폴더 복제를 요구하지 않으며 Assignment Execution 등의 분리는 후속 실행 요구로 검토한다.
 
 ## 7. Current Implementation vs Target Architecture
@@ -334,17 +348,16 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 | Specialist Decisions / Comparison | [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)의 일반 Specialist Node / Edge가 기존 Governance·v2 / v3를 조합 | 순차 반복·Fail-fast는 Edge가 제어. 단일 Decision은 Comparison 생략; Staffing CLI에서는 미실행 |
 | Planning / Execution | [v1 Planning](../src/application/planning/index.ts), [v0 Execution](../src/application/execution/index.ts) 구현 | 독립 CLI / Application capability. ApprovedDecision 입력·Phase B 실행 조정은 없음 |
 
-현재 Decision Workflow의 실패 단계는 preflight / authorization / claim / decision / comparison이며 부분
-성공을 완전한 결과로 반환하지 않는다. Claim 세부 거부 원인은 구분하지 않는다. Budget은 예약 시 소비하고
-실행 실패 후 Claim 자동 취소·자동 재시도·환불을 제공하지 않는다. 이를 전체 Organization 실패 Schema로 확장하지 않는다.
+현재 Stage 3 실패 단계는 preflight / authorization / claim / decision이며 미완료 묶음을 성공으로
+반환하지 않는다. Stage 4 실패는 별도 decisionComparisonResult에 기록한다. Claim 세부 거부 원인은 구분하지
+않는다. Budget은 예약 시 소비하고 실행 실패 후 Claim 자동 취소·재시도·환불은 제공하지 않는다.
+Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하지 않는다.
 
 ### 현재 구현에서 남은 책임 정리 대상
 
 | 현재 구현 사실 | 권장 개선 방향 / 검토 이유 |
 | --- | --- |
 | staffingApprovalResult가 Staffing 실패·Escalation과 Approval 결과를 결합 | Stage 1의 Proposal 생성과 Stage 2의 승인·Scope 발급 결과를 구분해 완료·대기·실패를 관찰 |
-| specialistDecisionsResult가 Decision과 선택적 Comparison을 결합 | Stage 3 / 4의 독립 결과와 진행 조건을 검토. Comparison 실패를 Decision 생성 실패와 구별 |
-| complete-specialist-decisions가 복수 Decision의 Comparison 뒤에 실행 | [완료 Node 기준](workflow-responsibility-boundaries.md#node-조합완료-시점과-부작용)에 따라 Stage 3 완료 뒤 Stage 4로 진행하도록 검토 |
 | Node와 Preflight 함수가 각각 Scope 조회, Authorization과 일부 검사 중첩 | 배치 일관성과 실행 시점 권한 검증의 목적을 구분해 제거 가능한 중복만 정리 |
 
 위 항목은 **미적용 개선 방향**이다. 현재 Result 타입·Schema·Edge를 바꾼 것으로 해석하지 않는다.
@@ -418,7 +431,7 @@ CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 
 4. **중복 Orchestration — 현재 경계:** Graph가 순서·반복·분기를 단독 소유한다. 검증 helper와 단일 Claim / v2 실행 함수만 재사용하고 Governance와 Application의 판단 규칙은 유지한다.
 5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. Handoff 저장·검증 API와 실제 Graph 연결은 후속 과제다.
 6. **CLI / 폴더 제약 — Step 3 구현:** CLI 호환성만으로 Subgraph를 만들지 않는다. 같은 Graph의 staffing-approval / specialist-decisions 실행 대상 구분으로 현재 CLI 범위를 보존한다.
-7. **Stage 계약 — 후속 리팩토링 검토:** Staffing / Approval과 Decisions / Comparison의 결과·완료 시점을 분리하는 방향을 검토한다. 구체적인 Result 타입·필드·단일 비교 생략 표현·출력 호환성은 미정이다.
+7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과 분리와 최종 Phase A Outcome은 후속 과제다.
 8. **Preflight 중복 — 후속 리팩토링 검토:** Scope 중복 조회와 소속 검사에서 배치 검증·실행 권한 재검증의 목적을 구분하고 제거 가능한 중복을 확인한다.
 9. **Node / 배치 구조 — 판단 기준 확정, 배치 미정:** Application 함수당 Node나 Stage당 완료 Node를 강제하지 않는다. stages/ 디렉터리·미래 Node 수·새 Subgraph·재시도/복구 정책은 결정하지 않는다.
 

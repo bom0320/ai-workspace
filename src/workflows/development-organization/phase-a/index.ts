@@ -15,4 +15,5 @@ export {
 export type {
   PhaseAState,
   SpecialistDecisionsWorkflowResult,
+  DecisionComparisonStageResult,
 } from "./state.js";

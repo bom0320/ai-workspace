@@ -99,26 +99,20 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         (state.preparedSpecialistRequests?.length ?? 0)
       )
         return "execute-next-specialist";
-      return state.collectedDecisions?.length === 1
-        ? "complete-specialist-decisions"
-        : "compare-specialist-decisions";
+      return "complete-specialist-decisions";
     },
-    [
-      END,
-      "execute-next-specialist",
-      "complete-specialist-decisions",
-      "compare-specialist-decisions",
-    ]
+    [END, "execute-next-specialist", "complete-specialist-decisions"]
   );
   graph.addConditionalEdges(
-    "compare-specialist-decisions",
+    "complete-specialist-decisions",
     (state) =>
-      state.specialistDecisionsResult?.status === "failed"
-        ? END
-        : "complete-specialist-decisions",
-    [END, "complete-specialist-decisions"]
+      state.specialistDecisionsResult?.status === "completed"
+        ? "compare-specialist-decisions"
+        : END,
+    ["compare-specialist-decisions", END]
   );
-  graph.addEdge("complete-specialist-decisions", END);
+  // All Stage 4 outcomes end the current range. Failure cannot enter future Synthesis.
+  graph.addEdge("compare-specialist-decisions", END);
 
   // Approval may persist Scope: no retry policy or resume mechanism is installed.
   // 3. Compile Graph

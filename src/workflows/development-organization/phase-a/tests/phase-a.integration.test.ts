@@ -733,10 +733,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       repositoryCommitSha: scope.snapshot.commitSha,
       decisions: result.decisions,
     });
-    expect(result.comparison?.gaps[0].specialistIds).toEqual([
-      "frontend",
-      "ux",
-    ]);
+    expect(state.decisionComparisonResult?.status).toBe("completed");
+    if (state.decisionComparisonResult?.status !== "completed")
+      throw new Error("Expected Comparison");
+    expect(
+      state.decisionComparisonResult.comparison.gaps[0].specialistIds
+    ).toEqual(["frontend", "ux"]);
     expect(reservations()).toHaveLength(2);
     expect(
       reservations().every(({ claimedAt }) => claimedAt !== undefined)
@@ -845,6 +847,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(issuanceCount()).toBe(1);
     expect(authorize).toHaveBeenCalledTimes(1);
     expect(state.specialistDecisionsResult).not.toHaveProperty("decisions");
+    expect(state.decisionComparisonResult).toBeUndefined();
   });
   it("retains the Claim and stops remaining work on v2 Evidence failure", async () => {
     prepareBatch();
@@ -870,6 +873,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(issuanceCount()).toBe(1);
     expect(authorize).toHaveBeenCalledTimes(1);
     expect(state.specialistDecisionsResult).not.toHaveProperty("decisions");
+    expect(state.decisionComparisonResult).toBeUndefined();
   });
   it("reports v3 Reference Validation failure separately after all Decisions succeed", async () => {
     prepareBatch();
@@ -881,8 +885,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }).invoke({ goal: options.goal, repositoryPath: root });
     const result = state.specialistDecisionsResult;
     expect(state.staffingApprovalResult?.status).toBe("approved");
-    expect(result).toMatchObject({ status: "failed", stage: "comparison" });
-    expect(result).not.toHaveProperty("decisions");
+    expect(result).toEqual({
+      status: "completed",
+      decisions: state.collectedDecisions,
+    });
+    expect(state.collectedDecisions).toHaveLength(2);
+    expect(result).not.toHaveProperty("comparison");
+    expect(state.decisionComparisonResult).toMatchObject({
+      status: "failed",
+      reason: expect.any(String),
+    });
     expect(command).toHaveBeenCalledTimes(3);
     expect(reservations()).toHaveLength(2);
     expect(
@@ -920,7 +932,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0].claimedAt).toEqual(expect.any(String));
     expect(state.collectedDecisions).toEqual([]);
-    expect(state.specialistComparison).toBeUndefined();
+    expect(state.decisionComparisonResult).toBeUndefined();
   });
   it("does not reuse prior Claim or Decisions when the Graph is invoked again", async () => {
     prepareBatch();
@@ -936,8 +948,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       repositoryPath: root,
     });
     expect(first.specialistDecisionsResult?.status).toBe("completed");
+    expect(first.decisionComparisonResult?.status).toBe("completed");
     const second = await graph.invoke(first);
     expect(second.specialistDecisionsResult?.status).toBe("completed");
+    expect(second.decisionComparisonResult?.status).toBe("completed");
     expect(options.agent).toHaveBeenCalledTimes(2);
     expect(authorize).toHaveBeenCalledTimes(4);
     expect(claim).toHaveBeenCalledTimes(4);
@@ -1004,7 +1018,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         expect(context.assignmentObjective).toBe(
           scope.assignments[0].objective
         );
-        expect(result.comparison).toBeUndefined();
+        expect(result).not.toHaveProperty("comparison");
+        expect(state.decisionComparisonResult).toEqual({
+          status: "skipped",
+          reason: "insufficient-decisions",
+        });
         expect(command).toHaveBeenCalledTimes(1);
         expect(reservations()).toHaveLength(1);
         expect(reservations().every((r) => r.claimedAt !== undefined)).toBe(
@@ -1017,6 +1035,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
         expect(result).toHaveProperty("assignmentId");
         expect(result).not.toHaveProperty("decisions");
+        expect(state.decisionComparisonResult).toBeUndefined();
         expect(command).not.toHaveBeenCalled();
         expect(reservations()).toHaveLength(0);
       }
@@ -1101,11 +1120,11 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
     "approvalResult",
     "collectedDecisions",
     "currentSpecialistIndex",
+    "decisionComparisonResult",
     "goal",
     "policyLookup",
     "preparedSpecialistRequests",
     "repositoryPath",
-    "specialistComparison",
     "specialistComparisonContext",
     "specialistDecisionsResult",
     "staffingApprovalResult",

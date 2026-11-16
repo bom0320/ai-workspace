@@ -332,7 +332,8 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   실패는 전파하고 Claim을 유지한다. 추가 Authorization·Reservation·자동 재시도·환불은 없다.
 - **5.4 Implemented — 복수 실행·Comparison**: 초기 함수형 runSpecialistDecisions는 승인된 동적 Assignment를 사전 검증 후
   순차 Authorization·Step 5.3 실행하며, Decision 두 개 이상이면 기존 v3 Comparison을 연결한다.
-  실패는 preflight / authorization / claim / decision / comparison으로 구분하고 부분 성공 결과를 반환하지 않는다.
+  초기 결합 계약은 실패를 preflight / authorization / claim / decision / comparison으로 구분하고 부분 성공을 반환하지 않았다.
+  후속 Phase A Refactoring Step 2에서는 Stage 3 완료와 Stage 4 결과를 분리해 비교 실패 시 검증된 Decision을 보존한다.
   Claim 세부 거부 원인은 구분하지 않는다. 기존 Staffing CLI는 승인까지만 실행한다. LangGraph Step 3에서 해당 Orchestrator를 제거하고 동일 실행 계약을 Phase A Node / Edge로 이관했다. 실행 결과 영속화·재시도/복구는 미구현이다.
 - **5.5 — 별도 검증 단계 생략 / 후속 통합 검증으로 이관**: 구현 완료로 표시하지 않는다.
   기존 단위·통합 테스트는 signed Ledger / mock TTY / v2·v3 실제 검증 코드와 모의 Codex process로
@@ -347,7 +348,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 
 - 기존 LangGraph / Node / Domain Schema를 재사용해 Policy → Staffing → Approval → 결과 수집을 Phase A에 통합했다.
 - Organization State는 goal / repositoryPath만 유지한다. Phase A State는 policyLookup / staffingResult /
-  approvalResult / staffingApprovalResult / specialistDecisionsResult와 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 단계 결과는 최종 Phase A Outcome이나 실행 권한이 아니다.
+  approvalResult / staffingApprovalResult / specialistDecisionsResult / decisionComparisonResult와 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 단계 결과는 최종 Phase A Outcome이나 실행 권한이 아니다.
 - 책임 기반 디렉터리 정리 후 Node는 features/ 아래 staffing / governance / decision / comparison의 nodes/에 배치한다.
   결과 정규화 Node는 features/governance/nodes에, Workflow 검증·실행 보조 함수는 features/decision/validation·execution에 둔다.
   파일 위치와 참조만 변경했으며 Stage 결과·Graph 분기·Preflight 중복 검증은 유지한다.
@@ -363,6 +364,11 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   Phase A Edge가 반복·실패 종료·단일 Comparison 생략·복수 Comparison 및 완료를 조정한다.
   기존 runSpecialistDecisions 함수·specialist-decisions/ 디렉터리는 제거하고 검증 helper / 단일 Claim·v2 실행만 유지했다.
   Authorization / Claim / v2·v3, 기존 stage / assignmentId·Fail-fast·Budget 소비 계약은 유지한다.
+- **Phase A Refactoring Step 2 Implemented:** 모든 Specialist의 검증된 Decision을 Stage 3에서 먼저 완료한다.
+  Stage 3 성공은 비어 있지 않은 decisions만, 실패 단계는 preflight / authorization / claim / decision만 표현한다.
+  Stage 4는 decisionComparisonResult에 completed / comparison, skipped / insufficient-decisions, failed / reason을 기록한다.
+  비교 실패 시 Stage 3 완료와 Decision을 보존하되 전체 Phase A 성공이나 후속 진행으로 취급하지 않는다.
+  specialistComparison 중간 채널은 제거했다. 새 invoke는 두 결과와 중간 데이터를 초기화하며 Preflight 중복 조회는 유지한다.
 - 기본값과 Staffing Entry Point는 staffing-approval을 선택하므로 기존 CLI는 승인까지만 실행한다.
   실행 대상은 종료 지점 선택이며 Governance를 우회하지 않는다. 별도 Graph·중복 Orchestrator는 없다.
 - **Step 3 Tested:** 실제 Graph·Staffing·Governance·Ledger·기존 v2/v3 검증에 fake CEO / mock TTY / 모의 Codex를 조합해

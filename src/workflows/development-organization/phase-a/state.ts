@@ -24,20 +24,13 @@ const specialistDecisionsResultSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("completed"),
-      decisions: z.array(agentDecisionSchema),
-      comparison: comparisonPayloadSchema.optional(),
+      decisions: z.array(agentDecisionSchema).min(1),
     })
     .strict(),
   z
     .object({
       status: z.literal("failed"),
-      stage: z.enum([
-        "preflight",
-        "authorization",
-        "claim",
-        "decision",
-        "comparison",
-      ]),
+      stage: z.enum(["preflight", "authorization", "claim", "decision"]),
       reason: z.string(),
       assignmentId: z.string().optional(),
     })
@@ -46,6 +39,26 @@ const specialistDecisionsResultSchema = z.discriminatedUnion("status", [
 
 export type SpecialistDecisionsWorkflowResult = z.infer<
   typeof specialistDecisionsResultSchema
+>;
+
+const decisionComparisonResultSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("completed"),
+      comparison: comparisonPayloadSchema,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("skipped"),
+      reason: z.literal("insufficient-decisions"),
+    })
+    .strict(),
+  z.object({ status: z.literal("failed"), reason: z.string() }).strict(),
+]);
+
+export type DecisionComparisonStageResult = z.infer<
+  typeof decisionComparisonResultSchema
 >;
 
 const policyLookupSchema = z.discriminatedUnion("status", [
@@ -125,7 +138,7 @@ export const phaseAState = new StateSchema({
     })
     .strict()
     .optional(),
-  specialistComparison: comparisonPayloadSchema.optional(),
+  decisionComparisonResult: decisionComparisonResultSchema.optional(),
   policyLookup: policyLookupSchema.optional(),
   staffingResult: staffingRunResultSchema.optional(),
   approvalResult: z

@@ -4,28 +4,38 @@ import type { PhaseAState } from "../../../state.js";
 export async function compareSpecialistDecisions(
   state: PhaseAState
 ): Promise<Partial<PhaseAState>> {
-  // 1. Compare the Complete Decision Batch
-  // Only the Edge's all-completed path reaches Comparison. v3 retains Evidence
-  // Reference validation; preflight supplied the stored Scope's Goal and baseline.
   try {
+    // 1. Require Completed Specialist Decisions
+    const result = state.specialistDecisionsResult;
+    if (result?.status !== "completed")
+      throw new Error("Comparison requires completed Specialist Decisions.");
+
+    // 2. Record Comparison Skipping for a Single Decision
+    if (result.decisions.length === 1)
+      return {
+        decisionComparisonResult: {
+          status: "skipped",
+          reason: "insufficient-decisions",
+        },
+      };
+
+    // 3. Compare the Complete Decision Batch
+    // v3 owns Reference validation. A Comparison failure never invalidates Stage 3's Decisions.
     if (!state.specialistComparisonContext)
       throw new Error("Specialist Comparison context is unavailable.");
     const comparison = await compareDecisions({
       ...state.specialistComparisonContext,
-      decisions: state.collectedDecisions ?? [],
+      decisions: result.decisions,
     });
-    return { specialistComparison: comparison };
+    return { decisionComparisonResult: { status: "completed", comparison } };
   } catch (error) {
     return {
-      collectedDecisions: [],
-      specialistComparison: undefined,
-      specialistDecisionsResult: {
+      decisionComparisonResult: {
         status: "failed",
-        stage: "comparison",
         reason:
           error instanceof Error
             ? error.message
-            : "Specialist Decision Workflow failed.",
+            : "Decision Comparison failed.",
       },
     };
   }

@@ -15,10 +15,13 @@ import {
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
 import { createPhaseAGraph } from "../graph.js";
+import { completeSpecialistDecisions } from "../features/decision/nodes/complete-specialist-decisions.js";
+import { compareSpecialistDecisions } from "../features/comparison/nodes/compare-specialist-decisions.js";
 import {
   phaseAState,
   type PhaseAState,
   type StaffingApprovalStageResult,
+  type DecisionComparisonStageResult,
 } from "../state.js";
 import type { StaffingApprovalWorkflowResult } from "../entrypoints/run-staffing-approval.js";
 import { developmentOrganizationState } from "../../state.js";
@@ -154,11 +157,20 @@ describe("Phase A Staffing Approval execution", () => {
         ["collect-staffing-approval-result", "__end__"],
         ["preflight-specialist-decisions", "execute-next-specialist"],
         ["execute-next-specialist", "execute-next-specialist"],
-        ["execute-next-specialist", "compare-specialist-decisions"],
+        ["complete-specialist-decisions", "compare-specialist-decisions"],
+        ["compare-specialist-decisions", "__end__"],
         ["execute-next-specialist", "complete-specialist-decisions"],
         ["complete-specialist-decisions", "__end__"],
       ])
     );
+    expect(edges).not.toContainEqual([
+      "execute-next-specialist",
+      "compare-specialist-decisions",
+    ]);
+    expect(edges).not.toContainEqual([
+      "compare-specialist-decisions",
+      "complete-specialist-decisions",
+    ]);
   });
 
   it("keeps Organization inputs separate from Phase A stage state", () => {
@@ -170,11 +182,11 @@ describe("Phase A Staffing Approval execution", () => {
       "approvalResult",
       "collectedDecisions",
       "currentSpecialistIndex",
+      "decisionComparisonResult",
       "goal",
       "policyLookup",
       "preparedSpecialistRequests",
       "repositoryPath",
-      "specialistComparison",
       "specialistComparisonContext",
       "specialistDecisionsResult",
       "staffingApprovalResult",
@@ -187,6 +199,37 @@ describe("Phase A Staffing Approval execution", () => {
     expectTypeOf<
       NonNullable<PhaseAState["specialistDecisionsResult"]>
     >().toEqualTypeOf<SpecialistDecisionsWorkflowResult>();
+    expectTypeOf<
+      NonNullable<PhaseAState["decisionComparisonResult"]>
+    >().toEqualTypeOf<DecisionComparisonStageResult>();
+    expect(
+      phaseAState.fields.specialistDecisionsResult.safeParse({
+        status: "completed",
+        decisions: [],
+      }).success
+    ).toBe(false);
+    expect(
+      phaseAState.fields.specialistDecisionsResult.safeParse({
+        status: "completed",
+        decisions: [
+          {
+            specialistId: "frontend",
+            recommendation: "Review",
+            evidence: [],
+            risks: [],
+            uncertainty: [],
+          },
+        ],
+        comparison: { findings: [], gaps: [] },
+      }).success
+    ).toBe(false);
+    expect(
+      phaseAState.fields.specialistDecisionsResult.safeParse({
+        status: "failed",
+        stage: "comparison",
+        reason: "Invalid reference",
+      }).success
+    ).toBe(false);
   });
 
   it("executes policy → Staffing → pending approval once and records stage state", async () => {
@@ -581,8 +624,12 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       );
       expect(state.staffingApprovalResult?.status).toBe("approved");
       expect(state.specialistDecisionsResult).toBeUndefined();
+      expect(state.decisionComparisonResult).toBeUndefined();
       expect(getApprovedStaffingScope).not.toHaveBeenCalled();
       expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
+      expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
   it.each([
@@ -616,6 +663,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     }).invoke(specialistInput);
     expect(state.staffingApprovalResult?.status).toBe(status);
     expect(state.specialistDecisionsResult).toBeUndefined();
+    expect(state.decisionComparisonResult).toBeUndefined();
     expect(getApprovedStaffingScope).not.toHaveBeenCalled();
     expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
   });
@@ -645,6 +693,9 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         reason: expect.any(String),
       });
       expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
+      expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
   it.each([
@@ -680,6 +731,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
       expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
       expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
   it("awaits one Specialist per Node before the next Authorization and compares original inputs", async () => {
@@ -744,7 +796,11 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         original.assignments[index].contextPaths
       );
     }
-    expect(state.specialistDecisionsResult).toMatchObject({
+    expect(state.specialistDecisionsResult).toEqual({
+      status: "completed",
+      decisions: state.collectedDecisions,
+    });
+    expect(state.decisionComparisonResult).toEqual({
       status: "completed",
       comparison: { findings: [], gaps: [] },
     });
@@ -794,6 +850,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(2);
     expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(1);
     expect(compareDecisions).not.toHaveBeenCalled();
+    expect(state.decisionComparisonResult).toBeUndefined();
     expect(state.collectedDecisions).toEqual([]);
   });
   it.each(["claim", "decision"] as const)(
@@ -816,6 +873,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(1);
       expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(1);
       expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
       expect(state.collectedDecisions).toEqual([]);
     }
   );
@@ -823,9 +881,115 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     const state =
       await createPhaseAGraph(specialistOptions).invoke(specialistInput);
     expect(state.specialistDecisionsResult).toEqual(completed);
+    expect(state.decisionComparisonResult).toEqual({
+      status: "skipped",
+      reason: "insufficient-decisions",
+    });
     expect(compareDecisions).not.toHaveBeenCalled();
   });
-  it("terminates on Comparison failure without completed or partial results", async () => {
+  it.each(["empty", "incomplete"] as const)(
+    "does not complete an %s Decision batch",
+    async (kind) => {
+      const state = await createPhaseAGraph().invoke(specialistInput);
+      const result = completeSpecialistDecisions({
+        ...state,
+        preparedSpecialistRequests: [
+          {
+            scopeId: "scope",
+            scopeVersion: 1,
+            assignmentId: "a",
+            requestedContextPaths: ["a.ts"],
+          },
+          {
+            scopeId: "scope",
+            scopeVersion: 1,
+            assignmentId: "b",
+            requestedContextPaths: ["b.ts"],
+          },
+        ],
+        currentSpecialistIndex: kind === "empty" ? 0 : 1,
+        collectedDecisions: kind === "empty" ? [] : completed.decisions,
+      });
+      expect(result.specialistDecisionsResult).toMatchObject({
+        status: "failed",
+        stage: "decision",
+      });
+      expect(result.collectedDecisions).toEqual([]);
+      expect(result.decisionComparisonResult).toBeUndefined();
+      expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
+    }
+  );
+  it("publishes Stage 3 before Stage 4 and compares the completed result", async () => {
+    twoAssignments();
+    const updates: Array<Record<string, Partial<PhaseAState>>> = [];
+    const stream = await createPhaseAGraph(specialistOptions).stream(
+      specialistInput,
+      { streamMode: "updates" }
+    );
+    for await (const update of stream) updates.push(update);
+    const completionIndex = updates.findIndex(
+      (update) => "complete-specialist-decisions" in update
+    );
+    const comparisonIndex = updates.findIndex(
+      (update) => "compare-specialist-decisions" in update
+    );
+    expect(completionIndex).toBeGreaterThanOrEqual(0);
+    expect(comparisonIndex).toBeGreaterThan(completionIndex);
+    const result =
+      updates[completionIndex]["complete-specialist-decisions"]
+        .specialistDecisionsResult;
+    expect(result?.status).toBe("completed");
+    expect(result).not.toHaveProperty("comparison");
+    expect(
+      updates[comparisonIndex]["compare-specialist-decisions"]
+        .decisionComparisonResult?.status
+    ).toBe("completed");
+    expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
+      goal,
+      repositoryCommitSha: approved.scope.snapshot.commitSha,
+      decisions: result?.status === "completed" ? result.decisions : [],
+    });
+  });
+  it("Comparison consumes completed Decisions rather than intermediate collection", async () => {
+    const state = await createPhaseAGraph().invoke(specialistInput);
+    const decisions = [
+      ...completed.decisions,
+      { ...completed.decisions[0], specialistId: "ux" },
+    ];
+    const update = await compareSpecialistDecisions({
+      ...state,
+      specialistDecisionsResult: { status: "completed", decisions },
+      collectedDecisions: [],
+      specialistComparisonContext: { goal, repositoryCommitSha: "abc" },
+    });
+    expect(update.decisionComparisonResult?.status).toBe("completed");
+    expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
+      goal,
+      repositoryCommitSha: "abc",
+      decisions,
+    });
+    expect(update).not.toHaveProperty("specialistDecisionsResult");
+  });
+  it("does not reuse a previous successful Comparison when a fresh run fails to compare", async () => {
+    twoAssignments();
+    vi.mocked(compareDecisions)
+      .mockResolvedValueOnce({ findings: [], gaps: [] })
+      .mockRejectedValueOnce(new Error("New Comparison failed"));
+    const graph = createPhaseAGraph(specialistOptions);
+    const first = await graph.invoke(specialistInput);
+    expect(first.decisionComparisonResult?.status).toBe("completed");
+    const second = await graph.invoke(first);
+    expect(second.specialistDecisionsResult?.status).toBe("completed");
+    expect(second.collectedDecisions).toHaveLength(2);
+    expect(second.decisionComparisonResult).toEqual({
+      status: "failed",
+      reason: "New Comparison failed",
+    });
+    expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(4);
+    expect(compareDecisions).toHaveBeenCalledTimes(2);
+  });
+  it("preserves completed Decisions when Comparison alone fails", async () => {
     twoAssignments();
     vi.mocked(compareDecisions).mockRejectedValueOnce(
       new Error("Invalid reference")
@@ -833,14 +997,17 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     const state =
       await createPhaseAGraph(specialistOptions).invoke(specialistInput);
     expect(state.specialistDecisionsResult).toEqual({
+      status: "completed",
+      decisions: state.collectedDecisions,
+    });
+    expect(state.specialistDecisionsResult).not.toHaveProperty("comparison");
+    expect(state.decisionComparisonResult).toEqual({
       status: "failed",
-      stage: "comparison",
       reason: "Invalid reference",
     });
     expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(2);
     expect(compareDecisions).toHaveBeenCalledTimes(1);
-    expect(state.collectedDecisions).toEqual([]);
-    expect(state.specialistComparison).toBeUndefined();
+    expect(state.collectedDecisions).toHaveLength(2);
   });
   it.each(["staffing-approval", "specialist-decisions"] as const)(
     "clears all stale execution data for fresh %s execution",
@@ -863,18 +1030,24 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         currentSpecialistIndex: 9,
         collectedDecisions: completed.decisions,
         specialistComparisonContext: { goal, repositoryCommitSha: "stale" },
-        specialistComparison: { findings: [], gaps: [] },
+        decisionComparisonResult: {
+          status: "completed",
+          comparison: { findings: [], gaps: [] },
+        },
       });
       for (const key of [
         "preparedSpecialistRequests",
         "currentSpecialistIndex",
         "collectedDecisions",
         "specialistComparisonContext",
-        "specialistComparison",
+        "decisionComparisonResult",
         "specialistDecisionsResult",
       ] as const)
         expect(state[key]).toBeUndefined();
       expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
+      expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
 });

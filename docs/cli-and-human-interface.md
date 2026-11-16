@@ -388,9 +388,10 @@ Budget Reservation·장기 대기/재개는 이 명령에 연결하지 않는다
 
 ### Application / Workflow API와 CLI 경계
 
-별도 Phase A `runSpecialistDecisions({ scopeId, requests })`는 저장 승인 Scope를 조회한 뒤 순차
-Authorization·Reservation·Claim·v2 Decision과 v3 Comparison을 연결한다. 이 API를 호출하는 CLI 명령이나
-selector 항목은 아직 없다. 기존 `decision` 명령은 고정 Frontend / UX의 v2 → v3 경로를 유지하며
+Phase A Graph는 `executionTarget: "specialist-decisions"`에서 저장 승인 Scope의 전체 요청을 검증한 뒤
+Authorization·Reservation·Claim·v2 Decision의 순차 반복과 v3 Comparison을 Node / Edge로 조정한다.
+기존 함수형 runSpecialistDecisions API는 제거했다. 이 실행 대상을 제공하는 CLI 명령이나 selector 항목은
+아직 없다. 기존 `decision` 명령은 고정 Frontend / UX의 v2 → v3 경로를 유지하며
 v4의 승인 Scope나 Reservation을 자동으로 발급하지 않는다.
 
 LangGraph Step 2.5의 `phase-a/index.ts` / `createPhaseAGraph()`는 정책 조회 → CEO Staffing → Approval 평가를 조정한다.
@@ -398,7 +399,7 @@ approval-required인 경우에만 Human Confirmation Node로 진행한다. 콜�
 콜백이 있으면 분리된 review 사본을 전달하고 원본 Proposal과 실제 receipt로 Governance에 최종 승인을 요청한다.
 CLI staffing은 기존 runStaffingApproval() API를 통해 현재 createPhaseAGraph()를 실행하고 review·/dev/tty I/O를 제공한다.
 별도 Staffing Setup Graph는 제거했으며 Entry Point는 staffingApprovalResult만 기존 반환 계약으로 전달한다.
-현재 CLI 동작은 유지하지만 Step 3에서 Phase A에 Specialist Decisions를 추가하면 실행 범위가 달라질 수 있으므로 CLI 계약을 함께 재설계해야 한다. 미래 격리는 현재 보장하지 않는다.
-Graph 명령·Decision 연결·Interrupt·Resume·Checkpoint는 없다.
+Step 3에서 Entry Point가 executionTarget: staffing-approval을 명시하도록 고정했다. Graph의 기본값도 승인까지만 실행하며, specialist-decisions를 명시한 API 호출만 승인 후 분석을 수행한다. 실행 대상은 Governance 우회 옵션이 아니다.
+별도 Graph 명령은 추가하지 않았다. Decision은 API의 실행 대상으로 연결했으며 CEO Synthesis·Direction Governance·Interrupt·Resume·Checkpoint는 없다.
 Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.
 API 실패 계약과 신뢰 경계는 [Architecture](architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

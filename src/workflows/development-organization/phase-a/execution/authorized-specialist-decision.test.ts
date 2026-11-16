@@ -10,13 +10,14 @@ import {
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "../../index.js";
+} from "../index.js";
 
 vi.mock("@/application/governance/index.js", async (original) => ({
   ...(await original<typeof import("@/application/governance/index.js")>()),
   claimAuthorizedInvocation: vi.fn(),
 }));
-vi.mock("@/application/decision/index.js", () => ({
+vi.mock("@/application/decision/index.js", async (original) => ({
+  ...(await original<typeof import("@/application/decision/index.js")>()),
   runIndependentDecisions: vi.fn(),
 }));
 const invocation: AuthorizedSpecialistInvocation = {

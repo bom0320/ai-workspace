@@ -6,6 +6,12 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   if (!state.repositoryPath?.trim()) {
     return {
       staffingApprovalResult: undefined,
+      specialistDecisionsResult: undefined,
+      preparedSpecialistRequests: undefined,
+      currentSpecialistIndex: undefined,
+      collectedDecisions: undefined,
+      specialistComparisonContext: undefined,
+      specialistComparison: undefined,
       staffingResult: undefined,
       approvalResult: undefined,
       policyLookup: {
@@ -26,6 +32,12 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   return {
     policyLookup,
     staffingApprovalResult: undefined,
+    specialistDecisionsResult: undefined,
+    preparedSpecialistRequests: undefined,
+    currentSpecialistIndex: undefined,
+    collectedDecisions: undefined,
+    specialistComparisonContext: undefined,
+    specialistComparison: undefined,
     staffingResult: undefined,
     approvalResult: undefined,
   };

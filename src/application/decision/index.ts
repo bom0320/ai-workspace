@@ -23,3 +23,4 @@ export {
   captureRepositorySnapshot,
   assertRepositoryMatchesSnapshot,
 } from "./flow/context/repository-snapshot.js";
+export { agentDecisionSchema } from "./protocol/decision.js";

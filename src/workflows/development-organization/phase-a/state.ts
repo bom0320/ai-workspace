@@ -4,6 +4,7 @@ import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.j
 import {
   approvalRecordSchema,
   approvedOperatingScopeSchema,
+  invokeSpecialistRequestSchema,
 } from "@/application/governance/index.js";
 import {
   staffingRunResultSchema,
@@ -14,6 +15,38 @@ import type {
   StaffingSystemPolicyResult,
 } from "@/application/governance/index.js";
 import { developmentOrganizationState } from "../state.js";
+
+import { agentDecisionSchema } from "@/application/decision/index.js";
+import { comparisonPayloadSchema } from "@/application/comparison/index.js";
+
+// The envelope belongs to this Graph; Domain payload validation stays in v2/v3.
+const specialistDecisionsResultSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("completed"),
+      decisions: z.array(agentDecisionSchema),
+      comparison: comparisonPayloadSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("failed"),
+      stage: z.enum([
+        "preflight",
+        "authorization",
+        "claim",
+        "decision",
+        "comparison",
+      ]),
+      reason: z.string(),
+      assignmentId: z.string().optional(),
+    })
+    .strict(),
+]);
+
+export type SpecialistDecisionsWorkflowResult = z.infer<
+  typeof specialistDecisionsResultSchema
+>;
 
 const policyLookupSchema = z.discriminatedUnion("status", [
   z
@@ -80,6 +113,19 @@ export const staffingApprovalResultSchema = z.union([
 export const phaseAState = new StateSchema({
   ...developmentOrganizationState.fields,
   staffingApprovalResult: staffingApprovalResultSchema.optional(),
+  specialistDecisionsResult: specialistDecisionsResultSchema.optional(),
+  preparedSpecialistRequests: z.array(invokeSpecialistRequestSchema).optional(),
+  currentSpecialistIndex: z.number().int().nonnegative().optional(),
+  collectedDecisions: z.array(agentDecisionSchema).optional(),
+  // Preflight's trusted comparison inputs are data, never execution authority.
+  specialistComparisonContext: z
+    .object({
+      goal: developmentOrganizationState.fields.goal,
+      repositoryCommitSha: z.string(),
+    })
+    .strict()
+    .optional(),
+  specialistComparison: comparisonPayloadSchema.optional(),
   policyLookup: policyLookupSchema.optional(),
   staffingResult: staffingRunResultSchema.optional(),
   approvalResult: z

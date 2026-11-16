@@ -3,11 +3,7 @@ import * as phaseAGraph from "./graph.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
-import {
-  createPhaseAGraph,
-  runAuthorizedSpecialistDecision,
-  runSpecialistDecisions,
-} from "./index.js";
+import { createPhaseAGraph, runAuthorizedSpecialistDecision } from "./index.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -596,7 +592,7 @@ describe("Reserved Invocation → existing v2 Decision integration", () => {
 });
 
 describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () => {
-  async function batch(budget = 2) {
+  function prepareBatch(budget = 2) {
     writeFileSync(join(root, "b.ts"), "export const b = 2;\n");
     git("add", ".");
     git("commit", "--quiet", "-m", "second Context");
@@ -619,21 +615,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     draft.budget.maxAgentInvocations = budget;
     configure();
     options.confirmApproval = (request) => accept(request);
-    const approval = await runStaffingApproval(options);
-    if (approval.status !== "approved")
-      throw new Error(JSON.stringify(approval));
-    return {
-      scope: approval.scope,
-      input: {
-        scopeId: approval.scope.id,
-        requests: approval.scope.assignments.map((assignment) => ({
-          scopeId: approval.scope.id,
-          scopeVersion: approval.scope.version,
-          assignmentId: assignment.assignmentId,
-          requestedContextPaths: assignment.contextPaths,
-        })),
-      },
-    };
   }
   function reservations() {
     return withGovernanceRecords(
@@ -700,9 +681,17 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       });
   }
   it("runs approved dynamic Assignments in order and passes original Goal/SHA/Decisions to v3", async () => {
-    const { scope, input } = await batch();
+    prepareBatch();
     const command = runtime();
-    const result = await runSpecialistDecisions(input);
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    const result = state.specialistDecisionsResult;
+    const approval = state.staffingApprovalResult;
+    if (!result || approval?.status !== "approved")
+      throw new Error("Missing Graph results");
+    const scope = approval.scope;
     expect(result.status).toBe("completed");
     if (result.status !== "completed") throw new Error(JSON.stringify(result));
     expect(
@@ -745,73 +734,131 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toBe(true);
   });
   it("does not reserve anything if a later request fails preflight", async () => {
-    const { input } = await batch();
-    input.requests[1] = structuredClone(input.requests[0]);
+    prepareBatch();
+    const lookup = governance.getApprovedStaffingScope;
+    vi.spyOn(governance, "getApprovedStaffingScope").mockImplementation(
+      (id) => {
+        const result = lookup(id);
+        if (result.status !== "approved") return result;
+        const copy = structuredClone(result);
+        copy.scope.assignments[1] = structuredClone(copy.scope.assignments[0]);
+        return copy;
+      }
+    );
     const command = runtime();
-    expect(await runSpecialistDecisions(input)).toMatchObject({
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "preflight",
-      assignmentId: input.requests[0].assignmentId,
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(0);
     expect(command).not.toHaveBeenCalled();
   });
   it("leaves individual Context authorization to Governance", async () => {
-    const { input } = await batch();
-    input.requests[0].requestedContextPaths = ["unapproved.ts"];
+    prepareBatch();
+    const lookup = governance.getApprovedStaffingScope;
+    vi.spyOn(governance, "getApprovedStaffingScope").mockImplementation(
+      (id) => {
+        const result = lookup(id);
+        if (result.status !== "approved") return result;
+        const copy = structuredClone(result);
+        copy.scope.assignments[0].contextPaths = ["unapproved.ts"];
+        return copy;
+      }
+    );
     const command = runtime();
-    expect(await runSpecialistDecisions(input)).toMatchObject({
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "authorization",
-      assignmentId: input.requests[0].assignmentId,
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(0);
     expect(command).not.toHaveBeenCalled();
   });
   it("stops after budget denial without executing or comparing remaining work", async () => {
-    const { input } = await batch(1);
+    prepareBatch(1);
     const command = runtime();
-    expect(await runSpecialistDecisions(input)).toMatchObject({
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "authorization",
-      assignmentId: input.requests[1].assignmentId,
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[1].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(command).toHaveBeenCalledTimes(1);
   });
   it("reports an opaque Claim denial without executing Codex or reserving the next Assignment", async () => {
-    const { input } = await batch();
+    prepareBatch();
     vi.spyOn(governance, "claimAuthorizedInvocation").mockReturnValueOnce({
       status: "denied",
       reason: "Invocation claim denied",
     });
     const command = runtime();
-    expect(await runSpecialistDecisions(input)).toEqual({
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toEqual({
       status: "failed",
       stage: "claim",
       reason: "Invocation claim denied",
-      assignmentId: input.requests[0].assignmentId,
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0]).not.toHaveProperty("claimedAt");
     expect(command).not.toHaveBeenCalled();
   });
   it("retains the Claim and stops remaining work on v2 Evidence failure", async () => {
-    const { input } = await batch();
+    prepareBatch();
     const command = runtime("decision");
-    expect(await runSpecialistDecisions(input)).toMatchObject({
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "decision",
-      assignmentId: input.requests[0].assignmentId,
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0].claimedAt).toEqual(expect.any(String));
     expect(command).toHaveBeenCalledTimes(1);
   });
   it("reports v3 Reference Validation failure separately after all Decisions succeed", async () => {
-    const { input } = await batch();
+    prepareBatch();
     const command = runtime("comparison");
-    const result = await runSpecialistDecisions(input);
+    const result = (
+      await createPhaseAGraph({
+        ...options,
+        executionTarget: "specialist-decisions",
+      }).invoke({ goal: options.goal, repositoryPath: root })
+    ).specialistDecisionsResult;
     expect(result).toMatchObject({ status: "failed", stage: "comparison" });
     expect(result).not.toHaveProperty("decisions");
     expect(command).toHaveBeenCalledTimes(3);
@@ -820,6 +867,169 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       reservations().every(({ claimedAt }) => claimedAt !== undefined)
     ).toBe(true);
   });
+
+  it("rechecks current Governance policy before authorizing the next Assignment", async () => {
+    prepareBatch();
+    const command = runtime();
+    const simulate = command.getMockImplementation()!;
+    let calls = 0;
+    command.mockImplementation(async (...args) => {
+      const result = await simulate(...args);
+      if (++calls === 1) configure(); // New policy version invalidates the issued Scope.
+      return result;
+    });
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    if (state.staffingApprovalResult?.status !== "approved")
+      throw new Error("Missing Scope");
+    expect(state.specialistDecisionsResult).toMatchObject({
+      status: "failed",
+      stage: "authorization",
+      assignmentId:
+        state.staffingApprovalResult.scope.assignments[1].assignmentId,
+    });
+    expect(command).toHaveBeenCalledTimes(1);
+    expect(reservations()).toHaveLength(1);
+    expect(reservations()[0].claimedAt).toEqual(expect.any(String));
+    expect(state.collectedDecisions).toEqual([]);
+    expect(state.specialistComparison).toBeUndefined();
+  });
+  it("does not reuse prior Claim or Decisions when the Graph is invoked again", async () => {
+    prepareBatch();
+    const command = runtime();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
+    const claim = vi.spyOn(governance, "claimAuthorizedInvocation");
+    const graph = createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    });
+    const first = await graph.invoke({
+      goal: options.goal,
+      repositoryPath: root,
+    });
+    expect(first.specialistDecisionsResult?.status).toBe("completed");
+    const second = await graph.invoke(first);
+    expect(second.specialistDecisionsResult?.status).toBe("completed");
+    expect(options.agent).toHaveBeenCalledTimes(2);
+    expect(authorize).toHaveBeenCalledTimes(4);
+    expect(claim).toHaveBeenCalledTimes(4);
+    expect(command).toHaveBeenCalledTimes(6);
+    expect(reservations()).toHaveLength(4);
+    expect(new Set(reservations().map((r) => r.invocationId)).size).toBe(4);
+    expect(second.currentSpecialistIndex).toBe(2);
+    expect(second.collectedDecisions).toHaveLength(2);
+  });
+
+  it.each([
+    "single",
+    "multiple",
+    "authorization",
+    "claim",
+    "decision",
+    "comparison",
+  ] as const)(
+    "connects the real Specialist Workflow through Phase A: %s",
+    async (mode) => {
+      if (mode === "single") {
+        configure();
+        options.confirmApproval = (request) => accept(request);
+      } else prepareBatch();
+      if (mode === "authorization")
+        vi.spyOn(
+          governance,
+          "authorizeSpecialistInvocation"
+        ).mockReturnValueOnce({
+          status: "denied",
+          reason: "Authorization stopped",
+        });
+      if (mode === "claim")
+        vi.spyOn(governance, "claimAuthorizedInvocation").mockReturnValueOnce({
+          status: "denied",
+          reason: "Claim stopped",
+        });
+      const command = runtime(
+        mode === "decision" || mode === "comparison" ? mode : "success"
+      );
+      const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
+      const state = await createPhaseAGraph({
+        ...options,
+        executionTarget: "specialist-decisions",
+      }).invoke({ goal: options.goal, repositoryPath: root });
+      expect(state.staffingApprovalResult?.status).toBe("approved");
+      expect(options.agent).toHaveBeenCalledTimes(1);
+      expect(issuanceCount()).toBe(1);
+      expect(state.goal).toEqual(options.goal);
+      const result = state.specialistDecisionsResult;
+      if (mode === "single" || mode === "multiple") {
+        expect(result?.status).toBe("completed");
+        if (result?.status !== "completed")
+          throw new Error(JSON.stringify(result));
+        const approval = state.staffingApprovalResult;
+        if (approval?.status !== "approved") throw new Error("Expected Scope");
+        const scope = approval.scope;
+        expect(
+          result.decisions.map((d) => ({
+            id: d.specialistId,
+            objective: d.recommendation,
+            path: d.evidence[0].path,
+          }))
+        ).toEqual(
+          scope.assignments.map((a) => ({
+            id: a.specialistId,
+            objective: a.objective,
+            path: a.contextPaths[0],
+          }))
+        );
+        const specialistCalls = command.mock.calls.filter(([, args]) =>
+          args.at(-1)!.includes("SpecialistContext:\n")
+        );
+        specialistCalls.forEach(([, args], index) => {
+          const context = JSON.parse(
+            args.at(-1)!.split("SpecialistContext:\n")[1]
+          );
+          expect(context.goal).toEqual(options.goal);
+          expect(context.repositoryCommitSha).toBe(scope.snapshot.commitSha);
+          expect(context.assignmentObjective).toBe(
+            scope.assignments[index].objective
+          );
+        });
+        if (mode === "single") expect(result.comparison).toBeUndefined();
+        else
+          expect(result.comparison?.gaps[0].specialistIds).toEqual([
+            "frontend",
+            "ux",
+          ]);
+        expect(command).toHaveBeenCalledTimes(mode === "single" ? 1 : 3);
+        expect(authorize).toHaveBeenCalledTimes(mode === "single" ? 1 : 2);
+        expect(reservations()).toHaveLength(mode === "single" ? 1 : 2);
+        expect(reservations().every((r) => r.claimedAt !== undefined)).toBe(
+          true
+        );
+      } else {
+        expect(result).toMatchObject({ status: "failed", stage: mode });
+        if (mode !== "comparison")
+          expect(result).toHaveProperty("assignmentId");
+        expect(result).not.toHaveProperty("decisions");
+        expect(command).toHaveBeenCalledTimes(
+          mode === "authorization" || mode === "claim"
+            ? 0
+            : mode === "decision"
+              ? 1
+              : 3
+        );
+        expect(authorize).toHaveBeenCalledTimes(mode === "comparison" ? 2 : 1);
+        expect(reservations()).toHaveLength(
+          mode === "authorization" ? 0 : mode === "comparison" ? 2 : 1
+        );
+        if (mode === "claim")
+          expect(reservations()[0].claimedAt).toBeUndefined();
+        if (mode === "decision")
+          expect(reservations()[0].claimedAt).toBeDefined();
+      }
+    }
+  );
 });
 
 describe("Phase A Graph → real Staffing and Governance Approval", () => {
@@ -897,9 +1107,15 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
   expect(state.staffingApprovalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
     "approvalResult",
+    "collectedDecisions",
+    "currentSpecialistIndex",
     "goal",
     "policyLookup",
+    "preparedSpecialistRequests",
     "repositoryPath",
+    "specialistComparison",
+    "specialistComparisonContext",
+    "specialistDecisionsResult",
     "staffingApprovalResult",
     "staffingResult",
   ]);
@@ -936,11 +1152,18 @@ describe("CLI through current Phase A Staffing Approval", () => {
       executeStaffing({ ...input, agent: options.agent })
     );
     const createGraph = vi.spyOn(phaseAGraph, "createPhaseAGraph");
-    // This checks today's flow only; Step 3 must revisit the CLI execution range.
+    const specialistProcess = vi
+      .spyOn(processRuntime, "runCommand")
+      .mockRejectedValue(new Error("Unexpected Specialist execution"));
+    const scopeLookup = vi.spyOn(governance, "getApprovedStaffingScope");
     const output = vi.spyOn(console, "log").mockImplementation(() => {});
     writeFileSync(join(home, "goal.json"), JSON.stringify(options.goal));
     expect(await runStaffingCli([root, join(home, "goal.json")])).toBe(0);
-    expect(createGraph).toHaveBeenCalledTimes(1);
+    expect(createGraph).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ executionTarget: "staffing-approval" })
+    );
+    expect(specialistProcess).not.toHaveBeenCalled();
+    expect(scopeLookup).not.toHaveBeenCalled();
     expect(options.agent).toHaveBeenCalledTimes(1);
     const result = JSON.parse(output.mock.calls[0][0]);
     expect(result.status).toBe("approved");

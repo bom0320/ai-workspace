@@ -12,7 +12,7 @@ Development Organization의 실행 계약·Phase Handoff·Graph State / Output �
 현재 구현은 v0–v3와 v4 R1/R2 Staffing·Step 3 승인·Step 4 Authorization·Step 5.1–5.4 Decision/Comparison 연결을 포함한다.
 LangGraph.js Minimal Integration Step 1은 정책 조회를, Step 2는 CEO Staffing·Approval 평가 Node와 조건부 Edge를 연결했다.
 Step 2.5는 콜백 기반 Human 확인·최종화를 연결했고, 이후 Staffing Setup Subgraph를 제거해 Policy → Staffing → Approval을 Phase A가 직접 소유하도록 통합했다. CLI의 기존 API도 현재 Phase A Graph를 호출한다.
-전체 Organization Graph와 Decision Node 연결은 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
+Step 3는 승인된 Staffing 결과와 명시적 specialist-decisions 실행 대상에서 Preflight·단일 Specialist·Comparison·완료를 일반 Node로 연결하고 반복·실패 분기를 Phase A Edge로 이전했다. 전체 Organization Graph는 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
 v4는 진행 중이며 CEO Synthesis·해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
 
 ## 2. Current Architecture
@@ -55,7 +55,7 @@ Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance�
 Step 4는 저장 Scope 검증·Budget Reservation·AuthorizedSpecialistInvocation 발급을 제공한다.
 Step 5.2는 실행 전 Reservation 검증·일회 Claim, Step 5.3은 단일 Invocation의 v2 실행,
 Step 5.4는 승인 Scope의 동적 Specialist 순차 실행과 v3 Comparison 연결을 제공한다.
-LangGraph Phase A Graph는 정책 조회·Staffing·Approval 평가와 콜백 기반 Human 확인·최종 승인을 조정하며 상위 Organization Graph는 아직 없다. Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)과 [Runtime Foundation](#97-langgraph-minimal-integration-step-1--runtime-foundation)을 따른다.
+LangGraph Phase A Graph는 정책 조회·Staffing·Approval·Human 확인과 선택적 Specialist Decisions / Comparison까지 조정한다. 기본값·Staffing CLI는 승인까지만 실행하며 상위 Organization Graph는 아직 없다. Step별 상세는 아래 [Target Responsibility Model](#5-target-responsibility-model)과 [Runtime Foundation](#97-langgraph-minimal-integration-step-1--runtime-foundation)을 따른다.
 
 ## 3. Current End-to-End Flows
 
@@ -1043,7 +1043,7 @@ Source 영역은 다음 기준으로 구분한다.
   `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
   `Goal + RepositorySnapshot + explicit files → AgentDecision[]`가 여기에 속한다.
   각 use-case는 독립 진입점을 가지며 CLI가 Planning과 Execution을 Human gate로 연결한다.
-- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. Organization state.ts는 공통 입력을, phase-a/graph.ts는 Phase A 내부 순서를 소유하며 현재 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인을 조정한다. 상위 Organization Graph는 Phase 간 Handoff 정의 이후 구성한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
+- `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. Organization state.ts는 공통 입력을, phase-a/graph.ts는 Phase A 내부 순서를 소유하며 현재 정책 조회·Staffing·Approval·Human 확인과 실행 대상에 따른 Specialist Decisions를 조정한다. 상위 Organization Graph는 Phase 간 Handoff 정의 이후 구성한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec, TaskContract, InspectedFile의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
 - `services`: use-case 내부의 특정 단계가 아니라, use-case를 떠나도 독립 capability로
@@ -1291,20 +1291,22 @@ src/
 │     └─ phase-a/
 │        ├─ index.ts
 │        ├─ graph.ts
-│        ├─ state.ts  # 공통 입력 + 정책/Staffing/Approval 중간 상태·단계 결과
+│        ├─ state.ts  # 공통 입력 + Staffing / Specialist 단계 결과·중간 상태
 │        ├─ graph.test.ts
 │        ├─ nodes/
 │        │  ├─ policy/load-system-policy.ts
 │        │  ├─ staffing/run-staffing.ts
 │        │  ├─ approval/evaluate-staffing-approval.ts
 │        │  ├─ approval/confirm-staffing-approval.ts
+│        │  ├─ specialist/preflight-specialist-decisions.ts
+│        │  ├─ specialist/execute-next-specialist.ts
+│        │  ├─ specialist/compare-specialist-decisions.ts
+│        │  ├─ specialist/complete-specialist-decisions.ts
 │        │  └─ collect-staffing-approval-result.ts
 │        ├─ phase-a.integration.test.ts
 │        ├─ entrypoints/run-staffing-approval.ts
-│        └─ specialist-decisions/
-│           ├─ specialist-decisions.ts
-│           ├─ validation/preflight-specialist-decisions.ts
-│           └─ execution/authorized-specialist-decision.ts
+│        ├─ validation/preflight-specialist-decisions.ts
+│        └─ execution/authorized-specialist-decision.ts
 ├─ contracts/  # goal / task / repository / specialist / staffing
 ├─ services/
 │  ├─ artifacts/
@@ -1663,7 +1665,7 @@ authorizeSpecialistInvocation(request, attempt?)
   입력·검증·Lock·저장 실패는 denied다. 신규 Authorization이나 Eligibility 평가는 호출하지 않아
   잔여 예산이 0이어도 예약된 입력을 Claim할 수 있다. Budget은 여전히 예약 수로만 소비한다.
   기존 Ledger의 claimedAt 누락은 미사용 예약이며 읽기 시 default·재저장은 하지 않는다.
-- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/specialist-decisions/execution/authorized-specialist-decision.ts`의
+- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/execution/authorized-specialist-decision.ts`의
   `runAuthorizedSpecialistDecision(invocation)`으로 단일 호출을 연결한다. 실행 직전 Claim이 거부되면
   오류로 종료하고 v2를 호출하지 않는다. 성공하면 반환된 Invocation의 snapshot·goal과
   specialist·assignmentObjective·files 한 개를 `runIndependentDecisions()`에 전달한다.
@@ -1681,9 +1683,10 @@ authorizeSpecialistInvocation(request, attempt?)
 
 ### 9.6 Step 5.4 — Phase A Multi-Specialist Decision & Comparison — Implemented
 
-`workflows/development-organization/phase-a/specialist-decisions/specialist-decisions.ts`의
-`runSpecialistDecisions({ scopeId, requests })`는 승인된 동적 Assignment 요청 묶음을 실행한다.
-`runStaffingApproval()` 이후 받은 Scope ID로 별도 호출하며 외부 Scope 객체를 권한 근거로 받지 않는다.
+Step 5.4는 초기 함수형 `runSpecialistDecisions({ scopeId, requests })`로 승인된 동적 Assignment 요청 묶음을
+연결했다. LangGraph Step 3에서 해당 Orchestrator와 specialist-decisions/ 디렉터리를 제거하고 실행 계약을
+Phase A의 일반 Node / Edge로 이관했다. 현재 실행 경로는 [9.12](#912-langgraph-step-3--phase-a-specialist-decisions-integration)를 따른다.
+다음 검증·실행 계약은 이관 후에도 유지한다.
 
 1. `getApprovedStaffingScope()`로 현재 유효한 저장 Scope를 조회한다. 전체 요청을 기존 Request Schema로
    파싱·복제하고 비어 있지 않은 목록, 동일 Scope ID/version, Scope 소속 Assignment,
@@ -1704,8 +1707,8 @@ Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원�
 이미 사용됨·Scope 무효·입력 변조·저장소 오류 등 세부 원인을 구분하지 않는다.
 
 묶음 예약 transaction이나 durable Workflow 상태는 없다. 예약된 예산과 Claim은 실패 후에도 유지한다.
-자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장은 구현하지 않았다. 이 Decision Workflow는 Staffing·Approval·Human 확인을 조정하는 Phase A Graph와 아직 미연결이다.
-묶음 Workflow를 다시 호출하면 새 Authorization으로 새 예약을 만들 수 있으므로 호출자는 이를 자동 재개로
+자동 재시도·환불·재승인·CEO Recovery/Escalation·실행 결과 저장은 구현하지 않았다. 기존 Preflight 검증과 단일 Claim / v2 실행은 재사용하며 순차 실행·실패·Comparison 진입은 Phase A Graph가 단독 소유한다.
+Graph를 다시 실행하면 새 Staffing·Scope·Authorization으로 새 예약을 만들 수 있으므로 호출자는 이를 자동 재개로
 취급하면 안 된다. Step 5.3의 동일 Invocation 일회 Claim과 묶음의 재호출 의미는 다르다.
 외부 Git·정책 변경과 실행 사이의 TOCTOU 및 정확히 한 번의 실행 완료를 보장하지 않는 한계는 유지한다.
 
@@ -1714,7 +1717,7 @@ Workflow는 오류 메시지 패턴을 해석하지 않는다. Claim 거부 원�
 
 LangGraph.js는 최종적으로 Development Organization 전체 실행 Runtime을 맡는다. 실행 책임은
 Organization Graph의 Phase 간 순서·데이터 전달과 Phase A Graph의 내부 Node 순서·조건부 분기로 나눈다.
-현재 실행 가능한 Graph는 Phase A 정책 조회·Staffing·Approval과 콜백 기반 Human 확인까지다. 상위 Organization Graph는 Phase 간 Handoff 계약이
+현재 실행 가능한 Graph는 Phase A 정책 조회·Staffing·Approval·Human 확인과 선택적 Specialist Decisions / Comparison까지다. 상위 Organization Graph는 Phase 간 Handoff 계약이
 정의된 시점에 구성하며 단순히 Phase A를 다시 감싸는 Wrapper는 만들지 않았다.
 [공식 Graph API](https://docs.langchain.com/oss/javascript/langgraph/graph-api)의 StateSchema / StateGraph / compile / invoke를 사용한다.
 Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반 Agent Runtime을 유지한다.
@@ -1725,31 +1728,36 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | --- | --- |
 | `index.ts`, `state.ts` | Organization State 타입 공개와 원본 GoalSpec·repositoryPath 공통 입력 소유; Organization Graph는 없음 |
 | `phase-a/index.ts` | createPhaseAGraph·PhaseAState와 기존 Phase A Workflow 공개 API |
-| `phase-a/state.ts` | 공통 입력·정책/Staffing/Approval 중간 상태와 staffingApprovalResult; 최종 Phase A Output은 미정 |
-| `phase-a/graph.ts` | 5개 업무/결과 Node 직접 등록, 기존 조건부 Edge 연결, compile |
+| `phase-a/state.ts` | 공통 입력·정책/Staffing/Approval 중간 상태와 staffingApprovalResult / specialistDecisionsResult; 최종 Phase A Output은 미정 |
+| `phase-a/graph.ts` | 9개 일반 Node 직접 등록, 승인·실행 대상·Specialist 반복·실패에 따른 조건부 Edge 연결, compile |
 | `phase-a/nodes/policy/load-system-policy.ts` | Repository 경로 확인 → Governance 조회; 이전 Staffing / Approval 결과 제거 |
 | `phase-a/nodes/staffing/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; 실행 옵션은 closure에 보관 |
 | `phase-a/nodes/approval/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
 | `phase-a/nodes/approval/confirm-staffing-approval.ts` | 분리된 review로 확인 후 원본 Proposal·receipt로 최종화; receipt는 Node 로컬 변수 |
 | `phase-a/nodes/collect-staffing-approval-result.ts` | 승인 정책을 판단하지 않고 현재 단계 결과를 staffingApprovalResult로 정규화 |
-| `phase-a/entrypoints/run-staffing-approval.ts` | 현재 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
+| `phase-a/nodes/specialist/preflight-specialist-decisions.ts` | 저장 Scope ID / Version 확인·전체 Assignment 요청 구성 → 기존 Preflight 검증 |
+| `phase-a/nodes/specialist/execute-next-specialist.ts` | 한 Assignment의 Authorization → 기존 Claim / v2 실행 → Index 갱신 |
+| `phase-a/nodes/specialist/compare-specialist-decisions.ts` | 완전한 Decision 묶음으로 기존 v3 Comparison 호출 |
+| `phase-a/nodes/specialist/complete-specialist-decisions.ts` | 성공한 Specialist 단계 결과만 확정 |
+| `phase-a/entrypoints/run-staffing-approval.ts` | staffing-approval 대상을 명시한 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
 | `phase-a/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
 
 ```ts
 import { createPhaseAGraph } from "@/workflows/development-organization/phase-a/index.js";
 
-const graph = createPhaseAGraph({ maxRounds: 4 });
+const graph = createPhaseAGraph({ maxRounds: 4, executionTarget: "specialist-decisions" });
 const state = await graph.invoke({ goal, repositoryPath });
-// state.staffingApprovalResult: approved / approval-required / denied / rejected / failed / escalated
+// 승인된 경우에만 state.specialistDecisionsResult에 completed / failed 결과가 저장된다.
+// 직접 승인이 필요하면 기존 confirmApproval 콜백을 제공하며, 기본 실행 대상은 staffing-approval이다.
 ```
 
 Organization State는 goal / repositoryPath만 소유한다. Phase A State는 동일 입력 Schema와 기존 Domain Schema를 재사용해
-policyLookup / staffingResult / approvalResult / staffingApprovalResult를 소유한다. 최종 Phase A Outcome은 아직 없으며
+policyLookup / staffingResult / approvalResult / staffingApprovalResult / specialistDecisionsResult와 Specialist 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 최종 Phase A Outcome은 아직 없으며
 향후 Organization 공개 Output은 해결 방향 승인이 구현될 때 확정한다. policyLookup은 기존 Governance API의
 StaffingSystemPolicyResult와 같은 ready / denied 구조이며 configuration은 기존 Domain Schema를 그대로 쓴다.
 Node는 정책 조회 결과 전체를 교체하므로 denied 뒤에 이전 configuration/version이 남거나
 ready 결과와 과거 failure가 동시에 존재하지 않는다. 새 invoke의 정책 조회 Node는 기존 staffingResult / approvalResult도 지워 과거 결과로 라우팅하지 않는다. Organization State에 정책·Proposal·Decision·Comparison이나
-미래 phaseAOutcome / Phase B 필드를 미리 넣지 않는다. 범용 State Mapper나 Adapter도 추가하지 않았다.
+미래 phaseAOutcome / Phase B 필드를 미리 넣지 않는다. 새 invoke는 이전 Specialist 결과와 모든 Specialist 중간 State도 제거한다. 범용 State Mapper나 Adapter도 추가하지 않았다.
 
 호출자가 이전 policyLookup을 전달해도 Node는 Governance를 다시 조회한다. Graph State와 구조 검증은
 승인 출처나 실행 권한의 증거가 아니며, 서명된 Governance Ledger가 계속 승인·권한 기록을 소유한다.
@@ -1761,7 +1769,7 @@ Phase A 전용 createPhaseAGraph로 바꾸며 기존 factory export를 제거했
 policyLookup으로 모았다. Step 2.5 초기에 중간 채널을 Setup 내부로 분리했으나, 전체 Organization 기준 재검토 후
 별도 Setup Graph / State / Output을 제거하고 현재 Phase A가 중간 상태와 staffingApprovalResult를 소유하도록 통합했다.
 현재 root의 DevelopmentOrganizationState는 공통 입력만 가진다.
-기존 runStaffingApproval / runSpecialistDecisions / runAuthorizedSpecialistDecision 및 CLI 계약은 유지한다.
+runStaffingApproval / runAuthorizedSpecialistDecision 및 현재 CLI 계약은 유지한다. runSpecialistDecisions 함수 API는 제거했으며 호출부는 Phase A Graph 실행으로 이전했다.
 
 설치 버전은 `@langchain/langgraph` 1.7.3 / `@langchain/core` 1.3.7이며 lockfile로 고정한다.
 실제 패키지 조건은 graph의 core ^1.3.4, Zod ^3.25.32 또는 ^4.2.0이다. 기존 Zod 4.6.5와
@@ -1770,7 +1778,7 @@ TypeScript 5.9.3 / NodeNext를 그대로 사용하며, core의 Node >=20 조건�
 
 별도 Runtime Manager / Provider Registry / 상위 Organization Graph / 재시도·복구·Checkpoint·Interrupt/Resume는 없다.
 Step 2는 CEO Staffing·Approval 평가를 연결했고 Step 2.5는 콜백 기반 Human 확인과 CLI의 실행 책임을 같은 Graph로 통합했다.
-Specialist Decision·Comparison Node는 아직 없다. 후속 Step 3의 Graph 연결과 대기/재개, Checkpoint·복구는 별도 검증 대상이다.
+Step 3는 일반 Specialist Node와 조건부 Edge로 내부 순차 실행·반복·실패·Comparison을 이전하고 함수형 Orchestrator를 제거했다. 대기/재개·Checkpoint·복구는 아직 없다.
 Graph 테스트는 실제 LangGraph 런타임과 모의 Governance API를 조합한다. 기존 Governance의 signed Ledger·정책 검증은
 기존 테스트가 담당하며, 전체 Graph+실제 Human+Codex E2E나 Phase B·복구 보장은 아직 검증하지 않았다.
 
@@ -1849,7 +1857,7 @@ StateSchema 검증은 객체를 복사할 수 있으므로 원본 Proposal 보�
 State에 발급 Scope가 있어도 권한 증거가 아니며 후속 Authorization / Reservation / Claim은 여전히 Governance 책임이다.
 
 Staffing과 Approval Node는 staffing-approval/에, 정책 조회 Node는 nodes/에 둔다. Subgraph나 범용 DI는 추가하지 않았다.
-기존 specialist-decisions/는 순차 실행·Fail-fast·v2/v3·Claim 계약을 그대로 유지하며 다음 Graph 연결을 위해 남긴다.
+당시 specialist-decisions/는 후속 Graph 연결을 위해 유지했다. 현재 Step 3에서는 함수형 Orchestrator를 제거하고 동일 계약을 Phase A Node / Edge로 이전했다.
 Approval 평가·Human 최종화·Scope 발급에 자동 재시도를 설치하지 않았다. Checkpoint·Interrupt/Resume는 없고,
 수동 재호출은 새 Staffing 실행이므로 전체 Workflow의 idempotency / exactly-once / 저장 직후 장애 복구를 보장하지 않는다.
 
@@ -1903,6 +1911,8 @@ CLI가 부모 Graph를 호출하면 실패하도록 만들어 향후 부모 확�
 
 ### 9.11 Step 2.5 — Graph Boundary & Directory Consolidation
 
+이 절은 통합 당시의 구현 범위와 CLI 확장 위험 기록이다. Step 3에서 추가한 명시적 실행 대상·Specialist Node의 현재 계약은 9.12를 따른다.
+
 전체 Lifecycle을 Organization Graph가, 주요 판단·실행 범위를 Phase A / Phase B가 소유하도록 목표 계층을 결정했다.
 기존 CLI 독립 실행·Staffing 내부 State 분리를 위해 둔 Setup Subgraph는 이 계층의 필수 경계로 유지하지 않는다.
 현재 구현된 Node·분기·결과 Schema를 Phase A로 옮기고 별도 Setup Graph / State / Output / factory export를 제거했다.
@@ -1931,3 +1941,60 @@ Entry Point는 현재 Phase A를 호출하고 staffingApprovalResult만 기존 A
 이를 위한 별도 Staffing Graph·중복 함수형 Orchestrator·범용 실행 범위 옵션·승인 우회 옵션은 추가하지 않았다.
 후속 Edge는 아직 없으며 향후 승인된 Staffing 결과에 대해서만 기존 Authorization / Claim / Decision 경로를 연결해야 한다.
 자동 재시도·Interrupt/Resume·Checkpoint 및 저장 이후 장애 복구 보장은 여전히 없다.
+
+
+### 9.12 LangGraph Step 3 — Phase A Specialist Decisions Integration
+
+Phase A는 collect-staffing-approval-result 이후 staffingApprovalResult가 approved이고
+executionTarget이 specialist-decisions인 경우에만 Preflight로 진행한다. 기본값은 staffing-approval이며
+runStaffingApproval()도 이를 명시한다. 같은 Graph를 재사용하면서 기존 Staffing CLI는 Specialist /
+Comparison을 실행하지 않는다. 실행 대상은 종료 범위이며 Governance 우회 옵션이 아니다.
+
+```text
+preflight-specialist-decisions → failed: END
+  ↓ ready
+execute-next-specialist ← remaining Assignment
+  ├─ failed: END
+  └─ all completed
+       ├─ 1 Decision → complete-specialist-decisions → END
+       └─ 2+ Decisions → compare-specialist-decisions
+                           ├─ failed: END
+                           └─ complete-specialist-decisions → END
+```
+
+Preflight Node는 getApprovedStaffingScope()로 저장된 Scope를 재조회해 승인 결과의 ID / Version과 대조한다.
+모든 Assignment의 순서·contextPaths를 복사한 요청을 `validation/preflight-specialist-decisions.ts`의
+기존 검증 함수에 전달한다. 전체 요청을 검증·분리하기 전에 Authorization / Reservation을 수행하지 않는다.
+미승인·조회 실패·불일치·중복·잘못된 요청은 preflight 실패로 종료한다. Sparse Array 거부도 유지한다.
+
+execute-next-specialist는 호출마다 한 요청만 authorizeSpecialistInvocation()에 전달하고, allowed Invocation을
+`execution/authorized-specialist-decision.ts`의 runAuthorizedSpecialistDecision()으로 실행한다.
+Invocation은 지역 변수이며 State에 보관하지 않는다. Claim / Snapshot / Evidence / v2 실행은 기존 기능을
+재사용한다. 반복·다음 Assignment 진입·Comparison 여부·실패 종료는 Phase A 조건부 Edge가 단독 소유한다.
+기존 함수형 runSpecialistDecisions와 전체 specialist-decisions/ 디렉터리 및 단일 위임 Node는 제거했다.
+
+State는 preparedSpecialistRequests / currentSpecialistIndex / collectedDecisions로 진행 상황을 관리한다.
+specialistComparisonContext는 Preflight에서 확인한 원본 Goal / Snapshot SHA만 보존하고, specialistComparison은
+기존 v3 결과를 완료 Node에 전달한다. Graph State는 승인·실행 권한의 근거가 아니다. 최신 Authority·Context·
+Budget은 Governance가 재검증한다. Graph 기본 step limit가 별도 Invocation 예산이 되지 않도록 유한 Assignment
+커서로 반복을 종료하며, 호출자는 invoke의 recursionLimit으로 별도 실행 상한을 지정할 수 있다.
+
+specialistDecisionsResult는 completed(decisions / optional comparison) 또는 failed(stage / reason /
+optional assignmentId)다. 실패 단계는 preflight / authorization / claim / decision / comparison으로 유지한다.
+InvocationClaimError로 Claim / Decision 오류를 구분하며 메시지 패턴이나 Claim의 세부 거부 원인을 추측하지 않는다.
+실패 시 수집 Decision을 비우고 완료 Node로 진행하지 않는다. Graph-local 결과 envelope는 기존
+agentDecisionSchema / comparisonPayloadSchema를 재사용하며 Reference / Evidence 검증은 변경하지 않는다.
+새 실행은 준비 요청·Index·수집 Decision·Comparison·결과를 초기화한다. 실행 옵션·Agent·Human 콜백은 State 밖에 둔다.
+
+Authorization은 예약 시 예산을 소비하고 Claim은 일회성이다. 실패 후 Claim / 예산을 자동으로 취소·환불하지
+않으며 Node / Graph에 자동 Retry / Replay를 설치하지 않는다. 이관 전후 정책과 부작용 경계는 동일하다.
+이 단계의 END / completed는 분석·비교 범위의 종료일 뿐 Phase A 전체 완료나 해결 방향 승인이 아니다.
+CEO Synthesis·Human Direction Governance·Organization / Phase B Graph·Handoff·Interrupt / Resume /
+Checkpoint와 자동 복구는 여전히 미구현이다. 같은 Graph를 다시 invoke하면 새 Staffing·Scope·Invocation이
+생길 수 있으므로 전체 idempotency나 저장 이후 장애 복구, 정확히 한 번의 실행 완료를 보장하지 않는다.
+
+초기 Step 3는 한 Node가 함수형 Workflow를 호출했다. 내부 순서·반복·실패 제어가 Graph 밖에 남는 한계를
+확인해 현재 구조로 이전했으며 Governance / Application 판단 규칙은 재구현하지 않았다.
+검증은 실제 LangGraph invoke와 모의 Governance / 단일 실행 기능의 단위 테스트, 실제 Staffing / Governance /
+서명 Ledger / v2·v3 코드에 fake CEO / mock TTY / 모의 Codex process를 조합한 통합 테스트로 구분한다.
+실제 Human·Codex·전체 Organization / 복구 E2E나 모델 품질은 검증 범위가 아니다.

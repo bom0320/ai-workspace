@@ -37,8 +37,11 @@ export async function runStaffingApproval(
   options: StaffingApprovalWorkflowOptions
 ): Promise<StaffingApprovalWorkflowResult> {
   // 1. Execute the Current Phase A Staffing Approval Flow
-  // Step 3 must revisit this CLI contract before adding Specialist execution here.
-  const state = await createPhaseAGraph(options).invoke({
+  // Keep this CLI endpoint at approval even as the Phase A Graph gains later stages.
+  const state = await createPhaseAGraph({
+    ...options,
+    executionTarget: "staffing-approval",
+  }).invoke({
     goal: options.goal,
     repositoryPath: options.repositoryPath,
   });

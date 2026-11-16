@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
+  getApprovedStaffingScope,
   type StaffingSystemPolicy,
   type StaffingApprovalResult,
   type StaffingSystemPolicyResult,
@@ -21,10 +22,31 @@ import {
 } from "./state.js";
 import type { StaffingApprovalWorkflowResult } from "./entrypoints/run-staffing-approval.js";
 import { developmentOrganizationState } from "../state.js";
+import type { SpecialistDecisionsWorkflowResult } from "./state.js";
+import {
+  runAuthorizedSpecialistDecision,
+  InvocationClaimError,
+} from "./execution/authorized-specialist-decision.js";
+import { compareDecisions } from "@/application/comparison/index.js";
+import type {
+  AuthorizedSpecialistInvocation,
+  InvokeSpecialistRequest,
+} from "@/application/governance/index.js";
+vi.mock("./execution/authorized-specialist-decision.js", async (original) => ({
+  ...(await original<
+    typeof import("./execution/authorized-specialist-decision.js")
+  >()),
+  runAuthorizedSpecialistDecision: vi.fn(),
+}));
+vi.mock("@/application/comparison/index.js", async (original) => ({
+  ...(await original<typeof import("@/application/comparison/index.js")>()),
+  compareDecisions: vi.fn(),
+}));
 
 vi.mock("@/application/governance/index.js", async (original) => ({
   ...(await original<typeof import("@/application/governance/index.js")>()),
   getStaffingSystemPolicy: vi.fn(),
+  getApprovedStaffingScope: vi.fn(),
   approveStaffingProposal: vi.fn(),
   authorizeSpecialistInvocation: vi.fn(),
   claimAuthorizedInvocation: vi.fn(),
@@ -106,9 +128,13 @@ describe("Phase A Staffing Approval execution", () => {
       "__end__",
       "__start__",
       "collect-staffing-approval-result",
+      "compare-specialist-decisions",
+      "complete-specialist-decisions",
       "confirm-staffing-approval",
       "evaluate-staffing-approval",
+      "execute-next-specialist",
       "load-system-policy",
+      "preflight-specialist-decisions",
       "run-staffing",
     ]);
     const edges = graph.edges.map(({ source, target }) => [source, target]);
@@ -123,6 +149,11 @@ describe("Phase A Staffing Approval execution", () => {
         ["evaluate-staffing-approval", "collect-staffing-approval-result"],
         ["confirm-staffing-approval", "collect-staffing-approval-result"],
         ["collect-staffing-approval-result", "__end__"],
+        ["preflight-specialist-decisions", "execute-next-specialist"],
+        ["execute-next-specialist", "execute-next-specialist"],
+        ["execute-next-specialist", "compare-specialist-decisions"],
+        ["execute-next-specialist", "complete-specialist-decisions"],
+        ["complete-specialist-decisions", "__end__"],
       ])
     );
   });
@@ -134,9 +165,15 @@ describe("Phase A Staffing Approval execution", () => {
     ]);
     expect(Object.keys(phaseAState.fields).sort()).toEqual([
       "approvalResult",
+      "collectedDecisions",
+      "currentSpecialistIndex",
       "goal",
       "policyLookup",
+      "preparedSpecialistRequests",
       "repositoryPath",
+      "specialistComparison",
+      "specialistComparisonContext",
+      "specialistDecisionsResult",
       "staffingApprovalResult",
       "staffingResult",
     ]);
@@ -144,6 +181,9 @@ describe("Phase A Staffing Approval execution", () => {
       NonNullable<PhaseAState["policyLookup"]>
     >().toEqualTypeOf<StaffingSystemPolicyResult>();
     expectTypeOf<StaffingApprovalStageResult>().toExtend<StaffingApprovalWorkflowResult>();
+    expectTypeOf<
+      NonNullable<PhaseAState["specialistDecisionsResult"]>
+    >().toEqualTypeOf<SpecialistDecisionsWorkflowResult>();
   });
 
   it("executes policy → Staffing → pending approval once and records stage state", async () => {
@@ -409,6 +449,429 @@ describe("Phase A Staffing Approval execution", () => {
       expect(approveStaffingProposal).toHaveBeenCalledTimes(1);
       expect(proposal.goal.constraints).toEqual(["No edits"]);
       expect(result).not.toHaveProperty("confirmApproval");
+    }
+  );
+});
+
+const approved: Extract<StaffingApprovalResult, { status: "approved" }> = {
+  status: "approved",
+  approval: {
+    id: "approval",
+    proposalId: proposal.id,
+    proposalDigest: "digest",
+    approvedAt: "2026-11-16T00:00:00.000Z",
+    systemPolicyVersion: 1,
+    source: {
+      type: "human-delegation",
+      delegationPolicyId: "delegation",
+      delegationPolicyVersion: 1,
+      delegationApprovalId: "delegation-approval",
+    },
+  },
+  scope: {
+    id: "scope",
+    version: 1,
+    proposalId: proposal.id,
+    approvalRecordId: "approval",
+    policyVersion: "system:1",
+    goal,
+    snapshot: proposal.snapshot,
+    assignments: proposal.assignments.map(
+      ({ assignmentId, specialistId, objective, contextPaths }) => ({
+        assignmentId,
+        specialistId,
+        objective,
+        contextPaths,
+      })
+    ),
+    budget: proposal.budget,
+  },
+};
+const completed: SpecialistDecisionsWorkflowResult = {
+  status: "completed",
+  decisions: [
+    {
+      specialistId: "frontend",
+      recommendation: "Review UI",
+      evidence: [],
+      risks: [],
+      uncertainty: [],
+    },
+  ],
+};
+
+function authorizePrepared(raw: unknown): AuthorizedSpecialistInvocation {
+  const request = raw as InvokeSpecialistRequest;
+  const stored = vi.mocked(getApprovedStaffingScope).mock.results.at(-1)!.value;
+  const scope = stored.scope;
+  const assignment = scope.assignments.find(
+    (a: { assignmentId: string }) => a.assignmentId === request.assignmentId
+  )!;
+  return {
+    invocationId: `inv-${request.assignmentId}`,
+    scopeId: scope.id,
+    scopeVersion: scope.version,
+    assignmentId: request.assignmentId,
+    assignmentObjective: assignment.objective,
+    goal: scope.goal,
+    snapshot: scope.snapshot,
+    specialist: {
+      id: assignment.specialistId,
+      role: assignment.specialistId,
+      objective: "Default role",
+      authority: { repositoryAccess: "read", shellExecution: false },
+    },
+    files: request.requestedContextPaths.map((path) => ({
+      path,
+      content: path,
+    })),
+  };
+}
+function twoAssignments() {
+  const stored = structuredClone(approved);
+  stored.scope.assignments.push({
+    assignmentId: "assignment-2",
+    specialistId: "ux",
+    objective: "Assess interactions",
+    contextPaths: ["b.ts", "c.ts"],
+  });
+  vi.mocked(getApprovedStaffingScope).mockReturnValue(stored);
+  return stored;
+}
+const specialistInput = { goal, repositoryPath: "/repository" };
+const specialistOptions = { executionTarget: "specialist-decisions" as const };
+
+describe("Phase A Specialist execution Nodes and Edges", () => {
+  beforeEach(() => {
+    vi.mocked(getStaffingSystemPolicy).mockReturnValue({
+      status: "ready",
+      configuration: systemPolicy,
+      version: 1,
+    });
+    vi.mocked(approveStaffingProposal).mockReturnValue(
+      structuredClone(approved)
+    );
+    vi.mocked(getApprovedStaffingScope).mockReturnValue(
+      structuredClone(approved)
+    );
+    vi.mocked(authorizeSpecialistInvocation).mockImplementation((raw) => ({
+      status: "allowed",
+      invocation: authorizePrepared(raw),
+    }));
+    vi.mocked(runAuthorizedSpecialistDecision).mockImplementation(
+      async (invocation) => ({
+        specialistId: invocation.specialist.id,
+        recommendation: invocation.assignmentObjective,
+        evidence: [],
+        risks: [],
+        uncertainty: [],
+      })
+    );
+    vi.mocked(compareDecisions).mockResolvedValue({ findings: [], gaps: [] });
+  });
+
+  it.each([undefined, "staffing-approval"] as const)(
+    "stops at Staffing Approval for target %s",
+    async (executionTarget) => {
+      const state = await createPhaseAGraph({ executionTarget }).invoke(
+        specialistInput
+      );
+      expect(state.staffingApprovalResult?.status).toBe("approved");
+      expect(state.specialistDecisionsResult).toBeUndefined();
+      expect(getApprovedStaffingScope).not.toHaveBeenCalled();
+      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    }
+  );
+  it.each([
+    "approval-required",
+    "denied",
+    "rejected",
+    "failed",
+    "escalated",
+  ] as const)("does not execute Specialists after %s", async (status) => {
+    if (status === "failed")
+      vi.mocked(runStaffing).mockResolvedValue({
+        status,
+        failure: "agent-process",
+        reason: "CEO failed",
+        rounds: 1,
+      });
+    else if (status === "escalated")
+      vi.mocked(runStaffing).mockResolvedValue({
+        status,
+        reason: "Need Human",
+        questions: ["Which UI?"],
+        rounds: 1,
+      });
+    else
+      vi.mocked(approveStaffingProposal).mockReturnValue(
+        status === "denied" ? { status, reason: "Denied" } : required
+      );
+    const state = await createPhaseAGraph({
+      ...specialistOptions,
+      confirmApproval: status === "rejected" ? () => null : undefined,
+    }).invoke(specialistInput);
+    expect(state.staffingApprovalResult?.status).toBe(status);
+    expect(state.specialistDecisionsResult).toBeUndefined();
+    expect(getApprovedStaffingScope).not.toHaveBeenCalled();
+    expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
+  });
+  it.each(["missing", "id", "version", "throws"])(
+    "blocks %s Scope before reserving",
+    async (kind) => {
+      if (kind === "missing")
+        vi.mocked(getApprovedStaffingScope).mockReturnValue({
+          status: "denied",
+          reason: "Unavailable",
+        });
+      else if (kind === "throws")
+        vi.mocked(getApprovedStaffingScope).mockImplementation(() => {
+          throw new Error("Storage failed");
+        });
+      else {
+        const stored = structuredClone(approved);
+        if (kind === "id") stored.scope.id = "other";
+        else stored.scope.version++;
+        vi.mocked(getApprovedStaffingScope).mockReturnValue(stored);
+      }
+      const state =
+        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      expect(state.specialistDecisionsResult).toMatchObject({
+        status: "failed",
+        stage: "preflight",
+        reason: expect.any(String),
+      });
+      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    }
+  );
+  it.each([
+    "empty",
+    "sparse",
+    "duplicate-assignment",
+    "duplicate-specialist",
+    "malformed",
+  ])(
+    "validates the entire %s batch before first Authorization",
+    async (kind) => {
+      const stored = twoAssignments();
+      if (kind === "empty") stored.scope.assignments = [];
+      if (kind === "sparse") stored.scope.assignments.length = 3;
+      if (kind === "duplicate-assignment")
+        stored.scope.assignments[1] = structuredClone(
+          stored.scope.assignments[0]
+        );
+      if (kind === "duplicate-specialist")
+        stored.scope.assignments[1].specialistId = "frontend";
+      if (kind === "malformed") stored.scope.assignments[1].contextPaths = [];
+      const state =
+        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      expect(state.specialistDecisionsResult).toMatchObject({
+        status: "failed",
+        stage: "preflight",
+      });
+      if (!["empty", "sparse"].includes(kind))
+        expect(state.specialistDecisionsResult).toHaveProperty(
+          "assignmentId",
+          stored.scope.assignments[1].assignmentId
+        );
+      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+      expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
+      expect(compareDecisions).not.toHaveBeenCalled();
+    }
+  );
+  it("awaits one Specialist per Node before the next Authorization and compares original inputs", async () => {
+    const stored = twoAssignments();
+    const original = structuredClone(stored.scope);
+    const altered = structuredClone(approved);
+    altered.scope.assignments[0].contextPaths = ["untrusted.ts"];
+    vi.mocked(approveStaffingProposal).mockReturnValue(altered);
+    const events: string[] = [];
+    vi.mocked(authorizeSpecialistInvocation).mockImplementation((raw) => {
+      events.push(`authorize:${(raw as InvokeSpecialistRequest).assignmentId}`);
+      return { status: "allowed", invocation: authorizePrepared(raw) };
+    });
+    let finish!: (
+      decision: NonNullable<PhaseAState["collectedDecisions"]>[number]
+    ) => void;
+    vi.mocked(runAuthorizedSpecialistDecision)
+      .mockImplementationOnce((invocation) => {
+        events.push(`decision:${invocation.specialist.id}`);
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      })
+      .mockImplementation(async (invocation) => {
+        events.push(`decision:${invocation.specialist.id}`);
+        return {
+          ...completed.decisions[0],
+          specialistId: invocation.specialist.id,
+          recommendation: invocation.assignmentObjective,
+        };
+      });
+    const run = createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    await vi.waitFor(() =>
+      expect(events).toEqual(["authorize:assignment-1", "decision:frontend"])
+    );
+    expect(compareDecisions).not.toHaveBeenCalled();
+    // Changes to caller-owned data during execution cannot expand prepared Context.
+    stored.scope.assignments[1].contextPaths.push("unapproved.ts");
+    finish(completed.decisions[0]);
+    const state = await run;
+    expect(events).toEqual([
+      "authorize:assignment-1",
+      "decision:frontend",
+      "authorize:assignment-2",
+      "decision:ux",
+    ]);
+    expect(authorizeSpecialistInvocation).toHaveBeenNthCalledWith(2, {
+      scopeId: original.id,
+      scopeVersion: original.version,
+      assignmentId: "assignment-2",
+      requestedContextPaths: ["b.ts", "c.ts"],
+    });
+    for (const [index, [invocation]] of vi
+      .mocked(runAuthorizedSpecialistDecision)
+      .mock.calls.entries()) {
+      expect(invocation.goal).toEqual(original.goal);
+      expect(invocation.snapshot).toEqual(original.snapshot);
+      expect(invocation.assignmentObjective).toBe(
+        original.assignments[index].objective
+      );
+      expect(invocation.files.map((f) => f.path)).toEqual(
+        original.assignments[index].contextPaths
+      );
+    }
+    expect(state.specialistDecisionsResult).toMatchObject({
+      status: "completed",
+      comparison: { findings: [], gaps: [] },
+    });
+    expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
+      goal: original.goal,
+      repositoryCommitSha: original.snapshot.commitSha,
+      decisions: state.collectedDecisions,
+    });
+    expect(state.currentSpecialistIndex).toBe(2);
+    expect(claimAuthorizedInvocation).not.toHaveBeenCalled(); // Executor is mocked; Nodes do not duplicate Claim.
+    expect(state).not.toHaveProperty("invocation");
+  });
+  it("executes a finite approved batch beyond LangGraph's default 25 steps", async () => {
+    const stored = structuredClone(approved);
+    stored.scope.assignments = Array.from({ length: 30 }, (_, index) => ({
+      assignmentId: `assignment-${index}`,
+      specialistId: `specialist-${index}`,
+      objective: `Review ${index}`,
+      contextPaths: [`${index}.ts`],
+    }));
+    stored.scope.budget.maxAgentInvocations = 30;
+    vi.mocked(getApprovedStaffingScope).mockReturnValue(stored);
+    const state =
+      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    expect(state.specialistDecisionsResult?.status).toBe("completed");
+    expect(state.currentSpecialistIndex).toBe(30);
+    expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(30);
+    expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(30);
+    expect(compareDecisions).toHaveBeenCalledTimes(1);
+  });
+  it("stops on second Authorization denial and exposes no partial success", async () => {
+    twoAssignments();
+    vi.mocked(authorizeSpecialistInvocation)
+      .mockImplementationOnce((raw) => ({
+        status: "allowed",
+        invocation: authorizePrepared(raw),
+      }))
+      .mockReturnValueOnce({ status: "denied", reason: "No budget" });
+    const state =
+      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    expect(state.specialistDecisionsResult).toEqual({
+      status: "failed",
+      stage: "authorization",
+      reason: "No budget",
+      assignmentId: "assignment-2",
+    });
+    expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(2);
+    expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(1);
+    expect(compareDecisions).not.toHaveBeenCalled();
+    expect(state.collectedDecisions).toEqual([]);
+  });
+  it.each(["claim", "decision"] as const)(
+    "identifies %s by explicit error type and stops without retry",
+    async (stage) => {
+      twoAssignments();
+      const error =
+        stage === "claim"
+          ? new InvocationClaimError("opaque denial")
+          : new Error("Invocation claim denied: still a Decision error");
+      vi.mocked(runAuthorizedSpecialistDecision).mockRejectedValueOnce(error);
+      const state =
+        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      expect(state.specialistDecisionsResult).toEqual({
+        status: "failed",
+        stage,
+        reason: error.message,
+        assignmentId: "assignment-1",
+      });
+      expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(1);
+      expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(1);
+      expect(compareDecisions).not.toHaveBeenCalled();
+      expect(state.collectedDecisions).toEqual([]);
+    }
+  );
+  it("completes a single Decision without Comparison", async () => {
+    const state =
+      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    expect(state.specialistDecisionsResult).toEqual(completed);
+    expect(compareDecisions).not.toHaveBeenCalled();
+  });
+  it("terminates on Comparison failure without completed or partial results", async () => {
+    twoAssignments();
+    vi.mocked(compareDecisions).mockRejectedValueOnce(
+      new Error("Invalid reference")
+    );
+    const state =
+      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    expect(state.specialistDecisionsResult).toEqual({
+      status: "failed",
+      stage: "comparison",
+      reason: "Invalid reference",
+    });
+    expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(2);
+    expect(compareDecisions).toHaveBeenCalledTimes(1);
+    expect(state.collectedDecisions).toEqual([]);
+    expect(state.specialistComparison).toBeUndefined();
+  });
+  it.each(["staffing-approval", "specialist-decisions"] as const)(
+    "clears all stale execution data for fresh %s execution",
+    async (executionTarget) => {
+      vi.mocked(getStaffingSystemPolicy).mockReturnValue({
+        status: "denied",
+        reason: "No policy",
+      });
+      const state = await createPhaseAGraph({ executionTarget }).invoke({
+        ...specialistInput,
+        specialistDecisionsResult: completed,
+        preparedSpecialistRequests: [
+          {
+            scopeId: "stale",
+            scopeVersion: 1,
+            assignmentId: "stale",
+            requestedContextPaths: ["stale.ts"],
+          },
+        ],
+        currentSpecialistIndex: 9,
+        collectedDecisions: completed.decisions,
+        specialistComparisonContext: { goal, repositoryCommitSha: "stale" },
+        specialistComparison: { findings: [], gaps: [] },
+      });
+      for (const key of [
+        "preparedSpecialistRequests",
+        "currentSpecialistIndex",
+        "collectedDecisions",
+        "specialistComparisonContext",
+        "specialistComparison",
+        "specialistDecisionsResult",
+      ] as const)
+        expect(state[key]).toBeUndefined();
+      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
     }
   );
 });

@@ -39,13 +39,13 @@ CEO Synthesis·해결 방향 Human Governance·Phase B와 전체 조직 E2E는 �
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
 여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
 현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
-Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2와 Step 2.5 실행 책임 통합을 구현**했다.
+Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2·2.5·3을 구현**했다.
 Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 조건부 Edge로 연결한다.
 정책 거부·Staffing 실패/Escalation이면 중단하며, 직접 승인이 필요한 경우에만 Human Confirmation 콜백과 Governance 최종 승인으로 진행한다.
-콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter를 통해 현재 Phase A Graph를 실행하고 Staffing Approval 단계 결과를 반환한다. 별도 Staffing Setup Graph는 제거했다.
-Decision·Comparison은 아직 Graph에 연결하지 않았다. Graph 종료는 Staffing·승인 단계의 종료이며 Phase A 전체 완료가 아니다.
-Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력과 정책 조회·Staffing·Approval 중간 상태 및 staffingApprovalResult를 소유한다.
-Step 3에서 후속 Decision Node를 연결할 때 Staffing CLI 실행 범위를 함께 재설계해야 하며 미래 격리를 현재 보장하지 않는다.
+콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter에서 staffing-approval 실행 대상을 명시해 승인 단계 결과만 반환한다. 별도 Staffing Setup Graph는 없다.
+specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다. 이 완료도 Phase A 전체 완료나 해결 방향 승인은 아니다.
+Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회·Staffing·Approval 중간 상태와 staffingApprovalResult / specialistDecisionsResult를 소유한다.
+기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. CEO Synthesis·Human Direction Governance는 아직 없다.
 상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
 State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 
@@ -116,8 +116,7 @@ Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행�
 | --- | --- |
 | `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
 | `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
-| Phase A `runSpecialistDecisions({ scopeId, requests })` API | 저장 Scope 조회·Preflight → 순차 Authorization·Claim·v2 Decision → v3 Comparison |
-| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | 정책 조회 → Staffing → Approval → 단계 결과 수집. CLI도 현재 Phase A를 호출하며 Step 3에서 실행 범위 재설계 필요 |
+| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | 정책 조회 → Staffing → Approval → 선택적 Preflight·Specialist 반복·Comparison(Node / Edge). 기본값은 승인까지만 실행; API의 executionTarget으로 분석 명시 |
 
 Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
 API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

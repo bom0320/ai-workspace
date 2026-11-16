@@ -1,7 +1,8 @@
 # Development Organization Workflow Architecture
 
 이 문서는 Development Organization의 실행 계약, Phase 간 Handoff, Graph State / Output 소유권과
-Stage / Node / Application의 책임과 Graph 분리 판단의 기준이다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
+Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
+[Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
 Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval과 선택적 Specialist Decisions / Comparison까지 통합했으며
 Organization Graph·Phase B·후속 분석과 Handoff의 구체적인 계약을 선행 구현하지 않는다.
 
@@ -11,7 +12,8 @@ Organization Graph·Phase B·후속 분석과 Handoff의 구체적인 계약을 
 | --- | --- |
 | [Project Direction](project-direction.md) | 왜 만들며 어떤 Governance / Build vs Adopt 원칙을 지키는가? |
 | [Architecture](architecture.md) | 현재 시스템과 Application / Infrastructure의 책임·신뢰 경계는 무엇인가? |
-| 이 문서 | Organization의 Stage 목적·Node 실행 단위·Application 소유권과 Phase 전환·State·Output 경계를 어떻게 판단하는가? |
+| 이 문서 | Organization을 어떻게 실행하고 Phase 전환·State·Output을 어떻게 전달하는가? |
+| [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md) | Stage·Node·Application을 언제, 어떤 근거로 나누며 정책·신뢰 검증을 어디에 두는가? |
 | [Roadmap](roadmap.md) | 무엇을 구현했고 무엇을 다음에 검증하는가? |
 | [CLI & Human Interface](cli-and-human-interface.md) | 현재 사람이 어떻게 입력·확인·실행하는가? |
 
@@ -83,21 +85,9 @@ Phase B의 `Complete`라는 CEO 판단 역시 Harness의 검증과 Human Change 
 
 ## 3. Phase별 책임
 
-### Stage · Graph · Node · Application의 구분
-
-Stage는 Application의 기능 소유권을 바탕으로 Workflow에서 달성할 **업무 목적, 입력·출력 계약과
-성공·실패 조건**을 정의한다. 아래 구분은 설계 기준이며 새로운 Runtime 객체나 Stage Schema의 선언이 아니다.
-
-| 개념 | 소유하는 책임 |
-| --- | --- |
-| Application | 실제 기능과 비즈니스 규칙의 단일 소유자 |
-| Stage | 업무 목적, 필요한 입력·출력, 성공·실패 조건 및 완료 의미 |
-| Graph | 실행 순서·조건 분기·Workflow 반복·Stage 전환과 종료 제어 |
-| Node | State에서 입력을 선택해 하나의 실행 단위를 수행하고 부분 State 업데이트를 반환하는 함수 |
-
-Stage와 Application을 1:1로 강제하지 않는다. 한 Stage가 여러 Application을 사용하거나 같은 Application이
-여러 Stage에 참여할 수 있다. Stage 하나가 여러 Node로 실행될 수도 있다. Application 기준의 코드 분류와
-LangGraph의 Stage별 실행 구성은 별개 결정이며 `stages/` 도입이나 Application 폴더의 1:1 복제는 결정하지 않는다.
+Stage별 업무 목적·입력·성공 결과·후속 진행 조건은
+[Stage 책임 경계](workflow-responsibility-boundaries.md#2-첫-번째-경계--stage)를 따른다.
+이 절은 Phase별 목표 순서와 현재 실제 연결 범위를 설명한다.
 
 ### Phase A — Decision & Approval
 
@@ -117,22 +107,10 @@ Human Goal / Constraints
 → Approved Decision
 ```
 
-다음 Stage는 업무 경계와 목표 완료 조건이다. 1~4의 기반 기능은 구현되어 있지만 결과 계약은 아직
-Stage별로 분리되지 않았다. 5~6은 미구현이며 기능 이름이 새 Application 디렉터리를 확정하는 것은 아니다.
-
-| Stage | 주요 소유 Application | 입력 → 성공 결과 / 완료 조건 | 다음 Stage 진행 조건 |
-| --- | --- | --- | --- |
-| 1. CEO Staffing | `staffing` | 원본 Goal / Constraints와 정책·Snapshot Context → 검증·최종화된 `StaffingProposal` | Proposal이 proposed일 때 승인 평가로 진행. Proposal 자체는 실행 권한이 아님 |
-| 2. Human Staffing Approval | `governance/approval` | 원본 Proposal과 적용 정책·필요한 Human 확인 → 실제 승인과 `ApprovalRecord`, `ApprovedOperatingScope` 발급·저장 확정 | 승인된 경우에만 실행 대상으로 진행. 대기·거부·확인 실패는 차단; 실행 전 최신 권한 검증은 별도 |
-| 3. Independent Specialist Decisions | `decision` (실행 권한은 Governance) | 승인된 실행 대상·검증된 Context와 공통 Goal / Snapshot → 모든 대상의 독립 분석·Snapshot / Evidence 검증을 마친 `AgentDecision[]` | 전체 대상이 완료된 경우에만 비교 또는 단일 Decision 후속 경로로 진행 |
-| 4. Decision Comparison | `comparison` | 같은 비교 단위의 독립 Decision과 원본 Goal / Snapshot SHA → 관계 분석과 원본 참조 검증을 마친 `ComparisonResult` | 비교 성공 또는 허용된 생략 경로에서만 후속 종합으로 진행. 단일 Specialist의 명시적 생략 결과 표현은 향후 개선안 |
-| 5. CEO Synthesis | 향후 `synthesis` 기능 | 독립 판단·비교 결과·근거 → CEO 종합 보고안 | 보고안에 필요한 검증 후 Human Direction Governance로 전달하는 목표. CEO는 최종 승인 권한을 갖지 않음 |
-| 6. Human Governance | 향후 해결 방향의 Governance 승인·수정·거절 기능 | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인과 Handoff 검증을 충족해야 Phase B 진입. 수정·거절의 효과와 재검증은 후속 계약 대상 |
-
-Stage 실행의 종료와 업무 성공은 다르다. 실패·승인 대기·거부·Escalation·명시적 생략을 성공과 구분하며,
-성공 산출물이 있어도 다음 Stage의 선행조건·권한 검증까지 충족했다는 뜻은 아니다.
+여섯 업무 Stage의 계약과 현재 Result 결합의 한계는
+[Phase A Stage 사례](workflow-responsibility-boundaries.md#phase-a의-여섯-업무-목적과-진행-조건)에 모은다.
 현재 단일 Decision 경로는 Comparison을 호출하지 않고 선택적 comparison 필드를 생략한다.
-별도 skipped 결과는 아직 없으며 이 표가 새로운 Result 타입을 확정하지 않는다.
+별도 skipped Result는 아직 없다.
 
 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이다. Direction Governance는 종합된
 해결 방향에 대한 승인이다. 두 승인은 서로 다르며 Staffing Scope만으로 해결 방향이 승인됐다고 보지 않는다.
@@ -273,12 +251,9 @@ Decision / Comparison의 기존 Schema를 공개 API로 재사용하며 Graph는
 전달하며 `specialistComparison`은 v3 결과를 완료 Node에 전달한다. 실패 시 수집 Decision을 비우고 완료 Node로
 가지 않으므로 부분 성공이나 유효한 Comparison으로 공개하지 않는다. 이는 최종 Phase A Outcome 계약이 아니다.
 
-**권장 개선 방향:** Stage 1 / 2의 결과와 Stage 3 / 4의 결과·완료 시점을 각각 구분한다.
-현재 specialistDecisionsResult.completed는 Comparison이 필요한 경우 비교까지 성공해야 발급되므로,
-독립 Decision 완료 사실과 Comparison 실패를 분리해 관찰하기 어렵다. 향후에는 Stage 3 완료 후 Stage 4로
-이동하는 [완료 Node 기준](#완료-node와-stage-완료-시점)을 적용하는 방향을 권장한다.
-구체적인 필드명·새 Result 타입·Schema·공개 Output은 이번 결정에 포함하지 않는다. Stage 3 완료를 별도로
-보존하더라도 Comparison 실패를 전체 성공이나 다음 단계 진행 허용으로 취급해서는 안 된다.
+Stage별 완료 의미와 외부 결과를 분리하는 이유·트레이드오프는
+[결합 계약과 분리 이유](workflow-responsibility-boundaries.md#현재-결합-계약과-분리-이유)를 따른다.
+구체적인 새 Result / Output Schema는 아직 정하지 않았다.
 
 Agent, timeout, maxRounds, Human 콜백, executionTarget은 실행 옵션이며 Graph 생성 시 Node closure로 전달한다.
 일회용 HumanConfirmation은 Node의 지역 변수에서 소비하고 State에 저장·직렬화하지 않는다.
@@ -289,104 +264,13 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ## 6. Graph / Subgraph Boundary Principles
 
-### Node 분리와 Graph의 실행 책임
+Node의 실행·분기·실패·신뢰/재실행 판단 기준과 9개 실제 Node의 검토 근거는
+[Graph Node 책임 경계](workflow-responsibility-boundaries.md#3-두-번째-경계--graph-node)에 모았다.
+현재 Graph는 Assignment 반복·실패 종료·Comparison 진입을 제어하며 Application 내부 Loop는 이전하지 않는다.
 
-**Node는 Workflow가 독립적으로 실행하고, 결과를 관찰해 다음 흐름을 제어할 필요가 있는 작업 단위다.**
-Application 함수 하나당 Node 하나를 만들지 않는다. 다음 기준 중 독립적인 실행 지점으로 관리할 이유가
-있는지를 판단하며, 모든 조건을 동시에 만족해야 하는 것은 아니다.
-
-| 기준 | 판단 질문 |
-| --- | --- |
-| 실행 경계 | 독립적인 실행·관찰 단위가 필요한가? |
-| 분기 경계 | 이 결과에 따라 후속 경로가 달라지는가? |
-| 실패 경계 | 실패를 다른 작업과 구분해야 하는가? |
-| 신뢰·재실행 경계 | 권한·부작용·재시도·재개를 별도로 통제해야 하는가? |
-
-Graph는 Node의 순서, 조건부 분기, Workflow 수준의 반복, Stage 간 전환과 종료를 소유한다.
-Node는 필요한 State 입력을 선택하고 하나의 실행 단위에 필요한 Application 기능을 조합한 뒤 결과를
-부분 State 업데이트로 반환한다. 업무 규칙의 원본을 구현하거나 다른 Node를 직접 호출해 별도 Workflow를
-만들지 않는다. 독립적으로 관리할 이유가 없는 작업까지 Node로 나누지 않는다.
-
-하나의 Node에서 여러 Application을 호출할 수 있다. 현재 execute-next-specialist는 Governance
-Authorization → 재사용 실행 함수의 Claim → Decision 실행을 한 번의 Node 호출에서 연결한다.
-Authorization / Claim을 무조건 별도 Node로 나누면 Reservation·일회 Claim 사이의 재실행·재개와 중복
-부작용을 별도로 다뤄야 한다. Invocation을 권한 증거처럼 State에 보관하거나 소비한 Claim을 자동 재사용하지
-않는 현재 원칙을 유지한다. 단일 Node라는 사실이 원자적 실행 완료나 exactly-once를 보장하지는 않는다.
-
-반복문이 있다는 이유만으로 실행 책임을 Graph로 옮기지 않는다.
-
-- CEO가 Proposal을 완성하는 내부 Inspection / Staffing Loop는 Staffing Application이 소유한다.
-- Assignment별 Specialist 실행 순서·반복과 실패 시 후속 실행 차단은 Phase A Graph가 소유한다.
-- Application 내부 검증·데이터 처리 반복은 해당 Application이 소유한다. 현재 v2 API에도 입력 배열 처리
-  반복이 있지만 Phase A는 호출마다 한 Specialist만 전달한다.
-
-### 완료 Node와 Stage 완료 시점
-
-Stage의 결과를 독립적인 실행 지점에서 확정할 필요가 있으면 완료 Node를 둘 수 있다.
-모든 Stage에 단순 데이터 변환용 완료 Node를 강제하지 않는다.
-
-**현재:** 단일 Decision은 바로 complete-specialist-decisions로 진행하지만, 복수 Decision은 Comparison이
-성공한 뒤 이 Node로 진행한다. 이 Node는 선택적 Comparison을 포함한 결합 결과를 발급한다.
-따라서 현재 구현이 Stage 3만의 완료 시점을 확정한다고 설명해서는 안 된다.
-
-**향후 리팩토링 방향:** complete-specialist-decisions는 Stage 3의 완료 결과만 확정하도록 책임을 조정하고,
-Comparison은 독립 Stage 4로 취급한다.
-
-```text
-Preflight Specialist Decisions
-         ↓
-Execute Next Specialist
-    (Phase A Graph 반복)
-         ↓
-Complete Specialist Decisions — Stage 3 완료
-         ↓
-Decision Comparison — Stage 4
-```
-
-위 흐름은 현재 Edge가 아닌 권장 변경 방향이다. 단일 Decision의 비교 생략·실패 결과·호출부 호환성과
-후속 진행 조건을 함께 검토해야 한다. CEO Synthesis와 Human Governance도 실행·분기·실패·재개 요구로
-Node를 구성하며 미구현 기능의 Node 수나 새 Subgraph를 미리 정하지 않는다.
-
-### Application과 Workflow의 기능 소유권
-
-Application은 실제 기능과 비즈니스 규칙의 단일 소유자다. Workflow는 이를 조합해 업무 흐름을 구성하며
-기존 정책을 별도로 재정의하거나 검증을 우회하지 않는다.
-
-| Application | 기능·검증의 소유권 |
-| --- | --- |
-| Staffing | Proposal 생성·최종화, Staffing 정책 검증 및 Proposal 완성을 위한 내부 Loop |
-| Governance Approval | 승인 정책·Delegation·Human Confirmation 유효성 검증과 승인 기록·Scope 발급 |
-| Governance Authorization | Invocation 적격성, 최신 Scope / Assignment / Context·정책·예산 검증, Reservation 및 Claim |
-| Decision | Specialist 실행 계약과 Snapshot / Evidence 검증 |
-| Comparison | 독립 Decision 관계 분석, 결과의 Specialist ID / Evidence Reference 유효성 검증 |
-| Synthesis (예정) | CEO 종합 분석·보고안과 결과 계약 |
-| Human Governance (예정) | 해결 방향의 Human 승인 정책과 기록 |
-
-Approval에서 Workflow는 approveStaffingProposal() 결과를 관찰해 Human 확인이 필요한 경로를 선택한다.
-실제 승인 가능 여부·확인의 유효성·Scope 발급은 Governance가 결정한다. Human 대기 이후에도 원본 Proposal과
-실제 Confirmation으로 최신 Governance 검증을 거치며 Graph 조건문이 이 정책을 대신하지 않는다.
-
-Authorization에서 Workflow는 실행할 Assignment와 Context 요청을 준비해 authorizeSpecialistInvocation()을
-호출한다. Governance가 저장 Scope·요청·최신 정책·Context·예산을 검증하고 예약한다. Preflight 통과나 State의
-approved 표시만으로 실행을 허용하지 않는다. Claim은 기존 예약의 일회 사용을 검증하며 실행 성공의 기록은 아니다.
-
-Snapshot / Evidence의 유효성은 Decision이, Comparison 결과의 원본 참조는 Comparison이 검증한다.
-Workflow는 이를 복제하지 않는다. 구조적 Evidence / Reference 검증과 AI 분석 내용의 사실성은 구별한다.
-State / Checkpoint와 Governance Ledger의 신뢰 경계는 [State 소유권](#5-graph-state--output-ownership)을 따른다.
-
-### Preflight와 실행 시점 재검증
-
-| 책임 | 검증 목적과 범위 |
-| --- | --- |
-| Workflow Preflight | 전체 요청 준비·분리, 같은 비교 단위·Scope ID / Version·소속·중복 등 배치 일관성 확인. 뒤쪽의 잘못된 요청을 일부 예산 소비 이후에 발견하지 않도록 함 |
-| Governance Application | 실제 Scope의 유효성, Assignment / Context 정책과 실행 적격성 판단, 최신 정책·예산 검증, 예약과 Claim |
-
-현재 Preflight Node와 validation/preflight-specialist-decisions.ts가 모두 getApprovedStaffingScope()를
-호출한다. 일부 Scope / Assignment 검사는 Authorization과도 겹친다. 배치 전체를 예약 전에 확인하는 목적과
-각 실행 시점의 최신 권한을 확인하는 목적은 다르지만, 이것만으로 모든 중복 조회가 필수라고 단정하지 않는다.
-후속 리팩토링에서 방어적 재검증인지 제거 가능한 중복인지 구분하고, Workflow의 조회·배치 검증 책임을
-정리한다. Workflow Preflight는 Application 정책의 별도 원본이 되어서는 안 되며, 이를 통과했다고
-Authorization / Claim의 실행 시점 재검증을 생략해서도 안 된다.
+Approval / Authorization / Claim / Evidence / Comparison의 호출·정책 소유권과 Preflight 중복 검토는
+[Application과 Workflow 경계](workflow-responsibility-boundaries.md#4-세-번째-경계--application과-workflow)를 따른다.
+현재 구조를 유지·조정할 판단과 실제 구현 사실을 구분한다.
 
 ### Graph / Subgraph 분리 기준
 
@@ -456,7 +340,7 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 | --- | --- |
 | staffingApprovalResult가 Staffing 실패·Escalation과 Approval 결과를 결합 | Stage 1의 Proposal 생성과 Stage 2의 승인·Scope 발급 결과를 구분해 완료·대기·실패를 관찰 |
 | specialistDecisionsResult가 Decision과 선택적 Comparison을 결합 | Stage 3 / 4의 독립 결과와 진행 조건을 검토. Comparison 실패를 Decision 생성 실패와 구별 |
-| complete-specialist-decisions가 복수 Decision의 Comparison 뒤에 실행 | [완료 Node 기준](#완료-node와-stage-완료-시점)에 따라 Stage 3 완료 뒤 Stage 4로 진행하도록 검토 |
+| complete-specialist-decisions가 복수 Decision의 Comparison 뒤에 실행 | [완료 Node 기준](workflow-responsibility-boundaries.md#node-조합완료-시점과-부작용)에 따라 Stage 3 완료 뒤 Stage 4로 진행하도록 검토 |
 | Node와 Preflight 함수가 각각 Scope 조회, Authorization과 일부 검사 중첩 | 배치 일관성과 실행 시점 권한 검증의 목적을 구분해 제거 가능한 중복만 정리 |
 
 위 항목은 **미적용 개선 방향**이다. 현재 Result 타입·Schema·Edge를 바꾼 것으로 해석하지 않는다.
@@ -510,18 +394,15 @@ Staffing CLI는 명시적 승인 전용 대상과 Specialist 프로세스·예�
 | Phase A 확장이 기존 Staffing CLI까지 실행시킬 위험 | 과거에는 CLI 독립 실행과 내부 State 분리를 위해 Setup Subgraph를 구성 | Setup 제거 후 Step 3에서 같은 Graph의 실행 대상을 구분. 기본값·CLI는 승인까지만 실행하고 분석은 명시적으로 선택 |
 | Subgraph 내부 데이터가 부모로 퍼질 위험 | 내부 State / 공개 Output 분리 원칙 유지 | 현재 Staffing 중간 State는 Phase A 소유. 최종 Phase A Output은 Direction Governance 구현 시 정의 |
 | 제한된 Phase A를 먼저 구현 | Staffing·Governance·Decision capability와 안전성 테스트 유지 | Organization / Phase A / Phase B 실행 계층을 기준으로 통합. 미래 Graph와 Outcome Schema는 선행 구현하지 않음 |
-| 폴더·Node 구성을 먼저 정해 기능 소유권과 실행 제어가 혼동되고 Specialist 기능이 여러 Workflow 위치에 흩어짐 | 기존 검증·단일 실행 기능과 Application 소유권 유지 | 먼저 Application 기능 기준의 Stage 목적·계약을 식별하고, 독립 실행·관찰·분기·실패·신뢰 경계로 Node를 판단. 디렉터리는 별도 후속 결정 |
-| 함수형 Orchestrator를 제거했지만 Decision과 Comparison 결과·완료 시점은 결합 | Graph의 순차 반복·Fail-fast와 v2 / v3 검증 유지 | 실행 제어 이관과 Stage 계약 분리는 다른 작업. Stage 3 완료 이후 독립 Stage 4로 진행하는 개선 방향을 기록하되 현재 코드는 그대로 설명 |
 
 CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 판단에서, Organization Lifecycle과 Phase별 목적을
 주요 실행 경계로 삼는 판단으로 변경했다. Staffing / Approval의 Domain 정책·Human 확인·Ledger 안전성은 유지한다.
 현재 통합은 Phase A 전체 기능이나 Phase 간 Handoff 구현의 완료를 뜻하지 않는다.
 
-이번 판단은 Stage를 업무 목적·완료 조건으로, Node를 실행 관리 단위로, Application을 기능·정책 소유자로
-구분한다. 폴더 이름을 지키기 위해 책임을 억지로 배치하거나, Node 분리 자체를 기능 분리로 오인하는 문제를
-줄이는 기준이다. Stage별 결과를 나누면 완료·실패를 더 정확히 관찰할 수 있지만 State 중복, 기존 API·CLI
-호환성, 부분 성공의 공개 범위와 후속 실행 차단을 함께 설계해야 한다. Node를 더 나누면 관찰 지점은 늘지만
-예약·Claim 사이 재실행·재개 경계도 늘어난다. 더 많은 Node나 더 작은 파일을 그 자체로 개선이라고 보지 않는다.
+기능 소유권·Stage 목적을 먼저 정하는 판단, 함수와 Node의 1:1 대응을 피하는 이유, Specialist 반복의 Graph
+이관, Decision / Comparison 분리와 Preflight 재검증의 발전 과정은
+[설계 판단과 트레이드오프](workflow-responsibility-boundaries.md#5-설계-판단의-발전과-트레이드오프)에 보존한다.
+각 결정의 당시 가정·문제·대안·유지 계약·후속 과제를 해당 문서에서 관리한다.
 
 ## Next Architecture Review — Step 2.5
 

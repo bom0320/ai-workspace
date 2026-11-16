@@ -1097,7 +1097,7 @@ flow root에는 가능한 한 public use-case entry를 둔다.
 해당 Application use-case 내부의 순서와 진행 상태를 제어한다. 내부 단계 결정, 반복·실패 처리와
 use-case 종료가 여기에 속한다. 여러 Application을 조합하는 Phase A의 Assignment 반복·Stage 전환은
 LangGraph가 소유한다. 업무 Stage와 Node·Application의 구분은
-[Workflow 책임 경계](workflow-architecture.md#6-graph--subgraph-boundary-principles)를 따른다.
+[Workflow 책임 경계](workflow-responsibility-boundaries.md#4-세-번째-경계--application과-workflow)를 따른다.
 현재 `planning-loop.ts`, `stages.ts`, `result-finalizer.ts`, `run-independent-decisions.ts`가 해당한다.
 Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유한다.
 

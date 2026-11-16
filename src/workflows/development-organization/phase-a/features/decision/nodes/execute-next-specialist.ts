@@ -5,8 +5,8 @@ import {
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "../../execution/authorized-specialist-decision.js";
-import type { PhaseAState } from "../../state.js";
+} from "../execution/authorized-specialist-decision.js";
+import type { PhaseAState } from "../../../state.js";
 
 export async function executeNextSpecialist(
   state: PhaseAState

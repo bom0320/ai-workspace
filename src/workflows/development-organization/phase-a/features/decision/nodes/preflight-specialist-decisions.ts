@@ -1,6 +1,6 @@
 import { getApprovedStaffingScope } from "@/application/governance/index.js";
-import { preflightSpecialistDecisions } from "../../validation/preflight-specialist-decisions.js";
-import type { PhaseAState } from "../../state.js";
+import { preflightSpecialistDecisions } from "../validation/preflight-specialist-decisions.js";
+import type { PhaseAState } from "../../../state.js";
 
 export function preflightSpecialistDecisionsNode(
   state: PhaseAState

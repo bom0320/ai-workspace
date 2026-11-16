@@ -1295,21 +1295,25 @@ src/
 │        ├─ index.ts
 │        ├─ graph.ts
 │        ├─ state.ts  # 공통 입력 + Staffing / Specialist 단계 결과·중간 상태
-│        ├─ graph.test.ts
-│        ├─ nodes/
-│        │  ├─ policy/load-system-policy.ts
-│        │  ├─ staffing/run-staffing.ts
-│        │  ├─ approval/evaluate-staffing-approval.ts
-│        │  ├─ approval/confirm-staffing-approval.ts
-│        │  ├─ specialist/preflight-specialist-decisions.ts
-│        │  ├─ specialist/execute-next-specialist.ts
-│        │  ├─ specialist/compare-specialist-decisions.ts
-│        │  ├─ specialist/complete-specialist-decisions.ts
-│        │  └─ collect-staffing-approval-result.ts
-│        ├─ phase-a.integration.test.ts
-│        ├─ entrypoints/run-staffing-approval.ts
-│        ├─ validation/preflight-specialist-decisions.ts
-│        └─ execution/authorized-specialist-decision.ts
+│        ├─ tests/
+│        │  ├─ graph.test.ts
+│        │  └─ phase-a.integration.test.ts
+│        ├─ features/  # 기능별 Workflow 내부 모듈; 새 Application 계층이 아님
+│        │  ├─ staffing/nodes/run-staffing.ts
+│        │  ├─ governance/nodes/
+│        │  │  ├─ load-system-policy.ts
+│        │  │  ├─ evaluate-staffing-approval.ts
+│        │  │  ├─ confirm-staffing-approval.ts
+│        │  │  └─ collect-staffing-approval-result.ts
+│        │  ├─ decision/
+│        │  │  ├─ nodes/
+│        │  │  │  ├─ preflight-specialist-decisions.ts
+│        │  │  │  ├─ execute-next-specialist.ts
+│        │  │  │  └─ complete-specialist-decisions.ts
+│        │  │  ├─ validation/preflight-specialist-decisions.ts
+│        │  │  └─ execution/authorized-specialist-decision.ts
+│        │  └─ comparison/nodes/compare-specialist-decisions.ts
+│        └─ entrypoints/run-staffing-approval.ts
 ├─ contracts/  # goal / task / repository / specialist / staffing
 ├─ services/
 │  ├─ artifacts/
@@ -1668,7 +1672,7 @@ authorizeSpecialistInvocation(request, attempt?)
   입력·검증·Lock·저장 실패는 denied다. 신규 Authorization이나 Eligibility 평가는 호출하지 않아
   잔여 예산이 0이어도 예약된 입력을 Claim할 수 있다. Budget은 여전히 예약 수로만 소비한다.
   기존 Ledger의 claimedAt 누락은 미사용 예약이며 읽기 시 default·재저장은 하지 않는다.
-- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/execution/authorized-specialist-decision.ts`의
+- **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/features/decision/execution/authorized-specialist-decision.ts`의
   `runAuthorizedSpecialistDecision(invocation)`으로 단일 호출을 연결한다. 실행 직전 Claim이 거부되면
   오류로 종료하고 v2를 호출하지 않는다. 성공하면 반환된 Invocation의 snapshot·goal과
   specialist·assignmentObjective·files 한 개를 `runIndependentDecisions()`에 전달한다.
@@ -1733,17 +1737,17 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | `phase-a/index.ts` | createPhaseAGraph·PhaseAState와 기존 Phase A Workflow 공개 API |
 | `phase-a/state.ts` | 공통 입력·정책/Staffing/Approval 중간 상태와 staffingApprovalResult / specialistDecisionsResult; 최종 Phase A Output은 미정 |
 | `phase-a/graph.ts` | 9개 일반 Node 직접 등록, 승인·실행 대상·Specialist 반복·실패에 따른 조건부 Edge 연결, compile |
-| `phase-a/nodes/policy/load-system-policy.ts` | Repository 경로 확인 → Governance 조회; 이전 Staffing / Approval 결과 제거 |
-| `phase-a/nodes/staffing/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; 실행 옵션은 closure에 보관 |
-| `phase-a/nodes/approval/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
-| `phase-a/nodes/approval/confirm-staffing-approval.ts` | 분리된 review로 확인 후 원본 Proposal·receipt로 최종화; receipt는 Node 로컬 변수 |
-| `phase-a/nodes/collect-staffing-approval-result.ts` | 승인 정책을 판단하지 않고 현재 단계 결과를 staffingApprovalResult로 정규화 |
-| `phase-a/nodes/specialist/preflight-specialist-decisions.ts` | 저장 Scope ID / Version 확인·전체 Assignment 요청 구성 → 기존 Preflight 검증 |
-| `phase-a/nodes/specialist/execute-next-specialist.ts` | 한 Assignment의 Authorization → 기존 Claim / v2 실행 → Index 갱신 |
-| `phase-a/nodes/specialist/compare-specialist-decisions.ts` | 완전한 Decision 묶음으로 기존 v3 Comparison 호출 |
-| `phase-a/nodes/specialist/complete-specialist-decisions.ts` | 성공한 Specialist 단계 결과만 확정 |
+| `phase-a/features/governance/nodes/load-system-policy.ts` | Repository 경로 확인 → Governance 조회; 이전 Staffing / Approval 결과 제거 |
+| `phase-a/features/staffing/nodes/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; 실행 옵션은 closure에 보관 |
+| `phase-a/features/governance/nodes/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
+| `phase-a/features/governance/nodes/confirm-staffing-approval.ts` | 분리된 review로 확인 후 원본 Proposal·receipt로 최종화; receipt는 Node 로컬 변수 |
+| `phase-a/features/governance/nodes/collect-staffing-approval-result.ts` | 승인 정책을 판단하지 않고 현재 단계 결과를 staffingApprovalResult로 정규화 |
+| `phase-a/features/decision/nodes/preflight-specialist-decisions.ts` | 저장 Scope ID / Version 확인·전체 Assignment 요청 구성 → 기존 Preflight 검증 |
+| `phase-a/features/decision/nodes/execute-next-specialist.ts` | 한 Assignment의 Authorization → 기존 Claim / v2 실행 → Index 갱신 |
+| `phase-a/features/comparison/nodes/compare-specialist-decisions.ts` | 완전한 Decision 묶음으로 기존 v3 Comparison 호출 |
+| `phase-a/features/decision/nodes/complete-specialist-decisions.ts` | 성공한 Specialist 단계 결과만 확정 |
 | `phase-a/entrypoints/run-staffing-approval.ts` | staffing-approval 대상을 명시한 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
-| `phase-a/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
+| `phase-a/tests/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
 
 ```ts
 import { createPhaseAGraph } from "@/workflows/development-organization/phase-a/index.js";
@@ -1937,7 +1941,8 @@ staffingApprovalResult를 소유한다. 마지막 값은 기존 Staffing Approva
 Human review 사본·원본 Proposal·receipt 지역 변수·대기 이후 재검증·Ledger Lock·Scope 중복 발급 방지는 유지했다.
 Application·Governance·기존 Specialist Decisions 로직은 변경하지 않았다.
 
-Node는 nodes/policy·staffing·approval에, 결과 정규화는 nodes/collect-staffing-approval-result.ts에 둔다.
+당시 Node는 nodes/policy·staffing·approval에, 결과 정규화는 nodes/collect-staffing-approval-result.ts에 두었다.
+현재는 책임 기반 디렉터리 정리로 features/staffing/nodes와 features/governance/nodes로 이동했으며 당시 실행 계약은 유지한다.
 Entry Point는 현재 Phase A를 호출하고 staffingApprovalResult만 기존 API 형식으로 반환한다. CLI 입력·Human 확인·출력은 유지한다.
 단, Step 3에서 후속 Node가 추가되면 같은 Graph를 호출하는 Staffing CLI의 실행 범위도 확장될 수 있다.
 **Step 3에서 CLI 실행 계약을 함께 재설계해야 하며 미래의 범위 격리를 현재 보장하지 않는다.**
@@ -1966,12 +1971,12 @@ execute-next-specialist ← remaining Assignment
 ```
 
 Preflight Node는 getApprovedStaffingScope()로 저장된 Scope를 재조회해 승인 결과의 ID / Version과 대조한다.
-모든 Assignment의 순서·contextPaths를 복사한 요청을 `validation/preflight-specialist-decisions.ts`의
+모든 Assignment의 순서·contextPaths를 복사한 요청을 `features/decision/validation/preflight-specialist-decisions.ts`의
 기존 검증 함수에 전달한다. 전체 요청을 검증·분리하기 전에 Authorization / Reservation을 수행하지 않는다.
 미승인·조회 실패·불일치·중복·잘못된 요청은 preflight 실패로 종료한다. Sparse Array 거부도 유지한다.
 
 execute-next-specialist는 호출마다 한 요청만 authorizeSpecialistInvocation()에 전달하고, allowed Invocation을
-`execution/authorized-specialist-decision.ts`의 runAuthorizedSpecialistDecision()으로 실행한다.
+`features/decision/execution/authorized-specialist-decision.ts`의 runAuthorizedSpecialistDecision()으로 실행한다.
 Invocation은 지역 변수이며 State에 보관하지 않는다. Claim / Snapshot / Evidence / v2 실행은 기존 기능을
 재사용한다. 반복·다음 Assignment 진입·Comparison 여부·실패 종료는 Phase A 조건부 Edge가 단독 소유한다.
 기존 함수형 runSpecialistDecisions와 전체 specialist-decisions/ 디렉터리 및 단일 위임 Node는 제거했다.

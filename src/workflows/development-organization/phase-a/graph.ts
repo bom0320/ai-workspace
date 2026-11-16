@@ -3,20 +3,20 @@ import { phaseAState } from "./state.js";
 import {
   createRunStaffingNode,
   type StaffingExecutionOptions,
-} from "./nodes/staffing/run-staffing.js";
-import { evaluateStaffingApproval } from "./nodes/approval/evaluate-staffing-approval.js";
-import { loadSystemPolicy } from "./nodes/policy/load-system-policy.js";
+} from "./features/staffing/nodes/run-staffing.js";
+import { evaluateStaffingApproval } from "./features/governance/nodes/evaluate-staffing-approval.js";
+import { loadSystemPolicy } from "./features/governance/nodes/load-system-policy.js";
 import {
   createConfirmStaffingApprovalNode,
   type StaffingConfirmationOptions,
-} from "./nodes/approval/confirm-staffing-approval.js";
+} from "./features/governance/nodes/confirm-staffing-approval.js";
 
-import { collectStaffingApprovalResult } from "./nodes/collect-staffing-approval-result.js";
+import { collectStaffingApprovalResult } from "./features/governance/nodes/collect-staffing-approval-result.js";
 
-import { preflightSpecialistDecisionsNode } from "./nodes/specialist/preflight-specialist-decisions.js";
-import { executeNextSpecialist } from "./nodes/specialist/execute-next-specialist.js";
-import { compareSpecialistDecisions } from "./nodes/specialist/compare-specialist-decisions.js";
-import { completeSpecialistDecisions } from "./nodes/specialist/complete-specialist-decisions.js";
+import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
+import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
+import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
+import { completeSpecialistDecisions } from "./features/decision/nodes/complete-specialist-decisions.js";
 
 export type PhaseAExecutionTarget =
   "staffing-approval" | "specialist-decisions";

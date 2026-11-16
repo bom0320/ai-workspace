@@ -5,7 +5,7 @@ import {
 import {
   staffingApprovalEvaluationSchema,
   type PhaseAState,
-} from "../../state.js";
+} from "../../../state.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 
 export type StaffingConfirmationOptions = {

@@ -1,5 +1,5 @@
 import { compareDecisions } from "@/application/comparison/index.js";
-import type { PhaseAState } from "../../state.js";
+import type { PhaseAState } from "../../../state.js";
 
 export async function compareSpecialistDecisions(
   state: PhaseAState

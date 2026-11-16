@@ -10,7 +10,7 @@ import {
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "../index.js";
+} from "../../../index.js";
 
 vi.mock("@/application/governance/index.js", async (original) => ({
   ...(await original<typeof import("@/application/governance/index.js")>()),

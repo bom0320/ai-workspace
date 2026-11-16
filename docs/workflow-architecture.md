@@ -312,8 +312,12 @@ DevelopmentOrganizationGraph
 
 기존 Staffing CLI 범위를 보존해야 한다는 요구와 Subgraph가 최선이라는 판단은 구분한다.
 CLI는 필요한 실행 단위를 호출할 수 있어야 하지만 그 사실만으로 독립 Subgraph를 정당화하지 않는다.
-Graph별 디렉터리 응집성과 런타임 Subgraph 도입도 다른 판단이다. 현재 Node는 policy / staffing / approval / specialist의
-업무 책임으로 배치한다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
+Graph별 디렉터리 응집성과 런타임 Subgraph 도입도 다른 판단이다. 현재는 Application 기능 소유권에 맞춰
+features/ 아래 staffing / governance / decision / comparison 영역의 nodes/에 실제 Node를 배치한다.
+Workflow 전용 Preflight 검증과 단일 실행 보조 함수는 features/decision/validation, features/decision/execution에 둔다.
+entrypoints/는 외부 Graph 호출 인터페이스, features/는 기능별 내부 실행 모듈을 분류한다.
+features/는 새 Application 계층이 아니며 이번 이동은 실행 구조가 아닌 디렉터리 분류 기준의 정리다.
+이 구조 정리에서 Stage 결과·완료 시점·Edge·Preflight 중복 조회는 변경하지 않았다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
 이 배치가 Stage별 디렉터리나 Application 폴더 복제를 요구하지 않으며 Assignment Execution 등의 분리는 후속 실행 요구로 검토한다.
 
 ## 7. Current Implementation vs Target Architecture
@@ -324,7 +328,7 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 | 항목 | 코드에서 확인한 현재 상태 | 전체 Workflow 통합 수준 |
 | --- | --- | --- |
 | LangGraph Runtime / Phase A Graph | [createPhaseAGraph](../src/workflows/development-organization/phase-a/graph.ts) 구현 | 정책 → Staffing → Approval → 결과 수집 → 실행 대상·승인에 따른 선택적 Specialist 실행 |
-| Staffing / Approval Nodes | [결과 수집](../src/workflows/development-organization/phase-a/nodes/collect-staffing-approval-result.ts) 등 5개 Node 구현 | 기존 Application 호출·최소 선행조건·State 업데이트. 별도 Setup Graph는 없음 |
+| Staffing / Approval Nodes | [결과 수집](../src/workflows/development-organization/phase-a/features/governance/nodes/collect-staffing-approval-result.ts) 등 5개 Node 구현 | 기존 Application 호출·최소 선행조건·State 업데이트. 별도 Setup Graph는 없음 |
 | Staffing CLI | [runStaffingApproval](../src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts)이 staffing-approval 실행 대상을 명시하고 staffingApprovalResult 반환 | 기존 입력·Human 확인·출력 유지, Specialist 실행 없음 |
 | Staffing / Governance | [Staffing API](../src/application/staffing/index.ts), [Governance API](../src/application/governance/index.ts) 구현 | Proposal Finalization, 직접/위임 승인·Scope 발급, Authorization / Reservation / 일회 Claim 제공 |
 | Specialist Decisions / Comparison | [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)의 일반 Specialist Node / Edge가 기존 Governance·v2 / v3를 조합 | 순차 반복·Fail-fast는 Edge가 제어. 단일 Decision은 Comparison 생략; Staffing CLI에서는 미실행 |
@@ -349,8 +353,8 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 Human Direction Governance, ApprovedDecision Handoff, Phase B Graph, Assignment 실행 조정,
 Executive Report, Interrupt / Resume와 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
-테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/graph.test.ts),
-[Phase A 통합 테스트](../src/workflows/development-organization/phase-a/phase-a.integration.test.ts)와
+테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),
+[Phase A 통합 테스트](../src/workflows/development-organization/phase-a/tests/phase-a.integration.test.ts)와
 [CLI 테스트](../src/cli/commands/staffing/staffing.test.ts)에 있다. Node / Edge 분기·State 갱신,
 승인 대기·거부·위조 확인·정책/Repository 변경 검증과 CLI 실행 범위의 시나리오가 존재한다.
 이것은 실제 Human·Codex·전체 조직 E2E 또는 중단·재개·복구 검증의 완료를 의미하지 않는다.

@@ -1,9 +1,12 @@
 import * as staffingApplication from "@/application/staffing/index.js";
-import * as phaseAGraph from "./graph.js";
+import * as phaseAGraph from "../graph.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
-import { createPhaseAGraph, runAuthorizedSpecialistDecision } from "./index.js";
+import {
+  createPhaseAGraph,
+  runAuthorizedSpecialistDecision,
+} from "../index.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -32,7 +35,7 @@ import type {
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
-} from "./entrypoints/run-staffing-approval.js";
+} from "../entrypoints/run-staffing-approval.js";
 
 // Real receipts, signed storage and Git; only controlling-terminal I/O is fake.
 const terminal = vi.hoisted(() => ({ home: "", line: "", offset: 0 }));
@@ -683,6 +686,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it("runs approved dynamic Assignments in order and passes original Goal/SHA/Decisions to v3", async () => {
     prepareBatch();
     const command = runtime();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const state = await createPhaseAGraph({
       ...options,
       executionTarget: "specialist-decisions",
@@ -692,6 +696,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (!result || approval?.status !== "approved")
       throw new Error("Missing Graph results");
     const scope = approval.scope;
+    expect(state.goal).toEqual(options.goal);
+    expect(scope.goal).toEqual(options.goal);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(1);
+    expect(authorize).toHaveBeenCalledTimes(2);
     expect(result.status).toBe("completed");
     if (result.status !== "completed") throw new Error(JSON.stringify(result));
     expect(
@@ -809,6 +818,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   });
   it("reports an opaque Claim denial without executing Codex or reserving the next Assignment", async () => {
     prepareBatch();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     vi.spyOn(governance, "claimAuthorizedInvocation").mockReturnValueOnce({
       status: "denied",
       reason: "Invocation claim denied",
@@ -830,9 +840,15 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0]).not.toHaveProperty("claimedAt");
     expect(command).not.toHaveBeenCalled();
+    expect(state.goal).toEqual(options.goal);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(1);
+    expect(authorize).toHaveBeenCalledTimes(1);
+    expect(state.specialistDecisionsResult).not.toHaveProperty("decisions");
   });
   it("retains the Claim and stops remaining work on v2 Evidence failure", async () => {
     prepareBatch();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const command = runtime("decision");
     const state = await createPhaseAGraph({
       ...options,
@@ -849,16 +865,22 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0].claimedAt).toEqual(expect.any(String));
     expect(command).toHaveBeenCalledTimes(1);
+    expect(state.goal).toEqual(options.goal);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(1);
+    expect(authorize).toHaveBeenCalledTimes(1);
+    expect(state.specialistDecisionsResult).not.toHaveProperty("decisions");
   });
   it("reports v3 Reference Validation failure separately after all Decisions succeed", async () => {
     prepareBatch();
+    const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const command = runtime("comparison");
-    const result = (
-      await createPhaseAGraph({
-        ...options,
-        executionTarget: "specialist-decisions",
-      }).invoke({ goal: options.goal, repositoryPath: root })
-    ).specialistDecisionsResult;
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    const result = state.specialistDecisionsResult;
+    expect(state.staffingApprovalResult?.status).toBe("approved");
     expect(result).toMatchObject({ status: "failed", stage: "comparison" });
     expect(result).not.toHaveProperty("decisions");
     expect(command).toHaveBeenCalledTimes(3);
@@ -866,6 +888,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(
       reservations().every(({ claimedAt }) => claimedAt !== undefined)
     ).toBe(true);
+    expect(state.goal).toEqual(options.goal);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    expect(issuanceCount()).toBe(1);
+    expect(authorize).toHaveBeenCalledTimes(2);
   });
 
   it("rechecks current Governance policy before authorizing the next Assignment", async () => {
@@ -922,21 +948,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(second.collectedDecisions).toHaveLength(2);
   });
 
-  it.each([
-    "single",
-    "multiple",
-    "authorization",
-    "claim",
-    "decision",
-    "comparison",
-  ] as const)(
+  it.each(["single", "authorization"] as const)(
     "connects the real Specialist Workflow through Phase A: %s",
     async (mode) => {
       if (mode === "single") {
         configure();
         options.confirmApproval = (request) => accept(request);
-      } else prepareBatch();
-      if (mode === "authorization")
+      } else {
+        prepareBatch();
         vi.spyOn(
           governance,
           "authorizeSpecialistInvocation"
@@ -944,14 +963,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           status: "denied",
           reason: "Authorization stopped",
         });
-      if (mode === "claim")
-        vi.spyOn(governance, "claimAuthorizedInvocation").mockReturnValueOnce({
-          status: "denied",
-          reason: "Claim stopped",
-        });
-      const command = runtime(
-        mode === "decision" || mode === "comparison" ? mode : "success"
-      );
+      }
+      const command = runtime();
       const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
       const state = await createPhaseAGraph({
         ...options,
@@ -961,8 +974,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(options.agent).toHaveBeenCalledTimes(1);
       expect(issuanceCount()).toBe(1);
       expect(state.goal).toEqual(options.goal);
+      expect(authorize).toHaveBeenCalledTimes(1);
       const result = state.specialistDecisionsResult;
-      if (mode === "single" || mode === "multiple") {
+      if (mode === "single") {
         expect(result?.status).toBe("completed");
         if (result?.status !== "completed")
           throw new Error(JSON.stringify(result));
@@ -982,51 +996,29 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             path: a.contextPaths[0],
           }))
         );
-        const specialistCalls = command.mock.calls.filter(([, args]) =>
-          args.at(-1)!.includes("SpecialistContext:\n")
+        const context = JSON.parse(
+          command.mock.calls[0][1].at(-1)!.split("SpecialistContext:\n")[1]
         );
-        specialistCalls.forEach(([, args], index) => {
-          const context = JSON.parse(
-            args.at(-1)!.split("SpecialistContext:\n")[1]
-          );
-          expect(context.goal).toEqual(options.goal);
-          expect(context.repositoryCommitSha).toBe(scope.snapshot.commitSha);
-          expect(context.assignmentObjective).toBe(
-            scope.assignments[index].objective
-          );
-        });
-        if (mode === "single") expect(result.comparison).toBeUndefined();
-        else
-          expect(result.comparison?.gaps[0].specialistIds).toEqual([
-            "frontend",
-            "ux",
-          ]);
-        expect(command).toHaveBeenCalledTimes(mode === "single" ? 1 : 3);
-        expect(authorize).toHaveBeenCalledTimes(mode === "single" ? 1 : 2);
-        expect(reservations()).toHaveLength(mode === "single" ? 1 : 2);
+        expect(context.goal).toEqual(options.goal);
+        expect(context.repositoryCommitSha).toBe(scope.snapshot.commitSha);
+        expect(context.assignmentObjective).toBe(
+          scope.assignments[0].objective
+        );
+        expect(result.comparison).toBeUndefined();
+        expect(command).toHaveBeenCalledTimes(1);
+        expect(reservations()).toHaveLength(1);
         expect(reservations().every((r) => r.claimedAt !== undefined)).toBe(
           true
         );
       } else {
-        expect(result).toMatchObject({ status: "failed", stage: mode });
-        if (mode !== "comparison")
-          expect(result).toHaveProperty("assignmentId");
+        expect(result).toMatchObject({
+          status: "failed",
+          stage: "authorization",
+        });
+        expect(result).toHaveProperty("assignmentId");
         expect(result).not.toHaveProperty("decisions");
-        expect(command).toHaveBeenCalledTimes(
-          mode === "authorization" || mode === "claim"
-            ? 0
-            : mode === "decision"
-              ? 1
-              : 3
-        );
-        expect(authorize).toHaveBeenCalledTimes(mode === "comparison" ? 2 : 1);
-        expect(reservations()).toHaveLength(
-          mode === "authorization" ? 0 : mode === "comparison" ? 2 : 1
-        );
-        if (mode === "claim")
-          expect(reservations()[0].claimedAt).toBeUndefined();
-        if (mode === "decision")
-          expect(reservations()[0].claimedAt).toBeDefined();
+        expect(command).not.toHaveBeenCalled();
+        expect(reservations()).toHaveLength(0);
       }
     }
   );

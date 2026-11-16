@@ -14,30 +14,33 @@ import {
   type StaffingProposal,
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
-import { createPhaseAGraph } from "./graph.js";
+import { createPhaseAGraph } from "../graph.js";
 import {
   phaseAState,
   type PhaseAState,
   type StaffingApprovalStageResult,
-} from "./state.js";
-import type { StaffingApprovalWorkflowResult } from "./entrypoints/run-staffing-approval.js";
-import { developmentOrganizationState } from "../state.js";
-import type { SpecialistDecisionsWorkflowResult } from "./state.js";
+} from "../state.js";
+import type { StaffingApprovalWorkflowResult } from "../entrypoints/run-staffing-approval.js";
+import { developmentOrganizationState } from "../../state.js";
+import type { SpecialistDecisionsWorkflowResult } from "../state.js";
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "./execution/authorized-specialist-decision.js";
+} from "../features/decision/execution/authorized-specialist-decision.js";
 import { compareDecisions } from "@/application/comparison/index.js";
 import type {
   AuthorizedSpecialistInvocation,
   InvokeSpecialistRequest,
 } from "@/application/governance/index.js";
-vi.mock("./execution/authorized-specialist-decision.js", async (original) => ({
-  ...(await original<
-    typeof import("./execution/authorized-specialist-decision.js")
-  >()),
-  runAuthorizedSpecialistDecision: vi.fn(),
-}));
+vi.mock(
+  "../features/decision/execution/authorized-specialist-decision.js",
+  async (original) => ({
+    ...(await original<
+      typeof import("../features/decision/execution/authorized-specialist-decision.js")
+    >()),
+    runAuthorizedSpecialistDecision: vi.fn(),
+  })
+);
 vi.mock("@/application/comparison/index.js", async (original) => ({
   ...(await original<typeof import("@/application/comparison/index.js")>()),
   compareDecisions: vi.fn(),

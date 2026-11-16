@@ -66,10 +66,13 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
 - `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
 - `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 중간 상태와 staffingApprovalResult / specialistDecisionsResult
-- `src/workflows/development-organization/phase-a/nodes/`: policy / staffing / approval / specialist 업무별 Node와 Staffing Approval 단계 결과 수집
+- `src/workflows/development-organization/phase-a/features/staffing/nodes/`: CEO Staffing Application 실행 연결
+- `src/workflows/development-organization/phase-a/features/governance/nodes/`: System Policy 조회·Staffing Approval·Human 확인과 승인 단계 결과 정규화
+- `src/workflows/development-organization/phase-a/features/decision/nodes/`, `features/comparison/nodes/`: 독립 Decision과 Comparison의 실행 Node; 순서·반복·분기는 Phase A Graph가 소유
+- `src/workflows/development-organization/phase-a/features/`: 기능별 Workflow 내부 실행 모듈. Application 계층을 추가하거나 정책을 재구현하지 않음
 - `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Phase A Graph의 staffing-approval 실행 대상을 명시하고 기존 결과 계약 유지
-- `src/workflows/development-organization/phase-a/validation/`: 전체 Specialist 요청의 동기 Preflight 검증·분리
-- `src/workflows/development-organization/phase-a/execution/`: 단일 Invocation Claim·기존 v2 Decision 실행; 반복·실패 분기·Comparison 진입은 Phase A Graph가 소유
+- `src/workflows/development-organization/phase-a/features/decision/validation/`: 전체 Specialist 요청의 동기 Preflight 검증·분리
+- `src/workflows/development-organization/phase-a/features/decision/execution/`: 단일 Invocation Claim·기존 v2 Decision 실행; 반복·실패 분기·Comparison 진입은 Phase A Graph가 소유
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델
@@ -80,6 +83,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/services/evidence/`: 실행 중 변경 사실 수집
 - `src/infrastructure/process/`: 외부 command 실행과 process lifecycle
 - `src/infrastructure/git/`: Repository resolution과 격리된 Git worktree lifecycle
+- `src/workflows/development-organization/phase-a/tests/`: Phase A Graph 계약·분기와 Workflow 통합 테스트; 개별 기능 테스트는 해당 구현과 co-location 유지
 - co-located `*.test.ts`: 해당 구현 모듈의 unit test
 
 현재 존재하지 않는 디렉터리를 예상 구조로 미리 추가하지 않는다.

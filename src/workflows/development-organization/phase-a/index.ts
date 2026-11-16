@@ -6,7 +6,7 @@ export {
 export {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "./execution/authorized-specialist-decision.js";
+} from "./features/decision/execution/authorized-specialist-decision.js";
 export {
   createPhaseAGraph,
   type PhaseAGraphOptions,

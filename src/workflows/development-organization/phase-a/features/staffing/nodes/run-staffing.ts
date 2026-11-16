@@ -2,7 +2,7 @@ import {
   runStaffing,
   type RunStaffingOptions,
 } from "@/application/staffing/index.js";
-import type { PhaseAState } from "../../state.js";
+import type { PhaseAState } from "../../../state.js";
 
 export type StaffingExecutionOptions = Partial<
   Pick<RunStaffingOptions, "maxRounds" | "timeoutMs" | "agent">

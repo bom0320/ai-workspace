@@ -348,7 +348,9 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - 기존 LangGraph / Node / Domain Schema를 재사용해 Policy → Staffing → Approval → 결과 수집을 Phase A에 통합했다.
 - Organization State는 goal / repositoryPath만 유지한다. Phase A State는 policyLookup / staffingResult /
   approvalResult / staffingApprovalResult / specialistDecisionsResult와 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 단계 결과는 최종 Phase A Outcome이나 실행 권한이 아니다.
-- Node는 nodes/policy·staffing·approval·specialist에 배치하고 결과 정규화는 nodes/collect-staffing-approval-result.ts에 둔다.
+- 책임 기반 디렉터리 정리 후 Node는 features/ 아래 staffing / governance / decision / comparison의 nodes/에 배치한다.
+  결과 정규화 Node는 features/governance/nodes에, Workflow 검증·실행 보조 함수는 features/decision/validation·execution에 둔다.
+  파일 위치와 참조만 변경했으며 Stage 결과·Graph 분기·Preflight 중복 검증은 유지한다.
   별도 Setup State / Output Schema와 factory export를 제거했다. 최종 Phase A Output은 해결 방향 승인 구현 시 정의한다.
 - ready 정책만 Staffing, proposed만 Approval, approval-required만 Human 확인으로 진행한다.
   콜백 부재는 대기, null은 rejected, 예외는 failed(confirmation)이다. 실제 receipt로 원본 Proposal을 최종화한다.

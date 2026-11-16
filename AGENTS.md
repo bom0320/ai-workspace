@@ -14,7 +14,9 @@ Authority / Staffing·Finalization, Human Approval / Delegation, Authorization /
 승인 Scope의 순차 Specialist Decision·Comparison Workflow가 구현되어 있다.
 LangGraph Phase A Graph가 System Policy 조회 → Staffing → Approval 평가 → 필요한 Human Confirmation·최종 승인을 조정한다. CLI의 runStaffingApproval()은 독립 Staffing Setup Subgraph만 실행하는 Adapter이며 Decision 연결은 후속 단계다.
 
-다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
+다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다.
+Development Organization 실행 계약·Phase Handoff·Graph State / Output 소유권의 기준은
+[Workflow Architecture](docs/workflow-architecture.md)다. 현재 Subgraph 구현과 재검토 대상인 최종 구조를 구분한다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
 
 ## 2. Current Stack
 
@@ -53,6 +55,7 @@ LangGraph Phase A Graph가 System Policy 조회 → Staffing → Approval 평가
 ## 5. Repository Structure
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
+- `docs/workflow-architecture.md`: Organization 실행 계약·Phase Handoff·State / Output 소유권과 Step 2.5 재검토 기준
 - `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
 - `src/contracts/`: 여러 Application이 공유하는 도메인별 runtime-validated 데이터 계약
 - `src/cli/commands/execute/load-task-contract.ts`: Execute Command의 TaskContract 파일 로딩

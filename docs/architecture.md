@@ -6,10 +6,13 @@
 설명한다. North Star와 Make vs Adopt는 [Project Direction](project-direction.md), 다음 검증 질문은
 [Roadmap](roadmap.md), 사용법은 [README](../README.md), Human 조작은
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
+Development Organization의 실행 계약·Phase Handoff·Graph State / Output 소유권과 분리 판단은
+[Workflow Architecture](workflow-architecture.md)를 기준으로 한다. 이 문서는 Application·runtime의 실제 구현과 설계 이력을 유지한다.
 
 현재 구현은 v0–v3와 v4 R1/R2 Staffing·Step 3 승인·Step 4 Authorization·Step 5.1–5.4 Decision/Comparison 연결을 포함한다.
 LangGraph.js Minimal Integration Step 1은 정책 조회를, Step 2는 CEO Staffing·Approval 평가 Node와 조건부 Edge를 연결했다.
-기존 CLI용 Phase A Workflow는 유지하며 전체 조직 Graph·CLI 전환과 직접 Human 확인·Decision Node 연결은 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
+Step 2.5는 콜백 기반 Human 확인·최종화를 Setup Subgraph에 연결했다. CLI의 기존 API는 Setup만 실행하고 Phase A가 이를 재사용한다.
+전체 Organization Graph와 Decision Node 연결은 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
 v4는 진행 중이며 CEO Synthesis·해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
 
 ## 2. Current Architecture
@@ -256,6 +259,10 @@ Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구
 
 ### v4 결정과 구현 상태
 
+목표 실행 순서·전환 조건은 [Workflow Architecture](workflow-architecture.md#2-organization-workflow-execution-contract)를 따른다.
+여기서는 기존 Application의 모델·권한·재사용 책임을 설명한다. 현재 Graph 분리와 State 배치는 구현 사실이며
+전체 Organization 관점의 최종 구조는 [Step 2.5 재검토](workflow-architecture.md#next-architecture-review--step-25) 대상이다.
+
 v4 목표는 **CEO Governance / AI Organization Orchestration의 전체 E2E lifecycle**이다.
 Phase A에서 CEO는 조직을 제안하고 Specialist의 독립 판단을 종합해 해결 방향에 대한 Human 승인을 받는다.
 Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문 직원의 상세 설계·구현·테스트·리뷰,
@@ -265,7 +272,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 | 설치·System Policy 조회 Graph 구현; 기존 Phase A / CLI 미연결 |
+| Workflow Runtime | LangGraph.js 채택 | Phase A → Staffing Setup 및 콜백 기반 승인 연결; CLI는 Setup 직접 실행. 전체 Organization Graph는 미구현 |
 | Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
@@ -280,20 +287,8 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 목적은 무엇을 어떻게 해결할지 결정하고 Human의 승인을 받는 것이다.
 
-```text
-Human Goal / Constraints
-→ CEO Intent Analysis
-→ Staffing / Context / Budget Proposal
-→ Harness Validation
-→ Human Staffing Approval
-→ Harness Scope issuance / Authorization → Authorized Specialist Invocation
-→ Independent Specialist Decisions (v2) → AgentDecision[]
-→ Decision Comparison (v3)
-→ CEO Synthesis: Recommendation / Rationale / Evidence / Trade-off / Unresolved Issues
-→ Harness Validation
-→ Human Governance: Approve / Override / Reject
-→ Approved Decision (승인된 방향만 Phase B로 전달)
-```
+목표 순서와 각 승인 경계는 [Phase A 실행 계약](workflow-architecture.md#phase-a--decision--approval)에 모았다.
+Staffing·권한 발급·독립 판단·Comparison 이후 CEO Synthesis와 Human Direction Governance를 거쳐야 한다.
 
 초기 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이고, Human Governance는 종합된
 해결 방향에 대한 최종 판단이다. 두 승인은 서로 다르며 코드 변경 전체의 포괄 승인도 아니다.
@@ -311,23 +306,9 @@ Trade-off, Unresolved Issues를 검토하고 근거 부족 시 Human에게 Escal
 
 목적은 승인된 해결 방향을 수행 가능한 개발 업무로 구체화하고 여러 직원의 결과를 관리하는 것이다.
 
-```text
-Approved Decision
-→ CEO Work Decomposition
-→ Implementation / Design / QA / Review Assignments
-→ Detailed Design & Planning
-→ TaskDraft → Harness TaskContract 구성 (Repository 실행 계약이 필요한 업무)
-→ Human Task Approval (해당 TaskContract 대상)
-→ Harness Authorization / Specialist 또는 Worker Execution (업무별 승인 권한 안에서)
-→ Verification / Review
-→ CEO Progress Evaluation
-   ├─ Continue → 다음 승인된 업무
-   ├─ Rework → 재작업 → 필요한 재검증·재승인 후 실행
-   ├─ Reassign → 업무 재배치 → 필요한 재검증·재승인 후 실행
-   ├─ Escalate → Human 판단 / 승인 대기
-   └─ Complete → Human Change Review / Delivery
-               → CEO Executive Report → Human
-```
+목표 반복 흐름은 [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution),
+진입 조건은 [Phase Handoff 계약](workflow-architecture.md#4-phase-a--phase-b-handoff-contract)을 따른다.
+업무 분해·Planning·실행·검증·진행 평가·Human Review / Delivery·보고를 구분한다.
 
 CEO는 Phase A 이후에도 업무 의존성, 진행 상태, 실패와 산출물·Evidence를 검토하며 Continue / Rework /
 Reassign / Escalate / Complete를 판단한다. Harness는 두 Phase 전체에서 Context / Authority / Scope /
@@ -1751,7 +1732,8 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | `phase-a/staffing-setup/nodes/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
 | `phase-a/staffing-setup/nodes/confirm-staffing-approval.ts` | 분리된 review로 Human 확인 후 원본 Proposal·receipt를 Governance에 재제출; receipt는 Node 로컬 변수 |
 | `phase-a/entrypoints/run-staffing-approval.ts` | 기존 runStaffingApproval API를 유지하는 Graph 실행·결과 변환 Adapter |
-| `phase-a/graph.test.ts` | 실제 compiled Graph.invoke, Governance API를 모의한 정상/거부/State 재조회 검증 |
+| `phase-a/graph.test.ts` | 부모의 Subgraph 등록·Edge 구조 검증 |
+| `phase-a/staffing-setup/graph.test.ts` | 독립 Setup / 부모 경로의 invoke, 모의 Governance 기반 정상/거부/State 재조회 검증 |
 
 ```ts
 import { createPhaseAGraph } from "@/workflows/development-organization/phase-a/index.js";
@@ -1773,9 +1755,10 @@ ready 결과와 과거 failure가 동시에 존재하지 않는다. 새 invoke�
 Application / Governance가 도메인 기능·정책·Context·Evidence·Reservation·Claim 검증을 소유한다.
 policyLookup.ready는 정책 조회 성공만 뜻한다. 현재 END는 Staffing 실패/Escalation 또는 승인 평가 종료이며 Phase A 전체 성공·조직 완료를 뜻하지 않는다.
 
-기존 createDevelopmentOrganizationGraph의 저장소 사용처는 테스트·문서뿐이었다. 이를 createPhaseAGraph로
-갱신하고 기존 factory export는 제거했다. 반환 State의 systemPolicy / policyVersion / status / failure는
-policyLookup으로 교체했으며 root의 DevelopmentOrganizationState는 공통 입력만 가진다.
+State 변경 이력: 기존 createDevelopmentOrganizationGraph의 저장소 사용처는 테스트·문서뿐이었다.
+Phase A 전용 createPhaseAGraph로 바꾸며 기존 factory export를 제거했고, 독립적인 정책·status·failure 채널을
+policyLookup으로 모았다. 이후 Step 2.5에서 중간 채널은 Setup 내부로 옮기고 부모는 staffingSetupResult만 받도록 했다.
+현재 root의 DevelopmentOrganizationState는 공통 입력만 가진다.
 기존 runStaffingApproval / runSpecialistDecisions / runAuthorizedSpecialistDecision 및 CLI 계약은 유지한다.
 
 설치 버전은 `@langchain/langgraph` 1.7.3 / `@langchain/core` 1.3.7이며 lockfile로 고정한다.
@@ -1874,6 +1857,10 @@ Human 대기 중 같은 Proposal의 선행 승인에 대한 중복 발급 거부
 
 
 ### 9.10 Step 2.5 — Workflow Boundary & Structure
+
+아래는 현재 구현과 당시의 분리 근거다. CLI 호환성·출력 격리의 검증을 전체 Organization의 최종 구조
+확정으로 해석하지 않는다. [Workflow Architecture](workflow-architecture.md#9-설계-판단의-발전과-현재-유효-범위)는
+이 이력을 보존하면서 Setup 독립성·Phase Handoff·State 소유권을 재검토할 기준과 질문을 정리한다.
 
 단일 Graph 통합만으로 실행 범위가 고정되지는 않았다. runStaffingApproval()이 Phase A 전체 Graph를 호출하면
 후속 Specialist Decisions를 연결할 때 기존 Staffing CLI도 실행을 시작할 위험이 있다. Staffing Setup은

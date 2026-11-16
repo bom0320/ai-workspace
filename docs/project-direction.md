@@ -2,7 +2,8 @@
 
 이 문서는 North Star, Governance Ownership, Make vs Adopt, 설계 판단 기준과 외부 기술 도입 원칙의
 canonical source다. 현재 사용법과 관찰 기록은 [README](../README.md), 구현 구조는
-[Architecture](architecture.md), 다음 검증 질문은 [Roadmap](roadmap.md), Human 조작은
+[Architecture](architecture.md), Organization 실행·Phase Handoff 계약은
+[Workflow Architecture](workflow-architecture.md), 다음 검증 질문은 [Roadmap](roadmap.md), Human 조작은
 [CLI / Human Interface](cli-and-human-interface.md)에 둔다. 미래 원칙을 현재 기능으로 해석하지 않는다.
 
 ## What AI Workspace is
@@ -41,6 +42,8 @@ Evidence / Verification / Human Approval을 통제한다. 현재의 독립 의�
 [Target Architecture](architecture.md#5-target-responsibility-model)에 둔다. 해결 방향 승인은 개별 코드
 변경·권한 확대의 포괄 승인이 아니며 Human은 Final Authority다. 이 전체 조직 운영은 목표이며,
 현재 구현 상태와 다음 순서는 [Roadmap의 v4](roadmap.md#v4--ceo-governance--ai-organization-orchestration)를 따른다.
+Phase 간 승인·실행 전환과 State / Output의 구체적인 검토 기준은
+[Workflow Architecture](workflow-architecture.md)에 둔다. 현재 CLI의 범위를 전체 조직 Graph의 설계 제약으로 고정하지 않는다.
 
 ### ADE와 Development Governance
 

@@ -2,6 +2,7 @@
 
 이 문서는 다음에 무엇을 검증할지 기록한다. North Star와 Make vs Adopt의 판단 기준은
 [Project Direction](project-direction.md), 현재 구현과 모델은 [Architecture](architecture.md),
+Organization 실행·Handoff·State 소유권의 검토 기준은 [Workflow Architecture](workflow-architecture.md),
 실행 방법과 관찰 기록은 [README](../README.md)에 둔다. 범용 Agent Framework 자체를 만드는 계획이
 아니라 Human과 AI Coding Agent가 함께 개발하는 ADE의 governance capabilities를 검증하는 계획이다.
 
@@ -190,13 +191,11 @@ Make vs Adopt 원칙은 [Project Direction](project-direction.md#build-vs-adopt)
 
 ### 목표와 책임
 
-- **Phase A — Decision & Approval**: Human Goal / Constraints → CEO Intent / Staffing / Context / Budget
-  제안 → Harness Validation → Human Staffing Approval → Harness Authorization → 독립 Specialist Decisions(v2)
-  → Comparison(v3) → CEO Synthesis → Human Governance → Approved Decision.
-- **Phase B — Detailed Design & Execution**: Approved Decision → CEO Work Decomposition → 설계·구현·QA·리뷰
-  배치 → Detailed Design / 필요한 업무의 v1 TaskDraft·TaskContract → Human Task Approval → 승인된
-  Specialist / Worker 실행 → Verification / Review → CEO Progress Evaluation / Rework / Reassignment /
-  Escalation → Human Change Review / Delivery → Executive Report.
+- **Phase A — Decision & Approval**: 분석 조직을 승인받고 독립 판단·비교·CEO 종합을 거쳐 해결 방향의 Human 승인을 받는다.
+- **Phase B — Detailed Design & Execution**: 승인된 방향을 업무로 분해하고 상세 설계·실행·검증·진행 평가·Review / Delivery·보고를 연결한다.
+
+상세 실행 순서와 진입 조건은 [Workflow 실행 계약](workflow-architecture.md#2-organization-workflow-execution-contract)과
+[Phase Handoff](workflow-architecture.md#4-phase-a--phase-b-handoff-contract)에 모은다.
 
 CEO는 Autonomous Decision Maker, Harness는 Governance & Control Owner, LangGraph.js는 Workflow Runtime,
 Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 계약 관계는
@@ -208,7 +207,8 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
 구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
-Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. 다음은 LangGraph의 단계별 연결과 Step 6 CEO Synthesis다. 아래 목록은 현재 구현과 예정 마일스톤을 구분하며 미구현 모델·병렬 실행 방식을 선행 확정하지 않는다.
+Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. 다음 작업은 Step 2.5를 전체 Organization 실행 계약·Phase Handoff·State / Output 관점에서 재검토하는 것이다.
+아래 LangGraph 연결·Step 6 CEO Synthesis 등의 기존 예정 마일스톤은 유지하되, 구체적인 Graph 분리·연결 형태를 이 순서만으로 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
@@ -340,6 +340,11 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   장기 대기/재개·복구와 모델 판단 품질은 이 테스트로 검증되지 않았다.
 
 ### LangGraph Minimal Integration — Step 1·2·2.5 Implemented / Step 3 Planned
+
+**현재 구현은 유지 / 다음 설계 검토는 Step 2.5 재평가**다.
+[Next Architecture Review](workflow-architecture.md#next-architecture-review--step-25)의 질문을 먼저 검토한다.
+Staffing Setup의 독립성과 Specialist Analysis의 Node / Subgraph 형태는 전체 실행 요구를 근거로 판단하며,
+기존 CLI 호환성이나 디렉터리 구조만으로 최종 확정하지 않는다. 아래 항목은 구현 이력·검증 범위다.
 
 - `@langchain/langgraph` / `@langchain/core` 설치. 기존 NodeNext / TypeScript / Zod를 유지했다.
 - `workflows/development-organization/phase-a/staffing-setup/`에 독립 Graph / State / nodes를 두고 기존 정책 조회·Staffing·Approval을 재사용한다.

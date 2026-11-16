@@ -115,13 +115,14 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 ### v4 현재 연결 단위
 
 ```text
-CLI staffing → runStaffingApproval Adapter → 현재 Phase A Graph → System Policy 조회 → runStaffing → Approval → Scope
-별도 Phase A API → 저장 Scope Preflight → 순차 Authorization → Claim → v2 Decision → v3 Comparison
-Phase A Graph API → 정책 조회 → ready면 Staffing → proposed면 Approval 평가 → 필요 시 Human 콜백·최종 승인 → END
+CLI staffing → runStaffingApproval Adapter → Phase A Graph (staffing-approval) → Policy / Staffing / Approval → Scope
+Phase A Graph API (specialist-decisions) → Policy / Staffing / Approval → 승인 시 Preflight / Specialist 반복 / Comparison
 ```
 
-이 세 연결 단위를 하나의 전체 조직 E2E로 표현하지 않는다. CLI staffing은 Scope에서 종료하며,
-Decision 묶음 API는 Scope ID / 요청을 별도로 받는다. Graph는 기존 두 Phase A Workflow를 통째로 호출하지 않고 Staffing / Approval Application을 직접 호출한다. 직접 Human 확인은 기존 CLI Workflow에만 있다.
+기본값과 Staffing CLI는 승인까지만 실행한다. Human 확인은 Graph Node가 제공된 콜백을 통해 수행한다.
+Graph는 기존 Application을 호출하며 별도 함수형 Decision 묶음 Orchestrator는 제거했다. 현재 실행 범위의
+종료를 전체 조직 E2E나 Phase A 전체 성공으로 해석하지 않는다. Stage의 업무 목적과 현재 결합된 결과 계약은
+[Workflow Architecture](workflow-architecture.md#3-phase별-책임)를 따른다.
 
 ## 4. Current Responsibility Boundaries
 
@@ -130,7 +131,7 @@ Decision 묶음 API는 Scope ID / 요청을 별도로 받는다. Graph는 기존
 | Human / CLI adapter | workflow·입력, Task Approval, Review / Delivery / Cleanup, 결과 표시 | application 내부 flow / Domain 검증을 소유하지 않음 |
 | Governance application | System Policy·위임·승인 근거·Scope와 Authorization·Reservation·Claim | 상태 조회나 Schema parsing을 승인·실행 권한으로 해석하지 않음 |
 | Phase A Workflow | Staffing→Approval 및 승인 Scope의 순차 Decision→Comparison API 조합 | Governance 정책·v2 Evidence·v3 참조 검증을 재구현하지 않음 |
-| LangGraph Runtime Foundation | Phase A State / 정책 조회→Staffing→Approval 평가의 조건부 실행 | 현재 승인 평가까지 연결; State는 Governance Ledger나 전체 Phase A 완료를 대체하지 않음 |
+| LangGraph Runtime Foundation | Phase A State / 정책 조회→Staffing→Approval·Human 확인→선택적 Specialist 반복·Comparison의 조건부 실행 | 실행·반복·분기는 Graph가, 기능·정책 검증은 Application이 소유. State는 Governance Ledger나 전체 Phase A 완료를 대체하지 않음 |
 | Planning application / Codex Planner | 조사·limits·계약 생성 / supplied PlannerContext로 inspect 또는 complete | inspection은 수정 권한이 아니며 Planner는 별도 cwd·제한된 도구 설정으로 실행 |
 | Harness contract transformation | ID 주입, Human constraints 보존, Goal의 targetRepository, Zod validation | AI가 시스템 ID나 Human 제약을 소유하지 않음 |
 | Execution application / Codex Worker | workspace와 Worker / Scope / Verification / artifacts 연결 / scoped 수정 | 정상 종료 때 workspace를 지우지 않으며 verification command는 Harness가 실행 |
@@ -1093,8 +1094,10 @@ flow root에는 가능한 한 public use-case entry를 둔다.
 
 #### flow/orchestration
 
-workflow의 순서와 진행 상태를 제어한다. 다음 단계 결정, 반복 제어, stage 진행,
-실패 누적, workflow 종료 처리가 여기에 속한다.
+해당 Application use-case 내부의 순서와 진행 상태를 제어한다. 내부 단계 결정, 반복·실패 처리와
+use-case 종료가 여기에 속한다. 여러 Application을 조합하는 Phase A의 Assignment 반복·Stage 전환은
+LangGraph가 소유한다. 업무 Stage와 Node·Application의 구분은
+[Workflow 책임 경계](workflow-architecture.md#6-graph--subgraph-boundary-principles)를 따른다.
 현재 `planning-loop.ts`, `stages.ts`, `result-finalizer.ts`, `run-independent-decisions.ts`가 해당한다.
 Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유한다.
 

@@ -619,6 +619,25 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     configure();
     options.confirmApproval = (request) => accept(request);
   }
+  it("keeps duplicate Specialist policy in Staffing and Governance, not batch preparation", async () => {
+    prepareBatch();
+    const result = await staffingApplication.runStaffing({
+      goal: options.goal,
+      agent: options.agent,
+      maxRounds: options.maxRounds,
+      systemPolicy: system,
+    });
+    if (result.status !== "proposed") throw new Error("Missing Proposal");
+    const proposal = structuredClone(result.proposal);
+    proposal.assignments[1].specialistId = proposal.assignments[0].specialistId;
+    expect(() =>
+      staffingApplication.validateStaffingProposal(proposal, system)
+    ).toThrow("Duplicate Specialist");
+    expect(governance.approveStaffingProposal(proposal)).toMatchObject({
+      status: "denied",
+    });
+    expect(reservations()).toHaveLength(0);
+  });
   function reservations() {
     return withGovernanceRecords(
       (raw) =>
@@ -769,6 +788,30 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assignmentId:
         state.staffingApprovalResult.scope.assignments[0].assignmentId,
     });
+    expect(reservations()).toHaveLength(0);
+    expect(command).not.toHaveBeenCalled();
+  });
+  it("rechecks Governance after preflight lookup and before the first Reservation", async () => {
+    prepareBatch();
+    const lookup = governance.getApprovedStaffingScope;
+    const queried = vi
+      .spyOn(governance, "getApprovedStaffingScope")
+      .mockImplementation((id) => {
+        const result = lookup(id);
+        configure(); // Policy changes after the trusted read, before Authorization.
+        return result;
+      });
+    const command = runtime();
+    const state = await createPhaseAGraph({
+      ...options,
+      executionTarget: "specialist-decisions",
+    }).invoke({ goal: options.goal, repositoryPath: root });
+    expect(queried).toHaveBeenCalledTimes(1);
+    expect(state.specialistDecisionsResult).toMatchObject({
+      status: "failed",
+      stage: "authorization",
+    });
+    expect(state.decisionComparisonResult).toBeUndefined();
     expect(reservations()).toHaveLength(0);
     expect(command).not.toHaveBeenCalled();
   });

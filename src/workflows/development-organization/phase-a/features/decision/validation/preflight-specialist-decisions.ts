@@ -1,5 +1,4 @@
 import {
-  getApprovedStaffingScope,
   invokeSpecialistRequestSchema,
   type ApprovedOperatingScope,
   type InvokeSpecialistRequest,
@@ -11,7 +10,8 @@ export type SpecialistDecisionsWorkflowInput = {
 };
 
 export function preflightSpecialistDecisions(
-  input: SpecialistDecisionsWorkflowInput
+  input: SpecialistDecisionsWorkflowInput,
+  scope: ApprovedOperatingScope
 ):
   | {
       status: "ready";
@@ -37,16 +37,13 @@ export function preflightSpecialistDecisions(
       throw new Error(
         "A Scope ID and non-empty Assignment request list are required."
       );
-    // 2. Load Approved Scope
-    const approved = getApprovedStaffingScope(input.scopeId);
-    if (approved.status !== "approved")
-      throw new Error(
-        "reason" in approved ? approved.reason : "Approved Scope unavailable."
-      );
-    const scope = approved.scope;
-    // 3. Validate and Detach All Requests
+    // 2. Validate the Batch Against the Supplied Scope
+    // This is a batch consistency check, not proof of approval. The caller must
+    // load Scope through Governance; Authorization rechecks current authority.
+    if (input.scopeId !== scope.id)
+      throw new Error("Batch Scope ID does not match the supplied Scope.");
     const assignmentIds = new Set<string>();
-    const specialistIds = new Set<string>();
+    // 3. Validate and Detach Every Request
     // Array.from visits sparse slots so missing requests fail validation too.
     const requests = Array.from(input.requests, (raw) => {
       assignmentId =
@@ -64,17 +61,24 @@ export function preflightSpecialistDecisions(
       );
       if (!assignment)
         throw new Error("Assignment does not belong to the approved Scope.");
-      if (
-        assignmentIds.has(assignment.assignmentId) ||
-        specialistIds.has(assignment.specialistId)
-      )
-        throw new Error(
-          "Duplicate Assignment or Specialist in Decision requests."
-        );
+      if (assignmentIds.has(assignment.assignmentId))
+        throw new Error("Duplicate Assignment in Decision requests.");
       assignmentIds.add(assignment.assignmentId);
-      specialistIds.add(assignment.specialistId);
       return request;
     });
+    // Phase A executes every approved Assignment once, in approved order.
+    // Detect missing or reordered work before any Invocation consumes budget.
+    if (requests.length !== scope.assignments.length)
+      throw new Error(
+        "Decision requests must include every approved Assignment."
+      );
+    for (const [index, request] of requests.entries()) {
+      assignmentId = request.assignmentId;
+      if (request.assignmentId !== scope.assignments[index].assignmentId)
+        throw new Error(
+          "Decision requests must preserve approved Assignment order."
+        );
+    }
     return { status: "ready", scope, requests };
   } catch (error) {
     return {

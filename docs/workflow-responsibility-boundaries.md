@@ -133,7 +133,7 @@ Node가 다른 Node를 직접 호출해 별도의 Orchestrator를 만들지 않�
 | [evaluate-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/evaluate-staffing-approval.ts) | 원본 Proposal로 approveStaffingProposal 호출, approved / approval-required / denied에 따라 다음 경로 선택 | 유지 근거: Human 확인 필요 여부가 바뀌는 분기. 위임 승인 시 여기서 Scope 발급까지 완료될 수 있어 순수 조회로 취급하거나 무조건 재실행하면 안 됨 |
 | [confirm-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/confirm-staffing-approval.ts) | 승인 필요 시 분리된 review로 Human 콜백 호출, 원본 Proposal·실제 receipt로 최종 승인 요청 | 유지 근거: Human 대기·거부·예외와 최신 정책 재검증의 경계. 내부의 확인과 확정을 함수 개수만으로 나누지 않음. 현재 Interrupt / Resume는 아님 |
 | [collect-staffing-approval-result](../src/workflows/development-organization/phase-a/features/governance/nodes/collect-staffing-approval-result.ts) | 정책·Staffing·Approval의 종료 경로를 staffingApprovalResult로 정규화. 신규 정책 판단은 없음 | 통합 검토: 현재는 CLI 반환 계약과 공통 후속 라우팅을 위한 수집 지점. Stage별 결과를 분리한 뒤에도 독립 관찰·제어 지점이 필요한지 검토. 단순 변환이면 별도 Node를 강제하지 않음 |
-| [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. 검증 helper와의 Scope 중복 조회는 별도 정리 대상 |
+| [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. Step 3에서 Scope 조회는 Node 한 곳에 두고 helper는 순수 배치 검증으로 변경 |
 | [execute-next-specialist](../src/workflows/development-organization/phase-a/features/decision/nodes/execute-next-specialist.ts) | 한 요청의 Authorization → Claim·v2 실행 → Decision 수집·Index 갱신. authorization / claim / decision 실패와 준비 요청 부재 시 preflight 실패 기록 | 유지 근거: Assignment별 실행·관찰과 즉시 중단. 반복은 Edge가 결정하며 Invocation은 로컬 변수. 권한 부작용을 고려해 무조건 여러 Node로 쪼개지 않음 |
 | [compare-specialist-decisions](../src/workflows/development-organization/phase-a/features/comparison/nodes/compare-specialist-decisions.ts) | 모든 Decision 수집 후 Stage 3 완료 결과로 기존 compareDecisions 호출 또는 단일 비교 생략 | 독립 Stage 4로 completed / skipped / failed 기록. 실패해도 Stage 3 결과 보존 |
 | [complete-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/complete-specialist-decisions.ts) | 비어 있지 않은 전체 Specialist 결과를 Comparison 전에 확정 | Step 2에서 Stage 3만의 완료 시점으로 조정. 모든 Stage에 완료 Node를 복제하는 근거는 아님 |
@@ -261,21 +261,39 @@ Evidence 경로·줄 범위 또는 Reference 구조의 유효성이 AI 분석 �
 
 ### Specialist Preflight의 중복과 목적 구분
 
-현재 [Preflight Node](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts)는
-getApprovedStaffingScope()로 저장 Scope를 조회해 승인 결과의 ID / Version과 대조하고 모든 Assignment를
-요청으로 변환한다. 이어 [Workflow Validation](../src/workflows/development-organization/phase-a/features/decision/validation/preflight-specialist-decisions.ts)도
-getApprovedStaffingScope()를 호출하고 요청 구조·Scope / Version·소속·Assignment 및 Specialist 중복을 검사한다.
-이후 Authorization과 Claim에서도 Governance가 실행 시점의 유효성을 재확인한다.
+Step 3 이전에는 Preflight Node와 Workflow Validation이 각각 getApprovedStaffingScope()를 호출했다.
+현재 [Preflight Node](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts)가
+Governance를 통해 한 번 조회하고 State의 승인 ID / Version과 대조한다. 이어
+[순수 배치 검증 함수](../src/workflows/development-organization/phase-a/features/decision/validation/preflight-specialist-decisions.ts)에
+그 Scope와 생성한 요청을 전달한다. 함수는 조회·예약·승인 인증을 하지 않는다.
 
-| 위치 | 목적 / 남겨야 할 책임 | 정리 시 판단 |
-| --- | --- | --- |
-| Workflow Preflight | 요청 전체 준비·분리와 배치 일관성 확인. 뒤쪽의 오류를 일부 예산 소비 후 발견하지 않도록 함 | 중복 Scope 조회·대조의 필요성과 조회·검증 기능의 소유 위치를 검토 |
-| Governance Application | 실제 Scope·Assignment·Context 유효성과 최신 실행 권한·예산·Reservation·Claim 검증 | Preflight 성공을 이유로 실행 시점 재검증을 생략하지 않음 |
+| 검사 / 시점 | 현재 소유자와 유지·제거 이유 |
+| --- | --- |
+| 저장 Scope·승인 기록·최신 정책·Repository 검증 / 배치 준비 시 | Governance 조회 API. Node만 한 번 호출하며 Validation의 두 번째 조회는 제거 |
+| State 승인 결과와 저장 Scope ID / Version 대조 | Node. 호출 대상 Binding 확인이며 State에 실행 권한을 부여하지 않음 |
+| Request Schema·Scope / Version·Assignment 소속·중복 요청·누락·순서·Sparse Array / 첫 예약 전 | 순수 Workflow Validation. 모든 승인 Assignment를 한 번씩 순서대로 준비하고 분리하기 위한 배치 검사 |
+| 동일 Specialist의 중복 배치 금지 | Staffing validateProposal 정책. Governance 조회의 validateStoredIssuance → validateCurrentStaffingPolicy → validateStaffingProposal에서도 재사용하므로 Workflow의 별도 Specialist Set 검사는 제거 |
+| Assignment·Context·최신 Scope·정책·Budget·Reservation / 개별 실행 시 | Governance Authorization. 배치 준비 이후 변경을 거부하기 위해 유지 |
+| Reservation Binding·최신 정책·Snapshot·Context·일회 사용 / 실행 직전 | Governance Claim. Preflight나 Authorization 성공으로 생략하지 않음 |
 
-중복 검증이 모두 불필요한 것은 아니다. 전체 배치 검사와 개별 Invocation 시점 검사는 보호하는 실패와
-시점이 다르다. 반대로 두 번 조회한다는 이유만으로 모두 필수 방어라고 단정하지 않는다. 후속 정리에서는
-각 검사의 입력·시점·I/O·보호 대상과 실패 효과를 확인해 제거 가능한 중복만 줄인다. 현재 중복 조회를 제거한
-것으로 서술하지 않으며 Workflow가 Scope·Context·예산 정책의 별도 원본이 되어서는 안 된다.
+Mock이 반환한 잘못된 Scope는 실제 Governance가 인증한 Scope와 다르다. Workflow에서 Specialist 중복 정책을
+다시 검사하는 Mock 테스트 대신 실제 Staffing 검증·Governance 승인 API가 중복 Specialist Proposal을
+거부하는 통합 테스트를 둔다. 요청 중복·누락·잘못된 Context를 같은 문제로 취급하지 않는다.
+배치 검증의 소속·Version 확인은 요청과 준비 입력의 일관성 검사이며 실행 권한 판단은 아니다.
+
+### Node 선행조건과 Stage 완료 검증 — Step 3 판단
+
+Complete Node는 유지한다. Graph의 커서 비교는 반복 종료 시점만 정하며 Decision 수가 실행 대상 수와
+일치함을 증명하지 않는다. Node의 비어 있지 않음·대상 수·커서 일치 검사는 불완전한 State가 Stage 3
+성공이 되는 것을 막는다. 별도 업데이트로 Stage 3 완료를 Comparison 전에 관찰하는 기존 계약도 유지한다.
+마지막 실행 Node로 옮기면 같은 불일치 검사를 여전히 해야 하므로 현재는 이 경계를 통합하지 않는다.
+
+| 방어적 검사 | 유지 이유 |
+| --- | --- |
+| load-system-policy의 빈 Repository 경로 | Workflow 필수 입력 오류를 denied로 표현. Governance는 실제 경로·저장 정책을 검증하며 별도 신뢰 경계 |
+| run-staffing의 ready, evaluate의 proposed, confirm의 approval-required | Edge는 정상 경로를 선택하고 Node는 자신의 입력 계약을 검사. 업무 정책을 재판단하지 않음 |
+| evaluate / confirm의 결과 Schema 및 final approved / denied 확인 | Application 결과를 State에 전달하는 Runtime 경계. 예상하지 못한 결과를 승인으로 취급하지 않음 |
+| compare의 Stage 3 완료 및 비교 Context 확인 | Stage 3 완료 결과만 사용하고 실패 의미를 Stage 4에 보존. 실제 Reference 검증은 Comparison Application |
 
 ### Graph State / Checkpoint와 Governance Ledger
 
@@ -337,7 +355,7 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 3. **선택한 원칙:** Workflow는 배치 전체 준비·일관성을, Governance는 실제 Scope·Context·권한·예산·예약·Claim 유효성을 소유한다.
 4. **이유와 대안:** 모든 중복을 제거하면 뒤쪽 오류 전 예산 소비나 최신 권한 검증 누락 위험이 있다. 모두 유지하면 비용과 정책 중복이 늘 수 있으므로 시점·목적으로 구분한다.
 5. **유지할 계약:** Preflight 실패 시 예약하지 않으며 통과 후에도 개별 Authorization / Claim을 수행한다. State / Checkpoint는 Ledger를 대체하지 않는다.
-6. **한계와 후속 과제:** 조회 횟수만으로 제거 여부를 정하지 않는다. 제거 가능한 중복과 방어적 재검증의 증거를 확인한 뒤 최소 범위로 정리한다.
+6. **적용 결과와 한계:** Step 3에서 Node의 단일 Governance 조회와 순수 배치 검증으로 분리하고 Specialist 중복 정책 검사는 Staffing에 일원화했다. 개별 Authorization / Claim의 최신 검증은 유지하며 조회와 실행 사이 TOCTOU를 제거한 것은 아니다.
 
 ## 6. 향후 리팩토링의 적용 순서와 미결정 사항
 
@@ -349,7 +367,7 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 6. 현재 API / CLI·실패 결과·부분 성공 공개·State / Ledger의 경계를 보존하며 계약 변경과 검증을 함께 계획한다.
 
 Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구현했다. 다음 검토 대상은 Stage 1 / 2의
-결과 계약·collect Node의 책임과 Preflight 중복 조회다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
+결과 계약·collect Node의 책임이다. Step 3에서 Preflight 조회는 한 번으로 정리했고 Complete Node는 유지했다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
 미래 Node 수·Retry / Resume 정책은 이번 기록에서 확정하지 않는다.
 
 Phase B에도 동일 기준을 적용하되 업무 분해·Assignment 모델·다중 실행·재작업·재배치·검증·진행 평가의

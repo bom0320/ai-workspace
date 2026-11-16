@@ -33,10 +33,10 @@ export function preflightSpecialistDecisionsNode(
       requestedContextPaths: [...assignment.contextPaths],
     }));
     // 3. Validate and Detach the Entire Batch Before Any Reservation
-    const prepared = preflightSpecialistDecisions({
-      scopeId: scope.id,
-      requests,
-    });
+    const prepared = preflightSpecialistDecisions(
+      { scopeId: scope.id, requests },
+      scope
+    );
     if (prepared.status === "failed")
       return { specialistDecisionsResult: prepared };
     return {

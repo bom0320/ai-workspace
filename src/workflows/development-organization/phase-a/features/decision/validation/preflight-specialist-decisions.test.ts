@@ -35,25 +35,22 @@ const requests = () =>
   }));
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(governance.getApprovedStaffingScope).mockReturnValue({
-    status: "approved",
-    scope: structuredClone(scope),
-    approval: {} as governance.ApprovalRecord,
-  });
 });
 describe("Specialist request preflight", () => {
   it.each([
     "empty",
     "sparse",
+    "batch-scope",
     "scope",
     "version",
     "assignment",
     "duplicate-assignment",
-    "duplicate-specialist",
     "malformed",
-    "unapproved",
+    "missing",
+    "reordered",
   ])("rejects %s preflight before reserving anything", async (kind) => {
     const input = { scopeId: scope.id, requests: requests() };
+    if (kind === "batch-scope") input.scopeId = "other";
     if (kind === "empty") input.requests = [];
     if (kind === "sparse") input.requests.length = 4;
     if (kind === "scope") input.requests[1].scopeId = "other";
@@ -61,43 +58,32 @@ describe("Specialist request preflight", () => {
     if (kind === "assignment") input.requests[1].assignmentId = "other";
     if (kind === "duplicate-assignment")
       input.requests[1] = structuredClone(input.requests[0]);
-    if (kind === "duplicate-specialist") {
-      const duplicate = structuredClone(scope);
-      duplicate.assignments[1].specialistId =
-        duplicate.assignments[0].specialistId;
-      vi.mocked(governance.getApprovedStaffingScope).mockReturnValue({
-        status: "approved",
-        scope: duplicate,
-        approval: {} as governance.ApprovalRecord,
-      });
-    }
     if (kind === "malformed") input.requests[1].requestedContextPaths = [];
-    if (kind === "unapproved")
-      vi.mocked(governance.getApprovedStaffingScope).mockReturnValue({
-        status: "denied",
-        reason: "No approval",
-      });
-    const result = preflightSpecialistDecisions(input);
+    if (kind === "missing") input.requests.pop();
+    if (kind === "reordered") input.requests.reverse();
+    const result = preflightSpecialistDecisions(input, scope);
     expect(result).toMatchObject({
       status: "failed",
       stage: "preflight",
       reason: expect.any(String),
     });
-    if (["empty", "sparse", "unapproved"].includes(kind)) {
+    if (["empty", "sparse", "batch-scope"].includes(kind)) {
       expect(result).not.toHaveProperty("assignmentId");
-    } else {
+    } else if (kind !== "missing" && kind !== "reordered") {
       expect(result).toMatchObject({
         assignmentId: input.requests[1].assignmentId,
       });
     }
     expect(governance.authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    expect(governance.getApprovedStaffingScope).not.toHaveBeenCalled();
   });
   it("detaches every request before asynchronous execution can begin", () => {
     const input = { scopeId: scope.id, requests: requests() };
-    const result = preflightSpecialistDecisions(input);
+    const result = preflightSpecialistDecisions(input, scope);
     if (result.status !== "ready") throw new Error(result.reason);
     input.requests[1].assignmentId = "tampered";
     input.requests[1].requestedContextPaths.push("unapproved.ts");
     expect(result.requests).toEqual(requests());
+    expect(governance.getApprovedStaffingScope).not.toHaveBeenCalled();
   });
 });

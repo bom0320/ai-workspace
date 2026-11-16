@@ -1974,7 +1974,10 @@ execute-next-specialist ← remaining Assignment
 
 Preflight Node는 getApprovedStaffingScope()로 저장된 Scope를 재조회해 승인 결과의 ID / Version과 대조한다.
 모든 Assignment의 순서·contextPaths를 복사한 요청을 `features/decision/validation/preflight-specialist-decisions.ts`의
-기존 검증 함수에 전달한다. 전체 요청을 검증·분리하기 전에 Authorization / Reservation을 수행하지 않는다.
+순수 배치 검증 함수에 전달한다. Phase A Refactoring Step 3에서 이 함수의 중복 Scope 조회를 제거했다.
+Workflow는 요청 Schema·Scope / Version 일관성·소속·중복 요청·누락·순서·Sparse Array를 검사한다.
+Specialist 중복 금지는 Staffing 정책 검증을 Governance가 재사용하므로 Workflow의 별도 검사를 제거했다.
+전체 요청을 검증·분리하기 전에 Authorization / Reservation을 수행하지 않는다.
 미승인·조회 실패·불일치·중복·잘못된 요청은 preflight 실패로 종료한다. Sparse Array 거부도 유지한다.
 
 execute-next-specialist는 호출마다 한 요청만 authorizeSpecialistInvocation()에 전달하고, allowed Invocation을
@@ -2014,3 +2017,15 @@ Checkpoint와 자동 복구는 여전히 미구현이다. 같은 Graph를 다시
 검증은 실제 LangGraph invoke와 모의 Governance / 단일 실행 기능의 단위 테스트, 실제 Staffing / Governance /
 서명 Ledger / v2·v3 코드에 fake CEO / mock TTY / 모의 Codex process를 조합한 통합 테스트로 구분한다.
 실제 Human·Codex·전체 Organization / 복구 E2E나 모델 품질은 검증 범위가 아니다.
+
+### Phase A Refactoring Step 3 — Validation Responsibility Consolidation
+
+Preflight의 Node는 저장 Scope를 Governance에서 한 번 조회하고 순수 배치 Validation에 전달한다.
+이 함수는 권한 인증 API가 아니다. 개별 Authorization / Claim은 최신 정책·Repository·Context·예산 및
+일회성 검증을 계속 수행한다. 실제 Staffing·Governance API의 중복 Specialist 거부를 통합 테스트로 확인한다.
+
+Complete Node는 유지했다. Graph의 커서 기반 반복 종료는 Decision 수와 대상 수의 일치를 증명하지 않으며,
+독립적인 Stage 3 완료 업데이트를 Comparison 전에 관찰하는 기존 계약이 있다. 빈 결과·미완료·커서 불일치를
+성공으로 처리하지 않는 guard를 유지한다. 다른 Node의 선행조건·Runtime 결과 Schema 검사도 정책 재구현이
+아니므로 보존했다. 상세 판단은 [검증 책임 기록](workflow-responsibility-boundaries.md#specialist-preflight의-중복과-목적-구분)을 따른다.
+Stage 1 / 2 결과 분리·Checkpoint / Resume·부작용 복구는 이번 변경 범위가 아니다.

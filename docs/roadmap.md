@@ -368,7 +368,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
   Stage 3 성공은 비어 있지 않은 decisions만, 실패 단계는 preflight / authorization / claim / decision만 표현한다.
   Stage 4는 decisionComparisonResult에 completed / comparison, skipped / insufficient-decisions, failed / reason을 기록한다.
   비교 실패 시 Stage 3 완료와 Decision을 보존하되 전체 Phase A 성공이나 후속 진행으로 취급하지 않는다.
-  specialistComparison 중간 채널은 제거했다. 새 invoke는 두 결과와 중간 데이터를 초기화하며 Preflight 중복 조회는 유지한다.
+  specialistComparison 중간 채널은 제거했다. 새 invoke는 두 결과와 중간 데이터를 초기화한다. 당시 유지한 Preflight 중복 조회는 후속 Step 3에서 정리했다.
 - 기본값과 Staffing Entry Point는 staffing-approval을 선택하므로 기존 CLI는 승인까지만 실행한다.
   실행 대상은 종료 지점 선택이며 Governance를 우회하지 않는다. 별도 Graph·중복 Orchestrator는 없다.
 - **Step 3 Tested:** 실제 Graph·Staffing·Governance·Ledger·기존 v2/v3 검증에 fake CEO / mock TTY / 모의 Codex를 조합해
@@ -445,6 +445,16 @@ Staffing / Governance 경계 정리: Approval과 Authorization은 별도 내부 
 R2 Proposal의 실제 Harness 발급 출처는 여전히 남은 신뢰 경계다. 승인 JSON의 구조·정책 재검증과
 Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 Finalization digest 기록과 Approval의 동일
 발급 결과 확인은 별도 과제로 남긴다. Step 4는 이미 저장된 승인 Scope에서 Invocation을 예약·발급한다.
+
+
+### Phase A Refactoring Step 3 — 검증 책임 정리 (Implemented)
+
+- Preflight Node의 단일 Governance Scope 조회 결과를 순수 배치 검증 함수에 전달한다.
+- Workflow는 요청 구조·Scope / Version·Assignment 소속·배치 중복·누락·순서·Sparse Array와 분리를 담당한다.
+- Specialist 중복 금지는 Staffing 정책에 일원화한다. Governance의 저장 Scope 재검증도 같은 정책을 사용한다.
+- Complete Node는 비어 있거나 불완전한 배치 방어와 독립 Stage 3 완료 관찰을 위해 유지한다.
+- Node 선행조건·반환 Schema 검사 및 Invocation별 최신 Authorization / Claim·Evidence / Reference 검증은 유지한다.
+- Stage 1 / 2 결과 분리와 재시도·Checkpoint 복구는 후속 과제다.
 
 
 ## v5 — Evaluation

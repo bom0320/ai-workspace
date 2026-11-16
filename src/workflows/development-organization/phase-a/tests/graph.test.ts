@@ -698,13 +698,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
-  it.each([
-    "empty",
-    "sparse",
-    "duplicate-assignment",
-    "duplicate-specialist",
-    "malformed",
-  ])(
+  it.each(["empty", "sparse", "duplicate-assignment", "malformed"])(
     "validates the entire %s batch before first Authorization",
     async (kind) => {
       const stored = twoAssignments();
@@ -714,8 +708,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         stored.scope.assignments[1] = structuredClone(
           stored.scope.assignments[0]
         );
-      if (kind === "duplicate-specialist")
-        stored.scope.assignments[1].specialistId = "frontend";
       if (kind === "malformed") stored.scope.assignments[1].contextPaths = [];
       const state =
         await createPhaseAGraph(specialistOptions).invoke(specialistInput);
@@ -734,6 +726,11 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
+  it("loads the trusted Scope once while preparing the entire batch", async () => {
+    twoAssignments();
+    await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    expect(getApprovedStaffingScope).toHaveBeenCalledTimes(1);
+  });
   it("awaits one Specialist per Node before the next Authorization and compares original inputs", async () => {
     const stored = twoAssignments();
     const original = structuredClone(stored.scope);
@@ -887,8 +884,8 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     });
     expect(compareDecisions).not.toHaveBeenCalled();
   });
-  it.each(["empty", "incomplete"] as const)(
-    "does not complete an %s Decision batch",
+  it.each(["empty", "incomplete", "cursor-mismatch"] as const)(
+    "does not complete a Decision batch with %s state",
     async (kind) => {
       const state = await createPhaseAGraph().invoke(specialistInput);
       const result = completeSpecialistDecisions({
@@ -906,8 +903,8 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
             assignmentId: "b",
             requestedContextPaths: ["b.ts"],
           },
-        ],
-        currentSpecialistIndex: kind === "empty" ? 0 : 1,
+        ].slice(0, kind === "cursor-mismatch" ? 1 : 2),
+        currentSpecialistIndex: kind === "incomplete" ? 1 : 0,
         collectedDecisions: kind === "empty" ? [] : completed.decisions,
       });
       expect(result.specialistDecisionsResult).toMatchObject({

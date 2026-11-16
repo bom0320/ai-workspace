@@ -109,7 +109,7 @@ Human Goal / Constraints
 
 여섯 업무 Stage의 계약과 Result 분리의 판단 이력은
 [Phase A Stage 사례](workflow-responsibility-boundaries.md#phase-a의-여섯-업무-목적과-진행-조건)에 모은다.
-현재 단일 Decision 경로는 Comparison을 호출하지 않고 선택적 comparison 필드를 생략한다.
+현재 단일 Decision 경로는 Comparison Application을 호출하지 않는다.
 Stage 3 완료 후 Stage 4가 skipped / insufficient-decisions를 명시한다.
 
 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이다. Direction Governance는 종합된
@@ -128,7 +128,9 @@ preflight-specialist-decisions
 ```
 
 Preflight Node는 저장 Scope의 ID / Version을 승인 결과와 대조하고 모든 Assignment의 요청을 구성한 뒤
-기존 검증 함수를 재사용한다. 전체 검증이 끝나기 전에는 예산을 예약하지 않는다. 실행 Node 한 번은
+동일 Scope를 입력받는 순수 배치 검증 함수를 재사용한다. Governance Scope 조회는 Preflight당 한 번이며
+요청 구조·소속·중복·누락·순서를 검사하고 분리한다. Specialist 중복 금지는 Staffing 정책에 맡긴다.
+전체 검증이 끝나기 전에는 예산을 예약하지 않는다. 실행 Node 한 번은
 한 요청만 Authorization → Claim → v2 Decision으로 처리한다. 반복·실패 종료·Comparison 진입은 Phase A
 조건부 Edge가 소유한다. Invocation은 Node 지역 변수이며 State에 보관하지 않는다.
 
@@ -331,7 +333,7 @@ features/ 아래 staffing / governance / decision / comparison 영역의 nodes/�
 Workflow 전용 Preflight 검증과 단일 실행 보조 함수는 features/decision/validation, features/decision/execution에 둔다.
 entrypoints/는 외부 Graph 호출 인터페이스, features/는 기능별 내부 실행 모듈을 분류한다.
 features/는 새 Application 계층이 아니며 이번 이동은 실행 구조가 아닌 디렉터리 분류 기준의 정리다.
-당시 디렉터리 정리에서는 실행 계약을 유지했다. 후속 Step 2에서 Stage 3 / 4의 결과·완료 순서를 분리했으며 Preflight 중복 조회는 유지한다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
+당시 디렉터리 정리에서는 실행 계약을 유지했다. 후속 Step 2에서 Stage 3 / 4의 결과·완료 순서를 분리했으며 후속 Step 3에서 Preflight 조회를 단일화했다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.
 이 배치가 Stage별 디렉터리나 Application 폴더 복제를 요구하지 않으며 Assignment Execution 등의 분리는 후속 실행 요구로 검토한다.
 
 ## 7. Current Implementation vs Target Architecture
@@ -358,7 +360,6 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 | 현재 구현 사실 | 권장 개선 방향 / 검토 이유 |
 | --- | --- |
 | staffingApprovalResult가 Staffing 실패·Escalation과 Approval 결과를 결합 | Stage 1의 Proposal 생성과 Stage 2의 승인·Scope 발급 결과를 구분해 완료·대기·실패를 관찰 |
-| Node와 Preflight 함수가 각각 Scope 조회, Authorization과 일부 검사 중첩 | 배치 일관성과 실행 시점 권한 검증의 목적을 구분해 제거 가능한 중복만 정리 |
 
 위 항목은 **미적용 개선 방향**이다. 현재 Result 타입·Schema·Edge를 바꾼 것으로 해석하지 않는다.
 
@@ -432,7 +433,7 @@ CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 
 5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. Handoff 저장·검증 API와 실제 Graph 연결은 후속 과제다.
 6. **CLI / 폴더 제약 — Step 3 구현:** CLI 호환성만으로 Subgraph를 만들지 않는다. 같은 Graph의 staffing-approval / specialist-decisions 실행 대상 구분으로 현재 CLI 범위를 보존한다.
 7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과 분리와 최종 Phase A Outcome은 후속 과제다.
-8. **Preflight 중복 — 후속 리팩토링 검토:** Scope 중복 조회와 소속 검사에서 배치 검증·실행 권한 재검증의 목적을 구분하고 제거 가능한 중복을 확인한다.
+8. **Preflight 책임 — Step 3 적용:** 단일 Governance 조회와 순수 배치 검증으로 분리했다. Complete Node는 Stage 3 완료 관찰과 대상 수·커서·Decision 수 불일치 방어를 위해 유지했다. 실행 시점 Authorization / Claim은 생략하지 않는다.
 9. **Node / 배치 구조 — 판단 기준 확정, 배치 미정:** Application 함수당 Node나 Stage당 완료 Node를 강제하지 않는다. stages/ 디렉터리·미래 Node 수·새 Subgraph·재시도/복구 정책은 결정하지 않는다.
 
 Step 3은 승인된 Staffing 단계 결과와 명시적 Specialist 실행 대상에만 후속 분석을 허용한다.

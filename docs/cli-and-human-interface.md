@@ -384,7 +384,7 @@ Workflow가 Ledger에서 정책을 가져와 CEO Staffing을 실행하고 Propos
 결과는 JSON으로 출력하며 `approved`만 exit code 0이다. `failed`(정책 조회·Staffing·확인 실패), `escalated`
 (질문·사유 포함), `rejected`, `denied`는 1이다. 기존 selector와 `governance approve <proposal.json>`은 유지한다.
 새 명령은 Proposal 파일을 저장·재로딩하지 않으며 Scope 발급까지만 수행한다. Specialist 호출·Authorization·
-Budget Reservation·장기 대기/재개는 이 명령에 연결하지 않는다. Staffing Setup 내부 실행 순서는 LangGraph가 조정한다.
+Budget Reservation·장기 대기/재개는 이 명령에 연결하지 않는다. 현재 Phase A의 Staffing / Approval 실행 순서는 LangGraph가 조정한다.
 
 ### Application / Workflow API와 CLI 경계
 
@@ -396,9 +396,9 @@ v4의 승인 Scope나 Reservation을 자동으로 발급하지 않는다.
 LangGraph Step 2.5의 `phase-a/index.ts` / `createPhaseAGraph()`는 정책 조회 → CEO Staffing → Approval 평가를 조정한다.
 approval-required인 경우에만 Human Confirmation Node로 진행한다. 콜백이 없으면 원본 Proposal·Binding과 승인 대기를 보존하며,
 콜백이 있으면 분리된 review 사본을 전달하고 원본 Proposal과 실제 receipt로 Governance에 최종 승인을 요청한다.
-CLI staffing은 기존 runStaffingApproval() API를 통해 createStaffingSetupGraph()만 실행하고 review·/dev/tty I/O를 제공한다.
-Phase A Graph는 같은 Setup을 Subgraph로 재사용한다. 이후 Phase A에 Decision Node가 추가되어도 Staffing CLI의 실행 범위는 확대되지 않는다.
-Setup의 내부 상태는 부모에 노출하지 않고 staffingSetupResult로 승인·대기·거부·실패를 전달한다.
+CLI staffing은 기존 runStaffingApproval() API를 통해 현재 createPhaseAGraph()를 실행하고 review·/dev/tty I/O를 제공한다.
+별도 Staffing Setup Graph는 제거했으며 Entry Point는 staffingApprovalResult만 기존 반환 계약으로 전달한다.
+현재 CLI 동작은 유지하지만 Step 3에서 Phase A에 Specialist Decisions를 추가하면 실행 범위가 달라질 수 있으므로 CLI 계약을 함께 재설계해야 한다. 미래 격리는 현재 보장하지 않는다.
 Graph 명령·Decision 연결·Interrupt·Resume·Checkpoint는 없다.
 Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.
 API 실패 계약과 신뢰 경계는 [Architecture](architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

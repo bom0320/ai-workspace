@@ -1,6 +1,106 @@
 import { StateSchema } from "@langchain/langgraph";
-import { staffingSetupOutput } from "./staffing-setup/state.js";
+import { z } from "zod";
+import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
+import {
+  approvalRecordSchema,
+  approvedOperatingScopeSchema,
+} from "@/application/governance/index.js";
+import {
+  staffingRunResultSchema,
+  staffingProposalSchema,
+} from "@/application/staffing/index.js";
+import type {
+  StaffingApprovalResult,
+  StaffingSystemPolicyResult,
+} from "@/application/governance/index.js";
+import { developmentOrganizationState } from "../state.js";
 
-// Phase A shares inputs and the Setup outcome, not its internal policy/Proposal channels.
-export const phaseAState = new StateSchema({ ...staffingSetupOutput.fields });
+const policyLookupSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("ready"),
+      configuration: staffingSystemPolicySchema,
+      version: z.number().int().positive(),
+    })
+    .strict(),
+  z.object({ status: z.literal("denied"), reason: z.string().min(1) }).strict(),
+]) satisfies z.ZodType<StaffingSystemPolicyResult>;
+
+// Graph-local evaluation boundary: only Staffing Approval results are accepted.
+// Reuse the Domain schemas; this does not validate approval authority or provenance.
+export const staffingApprovalEvaluationSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("approved"),
+      approval: approvalRecordSchema,
+      scope: approvedOperatingScopeSchema,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("approval-required"),
+      kind: z.literal("staffing"),
+      binding: z.string().min(1),
+      reason: z.string().min(1),
+      subject: staffingProposalSchema,
+    })
+    .strict(),
+  z.object({ status: z.literal("denied"), reason: z.string().min(1) }).strict(),
+]) satisfies z.ZodType<
+  Exclude<StaffingApprovalResult, { status: "configured" }>
+>;
+
+// Shared inputs reuse their original schemas. A lookup result is runtime data,
+// not a substitute for the Governance Ledger's approval and authority records.
+export const staffingApprovalResultSchema = z.union([
+  staffingRunResultSchema.options[1],
+  staffingRunResultSchema.options[2],
+  staffingApprovalEvaluationSchema.options[0],
+  staffingApprovalEvaluationSchema.options[2],
+  z
+    .object({
+      status: z.literal("approval-required"),
+      request: staffingApprovalEvaluationSchema.options[1],
+    })
+    .strict(),
+  z
+    .object({ status: z.literal("rejected"), reason: z.string().min(1) })
+    .strict(),
+  z
+    .object({
+      status: z.literal("failed"),
+      failure: z.enum(["system-policy", "confirmation"]),
+      reason: z.string().min(1),
+      rounds: z.number().int().nonnegative(),
+    })
+    .strict(),
+]);
+
+// This is the Staffing Approval stage result, not a final Phase A Outcome.
+export const phaseAState = new StateSchema({
+  ...developmentOrganizationState.fields,
+  staffingApprovalResult: staffingApprovalResultSchema.optional(),
+  policyLookup: policyLookupSchema.optional(),
+  staffingResult: staffingRunResultSchema.optional(),
+  approvalResult: z
+    .union([
+      staffingApprovalEvaluationSchema,
+      z
+        .object({ status: z.literal("rejected"), reason: z.string().min(1) })
+        .strict(),
+      z
+        .object({
+          status: z.literal("failed"),
+          failure: z.literal("confirmation"),
+          reason: z.string().min(1),
+          rounds: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ])
+    .optional(),
+});
+
 export type PhaseAState = typeof phaseAState.State;
+export type StaffingApprovalStageResult = z.infer<
+  typeof staffingApprovalResultSchema
+>;

@@ -1,12 +1,12 @@
 import { approveStaffingProposal } from "@/application/governance/index.js";
 import {
   staffingApprovalEvaluationSchema,
-  type StaffingSetupState,
-} from "../state.js";
+  type PhaseAState,
+} from "../../state.js";
 
 export function evaluateStaffingApproval(
-  state: StaffingSetupState
-): Partial<StaffingSetupState> {
+  state: PhaseAState
+): Partial<PhaseAState> {
   // 1. Require a Proposed Staffing Result
   if (state.staffingResult?.status !== "proposed")
     throw new Error("Approval evaluation requires a Staffing Proposal.");

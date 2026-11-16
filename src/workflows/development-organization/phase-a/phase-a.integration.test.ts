@@ -1,6 +1,5 @@
 import * as staffingApplication from "@/application/staffing/index.js";
 import * as phaseAGraph from "./graph.js";
-import * as staffingSetupGraph from "./staffing-setup/graph.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
@@ -833,7 +832,7 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
         maxRounds: options.maxRounds,
         agent: options.agent,
       }).invoke({ goal: options.goal, repositoryPath: root });
-      const outcome = state.staffingSetupResult;
+      const outcome = state.staffingApprovalResult;
       expect(state.goal).toEqual(options.goal);
       expect(options.agent).toHaveBeenCalledTimes(1);
       if (mode === "delegated") {
@@ -881,13 +880,13 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
       goal: options.goal,
       repositoryPath: root,
     });
-    expect(state.staffingSetupResult?.status).toBe("denied");
+    expect(state.staffingApprovalResult?.status).toBe("denied");
     expect(agent).toHaveBeenCalledTimes(1);
     expect(issuanceCount()).toBe(0);
   });
 });
 
-it("finalizes direct Human approval through the parent without exposing Setup internals", async () => {
+it("finalizes direct Human approval and retains Phase A stage results", async () => {
   configure();
   const confirmApproval = vi.fn((request: Parameters<typeof accept>[0]) =>
     accept(request)
@@ -895,11 +894,14 @@ it("finalizes direct Human approval through the parent without exposing Setup in
   const state = await createPhaseAGraph({ ...options, confirmApproval }).invoke(
     { goal: options.goal, repositoryPath: root }
   );
-  expect(state.staffingSetupResult?.status).toBe("approved");
+  expect(state.staffingApprovalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
+    "approvalResult",
     "goal",
+    "policyLookup",
     "repositoryPath",
-    "staffingSetupResult",
+    "staffingApprovalResult",
+    "staffingResult",
   ]);
   expect(options.agent).toHaveBeenCalledTimes(1);
   expect(confirmApproval).toHaveBeenCalledTimes(1);
@@ -926,28 +928,19 @@ describe("Graph approval concurrency boundary", () => {
   });
 });
 
-describe("CLI through Staffing Setup only", () => {
-  it("executes the real Setup Graph without the parent and finalizes terminal confirmation once", async () => {
+describe("CLI through current Phase A Staffing Approval", () => {
+  it("executes the real Phase A Graph and finalizes terminal confirmation once", async () => {
     configure();
     const executeStaffing = staffingApplication.runStaffing;
     vi.spyOn(staffingApplication, "runStaffing").mockImplementation((input) =>
       executeStaffing({ ...input, agent: options.agent })
     );
-    const createGraph = vi.spyOn(
-      staffingSetupGraph,
-      "createStaffingSetupGraph"
-    );
-    // A future parent implementation must not expand this CLI's execution scope.
-    const parent = vi
-      .spyOn(phaseAGraph, "createPhaseAGraph")
-      .mockImplementation(() => {
-        throw new Error("Parent Graph must never run from Staffing CLI");
-      });
+    const createGraph = vi.spyOn(phaseAGraph, "createPhaseAGraph");
+    // This checks today's flow only; Step 3 must revisit the CLI execution range.
     const output = vi.spyOn(console, "log").mockImplementation(() => {});
     writeFileSync(join(home, "goal.json"), JSON.stringify(options.goal));
     expect(await runStaffingCli([root, join(home, "goal.json")])).toBe(0);
     expect(createGraph).toHaveBeenCalledTimes(1);
-    expect(parent).not.toHaveBeenCalled();
     expect(options.agent).toHaveBeenCalledTimes(1);
     const result = JSON.parse(output.mock.calls[0][0]);
     expect(result.status).toBe("approved");

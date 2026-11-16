@@ -1,13 +1,11 @@
 import { getStaffingSystemPolicy } from "@/application/governance/index.js";
-import type { StaffingSetupState } from "../state.js";
+import type { PhaseAState } from "../../state.js";
 
-export function loadSystemPolicy(
-  state: StaffingSetupState
-): Partial<StaffingSetupState> {
+export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
     return {
-      staffingSetupResult: undefined,
+      staffingApprovalResult: undefined,
       staffingResult: undefined,
       approvalResult: undefined,
       policyLookup: {
@@ -27,7 +25,7 @@ export function loadSystemPolicy(
   // A fresh invocation cannot reuse downstream results from an earlier run.
   return {
     policyLookup,
-    staffingSetupResult: undefined,
+    staffingApprovalResult: undefined,
     staffingResult: undefined,
     approvalResult: undefined,
   };

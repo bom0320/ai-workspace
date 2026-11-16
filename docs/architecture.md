@@ -11,7 +11,7 @@ Development Organization의 실행 계약·Phase Handoff·Graph State / Output �
 
 현재 구현은 v0–v3와 v4 R1/R2 Staffing·Step 3 승인·Step 4 Authorization·Step 5.1–5.4 Decision/Comparison 연결을 포함한다.
 LangGraph.js Minimal Integration Step 1은 정책 조회를, Step 2는 CEO Staffing·Approval 평가 Node와 조건부 Edge를 연결했다.
-Step 2.5는 콜백 기반 Human 확인·최종화를 Setup Subgraph에 연결했다. CLI의 기존 API는 Setup만 실행하고 Phase A가 이를 재사용한다.
+Step 2.5는 콜백 기반 Human 확인·최종화를 연결했고, 이후 Staffing Setup Subgraph를 제거해 Policy → Staffing → Approval을 Phase A가 직접 소유하도록 통합했다. CLI의 기존 API도 현재 Phase A Graph를 호출한다.
 전체 Organization Graph와 Decision Node 연결은 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
 v4는 진행 중이며 CEO Synthesis·해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
 
@@ -115,7 +115,7 @@ Comparison 실패도 전체 command에 전파하고 partial Decision 결과를 �
 ### v4 현재 연결 단위
 
 ```text
-CLI staffing → runStaffingApproval Adapter → Staffing Setup Graph → System Policy 조회 → runStaffing → Approval → Scope
+CLI staffing → runStaffingApproval Adapter → 현재 Phase A Graph → System Policy 조회 → runStaffing → Approval → Scope
 별도 Phase A API → 저장 Scope Preflight → 순차 Authorization → Claim → v2 Decision → v3 Comparison
 Phase A Graph API → 정책 조회 → ready면 Staffing → proposed면 Approval 평가 → 필요 시 Human 콜백·최종 승인 → END
 ```
@@ -261,7 +261,7 @@ Decision Duration은 input 완료 후 Specialist / Comparator 실행·표시 구
 
 목표 실행 순서·전환 조건은 [Workflow Architecture](workflow-architecture.md#2-organization-workflow-execution-contract)를 따른다.
 여기서는 기존 Application의 모델·권한·재사용 책임을 설명한다. 현재 Graph 분리와 State 배치는 구현 사실이며
-전체 Organization 관점의 최종 구조는 [Step 2.5 재검토](workflow-architecture.md#next-architecture-review--step-25) 대상이다.
+Organization을 최상위, Phase A / Phase B를 주요 Subgraph로 두는 목표 계층을 결정했다. 미구현 Graph·Output과 후속 과제는 [Step 2.5 검토 기록](workflow-architecture.md#next-architecture-review--step-25)을 따른다.
 
 v4 목표는 **CEO Governance / AI Organization Orchestration의 전체 E2E lifecycle**이다.
 Phase A에서 CEO는 조직을 제안하고 Specialist의 독립 판단을 종합해 해결 방향에 대한 Human 승인을 받는다.
@@ -767,7 +767,7 @@ Staffing은 Proposal의 유효성을 소유하고 Governance는 이를 재검증
 ### v4 Staffing → Governance Approval Workflow — 구현
 
 `src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts`의 `runStaffingApproval()`은 개별 Application의 상위
-Graph Adapter다. 실행은 독립 createStaffingSetupGraph()에 위임하고 기존 반환 계약을 유지하며 중복 순서·Human 최종화 로직을 갖지 않는다.
+Graph Adapter다. 실행은 현재 createPhaseAGraph()에 위임하고 staffingApprovalResult를 기존 반환 계약으로 돌려주며 중복 순서·Human 최종화 로직을 갖지 않는다.
 Workflow → Application 방향으로만 의존하며 Application은 Workflow를 import하지 않는다.
 Graph는 Scope 발급까지만 연결한다. 별도 Step 5.3–5.4의 Specialist 실행·Comparison API는 아직 Graph 미연결이다.
 
@@ -1291,12 +1291,14 @@ src/
 │     └─ phase-a/
 │        ├─ index.ts
 │        ├─ graph.ts
-│        ├─ state.ts  # 공통 입력 + staffingSetupResult
+│        ├─ state.ts  # 공통 입력 + 정책/Staffing/Approval 중간 상태·단계 결과
 │        ├─ graph.test.ts
-│        ├─ staffing-setup/
-│        │  ├─ graph.ts
-│        │  ├─ state.ts  # 정책/Staffing/Approval 내부 상태와 명시적 출력
-│        │  └─ nodes/  # 정책 조회, Staffing, Approval, Human 확인, 결과 수집
+│        ├─ nodes/
+│        │  ├─ policy/load-system-policy.ts
+│        │  ├─ staffing/run-staffing.ts
+│        │  ├─ approval/evaluate-staffing-approval.ts
+│        │  ├─ approval/confirm-staffing-approval.ts
+│        │  └─ collect-staffing-approval-result.ts
 │        ├─ phase-a.integration.test.ts
 │        ├─ entrypoints/run-staffing-approval.ts
 │        └─ specialist-decisions/
@@ -1454,7 +1456,7 @@ Staffing Context Schema는 source root나 Authority를 투영하지 않지만, �
 **Goal → Staffing Discovery → Proposal Finalization — 현재**
 
 ```text
-runStaffingApproval() Adapter → createStaffingSetupGraph().invoke()
+runStaffingApproval() Adapter → createPhaseAGraph().invoke()
   → getStaffingSystemPolicy(): withGovernanceLedger → requireCurrentSystemPolicy / validateSystemConfiguration
   → runStaffing(): prepareProposalInput (설정 Schema·입력 복제)
     → runStaffingLoop: callLimitsSchema
@@ -1723,28 +1725,27 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | --- | --- |
 | `index.ts`, `state.ts` | Organization State 타입 공개와 원본 GoalSpec·repositoryPath 공통 입력 소유; Organization Graph는 없음 |
 | `phase-a/index.ts` | createPhaseAGraph·PhaseAState와 기존 Phase A Workflow 공개 API |
-| `phase-a/state.ts` | Organization 입력과 staffingSetupResult만 공유 |
-| `phase-a/staffing-setup/state.ts` | 정책/Staffing/Approval 내부 채널, 기존 결과 의미의 출력 Schema와 출력 채널 정의 |
-| `phase-a/staffing-setup/graph.ts` | 독립 Setup 순서·분기; collect-staffing-setup-result에서 최종 결과를 만들어 출력 |
-| `phase-a/graph.ts` | 컴파일된 staffing-setup Subgraph 등록 → START/END Edge 연결 → compile |
-| `phase-a/staffing-setup/nodes/load-system-policy.ts` | Repository 경로 확인 → 기존 Governance 조회; 이전 실행의 Staffing / Approval 결과 제거 |
-| `phase-a/staffing-setup/nodes/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; Agent는 closure에 보관 |
-| `phase-a/staffing-setup/nodes/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
-| `phase-a/staffing-setup/nodes/confirm-staffing-approval.ts` | 분리된 review로 Human 확인 후 원본 Proposal·receipt를 Governance에 재제출; receipt는 Node 로컬 변수 |
-| `phase-a/entrypoints/run-staffing-approval.ts` | 기존 runStaffingApproval API를 유지하는 Graph 실행·결과 변환 Adapter |
-| `phase-a/graph.test.ts` | 부모의 Subgraph 등록·Edge 구조 검증 |
-| `phase-a/staffing-setup/graph.test.ts` | 독립 Setup / 부모 경로의 invoke, 모의 Governance 기반 정상/거부/State 재조회 검증 |
+| `phase-a/state.ts` | 공통 입력·정책/Staffing/Approval 중간 상태와 staffingApprovalResult; 최종 Phase A Output은 미정 |
+| `phase-a/graph.ts` | 5개 업무/결과 Node 직접 등록, 기존 조건부 Edge 연결, compile |
+| `phase-a/nodes/policy/load-system-policy.ts` | Repository 경로 확인 → Governance 조회; 이전 Staffing / Approval 결과 제거 |
+| `phase-a/nodes/staffing/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; 실행 옵션은 closure에 보관 |
+| `phase-a/nodes/approval/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
+| `phase-a/nodes/approval/confirm-staffing-approval.ts` | 분리된 review로 확인 후 원본 Proposal·receipt로 최종화; receipt는 Node 로컬 변수 |
+| `phase-a/nodes/collect-staffing-approval-result.ts` | 승인 정책을 판단하지 않고 현재 단계 결과를 staffingApprovalResult로 정규화 |
+| `phase-a/entrypoints/run-staffing-approval.ts` | 현재 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
+| `phase-a/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
 
 ```ts
 import { createPhaseAGraph } from "@/workflows/development-organization/phase-a/index.js";
 
 const graph = createPhaseAGraph({ maxRounds: 4 });
 const state = await graph.invoke({ goal, repositoryPath });
-// state.staffingSetupResult: approved / approval-required / denied / rejected / failed / escalated
+// state.staffingApprovalResult: approved / approval-required / denied / rejected / failed / escalated
 ```
 
-Organization State는 goal / repositoryPath만 소유한다. Phase A State는 동일 입력 schema를 재사용하고
-부모에 staffingSetupResult만 전달한다. 내부 policyLookup / staffingResult / approvalResult는 Setup State가 소유한다. policyLookup은 기존 Governance API의
+Organization State는 goal / repositoryPath만 소유한다. Phase A State는 동일 입력 Schema와 기존 Domain Schema를 재사용해
+policyLookup / staffingResult / approvalResult / staffingApprovalResult를 소유한다. 최종 Phase A Outcome은 아직 없으며
+향후 Organization 공개 Output은 해결 방향 승인이 구현될 때 확정한다. policyLookup은 기존 Governance API의
 StaffingSystemPolicyResult와 같은 ready / denied 구조이며 configuration은 기존 Domain Schema를 그대로 쓴다.
 Node는 정책 조회 결과 전체를 교체하므로 denied 뒤에 이전 configuration/version이 남거나
 ready 결과와 과거 failure가 동시에 존재하지 않는다. 새 invoke의 정책 조회 Node는 기존 staffingResult / approvalResult도 지워 과거 결과로 라우팅하지 않는다. Organization State에 정책·Proposal·Decision·Comparison이나
@@ -1757,7 +1758,8 @@ policyLookup.ready는 정책 조회 성공만 뜻한다. 현재 END는 Staffing 
 
 State 변경 이력: 기존 createDevelopmentOrganizationGraph의 저장소 사용처는 테스트·문서뿐이었다.
 Phase A 전용 createPhaseAGraph로 바꾸며 기존 factory export를 제거했고, 독립적인 정책·status·failure 채널을
-policyLookup으로 모았다. 이후 Step 2.5에서 중간 채널은 Setup 내부로 옮기고 부모는 staffingSetupResult만 받도록 했다.
+policyLookup으로 모았다. Step 2.5 초기에 중간 채널을 Setup 내부로 분리했으나, 전체 Organization 기준 재검토 후
+별도 Setup Graph / State / Output을 제거하고 현재 Phase A가 중간 상태와 staffingApprovalResult를 소유하도록 통합했다.
 현재 root의 DevelopmentOrganizationState는 공통 입력만 가진다.
 기존 runStaffingApproval / runSpecialistDecisions / runAuthorizedSpecialistDecision 및 CLI 계약은 유지한다.
 
@@ -1814,7 +1816,7 @@ Phase A 통합 테스트는 실제 Staffing / Governance / 서명 Ledger, 테스
 
 ### 9.9 Step 2.5 — Workflow Architecture Consolidation
 
-아래는 단일 Orchestrator로 통합한 당시의 구조다. 이후 발견한 CLI 실행 범위 문제와 현재 Subgraph 경계는 다음 절을 따른다.
+아래는 단일 Orchestrator로 통합한 당시의 구조다. 이후 CLI 범위 분리 시도는 9.10, 현재 Phase A 통합 결정은 9.11에 남긴다.
 
 Phase A의 상위 Staffing / Approval 순서는 createPhaseAGraph() 한 곳에서 관리한다.
 기존 함수형 Workflow와 Graph에 같은 순서를 유지하면 실패 분기와 Human 확인의 안전성이 달라질 수 있어,
@@ -1858,9 +1860,9 @@ Human 대기 중 같은 Proposal의 선행 승인에 대한 중복 발급 거부
 
 ### 9.10 Step 2.5 — Workflow Boundary & Structure
 
-아래는 현재 구현과 당시의 분리 근거다. CLI 호환성·출력 격리의 검증을 전체 Organization의 최종 구조
-확정으로 해석하지 않는다. [Workflow Architecture](workflow-architecture.md#9-설계-판단의-발전과-현재-유효-범위)는
-이 이력을 보존하면서 Setup 독립성·Phase Handoff·State 소유권을 재검토할 기준과 질문을 정리한다.
+아래는 이전 Setup Subgraph 구현과 당시의 분리 근거다. 현재 구조는 9.11의 Phase A 통합으로 대체했다.
+과거 CLI 격리·Output 필터링 테스트를 현재 구조의 보장으로 해석하지 않는다.
+[Workflow Architecture](workflow-architecture.md#9-설계-판단의-발전과-현재-유효-범위)에 판단 변화와 후속 과제를 정리한다.
 
 단일 Graph 통합만으로 실행 범위가 고정되지는 않았다. runStaffingApproval()이 Phase A 전체 Graph를 호출하면
 후속 Specialist Decisions를 연결할 때 기존 Staffing CLI도 실행을 시작할 위험이 있다. Staffing Setup은
@@ -1897,3 +1899,35 @@ Agent·timeout·maxRounds·Human 콜백은 생성 옵션에 캡처하고 일회�
 CLI가 부모 Graph를 호출하면 실패하도록 만들어 향후 부모 확장이 CLI 범위를 넓히지 않는 경계를 검사한다.
 기존 Specialist Decisions / Authorization / Comparison은 바꾸거나 Graph에 연결하지 않았다.
 자동 재시도·Interrupt/Resume·Checkpoint는 없으며 저장 이후 장애 복구·전체 실행 idempotency는 보장하지 않는다.
+
+
+### 9.11 Step 2.5 — Graph Boundary & Directory Consolidation
+
+전체 Lifecycle을 Organization Graph가, 주요 판단·실행 범위를 Phase A / Phase B가 소유하도록 목표 계층을 결정했다.
+기존 CLI 독립 실행·Staffing 내부 State 분리를 위해 둔 Setup Subgraph는 이 계층의 필수 경계로 유지하지 않는다.
+현재 구현된 Node·분기·결과 Schema를 Phase A로 옮기고 별도 Setup Graph / State / Output / factory export를 제거했다.
+Organization Graph·Phase B·Specialist Analysis와 Handoff는 생성하거나 연결하지 않았다.
+
+```text
+START → load-system-policy
+          ├─ denied → collect-staffing-approval-result → END
+          └─ ready → run-staffing
+                       ├─ failed / escalated → 결과 수집
+                       └─ proposed → evaluate-staffing-approval
+                                       ├─ approved / denied → 결과 수집
+                                       └─ approval-required → confirm-staffing-approval → 결과 수집
+```
+
+Phase A State는 goal / repositoryPath / policyLookup / staffingResult / approvalResult /
+staffingApprovalResult를 소유한다. 마지막 값은 기존 Staffing Approval 반환 의미를 유지하는 단계 결과이며
+최종 Phase A Outcome이 아니다. Graph State는 Governance Ledger의 승인 근거·실행 권한을 대체하지 않는다.
+Human review 사본·원본 Proposal·receipt 지역 변수·대기 이후 재검증·Ledger Lock·Scope 중복 발급 방지는 유지했다.
+Application·Governance·기존 Specialist Decisions 로직은 변경하지 않았다.
+
+Node는 nodes/policy·staffing·approval에, 결과 정규화는 nodes/collect-staffing-approval-result.ts에 둔다.
+Entry Point는 현재 Phase A를 호출하고 staffingApprovalResult만 기존 API 형식으로 반환한다. CLI 입력·Human 확인·출력은 유지한다.
+단, Step 3에서 후속 Node가 추가되면 같은 Graph를 호출하는 Staffing CLI의 실행 범위도 확장될 수 있다.
+**Step 3에서 CLI 실행 계약을 함께 재설계해야 하며 미래의 범위 격리를 현재 보장하지 않는다.**
+이를 위한 별도 Staffing Graph·중복 함수형 Orchestrator·범용 실행 범위 옵션·승인 우회 옵션은 추가하지 않았다.
+후속 Edge는 아직 없으며 향후 승인된 Staffing 결과에 대해서만 기존 Authorization / Claim / Decision 경로를 연결해야 한다.
+자동 재시도·Interrupt/Resume·Checkpoint 및 저장 이후 장애 복구 보장은 여전히 없다.

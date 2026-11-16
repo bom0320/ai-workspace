@@ -4,8 +4,8 @@ import {
 } from "@/application/governance/index.js";
 import {
   staffingApprovalEvaluationSchema,
-  type StaffingSetupState,
-} from "../state.js";
+  type PhaseAState,
+} from "../../state.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 
 export type StaffingConfirmationOptions = {
@@ -17,9 +17,7 @@ export type StaffingConfirmationOptions = {
 export function createConfirmStaffingApprovalNode(
   confirmApproval: StaffingConfirmationOptions["confirmApproval"]
 ) {
-  return async (
-    state: StaffingSetupState
-  ): Promise<Partial<StaffingSetupState>> => {
+  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
     // 1. Check Human Confirmation Availability
     if (
       state.staffingResult?.status !== "proposed" ||

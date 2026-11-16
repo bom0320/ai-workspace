@@ -1,12 +1,12 @@
-import type { StaffingSetupState } from "../state.js";
+import type { PhaseAState } from "../state.js";
 
-export function collectStaffingSetupResult(
-  state: StaffingSetupState
-): Partial<StaffingSetupState> {
+export function collectStaffingApprovalResult(
+  state: PhaseAState
+): Partial<PhaseAState> {
   // 1. Preserve Explicit Incomplete Outcomes
   if (state.policyLookup?.status === "denied")
     return {
-      staffingSetupResult: {
+      staffingApprovalResult: {
         status: "failed",
         failure: "system-policy",
         reason: state.policyLookup.reason,
@@ -14,18 +14,18 @@ export function collectStaffingSetupResult(
       },
     };
   if (state.staffingResult && state.staffingResult.status !== "proposed")
-    return { staffingSetupResult: state.staffingResult };
+    return { staffingApprovalResult: state.staffingResult };
 
   // 2. Publish the Approval Outcome
   // END means this execution range ended, not that Phase A succeeded.
   if (state.approvalResult?.status === "approval-required")
     return {
-      staffingSetupResult: {
+      staffingApprovalResult: {
         status: "approval-required",
         request: state.approvalResult,
       },
     };
   if (state.approvalResult)
-    return { staffingSetupResult: state.approvalResult };
-  throw new Error("Staffing Setup ended without an approval outcome.");
+    return { staffingApprovalResult: state.approvalResult };
+  throw new Error("Staffing Approval ended without an outcome.");
 }

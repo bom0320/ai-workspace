@@ -12,11 +12,11 @@ v4 목표는 CEO가 해결 방향의 판단·Human 승인(Phase A) 이후에도 
 재작업·재배치·진행 평가(Phase B)를 관리하는 AI Development Organization이다. 전체 Workflow는 미완성이며
 Authority / Staffing·Finalization, Human Approval / Delegation, Authorization / Reservation / Claim과
 승인 Scope의 순차 Specialist Decision·Comparison Workflow가 구현되어 있다.
-LangGraph Phase A Graph가 System Policy 조회 → Staffing → Approval 평가 → 필요한 Human Confirmation·최종 승인을 조정한다. CLI의 runStaffingApproval()은 독립 Staffing Setup Subgraph만 실행하는 Adapter이며 Decision 연결은 후속 단계다.
+LangGraph Phase A Graph가 System Policy 조회 → Staffing → Approval 평가 → 필요한 Human Confirmation·최종 승인을 조정한다. CLI의 runStaffingApproval()은 현재 Phase A Graph를 호출하는 Adapter다. Decision 연결과 이때 필요한 CLI 실행 범위 재설계는 Step 3 과제다.
 
 다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다.
 Development Organization 실행 계약·Phase Handoff·Graph State / Output 소유권의 기준은
-[Workflow Architecture](docs/workflow-architecture.md)다. 현재 Subgraph 구현과 재검토 대상인 최종 구조를 구분한다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
+[Workflow Architecture](docs/workflow-architecture.md)다. Organization을 최상위, Phase A / Phase B를 주요 Subgraph로 두는 목표 계층과 현재 구현 범위를 구분한다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
 
 ## 2. Current Stack
 
@@ -47,7 +47,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - Human은 승인과 최종 governance 결정을 소유한다.
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
-- Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js이며 Phase A는 독립 Staffing Setup Subgraph를 재사용하며 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인은 Setup 내부에서 조정한다. 상위 Organization Graph는 Phase 간 Handoff 계약 정의 이후 구성한다. 기존 Codex 기반 Agent Execution Runtime을 재사용하며 Agent / Model Provider / Tool Calling은 LangChain으로 교체하지 않는다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
+- Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js이며 Phase A가 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인을 직접 조정한다. 별도 Staffing Setup Graph는 제거했으며 목표의 주요 Subgraph는 Phase A / Phase B다. 상위 Organization Graph는 Phase 간 Handoff 계약 정의 이후 구성한다. 기존 Codex 기반 Agent Execution Runtime을 재사용하며 Agent / Model Provider / Tool Calling은 LangChain으로 교체하지 않는다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
 - Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / 해결 방향의 Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol 또는 Graph State의 존재를 durable execution으로 설명하지 않는다. Graph State는 실행 데이터이며 Governance Ledger를 대체하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
@@ -65,9 +65,9 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/application/staffing/`: CEO Staffing·Snapshot Context·Proposal Finalization
 - `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
 - `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
-- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 상위 순서; 공통 입력과 staffingSetupResult만 공유
-- `src/workflows/development-organization/phase-a/staffing-setup/`: 독립 Setup Graph·내부 State·정책/Staffing/Approval Node; 부모에는 명시적 결과만 전달
-- `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Setup Graph만 실행
+- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 중간 상태와 staffingApprovalResult
+- `src/workflows/development-organization/phase-a/nodes/`: policy / staffing / approval 업무별 Node와 Staffing Approval 단계 결과 수집
+- `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; 현재 Phase A Graph 호출. Step 3에서 CLI 실행 범위 재설계 필요
 - `src/workflows/development-organization/phase-a/specialist-decisions/`: 기존 순차 Decision Workflow API; Phase A Graph에 아직 미연결
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration

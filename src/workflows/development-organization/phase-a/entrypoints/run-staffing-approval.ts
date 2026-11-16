@@ -1,4 +1,4 @@
-import { createStaffingSetupGraph } from "../staffing-setup/graph.js";
+import { createPhaseAGraph } from "../graph.js";
 import type { StaffingApprovalResult } from "@/application/governance/index.js";
 
 import type {
@@ -6,7 +6,7 @@ import type {
   StaffingRunResult,
 } from "@/application/staffing/index.js";
 
-import type { StaffingConfirmationOptions } from "../staffing-setup/nodes/confirm-staffing-approval.js";
+import type { StaffingConfirmationOptions } from "../nodes/approval/confirm-staffing-approval.js";
 
 type ApprovalRequest = Extract<
   StaffingApprovalResult,
@@ -36,15 +36,15 @@ export type StaffingApprovalWorkflowResult =
 export async function runStaffingApproval(
   options: StaffingApprovalWorkflowOptions
 ): Promise<StaffingApprovalWorkflowResult> {
-  // 1. Execute Staffing Setup Only
-  // This entrypoint must never inherit later Phase A Specialist execution.
-  const state = await createStaffingSetupGraph(options).invoke({
+  // 1. Execute the Current Phase A Staffing Approval Flow
+  // Step 3 must revisit this CLI contract before adding Specialist execution here.
+  const state = await createPhaseAGraph(options).invoke({
     goal: options.goal,
     repositoryPath: options.repositoryPath,
   });
 
   // 2. Return the Existing Workflow Contract
-  if (!state.staffingSetupResult)
-    throw new Error("Staffing Setup returned no outcome.");
-  return state.staffingSetupResult;
+  if (!state.staffingApprovalResult)
+    throw new Error("Phase A returned no Staffing Approval outcome.");
+  return state.staffingApprovalResult;
 }

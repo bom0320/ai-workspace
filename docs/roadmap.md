@@ -452,9 +452,18 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - Preflight Node의 단일 Governance Scope 조회 결과를 순수 배치 검증 함수에 전달한다.
 - Workflow는 요청 구조·Scope / Version·Assignment 소속·배치 중복·누락·순서·Sparse Array와 분리를 담당한다.
 - Specialist 중복 금지는 Staffing 정책에 일원화한다. Governance의 저장 Scope 재검증도 같은 정책을 사용한다.
-- Complete Node는 비어 있거나 불완전한 배치 방어와 독립 Stage 3 완료 관찰을 위해 유지한다.
+- 당시 Complete Node는 불완전한 배치 방어·완료 관찰을 위해 유지했다. 후속 Step 3.1에서 검사와 완료 결과를 Execute Node에 통합했다.
 - Node 선행조건·반환 Schema 검사 및 Invocation별 최신 Authorization / Claim·Evidence / Reference 검증은 유지한다.
 - Stage 1 / 2 결과 분리와 재시도·Checkpoint 복구는 후속 과제다.
+
+
+### Phase A Refactoring Step 3.1 — Specialist 완료 처리 통합 (Implemented)
+
+- 별도 complete-specialist-decisions Node를 제거하고 마지막 Execute 성공 시 Stage 3 결과를 확정한다.
+- 실행 전 요청·커서·수집 결과의 일관성을 검사해 불완전한 State로 Authorization을 수행하지 않는다.
+- Graph는 반복·실패 종료·completed 이후 Comparison 진입을 담당한다. Stage 3 / 4 결과 Schema는 유지한다.
+- 별도 완료 이벤트 대신 마지막 Execute Stream 업데이트로 완료를 관찰한다. Comparison 실패 시 Stage 3을 보존한다.
+- Preflight 단일 조회·Governance Authorization / Claim·기존 Staffing CLI 범위와 v2 / v3 검증은 유지한다.
 
 
 ## v5 — Evaluation

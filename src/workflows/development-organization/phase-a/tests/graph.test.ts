@@ -15,7 +15,7 @@ import {
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
 import { createPhaseAGraph } from "../graph.js";
-import { completeSpecialistDecisions } from "../features/decision/nodes/complete-specialist-decisions.js";
+import { executeNextSpecialist } from "../features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "../features/comparison/nodes/compare-specialist-decisions.js";
 import {
   phaseAState,
@@ -135,7 +135,6 @@ describe("Phase A Staffing Approval execution", () => {
       "__start__",
       "collect-staffing-approval-result",
       "compare-specialist-decisions",
-      "complete-specialist-decisions",
       "confirm-staffing-approval",
       "evaluate-staffing-approval",
       "execute-next-specialist",
@@ -157,16 +156,11 @@ describe("Phase A Staffing Approval execution", () => {
         ["collect-staffing-approval-result", "__end__"],
         ["preflight-specialist-decisions", "execute-next-specialist"],
         ["execute-next-specialist", "execute-next-specialist"],
-        ["complete-specialist-decisions", "compare-specialist-decisions"],
+        ["execute-next-specialist", "compare-specialist-decisions"],
         ["compare-specialist-decisions", "__end__"],
-        ["execute-next-specialist", "complete-specialist-decisions"],
-        ["complete-specialist-decisions", "__end__"],
+        ["execute-next-specialist", "__end__"],
       ])
     );
-    expect(edges).not.toContainEqual([
-      "execute-next-specialist",
-      "compare-specialist-decisions",
-    ]);
     expect(edges).not.toContainEqual([
       "compare-specialist-decisions",
       "complete-specialist-decisions",
@@ -884,70 +878,112 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     });
     expect(compareDecisions).not.toHaveBeenCalled();
   });
-  it.each(["empty", "incomplete", "cursor-mismatch"] as const)(
-    "does not complete a Decision batch with %s state",
-    async (kind) => {
-      const state = await createPhaseAGraph().invoke(specialistInput);
-      const result = completeSpecialistDecisions({
-        ...state,
-        preparedSpecialistRequests: [
-          {
-            scopeId: "scope",
-            scopeVersion: 1,
-            assignmentId: "a",
-            requestedContextPaths: ["a.ts"],
-          },
-          {
-            scopeId: "scope",
-            scopeVersion: 1,
-            assignmentId: "b",
-            requestedContextPaths: ["b.ts"],
-          },
-        ].slice(0, kind === "cursor-mismatch" ? 1 : 2),
-        currentSpecialistIndex: kind === "incomplete" ? 1 : 0,
-        collectedDecisions: kind === "empty" ? [] : completed.decisions,
-      });
-      expect(result.specialistDecisionsResult).toMatchObject({
+  it.each([
+    "empty",
+    "incomplete",
+    "cursor-mismatch",
+    "negative",
+    "fractional",
+    "past-end",
+    "missing-cursor",
+    "missing-decisions",
+    "failed",
+    "completed",
+  ])("rejects %s progress before any Authorization", async (kind) => {
+    const state = await createPhaseAGraph().invoke(specialistInput);
+    const progress: PhaseAState = {
+      ...state,
+      preparedSpecialistRequests: ["a", "b"].map((assignmentId) => ({
+        scopeId: "scope",
+        scopeVersion: 1,
+        assignmentId,
+        requestedContextPaths: ["a.ts"],
+      })),
+      currentSpecialistIndex: 0,
+      collectedDecisions: [],
+    };
+    if (kind === "empty") progress.preparedSpecialistRequests = [];
+    if (kind === "incomplete") progress.currentSpecialistIndex = 1;
+    if (kind === "cursor-mismatch")
+      progress.collectedDecisions = completed.decisions;
+    if (kind === "negative") progress.currentSpecialistIndex = -1;
+    if (kind === "fractional") progress.currentSpecialistIndex = 0.5;
+    if (kind === "past-end") {
+      progress.currentSpecialistIndex = 2;
+      progress.collectedDecisions = [
+        ...completed.decisions,
+        ...completed.decisions,
+      ];
+    }
+    if (kind === "missing-cursor") progress.currentSpecialistIndex = undefined;
+    if (kind === "missing-decisions") progress.collectedDecisions = undefined;
+    if (kind === "failed")
+      progress.specialistDecisionsResult = {
         status: "failed",
         stage: "decision",
-      });
-      expect(result.collectedDecisions).toEqual([]);
-      expect(result.decisionComparisonResult).toBeUndefined();
-      expect(compareDecisions).not.toHaveBeenCalled();
-      expect(state.decisionComparisonResult).toBeUndefined();
+        reason: "Previous failure",
+      };
+    if (kind === "completed") progress.specialistDecisionsResult = completed;
+    const result = await executeNextSpecialist(progress);
+    expect(result.specialistDecisionsResult).toMatchObject({
+      status: "failed",
+      stage: "decision",
+    });
+    expect(result.collectedDecisions).toEqual([]);
+    expect(result.decisionComparisonResult).toBeUndefined();
+    expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
+    expect(compareDecisions).not.toHaveBeenCalled();
+  });
+  it.each([1, 2])(
+    "publishes Stage 3 in the last of %i executions before Stage 4",
+    async (count) => {
+      if (count === 2) twoAssignments();
+      const updates: Array<Record<string, Partial<PhaseAState>>> = [];
+      const stream = await createPhaseAGraph(specialistOptions).stream(
+        specialistInput,
+        { streamMode: "updates" }
+      );
+      for await (const update of stream) updates.push(update);
+      const completionIndex = updates.findIndex(
+        (update) =>
+          update["execute-next-specialist"]?.specialistDecisionsResult
+            ?.status === "completed"
+      );
+      const comparisonIndex = updates.findIndex(
+        (update) => "compare-specialist-decisions" in update
+      );
+      expect(completionIndex).toBeGreaterThanOrEqual(0);
+      expect(comparisonIndex).toBeGreaterThan(completionIndex);
+      const result =
+        updates[completionIndex]["execute-next-specialist"]
+          .specialistDecisionsResult;
+      expect(result?.status).toBe("completed");
+      expect(result).not.toHaveProperty("comparison");
+      const executions = updates.filter(
+        (update) => "execute-next-specialist" in update
+      );
+      expect(executions).toHaveLength(count);
+      for (const update of executions.slice(0, -1))
+        expect(
+          update["execute-next-specialist"].specialistDecisionsResult
+        ).toBeUndefined();
+      expect(
+        updates.some((update) => "complete-specialist-decisions" in update)
+      ).toBe(false);
+      expect(
+        updates[comparisonIndex]["compare-specialist-decisions"]
+          .decisionComparisonResult?.status
+      ).toBe(count === 1 ? "skipped" : "completed");
+      if (count === 1) expect(compareDecisions).not.toHaveBeenCalled();
+      else
+        expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
+          goal,
+          repositoryCommitSha: approved.scope.snapshot.commitSha,
+          decisions: result?.status === "completed" ? result.decisions : [],
+        });
     }
   );
-  it("publishes Stage 3 before Stage 4 and compares the completed result", async () => {
-    twoAssignments();
-    const updates: Array<Record<string, Partial<PhaseAState>>> = [];
-    const stream = await createPhaseAGraph(specialistOptions).stream(
-      specialistInput,
-      { streamMode: "updates" }
-    );
-    for await (const update of stream) updates.push(update);
-    const completionIndex = updates.findIndex(
-      (update) => "complete-specialist-decisions" in update
-    );
-    const comparisonIndex = updates.findIndex(
-      (update) => "compare-specialist-decisions" in update
-    );
-    expect(completionIndex).toBeGreaterThanOrEqual(0);
-    expect(comparisonIndex).toBeGreaterThan(completionIndex);
-    const result =
-      updates[completionIndex]["complete-specialist-decisions"]
-        .specialistDecisionsResult;
-    expect(result?.status).toBe("completed");
-    expect(result).not.toHaveProperty("comparison");
-    expect(
-      updates[comparisonIndex]["compare-specialist-decisions"]
-        .decisionComparisonResult?.status
-    ).toBe("completed");
-    expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
-      goal,
-      repositoryCommitSha: approved.scope.snapshot.commitSha,
-      decisions: result?.status === "completed" ? result.decisions : [],
-    });
-  });
   it("Comparison consumes completed Decisions rather than intermediate collection", async () => {
     const state = await createPhaseAGraph().invoke(specialistInput);
     const decisions = [

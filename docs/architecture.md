@@ -1308,8 +1308,7 @@ src/
 │        │  ├─ decision/
 │        │  │  ├─ nodes/
 │        │  │  │  ├─ preflight-specialist-decisions.ts
-│        │  │  │  ├─ execute-next-specialist.ts
-│        │  │  │  └─ complete-specialist-decisions.ts
+│        │  │  │  └─ execute-next-specialist.ts
 │        │  │  ├─ validation/preflight-specialist-decisions.ts
 │        │  │  └─ execution/authorized-specialist-decision.ts
 │        │  └─ comparison/nodes/compare-specialist-decisions.ts
@@ -1748,7 +1747,7 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | `phase-a/features/decision/nodes/preflight-specialist-decisions.ts` | 저장 Scope ID / Version 확인·전체 Assignment 요청 구성 → 기존 Preflight 검증 |
 | `phase-a/features/decision/nodes/execute-next-specialist.ts` | 한 Assignment의 Authorization → 기존 Claim / v2 실행 → Index 갱신 |
 | `phase-a/features/comparison/nodes/compare-specialist-decisions.ts` | 완전한 Decision 묶음으로 기존 v3 Comparison 호출 |
-| `phase-a/features/decision/nodes/complete-specialist-decisions.ts` | 성공한 Specialist 단계 결과만 확정 |
+| `phase-a/features/decision/nodes/execute-next-specialist.ts`의 마지막 성공 | Stage 3 완료 결과 확정 (Step 3.1: 별도 Complete Node 제거) |
 | `phase-a/entrypoints/run-staffing-approval.ts` | staffing-approval 대상을 명시한 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
 | `phase-a/tests/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
 
@@ -1966,10 +1965,8 @@ preflight-specialist-decisions → failed: END
   ↓ ready
 execute-next-specialist ← remaining Assignment
   ├─ failed: END
-  └─ all completed → complete-specialist-decisions
-                      ├─ empty / incomplete: Stage 3 failed → END
-                      └─ Stage 3 completed → compare-specialist-decisions
-                                              └─ completed / skipped / failed → END
+  └─ last success: Stage 3 completed → compare-specialist-decisions
+                                       └─ completed / skipped / failed → END
 ```
 
 Preflight Node는 getApprovedStaffingScope()로 저장된 Scope를 재조회해 승인 결과의 ID / Version과 대조한다.
@@ -1995,7 +1992,7 @@ Budget은 Governance가 재검증한다. Graph 기본 step limit가 별도 Invoc
 초기 Step 3에서는 specialistDecisionsResult가 optional comparison과 comparison 실패 단계까지 결합했다.
 **현재 Phase A Step 2 계약:** specialistDecisionsResult는 completed / 비어 있지 않은 decisions 또는
 failed / preflight·authorization·claim·decision / reason·assignmentId?다. 모든 Assignment가 성공하면
-complete-specialist-decisions가 Stage 3을 확정하고 compare-specialist-decisions로 진행한다.
+Step 3.1부터 마지막 execute-next-specialist 업데이트가 Stage 3을 확정하고 compare-specialist-decisions로 진행한다.
 Stage 4는 Stage 3 완료 결과를 읽어 단일 Decision은 skipped / insufficient-decisions, 복수 Decision은
 기존 v3를 호출해 completed / comparison 또는 failed / reason을 decisionComparisonResult에 기록한다.
 Stage 4 실패 시 Stage 3과 검증된 Decision은 보존한다. Stage 3 실패 시 미완료 묶음은 성공으로 노출하지 않고
@@ -2024,8 +2021,19 @@ Preflight의 Node는 저장 Scope를 Governance에서 한 번 조회하고 순�
 이 함수는 권한 인증 API가 아니다. 개별 Authorization / Claim은 최신 정책·Repository·Context·예산 및
 일회성 검증을 계속 수행한다. 실제 Staffing·Governance API의 중복 Specialist 거부를 통합 테스트로 확인한다.
 
-Complete Node는 유지했다. Graph의 커서 기반 반복 종료는 Decision 수와 대상 수의 일치를 증명하지 않으며,
+Step 3 당시 Complete Node는 유지했다. Graph의 커서 기반 반복 종료는 Decision 수와 대상 수의 일치를 증명하지 않으며,
 독립적인 Stage 3 완료 업데이트를 Comparison 전에 관찰하는 기존 계약이 있다. 빈 결과·미완료·커서 불일치를
 성공으로 처리하지 않는 guard를 유지한다. 다른 Node의 선행조건·Runtime 결과 Schema 검사도 정책 재구현이
 아니므로 보존했다. 상세 판단은 [검증 책임 기록](workflow-responsibility-boundaries.md#specialist-preflight의-중복과-목적-구분)을 따른다.
 Stage 1 / 2 결과 분리·Checkpoint / Resume·부작용 복구는 이번 변경 범위가 아니다.
+
+### Phase A Refactoring Step 3.1 — Specialist Completion Node Consolidation
+
+실행 결과·커서 갱신과 Stage 3 완료 검사가 두 Node에 분산된 경계를 다시 검토했다. 마지막 Specialist 실행
+성공 시 Stage 3 결과까지 반환하도록 통합하고 Complete Node를 제거했다. 완료 결과의 독립성이 별도 Node의
+필요성을 뜻하지는 않는다. 빈 요청·잘못된 커서·수집 수 불일치·이미 종료된 Stage는 Authorization 전에 거부하며,
+실행 후 Decision 수·커서·대상 수의 일치를 검사한다. Graph는 completed만 Comparison으로 보내고 반복·실패를 제어한다.
+
+독립 완료 Stream 이벤트는 없어졌지만 마지막 Execute 업데이트에서 Comparison 전 Stage 3 완료를 관찰한다.
+Stage 3 / 4의 독립 Schema·비교 실패 시 Decision 보존·단일 생략·Governance와 v2 / v3 신뢰 검증은 유지했다.
+State는 권한 원본이 아니며 Node 재실행·Checkpoint 복구·exactly-once는 구현하거나 보장하지 않는다.

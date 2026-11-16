@@ -90,7 +90,7 @@ Comparison을 호출하지 않는 허용 경로이며 Stage 4에 skipped / insuf
 | staffingApprovalResult | 정책 조회 실패·Staffing 실패/Escalation과 Approval의 승인·대기·거부·확인 실패를 한 결과로 정규화 |
 | specialistDecisionsResult | Stage 3만 표현. completed와 비어 있지 않은 Decision 배열 또는 preflight / authorization / claim / decision 실패 |
 | decisionComparisonResult | Stage 4의 completed / comparison, skipped / insufficient-decisions, failed / reason |
-| complete-specialist-decisions | 전체 Assignment 성공을 확인해 Stage 3을 확정한 뒤 Stage 4로 진행. Comparison은 완료 결과를 소비 |
+| execute-next-specialist의 마지막 성공 업데이트 | 전체 Assignment 성공을 확인해 Stage 3을 확정한 뒤 Stage 4로 진행. Comparison은 완료 결과를 소비 |
 
 **이전 계약과 변경 이유:** 과거에는 Comparison이 필요한 경우 비교까지 성공해야 Stage 3 결합 결과가
 completed가 되었고, Comparison 실패가 Decision 생성 실패처럼 보였다. Step 2에서 Stage 3 완료 후 독립
@@ -136,7 +136,7 @@ Node가 다른 Node를 직접 호출해 별도의 Orchestrator를 만들지 않�
 | [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. Step 3에서 Scope 조회는 Node 한 곳에 두고 helper는 순수 배치 검증으로 변경 |
 | [execute-next-specialist](../src/workflows/development-organization/phase-a/features/decision/nodes/execute-next-specialist.ts) | 한 요청의 Authorization → Claim·v2 실행 → Decision 수집·Index 갱신. authorization / claim / decision 실패와 준비 요청 부재 시 preflight 실패 기록 | 유지 근거: Assignment별 실행·관찰과 즉시 중단. 반복은 Edge가 결정하며 Invocation은 로컬 변수. 권한 부작용을 고려해 무조건 여러 Node로 쪼개지 않음 |
 | [compare-specialist-decisions](../src/workflows/development-organization/phase-a/features/comparison/nodes/compare-specialist-decisions.ts) | 모든 Decision 수집 후 Stage 3 완료 결과로 기존 compareDecisions 호출 또는 단일 비교 생략 | 독립 Stage 4로 completed / skipped / failed 기록. 실패해도 Stage 3 결과 보존 |
-| [complete-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/complete-specialist-decisions.ts) | 비어 있지 않은 전체 Specialist 결과를 Comparison 전에 확정 | Step 2에서 Stage 3만의 완료 시점으로 조정. 모든 Stage에 완료 Node를 복제하는 근거는 아님 |
+| 과거 complete-specialist-decisions (Step 3.1에서 제거) | 비어 있지 않은 전체 Specialist 결과를 Comparison 전에 확정 | Step 2에서 Stage 3 완료를 분리했고 Step 3.1에서 검사를 Execute Node에 통합. 완료 계약이 별도 Node를 요구하지는 않음 |
 
 ### Graph 반복과 Application 내부 Loop
 
@@ -170,9 +170,13 @@ Node로 강제하지 않으며 모든 Stage에 완료 Node를 요구하지 않�
     ├─ 1 Decision → Complete Specialist Decisions → END
     └─ 2+ Decisions → Comparison → Complete Specialist Decisions → END
 
-현재 — Step 2 구현
+이전 — Step 2 구현
   Preflight → Execute Next Specialist (Phase A Edge 반복)
             → Complete Specialist Decisions (Stage 3 완료)
+            → Decision Comparison (Stage 4: 단일 skipped, 복수 completed / failed)
+
+현재 — Step 3.1 구현
+  Preflight → Execute Next Specialist (Phase A Edge 반복, 마지막 성공에서 Stage 3 완료)
             → Decision Comparison (Stage 4: 단일 skipped, 복수 completed / failed)
 ```
 
@@ -283,10 +287,21 @@ Mock이 반환한 잘못된 Scope는 실제 Governance가 인증한 Scope와 다
 
 ### Node 선행조건과 Stage 완료 검증 — Step 3 판단
 
-Complete Node는 유지한다. Graph의 커서 비교는 반복 종료 시점만 정하며 Decision 수가 실행 대상 수와
+Step 3 당시에는 Complete Node를 유지했다. Graph의 커서 비교는 반복 종료 시점만 정하며 Decision 수가 실행 대상 수와
 일치함을 증명하지 않는다. Node의 비어 있지 않음·대상 수·커서 일치 검사는 불완전한 State가 Stage 3
 성공이 되는 것을 막는다. 별도 업데이트로 Stage 3 완료를 Comparison 전에 관찰하는 기존 계약도 유지한다.
-마지막 실행 Node로 옮기면 같은 불일치 검사를 여전히 해야 하므로 현재는 이 경계를 통합하지 않는다.
+당시에는 같은 불일치 검사를 유지하고 별도 완료 업데이트를 관찰하기 위해 독립 Node를 남겼다.
+
+**Step 3.1 판단 변화:** 완료 상태 갱신과 검증이 Execute / Complete에 분산되어 있었으므로 마지막
+Specialist 실행 성공 시 같은 업데이트로 Stage 3 결과를 확정하도록 통합했다. 독립적인 Stage 결과는
+유지하되 별도 실행 Node는 제거했다. 실행 전 비어 있지 않은 요청·정수 커서·커서 범위·수집 수 일치·
+미완료 상태를 확인해 잘못된 진행 상태로 추가 Authorization을 하지 않는다. 실행 후 수집 수·새 커서·
+대상 수가 정확히 일치해야 완료하며, 실패 시 부분 수집 결과를 성공으로 노출하지 않는다.
+
+별도 Complete Node Stream 이벤트는 사라졌다. 대신 마지막 execute-next-specialist 업데이트에서
+Stage 3 완료를 Comparison보다 먼저 관찰한다. Graph는 completed인 경우에만 비교로 진행하고, 그 외에는
+남은 Assignment 반복 또는 종료만 제어한다. Application의 Evidence·권한 정책은 복제하지 않는다.
+별도 Node를 제거해도 Reservation / Claim·실행 완료가 원자적이거나 안전하게 재실행 가능해지는 것은 아니다.
 
 | 방어적 검사 | 유지 이유 |
 | --- | --- |
@@ -367,7 +382,7 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 6. 현재 API / CLI·실패 결과·부분 성공 공개·State / Ledger의 경계를 보존하며 계약 변경과 검증을 함께 계획한다.
 
 Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구현했다. 다음 검토 대상은 Stage 1 / 2의
-결과 계약·collect Node의 책임이다. Step 3에서 Preflight 조회는 한 번으로 정리했고 Complete Node는 유지했다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
+결과 계약·collect Node의 책임이다. Step 3에서 Preflight 조회는 한 번으로 정리했고 Step 3.1에서는 완료 검사를 마지막 Execute 업데이트에 통합했다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
 미래 Node 수·Retry / Resume 정책은 이번 기록에서 확정하지 않는다.
 
 Phase B에도 동일 기준을 적용하되 업무 분해·Assignment 모델·다중 실행·재작업·재배치·검증·진행 평가의

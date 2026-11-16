@@ -122,7 +122,7 @@ Override도 변경 대상의 검증과 필요한 승인을 충족해야 하며, 
 ```text
 preflight-specialist-decisions
 → execute-next-specialist ← remaining Assignment Edge
-→ complete-specialist-decisions (Stage 3 완료)
+  (마지막 실행 성공 시 Stage 3 완료)
 → compare-specialist-decisions (Stage 4: completed / skipped / failed)
 → END
 ```
@@ -433,8 +433,17 @@ CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 
 5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. Handoff 저장·검증 API와 실제 Graph 연결은 후속 과제다.
 6. **CLI / 폴더 제약 — Step 3 구현:** CLI 호환성만으로 Subgraph를 만들지 않는다. 같은 Graph의 staffing-approval / specialist-decisions 실행 대상 구분으로 현재 CLI 범위를 보존한다.
 7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과 분리와 최종 Phase A Outcome은 후속 과제다.
-8. **Preflight 책임 — Step 3 적용:** 단일 Governance 조회와 순수 배치 검증으로 분리했다. Complete Node는 Stage 3 완료 관찰과 대상 수·커서·Decision 수 불일치 방어를 위해 유지했다. 실행 시점 Authorization / Claim은 생략하지 않는다.
+8. **Preflight 책임 — Step 3 적용:** 단일 Governance 조회와 순수 배치 검증으로 분리했다. 당시 Complete Node를 유지했으나 Step 3.1에서 실행 전 진행 상태 검사와 마지막 실행의 완료 확정으로 통합했다. 실행 시점 Authorization / Claim은 생략하지 않는다.
 9. **Node / 배치 구조 — 판단 기준 확정, 배치 미정:** Application 함수당 Node나 Stage당 완료 Node를 강제하지 않는다. stages/ 디렉터리·미래 Node 수·새 Subgraph·재시도/복구 정책은 결정하지 않는다.
 
 Step 3은 승인된 Staffing 단계 결과와 명시적 Specialist 실행 대상에만 후속 분석을 허용한다.
 Phase B 진입은 여전히 승인된 해결 방향과 Handoff 검증을 별도로 요구한다.
+
+### Phase A Refactoring Step 3.1 — Specialist 완료 실행 경계 통합
+
+Stage 3의 완료 결과는 마지막 execute-next-specialist 업데이트에서 확정한다. Graph는 실패 시 종료,
+미완료 시 다음 Assignment 반복, completed일 때만 Comparison 진입을 담당한다. 별도 완료 Node는 제거했다.
+실행 전 요청·커서·수집 수 불일치를 검사해 추가 Authorization을 차단하고, 마지막 성공 후 전체 대상 수와
+Decision 수·커서 일치를 확인한다. Stage 3 / 4 Schema와 Preflight 단일 조회·개별 Authorization / Claim은 그대로다.
+별도 완료 Stream 이벤트 대신 마지막 Execute 업데이트로 Stage 3 완료를 관찰하며 Stage 4 실패는 완료된
+Stage 3을 지우지 않는다. Phase A 전체 완료·해결 방향 승인이나 재시도·복구를 의미하지 않는다.

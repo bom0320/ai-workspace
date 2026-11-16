@@ -11,19 +11,32 @@ import type { PhaseAState } from "../../../state.js";
 export async function executeNextSpecialist(
   state: PhaseAState
 ): Promise<Partial<PhaseAState>> {
-  // 1. Select the Next Prepared Assignment
-  const index = state.currentSpecialistIndex ?? 0;
-  const request = state.preparedSpecialistRequests?.[index];
-  if (!request) {
+  // 1. Require Consistent Prepared Progress Before Reserving Budget
+  const requests = state.preparedSpecialistRequests;
+  const index = state.currentSpecialistIndex;
+  const collected = state.collectedDecisions;
+  if (
+    !requests?.length ||
+    index === undefined ||
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= requests.length ||
+    !collected ||
+    collected.length !== index ||
+    !requests[index] ||
+    state.specialistDecisionsResult !== undefined
+  ) {
     return {
       collectedDecisions: [],
       specialistDecisionsResult: {
         status: "failed",
-        stage: "preflight",
-        reason: "No prepared Specialist request is available.",
+        stage: "decision",
+        reason:
+          "Specialist execution requires consistent unfinished batch progress.",
       },
     };
   }
+  const request = requests[index];
 
   // 2. Authorize One Invocation
   // Authority and budget remain Governance decisions. Never persist an Invocation
@@ -53,9 +66,31 @@ export async function executeNextSpecialist(
   // Failed batches expose no partial success and must not consume later budgets.
   try {
     const decision = await runAuthorizedSpecialistDecision(invocation);
+    // 4. Record Progress or Complete Stage 3 With the Last Successful Execution
+    const decisions = [...collected, decision];
+    const nextIndex = index + 1;
+    if (
+      decisions.length === 0 ||
+      decisions.length !== nextIndex ||
+      nextIndex > requests.length
+    )
+      throw new Error("Specialist Decision batch progress is inconsistent.");
+    if (nextIndex < requests.length)
+      return {
+        collectedDecisions: decisions,
+        currentSpecialistIndex: nextIndex,
+      };
+
+    if (decisions.length !== requests.length)
+      throw new Error(
+        "Specialist Decisions require every prepared Assignment to succeed."
+      );
+    // Completion remains observable before Comparison without a separate Node.
+    // It does not approve a direction or complete Phase A.
     return {
-      collectedDecisions: [...(state.collectedDecisions ?? []), decision],
-      currentSpecialistIndex: index + 1,
+      collectedDecisions: decisions,
+      currentSpecialistIndex: nextIndex,
+      specialistDecisionsResult: { status: "completed", decisions },
     };
   } catch (error) {
     return {

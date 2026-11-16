@@ -16,7 +16,6 @@ import { collectStaffingApprovalResult } from "./features/governance/nodes/colle
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
-import { completeSpecialistDecisions } from "./features/decision/nodes/complete-specialist-decisions.js";
 
 export type PhaseAExecutionTarget =
   "staffing-approval" | "specialist-decisions";
@@ -38,8 +37,7 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     .addNode("collect-staffing-approval-result", collectStaffingApprovalResult)
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
     .addNode("execute-next-specialist", executeNextSpecialist)
-    .addNode("compare-specialist-decisions", compareSpecialistDecisions)
-    .addNode("complete-specialist-decisions", completeSpecialistDecisions);
+    .addNode("compare-specialist-decisions", compareSpecialistDecisions);
 
   // 2. Connect Execution Edges
   graph.addEdge(START, "load-system-policy");
@@ -94,22 +92,18 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     "execute-next-specialist",
     (state) => {
       if (state.specialistDecisionsResult?.status === "failed") return END;
+      if (state.specialistDecisionsResult?.status === "completed")
+        return "compare-specialist-decisions";
       if (
-        (state.currentSpecialistIndex ?? 0) <
-        (state.preparedSpecialistRequests?.length ?? 0)
+        state.currentSpecialistIndex !== undefined &&
+        state.currentSpecialistIndex > 0 &&
+        state.currentSpecialistIndex <
+          (state.preparedSpecialistRequests?.length ?? 0)
       )
         return "execute-next-specialist";
-      return "complete-specialist-decisions";
+      return END;
     },
-    [END, "execute-next-specialist", "complete-specialist-decisions"]
-  );
-  graph.addConditionalEdges(
-    "complete-specialist-decisions",
-    (state) =>
-      state.specialistDecisionsResult?.status === "completed"
-        ? "compare-specialist-decisions"
-        : END,
-    ["compare-specialist-decisions", END]
+    [END, "execute-next-specialist", "compare-specialist-decisions"]
   );
   // All Stage 4 outcomes end the current range. Failure cannot enter future Synthesis.
   graph.addEdge("compare-specialist-decisions", END);

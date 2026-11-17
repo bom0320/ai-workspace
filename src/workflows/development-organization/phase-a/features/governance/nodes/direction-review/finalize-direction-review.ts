@@ -4,7 +4,7 @@ import {
   type DirectionConfirmationRequest,
 } from "@/application/governance/index.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
-import type { PhaseAState } from "../../../state.js";
+import type { PhaseAState } from "../../../../state.js";
 
 export type DirectionConfirmationOptions = {
   confirmDirection?: (

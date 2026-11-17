@@ -1,8 +1,8 @@
-import { humanDirectionReview } from "./features/governance/nodes/human-direction-review.js";
+import { humanDirectionReview } from "./features/governance/nodes/direction-review/human-direction-review.js";
 import {
   createFinalizeDirectionReviewNode,
   type DirectionConfirmationOptions,
-} from "./features/governance/nodes/finalize-direction-review.js";
+} from "./features/governance/nodes/direction-review/finalize-direction-review.js";
 import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
 import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
 import { END, START, StateGraph, MemorySaver } from "@langchain/langgraph";
@@ -11,12 +11,12 @@ import {
   createRunStaffingNode,
   type StaffingExecutionOptions,
 } from "./features/staffing/nodes/run-staffing.js";
-import { evaluateStaffingApproval } from "./features/governance/nodes/evaluate-staffing-approval.js";
-import { loadSystemPolicy } from "./features/governance/nodes/load-system-policy.js";
+import { evaluateStaffingApproval } from "./features/governance/nodes/staffing-approval/evaluate-staffing-approval.js";
+import { loadSystemPolicy } from "./features/governance/nodes/system-policy/load-system-policy.js";
 import {
   createConfirmStaffingApprovalNode,
   type StaffingConfirmationOptions,
-} from "./features/governance/nodes/confirm-staffing-approval.js";
+} from "./features/governance/nodes/staffing-approval/confirm-staffing-approval.js";
 
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";

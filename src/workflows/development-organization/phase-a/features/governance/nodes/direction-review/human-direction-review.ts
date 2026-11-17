@@ -1,6 +1,6 @@
 import { interrupt } from "@langchain/langgraph";
 import { directionActionSchema } from "@/application/governance/index.js";
-import type { PhaseAState } from "../../../state.js";
+import type { PhaseAState } from "../../../../state.js";
 
 export function humanDirectionReview(state: PhaseAState): Partial<PhaseAState> {
   // 1. Interrupt Without Side Effects; This Node Starts Again on Resume

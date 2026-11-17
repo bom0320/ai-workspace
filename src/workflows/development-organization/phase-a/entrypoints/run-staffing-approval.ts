@@ -6,7 +6,7 @@ import type {
   StaffingRunResult,
 } from "@/application/staffing/index.js";
 
-import type { StaffingConfirmationOptions } from "../features/governance/nodes/confirm-staffing-approval.js";
+import type { StaffingConfirmationOptions } from "../features/governance/nodes/staffing-approval/confirm-staffing-approval.js";
 
 type ApprovalRequest = Extract<
   StaffingApprovalResult,

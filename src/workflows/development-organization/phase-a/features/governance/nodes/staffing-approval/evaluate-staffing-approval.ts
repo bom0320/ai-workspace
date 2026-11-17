@@ -2,7 +2,7 @@ import { approveStaffingProposal } from "@/application/governance/index.js";
 import {
   staffingApprovalEvaluationSchema,
   type PhaseAState,
-} from "../../../state.js";
+} from "../../../../state.js";
 
 export function evaluateStaffingApproval(
   state: PhaseAState

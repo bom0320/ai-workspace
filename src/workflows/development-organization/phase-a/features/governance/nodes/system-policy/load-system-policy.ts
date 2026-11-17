@@ -1,5 +1,5 @@
 import { getStaffingSystemPolicy } from "@/application/governance/index.js";
-import type { PhaseAState } from "../../../state.js";
+import type { PhaseAState } from "../../../../state.js";
 
 export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // 1. Check Repository Path

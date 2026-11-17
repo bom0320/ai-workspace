@@ -1,16 +1,18 @@
-export { runSynthesis, type RunSynthesisOptions } from "./run-synthesis.js";
 export {
-  synthesisContextSchema,
+  runSynthesis,
+  type RunSynthesisOptions,
+} from "./flow/run-synthesis.js";
+export { synthesisContextSchema } from "./protocol/context.js";
+export {
   synthesisProposalSchema,
-  synthesisResultSchema,
   sourceReferenceSchema,
-  ceoSynthesisDecisionSchema,
-} from "./contracts.js";
+} from "./model/proposal.js";
+export { synthesisResultSchema } from "./model/result.js";
+export { ceoSynthesisDecisionSchema } from "./protocol/ceo.js";
+export type { SynthesisContext } from "./protocol/context.js";
+export type { SynthesisProposal, SourceReference } from "./model/proposal.js";
+export type { SynthesisResult } from "./model/result.js";
 export type {
-  SynthesisContext,
-  SynthesisProposal,
-  SynthesisResult,
-  SourceReference,
   CEOSynthesisDecision,
   CEOSynthesisAgent,
-} from "./contracts.js";
+} from "./protocol/ceo.js";

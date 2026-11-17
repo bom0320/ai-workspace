@@ -2066,10 +2066,12 @@ Graph State 변경은 내부 Entry Point와 테스트에 반영했고 저장소�
 
 | 파일 | 책임 |
 | --- | --- |
-| contracts.ts | 기존 GoalSpec·Staffing Assignment pick·AgentDecision·Comparison Schema를 재사용한 Context, SourceReference, Proposal, Action / Result 계약 |
-| validation.ts | Assignment / Decision 일치·기존 Comparison 참조 검사 재사용, Synthesis SourceReference 및 누락 검증 |
-| run-synthesis.ts | 입력 캡처·CEO 단일 호출·출력 검증·proposed / escalated / failed 구분 |
-| codex-ceo-synthesis.ts | Synthesis 전용 역할·출력 프롬프트, 기존 Context-only Codex 실행 방식 재사용 |
+| model/proposal.ts, model/result.ts | 검증된 제안·Escalation·실패 결과와 SourceReference의 Domain 계약 |
+| protocol/context.ts, protocol/ceo.ts | 기존 Domain Schema를 재사용한 CEO Context와 propose / escalate 출력 계약 |
+| flow/validation/validate-context.ts | Assignment / Decision 일치·기존 Comparison Reference 검증 재사용 |
+| flow/validation/validate-output.ts | 출처 무결성과 Propose의 쟁점별 처리 위치·누락 검증 |
+| flow/run-synthesis.ts | 입력 캡처 → Agent 단일 실행 → Schema → Reference → Propose Coverage → 결과 반환 |
+| ceo/codex-ceo-synthesis.ts | 역할 Prompt·Codex 호출·JSON 수신, 실행 / Timeout / JSON 실패 분류 |
 | infrastructure/codex/context-only-codex.ts | Staffing과 공유하는 Codex 옵션·임시 빈 cwd·cleanup. 역할과 Domain 정책을 소유하지 않는 구체적인 transport 함수 |
 | phase-a/features/synthesis/nodes/run-ceo-synthesis.ts | Stage 선행조건 검사와 Application 호출, 부분 State 업데이트 |
 
@@ -2083,11 +2085,14 @@ Assignment·Decision이 정확히 1:1이어야 하며 단일 Decision만 비교�
 결과에서 Assignment projection을 저장한다. Context에 Scope·Budget·Receipt·Invocation 권한 객체는 없다.
 
 CEO action은 propose / escalate뿐이다. SynthesisResult는 proposed / proposal, escalated / reason·questions·sources,
-failed / failure·reason이다. failure는 invalid-input / agent-execution / invalid-output이며 출력 파싱·검증 또는
-실행 오류를 Escalation으로 바꾸지 않는다. 실패 메시지에는 raw process 출력이나 민감한 Context를 넣지 않는다.
-Proposal은 direction / rationale, alternatives(description·reasonNotChosen), tradeoffs / risks / unresolvedIssues /
-humanReviewItems를 가진다. direction / rationale과 각 항목에 non-empty sources를 붙인다.
-Human Review 항목과 Escalation 질문은 최소 하나이며 다른 Proposal 배열은 필요 없으면 비울 수 있다.
+failed / failure·reason이다. failure는 invalid-input / agent-execution / timeout / malformed-json /
+invalid-output(Schema) / invalid-references / incomplete-coverage를 구분한다. 실패를 Escalation으로 바꾸지 않으며
+raw process 출력·민감한 Context·검증 예외의 내부 상세를 공개 reason에 넣지 않는다.
+Proposal은 direction, rationale, alternatives(description·reasonNotChosen), tradeoffs, risks, unresolvedIssues,
+humanReviewItems를 가진다. rationale은 non-empty 근거 항목 목록이며 tradeoffs는 benefit / cost / reason /
+sources로 구조화한다. 각 항목에 non-empty sources를 붙인다. Human Review 항목과 Escalation 질문도 최소 하나다.
+이 외 Proposal 배열은 실제 해당 사항이 없으면 비울 수 있다. 이전 rationale 단일 객체·tradeoffs.text 계약은
+이 리팩터링에서 변경했으며 저장된 과거 결과와 직접 소비자는 새 Schema로 이전해야 한다.
 
 #### SourceReference 검증과 한계
 
@@ -2096,14 +2101,34 @@ Human Review 항목과 Escalation 질문은 최소 하나이며 다른 Proposal 
 - finding / gap: 0-based index로 원본 Comparison 배열 참조. skipped에서는 사용할 수 없다.
 
 없는 Specialist·범위 밖/음수/소수 index·목록 내 중복·추가 Evidence 필드를 거부한다.
-모든 Specialist recommendation·원본 Risk / Uncertainty, 모든 Conflict / Trade-off Finding과 Gap의 참조가
-Proposal 또는 Escalation에 포함되어야 한다. 중요도 평가를 새로 만들지 않고 이 원본 범주 전체를 확인한다.
-모든 Evidence를 의무 인용하지는 않지만 인용된 Evidence는 반드시 원본에 존재해야 한다.
+초기 Step 6.2는 Propose / Escalate 구분 없이 모든 Recommendation·Risk·Uncertainty·Conflict·Trade-off·Gap을
+출력 어딘가에 인용하도록 강제했다. 하나의 sources 배열에 몰아 넣어도 통과하고 정당한 Escalation을 거부할 수
+있어 아래처럼 변경했다. 이는 예전 전역 참조 개수 검사를 현재 정책으로 해석하지 않도록 남기는 이력이다.
 
-이는 어떤 항목에서 원본 쟁점을 다뤘는지 추적하는 구조적 coverage다. 인용만으로 실제 Conflict 해결의 적절성,
-Evidence의 사실성·판단 의미·자연어 Constraints 준수를 증명하지 않는다. 새 Evidence 생성은 허용하지 않지만
-출처가 붙은 자연어의 모든 주장이 참인지 자동 보장하지는 않는다. Human이 원본 Goal·근거와 제안을 검토해야 한다.
-Context의 승인·출처 인증은 상위 Governance 실행 경계에 있고 이 API가 권한을 발급하지 않는다.
+**현재 Propose Coverage:**
+
+| 원본 쟁점 | 처리 내용을 설명하는 위치 |
+| --- | --- |
+| Conflict Finding | rationale 또는 unresolvedIssues |
+| Trade-off Finding | 구조화된 tradeoffs, rationale 또는 unresolvedIssues |
+| Gap | rationale 또는 unresolvedIssues |
+| Risk | risks 또는 unresolvedIssues. 관련 여러 원본 Risk를 하나의 설명으로 묶을 수 있음 |
+| Uncertainty | unresolvedIssues. 관련 여러 원본 불확실성을 묶을 수 있음 |
+
+하나의 처리 항목은 Finding / Gap 하나까지만 참조한다. 복수 쟁점은 근거 목록이나 미해결 목록에서 각각
+설명해야 하며, alternatives / humanReviewItems에 참조만 모아 두는 것으로는 쟁점 Coverage를 충족하지 못한다.
+전체 Recommendation이나 모든 Evidence를 인용할 의무는 없다. Risk·Uncertainty에는 원본 중요도 정보가 없으므로
+Harness가 임의의 중요도 정책을 만들지 않는다. 해당 원본 범주는 보수적으로 추적하되 원본 문장별 반복 서술을
+요구하지 않고 주제별 묶음을 허용한다. 중요도 판별·관련성·묶음의 적절성은 Human 검토 대상이다.
+
+**현재 Escalate:** 구체적인 이유·질문과 non-empty sources를 요구하고 인용된 참조의 존재·범위·중복만
+검사한다. Proposal Coverage는 적용하지 않아 하나의 blocker에 관련된 일부 출처만으로 Escalation할 수 있다.
+
+출처의 존재·위치·쟁점별 분리는 설명이 실제로 타당한지, 서로 무관한 내용을 근거처럼 쓰지 않았는지,
+Conflict가 적절히 해결됐는지, 자연어 Constraints를 준수하는지 증명하지 못한다. 형식적 참조 나열은 줄이지만
+일반적 문장을 쟁점별로 반복하는 의미적 회피까지 정적으로 차단했다고 주장하지 않는다. 새 Evidence 필드는
+허용하지 않으며 Context / Agent 입력 사본을 분리해 원본 변조로 참조 검증 기준을 바꾸지 못하게 한다.
+SynthesisProposal은 검토 대상이지 ApprovedDecision이 아니며 Step 7의 승인·기록은 구현하지 않았다.
 
 #### Runtime / Graph
 

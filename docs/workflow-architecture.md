@@ -469,3 +469,12 @@ ApprovedDecision·Phase A 완료·Phase B 진입 허가가 아니다. Human Dire
 
 Application 계약과 SourceReference의 구체적인 범위·한계는
 [CEO Synthesis 구현](architecture.md#step-62--ceo-synthesis-application--graph-integration)을 따른다.
+
+### Step 6.2 내부 계약 리팩터링
+
+Graph 실행 대상·Stage 5 진입 / 종료·State 채널은 유지했다. Synthesis Application 내부를 Model / Protocol /
+CEO Adapter / Flow / Validation으로 정리했다. 공개 API 이름은 유지하지만 Proposal의 rationale은 목록으로,
+tradeoffs는 benefit / cost / reason / sources로 변경했다. 실패 값도 입력·실행·Timeout·JSON·Schema·Reference·
+Coverage로 구분한다. Graph fixture와 결과 소비자는 이 Output Schema 변경을 반영해야 한다.
+Propose는 쟁점별 처리 위치를 검증하고 Escalation에는 전체 배치 Coverage를 요구하지 않는다.
+상세 규칙과 정적 검증 한계는 [Synthesis 구현 계약](architecture.md#sourcereference-검증과-한계)을 따른다.

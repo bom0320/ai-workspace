@@ -680,7 +680,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               type: "propose",
               proposal: {
                 direction: statement,
-                rationale: statement,
+                rationale: [statement],
                 alternatives: [],
                 tradeoffs: [],
                 risks: [],

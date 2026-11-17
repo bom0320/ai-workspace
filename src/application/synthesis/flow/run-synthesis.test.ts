@@ -7,7 +7,7 @@ import {
   type SynthesisContext,
   type CEOSynthesisDecision,
   type SourceReference,
-} from "./index.js";
+} from "../index.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 const command = vi.mocked(runCommand);
@@ -101,10 +101,12 @@ function propose(
         text: "Prefer reversible feedback behavior",
         sources: [source("frontend")],
       },
-      rationale: {
-        text: "Retain both independent perspectives",
-        sources: ctx.decisions.map((d) => source(d.specialistId)),
-      },
+      rationale: [
+        {
+          text: "Retain both independent perspectives",
+          sources: ctx.decisions.map((d) => source(d.specialistId)),
+        },
+      ],
       alternatives: [
         {
           description: "Replace the interaction entirely",
@@ -114,21 +116,46 @@ function propose(
       ],
       tradeoffs: [
         {
-          text: "Choose reversibility over broader change",
-          sources: [source("frontend")],
+          benefit: "Reversible behavior limits regression risk",
+          cost: "Broader UX improvement is deferred",
+          reason: "Prefer reversibility until measurement gaps are resolved",
+          sources:
+            ctx.comparison.status === "completed"
+              ? [{ kind: "finding", index: 1 }]
+              : [source("frontend")],
         },
       ],
       risks: [
         {
           text: "Compatibility risk needs review",
-          sources: [{ kind: "risk", specialistId: "frontend", index: 0 }],
+          sources: ctx.decisions.map((d) => ({
+            kind: "risk",
+            specialistId: d.specialistId,
+            index: 0,
+          })),
         },
       ],
       unresolvedIssues: [
         {
-          text: "Reconcile conflicting feedback and missing evidence before implementation",
-          sources: sources(ctx),
+          text: "Measurement uncertainty requires Human review before implementation",
+          sources: ctx.decisions.map((d) => ({
+            kind: "uncertainty",
+            specialistId: d.specialistId,
+            index: 0,
+          })),
         },
+        ...(ctx.comparison.status === "completed"
+          ? [
+              {
+                text: "Resolve incompatible feedback priorities with the Human",
+                sources: [{ kind: "finding" as const, index: 0 }],
+              },
+              {
+                text: "Accessibility evidence is missing and remains unresolved",
+                sources: [{ kind: "gap" as const, index: 0 }],
+              },
+            ]
+          : []),
       ],
       humanReviewItems: [
         {
@@ -168,7 +195,7 @@ describe("CEO Synthesis Application", () => {
         type: "escalate",
         reason: "Need priority decision",
         questions: ["Which trade-off is acceptable?"],
-        sources: sources(ctx),
+        sources: [{ kind: "finding", index: 0 }],
       }),
     });
     expect(result).toMatchObject({
@@ -237,15 +264,22 @@ describe("CEO Synthesis Application", () => {
     output.proposal.direction.sources = [bad as SourceReference];
     expect(
       await runSynthesis(context(), { agent: async () => output })
-    ).toMatchObject({ status: "failed", failure: "invalid-output" });
+    ).toMatchObject({
+      status: "failed",
+      failure:
+        "path" in bad ||
+        ("index" in bad && (bad.index! < 0 || !Number.isInteger(bad.index)))
+          ? "invalid-output"
+          : "invalid-references",
+    });
   });
-  it.each(["recommendation", "risk", "uncertainty", "finding", "gap"])(
+  it.each(["risk", "uncertainty", "finding", "gap"])(
     "rejects omitted %s coverage",
     async (kind) => {
       const output = propose();
       for (const item of [
         output.proposal.direction,
-        output.proposal.rationale,
+        ...output.proposal.rationale,
         ...output.proposal.alternatives,
         ...output.proposal.tradeoffs,
         ...output.proposal.risks,
@@ -260,9 +294,118 @@ describe("CEO Synthesis Application", () => {
       }
       expect(
         await runSynthesis(context(), { agent: async () => output })
-      ).toMatchObject({ status: "failed", failure: "invalid-output" });
+      ).toMatchObject({ status: "failed", failure: "incomplete-coverage" });
     }
   );
+  it.each([
+    { kind: "finding" as const, index: 0 },
+    { kind: "finding" as const, index: 1 },
+    { kind: "gap" as const, index: 0 },
+  ])(
+    "rejects one individually omitted Comparison concern %j",
+    async (missing) => {
+      const output = propose();
+      for (const item of [
+        ...output.proposal.rationale,
+        ...output.proposal.tradeoffs,
+        ...output.proposal.unresolvedIssues,
+      ]) {
+        item.sources = item.sources.filter(
+          (s) =>
+            !(
+              s.kind === missing.kind &&
+              "index" in s &&
+              s.index === missing.index
+            )
+        );
+        if (item.sources.length === 0)
+          item.sources = [
+            { kind: "evidence", specialistId: "frontend", index: 0 },
+          ];
+      }
+      expect(
+        await runSynthesis(context(), { agent: async () => output })
+      ).toMatchObject({ status: "failed", failure: "incomplete-coverage" });
+    }
+  );
+  it("allows targeted Escalation while rejecting invalid or duplicated question sources", async () => {
+    for (const sources of [
+      [{ kind: "gap", index: 99 }],
+      [
+        { kind: "gap", index: 0 },
+        { kind: "gap", index: 0 },
+      ],
+    ] as SourceReference[][]) {
+      expect(
+        await runSynthesis(context(), {
+          agent: async () => ({
+            type: "escalate",
+            reason: "Need accessibility evidence",
+            questions: ["How should accessibility be prioritized?"],
+            sources,
+          }),
+        })
+      ).toMatchObject({ status: "failed", failure: "invalid-references" });
+    }
+  });
+  it("accepts grouped Risks/Uncertainties without copying each original sentence or citing every recommendation", async () => {
+    const output = propose();
+    output.proposal.rationale = [
+      {
+        text: "Select reversible behavior based on the supplied implementation",
+        sources: [{ kind: "evidence", specialistId: "frontend", index: 0 }],
+      },
+    ];
+    expect(
+      await runSynthesis(context(), { agent: async () => output })
+    ).toMatchObject({ status: "proposed" });
+    expect(output.proposal.risks).toHaveLength(1);
+    expect(output.proposal.risks[0].sources).toHaveLength(2);
+  });
+  it.each([
+    "catch-all",
+    "alternatives-only",
+    "review-only",
+    "risk-in-rationale",
+  ])("rejects misplaced or merely listed concern sources: %s", async (kind) => {
+    const output = propose();
+    if (kind === "catch-all")
+      output.proposal.unresolvedIssues = [
+        { text: "All concerns reviewed", sources: sources(context()) },
+      ];
+    if (kind === "alternatives-only" || kind === "review-only") {
+      output.proposal.unresolvedIssues =
+        output.proposal.unresolvedIssues.filter(
+          (item) =>
+            !item.sources.some((s) => s.kind === "finding" || s.kind === "gap")
+        );
+      const references = [
+        { kind: "finding" as const, index: 0 },
+        { kind: "gap" as const, index: 0 },
+      ];
+      if (kind === "alternatives-only")
+        output.proposal.alternatives[0].sources = references;
+      else output.proposal.humanReviewItems[0].sources = references;
+    }
+    if (kind === "risk-in-rationale") {
+      output.proposal.rationale.push(...output.proposal.risks);
+      output.proposal.risks = [];
+    }
+    expect(
+      await runSynthesis(context(), { agent: async () => output })
+    ).toMatchObject({ status: "failed", failure: "incomplete-coverage" });
+  });
+  it("requires benefit, cost and choice reason in a Trade-off", async () => {
+    const output = propose();
+    delete (
+      output.proposal.tradeoffs[0] as Partial<
+        (typeof output.proposal.tradeoffs)[number]
+      >
+    ).cost;
+    expect(
+      await runSynthesis(context(), { agent: async () => output })
+    ).toMatchObject({ status: "failed", failure: "invalid-output" });
+  });
   it("rejects duplicated references and Comparison sources for skipped Comparison", async () => {
     const output = propose(context(true));
     output.proposal.direction.sources.push(source("frontend"));
@@ -292,7 +435,7 @@ describe("CEO Synthesis Application", () => {
     });
     expect(result).toMatchObject({
       status: "failed",
-      failure: "invalid-output",
+      failure: "invalid-references",
     });
     expect(input).toEqual(original);
   });
@@ -363,7 +506,19 @@ describe("Codex CEO Synthesis transport", () => {
         exitCode: kind === "process" ? 1 : 0,
         timedOut: kind === "timeout",
       });
-      expect((await runSynthesis(context(true))).status).toBe("failed");
+      const result = await runSynthesis(context(true));
+      expect(JSON.stringify(result)).not.toContain("private details");
+      expect(result).toMatchObject({
+        status: "failed",
+        failure:
+          kind === "timeout"
+            ? "timeout"
+            : kind === "process"
+              ? "agent-execution"
+              : kind === "json"
+                ? "malformed-json"
+                : "invalid-output",
+      });
       expect(command).toHaveBeenCalledTimes(1);
       expect(existsSync(command.mock.calls[0][2].cwd)).toBe(false);
     }

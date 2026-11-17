@@ -1171,7 +1171,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       type: "propose",
       proposal: {
         direction: statement,
-        rationale: statement,
+        rationale: [statement],
         alternatives: [],
         tradeoffs: [],
         risks: [],
@@ -1215,7 +1215,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(getApprovedStaffingScope).toHaveBeenCalledTimes(1);
     }
   );
-  it.each(["escalated", "invalid-output", "agent-execution"])(
+  it.each(["escalated", "invalid-references", "agent-execution"])(
     "preserves earlier Stages when Synthesis is %s",
     async (outcome) => {
       const agent = vi.fn(

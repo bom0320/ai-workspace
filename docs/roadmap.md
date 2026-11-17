@@ -486,6 +486,15 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - 실제 Codex 모델의 종합 품질·전체 Human E2E는 미검증이며 Step 7의 방향 승인·기록·Phase B Handoff는 미구현이다.
 
 
+### Step 6.2 Refactoring — Synthesis Architecture & Validation
+
+- Model / Protocol / CEO / Flow / Validation으로 내부 책임을 분리한다. Graph 실행 경계는 그대로다.
+- rationale 항목 목록과 구조화된 Trade-off(benefit / cost / reason), 쟁점별 Propose Coverage를 적용했다.
+- Escalation은 관련 출처만 인용해도 가능하며 전체 배치 Coverage를 적용하지 않는다.
+- 입력·실행·Timeout·JSON·Schema·Reference·Coverage 실패를 구분하고 민감한 상세는 외부에 노출하지 않는다.
+- Risk / Uncertainty의 주제별 묶음은 허용하지만 중요도 자동 판정·의미 검증·Step 7 승인은 미구현이다.
+
+
 ## v5 — Evaluation
 
 > 어떤 조건에서 Governed Multi-Agent가 Single-Agent 대비 판단 품질과 Human 신뢰에 기여하며, 비용은 무엇인가?

@@ -410,3 +410,17 @@ Node와 Graph는 이 규칙을 복제하지 않는다. proposed / escalated / fa
 명시적인 ceo-synthesis 실행 대상만 Stage 5로 진행하며 기존 두 대상과 Staffing CLI의 종료 범위는 그대로다.
 이것은 Human 승인이나 Phase B 권한이 아니다. 출처의 구조적 존재와 누락 여부를 확인할 뿐,
 Conflict 해결의 적절성·분석의 사실성·자연어 Constraints 준수를 자동 증명하지 않는다.
+
+### Step 6.2 리팩터링 — 제안의 처리 책임과 Escalation의 차이
+
+초기 전역 참조 Coverage는 쟁점 처리 여부 대신 인용의 존재만 세고 Escalation에도 전체 배치 의무를 부과했다.
+현재 Synthesis Model은 검토할 제안·결과를, Protocol은 CEO Context·Action을, Flow는 실행 순서를,
+Validation은 입력 일관성·Reference 무결성·Propose Coverage를 소유한다. CEO Adapter는 호출·JSON 수신과
+실행 / Timeout / JSON 실패만 분류한다. Graph의 Node / Edge와 기존 Application·Governance 소유권은 유지한다.
+
+Propose의 rationale은 근거 목록, tradeoffs는 benefit / cost / reason / sources다. Conflict·Gap은 근거·미해결
+항목에서, Trade-off는 이들 또는 구조화된 Trade-off 항목에서 추적한다. 처리 항목에 복수 Finding / Gap을
+몰아 넣지 못하며 Risk / Uncertainty는 관련 위험·미해결 항목에 묶어 설명할 수 있다. 전체 Recommendation
+인용이나 원본 문장별 중복 서술은 요구하지 않는다. 중요도 정보가 없는 Risk / Uncertainty를 임의로 제외하지는 않는다.
+Escalation에는 전체 Coverage 대신 이유·질문과 해당 출처의 무결성만 요구한다. 관련성·설명의 적절성은
+여전히 정적 검증으로 증명할 수 없으며 Human이 검토해야 한다. Step 7 계약·승인 정책은 추가하지 않았다.

@@ -1,3 +1,5 @@
+import * as governanceRecords from "@/services/governance-records/index.js";
+import * as filesystem from "node:fs";
 import { Command } from "@langchain/langgraph";
 import * as staffingApplication from "@/application/staffing/index.js";
 import * as phaseAGraph from "../graph.js";
@@ -924,6 +926,177 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       })
     ).toThrow();
   });
+
+  it.each(["approve", "reject", "request-revision"] as const)(
+    "persists a successful %s resolution exactly once",
+    async (choice) => {
+      const { pending } = await pendingDirection(1);
+      const review = pending.directionReview!;
+      const action =
+        choice === "request-revision"
+          ? {
+              reviewId: review.id,
+              binding: review.binding,
+              action: choice,
+              feedback: "Clarify risks",
+            }
+          : { reviewId: review.id, binding: review.binding, action: choice };
+      const request = governance.prepareDirectionConfirmation(action);
+      const receipt = confirmDirection(request)!;
+      const original = governanceRecords.withGovernanceRecords;
+      const saved = vi.fn();
+      vi.spyOn(governanceRecords, "withGovernanceRecords").mockImplementation(
+        (operation) =>
+          original((raw, persist) =>
+            operation(raw, (next) => {
+              saved();
+              persist(next);
+            })
+          )
+      );
+      const result = governance.finalizeDirectionReview(action, receipt);
+      expect(result.status).toBe(
+        choice === "approve"
+          ? "approved"
+          : choice === "reject"
+            ? "rejected"
+            : "revision-requested"
+      );
+      expect(saved).toHaveBeenCalledTimes(1);
+      expect(
+        governance.getDirectionReview(review.id).review.resolution?.action
+      ).toEqual(action);
+    }
+  );
+
+  it("does not persist any resolution when confirmation is missing", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const original = governanceRecords.withGovernanceRecords;
+    const saved = vi.fn();
+    vi.spyOn(governanceRecords, "withGovernanceRecords").mockImplementation(
+      (operation) =>
+        original((raw, persist) =>
+          operation(raw, (next) => {
+            saved();
+            persist(next);
+          })
+        )
+    );
+    expect(
+      governance.finalizeDirectionReview({
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve",
+      })
+    ).toEqual({ status: "confirmation-required", reviewId: review.id });
+    expect(saved).not.toHaveBeenCalled();
+    expect(
+      governance.getDirectionReview(review.id).review.resolution
+    ).toBeUndefined();
+  });
+
+  it("returns failed on atomic replacement failure without persisting partial approval", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const action = {
+      reviewId: review.id,
+      binding: review.binding,
+      action: "approve" as const,
+    };
+    const receipt = confirmDirection(
+      governance.prepareDirectionConfirmation(action)
+    )!;
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    const rename = vi
+      .spyOn(filesystem, "renameSync")
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("Test disk failure"), { code: "EIO" });
+      });
+    expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+      "failed"
+    );
+    expect(rename).toHaveBeenCalledTimes(1);
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(
+      governance.getDirectionReview(review.id).review.resolution
+    ).toBeUndefined();
+    expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+      "denied"
+    );
+  });
+
+  it.each(["signature", "schema", "access"] as const)(
+    "returns failed for Ledger %s errors and burns the supplied receipt",
+    async (failure) => {
+      const { pending } = await pendingDirection(1);
+      const review = pending.directionReview!;
+      const action = {
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve" as const,
+      };
+      const receipt = confirmDirection(
+        governance.prepareDirectionConfirmation(action)
+      )!;
+      const directory = join(home, ".ai-workspace-governance");
+      const path = join(directory, "records.json");
+      const before = readFileSync(path, "utf8");
+      if (failure === "signature") {
+        const envelope = JSON.parse(before);
+        envelope.signature = "0".repeat(64);
+        writeFileSync(path, JSON.stringify(envelope));
+      } else if (failure === "schema") {
+        withGovernanceRecords((_raw, persist) =>
+          persist({ repositories: { invalid: {} } })
+        );
+      } else filesystem.chmodSync(directory, 0o755);
+      try {
+        expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+          "failed"
+        );
+      } finally {
+        filesystem.chmodSync(directory, 0o700);
+        writeFileSync(path, before);
+      }
+      expect(
+        governance.getDirectionReview(review.id).review.resolution
+      ).toBeUndefined();
+      expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+        "denied"
+      );
+    }
+  );
+
+  it.each(["binding", "schema"] as const)(
+    "burns confirmation when %s validation rejects before normal consumption",
+    async (failure) => {
+      const { pending } = await pendingDirection(1);
+      const review = pending.directionReview!;
+      const action = {
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve" as const,
+      };
+      const receipt = confirmDirection(
+        governance.prepareDirectionConfirmation(action)
+      )!;
+      const invalid =
+        failure === "binding"
+          ? { ...action, binding: "wrong-binding" }
+          : { ...action, unexpected: true };
+      expect(governance.finalizeDirectionReview(invalid, receipt).status).toBe(
+        "denied"
+      );
+      expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+        "denied"
+      );
+      expect(
+        governance.getDirectionReview(review.id).review.resolution
+      ).toBeUndefined();
+    }
+  );
 
   it("records Reject without issuing an ApprovedDecision", async () => {
     const { graph, config, pending } = await pendingDirection(

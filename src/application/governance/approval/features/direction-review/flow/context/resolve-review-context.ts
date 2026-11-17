@@ -9,6 +9,7 @@ import {
   validateStoredIssuanceRecord,
 } from "../../../proposal-management/flow/validation/staffing-issuance.js";
 import {
+  DirectionReviewValidationError,
   assertAnalysisScope,
   assertReviewRecord,
 } from "../validation/validate-review-record.js";
@@ -20,7 +21,9 @@ function scopeSource(ledger: GovernanceLedger, scopeId: string) {
       .map((issuance) => ({ entry, issuance }))
   );
   if (matches.length !== 1)
-    throw new Error("Direction source Scope is unavailable or ambiguous.");
+    throw new DirectionReviewValidationError(
+      "Direction source Scope is unavailable or ambiguous."
+    );
   return matches[0];
 }
 function legacyAnalysisContext(
@@ -32,7 +35,9 @@ function legacyAnalysisContext(
       value.scopeId === scope.id && value.scopeVersion === scope.version
   );
   if (!analysis || analysis.decisions.length !== scope.assignments.length)
-    throw new Error("Validated analysis provenance is incomplete.");
+    throw new DirectionReviewValidationError(
+      "Validated analysis provenance is incomplete."
+    );
   const decisions = scope.assignments.map((assignment) => {
     const matches = analysis.decisions.filter(
       (value) => value.assignmentId === assignment.assignmentId
@@ -49,7 +54,9 @@ function legacyAnalysisContext(
       reservation.assignmentId !== assignment.assignmentId ||
       result.decision.specialistId !== assignment.specialistId
     )
-      throw new Error("Analysis does not match claimed approved Assignments.");
+      throw new DirectionReviewValidationError(
+        "Analysis does not match claimed approved Assignments."
+      );
     return result.decision;
   });
   const comparison =
@@ -63,7 +70,9 @@ function legacyAnalysisContext(
     !comparison ||
     (decisions.length > 1 && comparison.status !== "completed")
   )
-    throw new Error("Validated Comparison provenance is unavailable.");
+    throw new DirectionReviewValidationError(
+      "Validated Comparison provenance is unavailable."
+    );
   return {
     goal: scope.goal,
     repositoryCommitSha: scope.snapshot.commitSha,
@@ -97,7 +106,9 @@ function reviewContext(
       parent.scopeId !== scope.id ||
       parent.scopeVersion !== scope.version
     )
-      throw new Error("Revision Context source is invalid.");
+      throw new DirectionReviewValidationError(
+        "Revision Context source is invalid."
+      );
     return reviewContext(entry, scope, parent);
   }
   return legacyAnalysisContext(entry, scope);
@@ -114,12 +125,16 @@ function resolveReview(
       .map((review) => ({ entry, review }))
   );
   if (matches.length !== 1)
-    throw new Error("Direction Review is unavailable or ambiguous.");
+    throw new DirectionReviewValidationError(
+      "Direction Review is unavailable or ambiguous."
+    );
   const { review, entry: reviewEntry } = matches[0];
   const { entry, issuance } = scopeSource(ledger, review.scopeId);
   const { scope } = issuance;
   if (entry !== reviewEntry)
-    throw new Error("Review and Scope belong to different Repository records.");
+    throw new DirectionReviewValidationError(
+      "Review and Scope belong to different Repository records."
+    );
   validateIssuance(issuance, entry);
   const context = reviewContext(entry, scope, review);
   assertAnalysisScope(context, scope);

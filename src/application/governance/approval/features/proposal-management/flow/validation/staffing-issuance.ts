@@ -9,6 +9,8 @@ import {
   validateCurrentStaffingPolicy,
 } from "./evaluate-staffing-approval.js";
 
+export class StaffingIssuanceValidationError extends Error {}
+
 type StaffingIssuance = RepositoryGovernance["issuances"][number];
 
 export function assertProposalNotIssued(
@@ -16,7 +18,9 @@ export function assertProposalNotIssued(
   proposalId: string
 ): void {
   if (entry.issuances.some(({ proposal }) => proposal.id === proposalId))
-    throw new Error("Proposal has already been issued.");
+    throw new StaffingIssuanceValidationError(
+      "Proposal has already been issued."
+    );
 }
 
 export function assertIssuanceIdsUnused(
@@ -32,7 +36,9 @@ export function assertIssuanceIdsUnused(
       )
     )
   )
-    throw new Error("Approval or Scope ID collision.");
+    throw new StaffingIssuanceValidationError(
+      "Approval or Scope ID collision."
+    );
 }
 
 function assertApprovalBinding(
@@ -42,7 +48,10 @@ function assertApprovalBinding(
   const system = entry.systems.find(
     ({ version }) => version === approval.systemPolicyVersion
   );
-  if (!system) throw new Error("Issuance System Policy record is unavailable.");
+  if (!system)
+    throw new StaffingIssuanceValidationError(
+      "Issuance System Policy record is unavailable."
+    );
   if (
     scope.version !== 1 ||
     scope.proposalId !== proposal.id ||
@@ -51,7 +60,7 @@ function assertApprovalBinding(
     scope.policyVersion !== `system:${system.version}` ||
     governanceDigest(proposal) !== approval.proposalDigest
   )
-    throw new Error(
+    throw new StaffingIssuanceValidationError(
       "Proposal, ApprovalRecord and Scope bindings do not match."
     );
 }
@@ -77,7 +86,9 @@ function assertScopeContents({ proposal, scope }: StaffingIssuance): void {
     ),
   };
   if (governanceDigest(scoped) !== governanceDigest(proposed))
-    throw new Error("Scope contents differ from the approved Proposal.");
+    throw new StaffingIssuanceValidationError(
+      "Scope contents differ from the approved Proposal."
+    );
 }
 
 function assertDelegatedApprovalSource(
@@ -98,7 +109,9 @@ function assertDelegatedApprovalSource(
     Date.parse(policy.expiresAt) <= Date.now() ||
     policy.approval.id !== source.delegationApprovalId
   )
-    throw new Error("Delegated approval source is no longer valid.");
+    throw new StaffingIssuanceValidationError(
+      "Delegated approval source is no longer valid."
+    );
 }
 
 // Record integrity uses the original signed policy/delegation records. It must
@@ -116,7 +129,9 @@ export function validateStoredIssuanceRecord(
       Date.parse(approval.source.confirmation.confirmedAt) >
         Date.parse(approval.approvedAt)
     )
-      throw new Error("Direct Human confirmation does not match the issuance.");
+      throw new StaffingIssuanceValidationError(
+        "Direct Human confirmation does not match the issuance."
+      );
     return;
   }
   const source = approval.source;
@@ -132,7 +147,9 @@ export function validateStoredIssuanceRecord(
       Date.parse(approval.approvedAt) ||
     Date.parse(delegation.expiresAt) <= Date.parse(approval.approvedAt)
   )
-    throw new Error("Delegated approval does not match its historical source.");
+    throw new StaffingIssuanceValidationError(
+      "Delegated approval does not match its historical source."
+    );
 }
 
 // Current eligibility remains mandatory for Scope lookup, Authorization and
@@ -142,7 +159,9 @@ export function validateStoredIssuance(
   entry: RepositoryGovernance
 ): InspectedFile[] {
   if (entry.systems.at(-1)?.version !== issuance.approval.systemPolicyVersion)
-    throw new Error("Issuance is not bound to the current System Policy.");
+    throw new StaffingIssuanceValidationError(
+      "Issuance is not bound to the current System Policy."
+    );
   validateStoredIssuanceRecord(issuance, entry);
   assertDelegatedApprovalSource(issuance, entry);
   const files = validateCurrentStaffingPolicy(issuance.proposal, entry);
@@ -151,6 +170,8 @@ export function validateStoredIssuance(
     evaluateDelegationCoverage(issuance.proposal, entry, Date.now()) !==
       "delegated"
   )
-    throw new Error("Current evaluation no longer permits delegated approval.");
+    throw new StaffingIssuanceValidationError(
+      "Current evaluation no longer permits delegated approval."
+    );
   return files;
 }

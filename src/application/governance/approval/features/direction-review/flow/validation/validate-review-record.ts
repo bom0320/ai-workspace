@@ -3,6 +3,9 @@ import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 import type { SynthesisContext } from "@/application/synthesis/index.js";
 import type { DirectionReview } from "../../model/review.js";
 
+// Explicit rule rejection; storage and unexpected errors are not this type.
+export class DirectionReviewValidationError extends Error {}
+
 export const sameContent = (a: unknown, b: unknown) =>
   governanceDigest(a) === governanceDigest(b);
 export function assertAnalysisScope(
@@ -26,7 +29,9 @@ export function assertAnalysisScope(
     assignments: context.assignments,
   };
   if (!sameContent(approved, actual))
-    throw new Error("Review Context does not match the approved Scope.");
+    throw new DirectionReviewValidationError(
+      "Review Context does not match the approved Scope."
+    );
 }
 
 export function reviewBinding(
@@ -46,7 +51,9 @@ export function assertReviewRecord(
     governanceDigest(context) !== review.analysisDigest ||
     binding !== reviewBinding(subject)
   )
-    throw new Error("Direction Review binding is invalid.");
+    throw new DirectionReviewValidationError(
+      "Direction Review binding is invalid."
+    );
   if (review.revision > 0) {
     const parent = entry.directionReviews?.find(
       (value) => value.id === review.previousReviewId
@@ -59,11 +66,13 @@ export function assertReviewRecord(
       parent.scopeId !== review.scopeId ||
       parent.scopeVersion !== review.scopeVersion
     )
-      throw new Error("Revision provenance is invalid.");
+      throw new DirectionReviewValidationError(
+        "Revision provenance is invalid."
+      );
     // Revision numbers strictly decrease, so the maximum two ancestors are bounded.
     assertReviewRecord(parent, entry, scope, context);
   } else if (review.previousReviewId)
-    throw new Error("Unexpected previous Review.");
+    throw new DirectionReviewValidationError("Unexpected previous Review.");
   if (resolution) {
     const expected = governanceDigest({
       reviewBinding: binding,
@@ -77,7 +86,9 @@ export function assertReviewRecord(
       Date.parse(resolution.confirmation.confirmedAt) >
         Date.parse(resolution.resolvedAt)
     )
-      throw new Error("Direction resolution provenance is invalid.");
+      throw new DirectionReviewValidationError(
+        "Direction resolution provenance is invalid."
+      );
   }
 }
 
@@ -105,10 +116,15 @@ export function validateRevisionRequest({
       !sameContent(revision.previousProposal, previousReview.proposal) ||
       revision.feedback !== previousReview.resolution.action.feedback
     )
-      throw new Error("Revision does not match Human feedback.");
+      throw new DirectionReviewValidationError(
+        "Revision does not match Human feedback."
+      );
     return previousReview.revision + 1;
   }
-  if (revision) throw new Error("Revision requires a recorded Human request.");
+  if (revision)
+    throw new DirectionReviewValidationError(
+      "Revision requires a recorded Human request."
+    );
   return 0;
 }
 
@@ -124,5 +140,7 @@ export function assertReviewNotRegistered(
         : review.scopeId === scopeId
     )
   )
-    throw new Error("Direction Review has already been registered.");
+    throw new DirectionReviewValidationError(
+      "Direction Review has already been registered."
+    );
 }

@@ -1,3 +1,6 @@
+import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
+import { StaffingIssuanceValidationError } from "../../proposal-management/flow/validation/staffing-issuance.js";
+import { DirectionReviewValidationError } from "./validation/validate-review-record.js";
 import { randomUUID } from "node:crypto";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
@@ -23,7 +26,7 @@ function assertPendingAction(
     review.resolution ||
     (action.action === "request-revision" && review.revision >= 2)
   )
-    throw new Error(
+    throw new DirectionReviewValidationError(
       "Review is stale, resolved, mismatched or at its revision limit."
     );
 }
@@ -58,18 +61,31 @@ export function finalizeDirectionReview(
   input: unknown,
   receipt?: HumanConfirmation
 ): DirectionGovernanceResult {
+  // 1. Parse the Action Before Opening the Ledger
+  let confirmationConsumed = false;
   try {
-    const action: DirectionAction = directionActionSchema.parse(input);
+    const parsed = directionActionSchema.safeParse(input);
+    if (!parsed.success)
+      return { status: "denied", reason: "Invalid Direction Review action." };
+    const action = parsed.data;
     return withGovernanceLedger((ledger, save): DirectionGovernanceResult => {
+      // 2. Revalidate the Current Review and Exact Action Binding
       const { entry, review } = resolveCurrentReview(ledger, action.reviewId);
       assertPendingAction(review, action);
       const binding = confirmationBinding(review, action);
+
+      // 3. Consume the One-use Human Confirmation
+      confirmationConsumed = true;
       const confirmation = consumeCurrentHumanConfirmation(receipt, binding);
       if (!confirmation) {
         if (receipt)
-          throw new Error("Human Confirmation is invalid or already consumed.");
+          throw new DirectionReviewValidationError(
+            "Human Confirmation is invalid or already consumed."
+          );
         return { status: "confirmation-required", reviewId: review.id };
       }
+
+      // 4. Record the Resolution and Construct the Action Result
       review.resolution = {
         id: randomUUID(),
         action,
@@ -77,30 +93,55 @@ export function finalizeDirectionReview(
         confirmation,
         resolvedAt: new Date().toISOString(),
       };
-      if (action.action === "approve") {
-        const decision = {
-          id: randomUUID(),
-          reviewId: review.id,
-          reviewBinding: review.binding,
-          approvalRecordId: review.resolution.id,
-        };
-        (entry.approvedDecisions ??= []).push(decision);
-        save();
-        return { status: "approved", decision };
-      }
-      save();
-      return action.action === "reject"
-        ? { status: "rejected", reviewId: review.id }
-        : {
+      let result: DirectionGovernanceResult;
+      switch (action.action) {
+        case "approve": {
+          const decision = {
+            id: randomUUID(),
+            reviewId: review.id,
+            reviewBinding: review.binding,
+            approvalRecordId: review.resolution.id,
+          };
+          (entry.approvedDecisions ??= []).push(decision);
+          result = { status: "approved", decision };
+          break;
+        }
+        case "reject":
+          result = { status: "rejected", reviewId: review.id };
+          break;
+        case "request-revision":
+          result = {
             status: "revision-requested",
             reviewId: review.id,
             feedback: action.feedback,
           };
+          break;
+      }
+
+      // 5. Persist Once Before Returning Any Successful Decision
+      save();
+      return result;
     });
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof DirectionReviewValidationError ||
+      error instanceof StaffingIssuanceValidationError ||
+      error instanceof RepositorySnapshotMismatchError
+    )
+      return {
+        status: "denied",
+        reason: "Direction Review or Human Confirmation could not be verified.",
+      };
+    // Read/write, integrity/access and unclassified errors fail closed. Raw
+    // exceptions may contain paths or process output and are not public reasons.
     return {
-      status: "denied",
-      reason: "Direction Review or Human Confirmation could not be verified.",
+      status: "failed",
+      reason: "Direction Review could not be finalized or persisted.",
     };
+  } finally {
+    // Rejecting an action before its binding is available must still burn a
+    // supplied receipt. Never let a failed attempt authenticate another attempt.
+    if (receipt && !confirmationConsumed)
+      consumeCurrentHumanConfirmation(receipt, "");
   }
 }

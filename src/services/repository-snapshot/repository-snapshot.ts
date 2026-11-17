@@ -6,6 +6,9 @@ import {
 
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 
+// A successful Repository read found a changed baseline, rather than an I/O failure.
+export class RepositorySnapshotMismatchError extends Error {}
+
 export function captureRepositorySnapshot(
   repositoryPath: string
 ): RepositorySnapshot {
@@ -24,12 +27,12 @@ export function assertRepositoryMatchesSnapshot(
 ): void {
   const currentHead = getRepositoryHead(snapshot.repositoryRoot);
   if (currentHead !== snapshot.commitSha) {
-    throw new Error(
+    throw new RepositorySnapshotMismatchError(
       `Repository HEAD changed: expected ${snapshot.commitSha}, received ${currentHead}.`
     );
   }
   if (!isRepositoryClean(snapshot.repositoryRoot)) {
-    throw new Error(
+    throw new RepositorySnapshotMismatchError(
       "Repository working tree became dirty: uncommitted or untracked changes detected."
     );
   }

@@ -18,7 +18,7 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
   Agreement / Conflict / Trade-off와 Uncertainty / Limitation / Separate Concern을 구조화하고,
   원본 Specialist / Evidence reference를 검증한다.
 
-Agent discussion / synthesis / CEO 전체 조직 운영 / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
+Agent discussion / CEO 전체 조직 운영 / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
 미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
 
 문서는 다음 책임으로 나눈다.
@@ -33,7 +33,7 @@ CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffin
 Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
 동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
 CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
-CEO Synthesis는 API / Graph에 연결했으며 해결 방향 Human Governance·Phase B와 전체 조직 E2E는 아직 없다.
+CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B와 실제 전체 조직 E2E는 아직 없다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
@@ -46,7 +46,7 @@ Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 
 specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다.
 ceo-synthesis 실행 대상은 Comparison 성공 또는 단일 생략 후 CEO Synthesis 제안 / Escalation / 실패까지 진행한다. 이 결과는 Phase A 전체 완료나 해결 방향 승인이 아니다.
 Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회와 개별 staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult / synthesisResult를 소유한다.
-기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. CEO Synthesis Application과 Graph 연결은 구현했으며 Human Direction Governance는 아직 없다.
+기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. human-direction-governance 대상은 실제 Human Confirmation을 거친 방향 승인 / 수정 요청 / 거부와 같은 프로세스 Interrupt / Resume를 제공한다. 영속 장애 복구는 없으며 자세한 계약은 [Workflow Architecture](docs/workflow-architecture.md#step-72--human-direction-governance)를 따른다.
 상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
 State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 

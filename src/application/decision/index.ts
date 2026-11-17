@@ -24,3 +24,5 @@ export {
   assertRepositoryMatchesSnapshot,
 } from "./flow/context/repository-snapshot.js";
 export { agentDecisionSchema } from "./protocol/decision.js";
+
+export { consumeValidatedDecision } from "./validated-result.js";

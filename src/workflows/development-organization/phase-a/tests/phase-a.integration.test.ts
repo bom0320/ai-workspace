@@ -1,3 +1,4 @@
+import { Command } from "@langchain/langgraph";
 import * as staffingApplication from "@/application/staffing/index.js";
 import * as phaseAGraph from "../graph.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
@@ -672,7 +673,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               : []),
           ];
           const statement = {
-            text: "Propose reversible direction while retaining unresolved coverage",
+            text: context.revision
+              ? "Revised reversible direction addressing Human feedback"
+              : "Propose reversible direction while retaining unresolved coverage",
             sources,
           };
           return {
@@ -737,6 +740,474 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         };
       });
   }
+
+  async function pendingDirection(
+    count = 2,
+    confirmDirection?: import("../graph.js").PhaseAGraphOptions["confirmDirection"]
+  ) {
+    if (count === 2) prepareBatch();
+    else {
+      configure();
+      options.confirmApproval = (request) => accept(request);
+    }
+    const command = runtime();
+    const graph = createPhaseAGraph({
+      ...options,
+      executionTarget: "human-direction-governance",
+      confirmDirection,
+    });
+    const config = { configurable: { thread_id: "direction-test" } };
+    const pending = await graph.invoke(
+      { goal: options.goal, repositoryPath: root },
+      config
+    );
+    expect(pending.directionReview).toBeDefined();
+    expect(
+      (await graph.getState(config)).tasks.some(
+        (task) => task.interrupts.length === 1
+      )
+    ).toBe(true);
+    return { graph, config, pending, command };
+  }
+  const confirmDirection = (request: governance.DirectionConfirmationRequest) =>
+    confirmHumanAction(request.binding, JSON.stringify(request));
+
+  it.each([1, 2])(
+    "issues a trusted ApprovedDecision after interrupt/resume for %i Specialists, without replay",
+    async (count) => {
+      const { graph, config, pending, command } = await pendingDirection(
+        count,
+        confirmDirection
+      );
+      expect(pending.directionGovernanceResult).toBeUndefined();
+      const calls = command.mock.calls.length;
+      const review = pending.directionReview!;
+      const state = await graph.invoke(
+        new Command({
+          resume: {
+            reviewId: review.id,
+            binding: review.binding,
+            action: "approve",
+          },
+        }),
+        config
+      );
+      expect(state.directionGovernanceResult?.status).toBe("approved");
+      if (state.directionGovernanceResult?.status !== "approved")
+        throw new Error(JSON.stringify(state));
+      const restored = governance.getApprovedDecision(
+        state.directionGovernanceResult.decision.id
+      );
+      expect(restored.review.proposal).toEqual(
+        state.synthesisResult?.status === "proposed"
+          ? state.synthesisResult.proposal
+          : undefined
+      );
+      expect(restored.context.goal).toEqual(options.goal);
+      expect(restored.review.resolution?.action.action).toBe("approve");
+      expect(state.directionGovernanceResult.decision).not.toHaveProperty(
+        "proposal"
+      );
+      expect(command).toHaveBeenCalledTimes(calls);
+      expect(reservations()).toHaveLength(count);
+      expect(issuanceCount()).toBe(1);
+      expect(
+        governance.finalizeDirectionReview({
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        }).status
+      ).toBe("denied");
+    }
+  );
+
+  it("records Reject without issuing an ApprovedDecision", async () => {
+    const { graph, config, pending } = await pendingDirection(
+      1,
+      confirmDirection
+    );
+    const review = pending.directionReview!;
+    const state = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "reject",
+        },
+      }),
+      config
+    );
+    expect(state.directionGovernanceResult?.status).toBe("rejected");
+    withGovernanceRecords((raw) =>
+      expect(
+        Object.values(
+          (
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+          ).repositories
+        )[0].approvedDecisions
+      ).toBeUndefined()
+    );
+  });
+
+  it("does not treat Resume input or a forged receipt as Human authentication", async () => {
+    const { graph, config, pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const action = {
+      reviewId: review.id,
+      binding: review.binding,
+      action: "approve" as const,
+    };
+    const state = await graph.invoke(new Command({ resume: action }), config);
+    expect(state.directionGovernanceResult?.status).toBe(
+      "confirmation-required"
+    );
+    expect(
+      governance.finalizeDirectionReview(action, { token: "forged" }).status
+    ).toBe("denied");
+    expect(
+      governance.getDirectionReview(review.id).review.resolution
+    ).toBeUndefined();
+  });
+
+  it.each(["binding", "action"])(
+    "rejects invalid %s in Human Resume before confirmation",
+    async (kind) => {
+      const confirm = vi.fn(confirmDirection);
+      const { graph, config, pending } = await pendingDirection(1, confirm);
+      const review = pending.directionReview!;
+      const action = {
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve",
+        [kind]: "invalid",
+      };
+      const state = await graph.invoke(new Command({ resume: action }), config);
+      expect(state.directionGovernanceResult?.status).toBe("denied");
+      expect(confirm).not.toHaveBeenCalled();
+    }
+  );
+
+  it("revalidates Repository after Human confirmation before issuing approval", async () => {
+    const { graph, config, pending } = await pendingDirection(1, (request) => {
+      const receipt = confirmDirection(request);
+      writeFileSync(join(root, "a.ts"), "changed during Human review");
+      return receipt;
+    });
+    const review = pending.directionReview!;
+    const state = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    expect(state.directionGovernanceResult?.status).toBe("denied");
+  });
+
+  it("binds actual Human confirmation to the exact action and consumes it once", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const approve = {
+      reviewId: review.id,
+      binding: review.binding,
+      action: "approve" as const,
+    };
+    const receipt = confirmDirection(
+      governance.prepareDirectionConfirmation(approve)
+    )!;
+    expect(
+      governance.finalizeDirectionReview(
+        { ...approve, action: "reject" },
+        receipt
+      ).status
+    ).toBe("denied");
+    expect(governance.finalizeDirectionReview(approve, receipt).status).toBe(
+      "denied"
+    );
+  });
+
+  it("allows at most two Synthesis-only revisions with fresh bindings and original analysis", async () => {
+    const { graph, config, pending, command } = await pendingDirection(
+      2,
+      confirmDirection
+    );
+    let review = pending.directionReview!;
+    const bindings = [review.binding];
+    for (let index = 0; index < 2; index++) {
+      const state = await graph.invoke(
+        new Command({
+          resume: {
+            reviewId: review.id,
+            binding: review.binding,
+            action: "request-revision",
+            feedback: "Clarify the reversible direction",
+          },
+        }),
+        config
+      );
+      expect(state.directionReview?.revision).toBe(index + 1);
+      expect(state.directionReview?.previousReviewId).toBe(review.id);
+      expect(state.directionReview?.binding).not.toBe(review.binding);
+      expect(state.directionGovernanceResult).toBeUndefined();
+      expect(
+        (await graph.getState(config)).tasks.some(
+          (task) => task.interrupts.length === 1
+        )
+      ).toBe(true);
+      review = state.directionReview!;
+      bindings.push(review.binding);
+    }
+    expect(new Set(bindings).size).toBe(3);
+    const prompts = command.mock.calls.map((call) => call[1].at(-1)!);
+    expect(
+      prompts.filter((prompt) => prompt.includes("SpecialistContext:\n"))
+    ).toHaveLength(2);
+    expect(
+      prompts.filter((prompt) => prompt.includes("ComparisonContext:\n"))
+    ).toHaveLength(1);
+    const contexts = prompts
+      .filter((prompt) => prompt.includes("SynthesisContext:\n"))
+      .map((prompt) => JSON.parse(prompt.split("SynthesisContext:\n")[1]));
+    expect(contexts).toHaveLength(3);
+    for (const context of contexts.slice(1)) {
+      expect(context.goal).toEqual(contexts[0].goal);
+      expect(context.decisions).toEqual(contexts[0].decisions);
+      expect(context.comparison).toEqual(contexts[0].comparison);
+      expect(context.revision.feedback).toBe(
+        "Clarify the reversible direction"
+      );
+    }
+    expect(reservations()).toHaveLength(2);
+    expect(() =>
+      governance.prepareDirectionConfirmation({
+        reviewId: review.id,
+        binding: review.binding,
+        action: "request-revision",
+        feedback: "again",
+      })
+    ).toThrow();
+    const approved = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    expect(approved.directionGovernanceResult?.status).toBe("approved");
+  });
+
+  it("rejects policy changes made while waiting at the Human interrupt", async () => {
+    const { graph, config, pending, command } = await pendingDirection(
+      1,
+      confirmDirection
+    );
+    const review = pending.directionReview!;
+    const calls = command.mock.calls.length;
+    configure(); // New version, even though the policy contents remain compatible.
+    const state = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    expect(state.directionGovernanceResult?.status).toBe("denied");
+    expect(command).toHaveBeenCalledTimes(calls);
+  });
+
+  it("keeps Review unresolved when Human confirmation throws", async () => {
+    const { graph, config, pending } = await pendingDirection(1, () => {
+      throw new Error("terminal unavailable");
+    });
+    const review = pending.directionReview!;
+    const state = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    expect(state.directionGovernanceResult?.status).toBe("failed");
+    expect(
+      governance.getDirectionReview(review.id).review.resolution
+    ).toBeUndefined();
+  });
+
+  it("rejects a third revision through the Graph without rerunning analysis or Synthesis", async () => {
+    const { graph, config, pending, command } = await pendingDirection(
+      1,
+      confirmDirection
+    );
+    let review = pending.directionReview!;
+    for (let count = 0; count < 2; count++) {
+      const result = await graph.invoke(
+        new Command({
+          resume: {
+            reviewId: review.id,
+            binding: review.binding,
+            action: "request-revision",
+            feedback: "Clarify alternatives",
+          },
+        }),
+        config
+      );
+      review = result.directionReview!;
+    }
+    const calls = command.mock.calls.length;
+    const result = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "request-revision",
+          feedback: "Again",
+        },
+      }),
+      config
+    );
+    expect(result.directionGovernanceResult?.status).toBe("denied");
+    expect(command).toHaveBeenCalledTimes(calls);
+    expect(reservations()).toHaveLength(1);
+  });
+
+  it("rejects a Review whose stored Proposal changed after registration", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    withGovernanceRecords((raw, persist) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      Object.values(
+        ledger.repositories
+      )[0].directionReviews![0].proposal.direction.text =
+        "Unreviewed changed direction";
+      persist(ledger);
+    });
+    expect(
+      governance.finalizeDirectionReview({
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve",
+      }).status
+    ).toBe("denied");
+    expect(() => governance.getDirectionReview(review.id)).toThrow("binding");
+  });
+
+  it("does not authenticate copied Decision or Comparison results by their Schema alone", async () => {
+    const { pending } = await pendingDirection(2);
+    const comparison = pending.decisionComparisonResult;
+    if (comparison?.status !== "completed")
+      throw new Error("Missing Comparison");
+    expect(() =>
+      governance.recordDirectionComparison(
+        pending.directionReview!.scopeId,
+        structuredClone(comparison.comparison)
+      )
+    ).toThrow("Untrusted");
+  });
+
+  it("does not reuse a prior Human Review when invoking fresh input on the same thread", async () => {
+    const { graph, config, pending } = await pendingDirection(
+      1,
+      confirmDirection
+    );
+    const review = pending.directionReview!;
+    const approved = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    const next = await graph.invoke(
+      { ...approved, goal: options.goal, repositoryPath: root },
+      config
+    );
+    expect(next.directionReview?.id).not.toBe(review.id);
+    expect(next.directionReview?.revision).toBe(0);
+    expect(next.directionGovernanceResult).toBeUndefined();
+    expect(next.directionAction).toBeUndefined();
+    expect(reservations()).toHaveLength(2);
+  });
+
+  it("preserves Stage 5 proposal when trusted Review registration fails", async () => {
+    configure();
+    options.confirmApproval = (request) => accept(request);
+    runtime();
+    vi.spyOn(governance, "registerDirectionReview").mockImplementation(() => {
+      throw new Error("cannot persist Review");
+    });
+    const graph = createPhaseAGraph({
+      ...options,
+      executionTarget: "human-direction-governance",
+    });
+    const state = await graph.invoke(
+      { goal: options.goal, repositoryPath: root },
+      { configurable: { thread_id: "registration-failed" } }
+    );
+    expect(state.synthesisResult?.status).toBe("proposed");
+    expect(state.directionGovernanceResult?.status).toBe("failed");
+    expect(state.directionReview).toBeUndefined();
+  });
+
+  it("does not prepare Human Review after Comparison Reference validation fails", async () => {
+    prepareBatch();
+    runtime("comparison");
+    const graph = createPhaseAGraph({
+      ...options,
+      executionTarget: "human-direction-governance",
+    });
+    const state = await graph.invoke(
+      { goal: options.goal, repositoryPath: root },
+      { configurable: { thread_id: "comparison-failed" } }
+    );
+    expect(state.specialistDecisionsResult?.status).toBe("completed");
+    expect(state.decisionComparisonResult?.status).toBe("failed");
+    expect(state.synthesisResult).toBeUndefined();
+    expect(state.directionReview).toBeUndefined();
+  });
+  it("refuses copied or modified Synthesis state as Review provenance", async () => {
+    const { pending } = await pendingDirection(1);
+    expect(pending.synthesisResult?.status).toBe("proposed");
+    if (
+      pending.synthesisResult?.status !== "proposed" ||
+      pending.approvalResult?.status !== "approved"
+    )
+      throw new Error("Missing proposed result");
+    expect(() =>
+      governance.registerDirectionReview(
+        pending.approvalResult!.status === "approved"
+          ? pending.approvalResult!.scope.id
+          : "",
+        structuredClone(pending.synthesisResult) as Extract<
+          typeof pending.synthesisResult,
+          { status: "proposed" }
+        >
+      )
+    ).toThrow("Untrusted");
+    const review = pending.directionReview!;
+    expect(() =>
+      governance.prepareDirectionConfirmation({
+        reviewId: review.id,
+        binding: review.binding + "changed",
+        action: "approve",
+      })
+    ).toThrow();
+  });
   it.each([1, 2])(
     "connects real Governance, v2/v3 and Synthesis for %i Assignments",
     async (count) => {
@@ -1235,6 +1706,9 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
     "collectedDecisions",
     "currentSpecialistIndex",
     "decisionComparisonResult",
+    "directionAction",
+    "directionGovernanceResult",
+    "directionReview",
     "goal",
     "policyLookup",
     "preparedSpecialistRequests",

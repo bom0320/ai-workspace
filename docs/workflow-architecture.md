@@ -3,7 +3,7 @@
 이 문서는 Development Organization의 실행 계약, Phase 간 Handoff, Graph State / Output 소유권과
 Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
 [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
-Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval과 선택적 Specialist Decisions / Comparison까지 통합했으며
+Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval, Specialist Decisions / Comparison, CEO Synthesis와 선택적 Human Direction Governance까지 통합했으며
 Organization Graph·Phase B·후속 분석과 Handoff의 구체적인 계약을 선행 구현하지 않는다.
 
 문서별 기준은 다음과 같다.
@@ -43,7 +43,7 @@ Comparison, Planning, Execution 등의 기능을 제공하며 Harness Governance
 Context·Evidence·Verification의 규칙과 허용 조건을 소유한다. Human은 최종 승인 권한을 가진다.
 
 LangGraph는 이 기능을 연결하는 실행 순서·조건부 분기·실행 상태를 담당하며, 향후 중단·재개·복구의
-실행 메커니즘을 맡는다. 현재 Interrupt / Resume / Checkpoint 기반 복구는 연결하지 않았다.
+실행 메커니즘을 맡는다. Step 7.2는 Human Direction Review에 한정한 메모리 Checkpoint / Interrupt / Resume를 연결했다. 프로세스 재시작 복구는 지원하지 않는다.
 기존 Codex는 Agent Execution Runtime으로 유지한다.
 
 CLI는 사용자 입력, Human Confirmation, 결과 출력 계층이다. 현재 명령의 실행 범위는 호환성 요구지만,
@@ -103,7 +103,7 @@ Human Goal / Constraints
 → Decision Comparison (v3)
 → CEO Synthesis: Recommendation / Rationale / Evidence / Trade-off / Unresolved Issues
 → Harness Validation
-→ Human Direction Governance: Approve / Override / Reject
+→ Human Direction Governance: Approve / Request Revision / Reject
 → Approved Decision
 ```
 
@@ -137,7 +137,7 @@ Preflight Node는 저장 Scope의 ID / Version을 승인 결과와 대조하고 
 초기의 단일 Node → 함수형 runSpecialistDecisions() 위임 구조는 내부 실행 제어가 Graph 밖에 남았으므로
 제거했다. Preflight 검증과 단일 Invocation 실행 기능은 유지하며 Governance / v2 / v3 정책을 재구현하지 않는다.
 새 Subgraph나 Assignment 선택 Agent는 없다. Step 6.2에서 명시적 ceo-synthesis 대상에 Stage 5를 연결했다.
-Human Direction Governance와 전체 Phase A 완료는 여전히 미구현이다.
+Step 7.2에서 Human Direction Governance를 연결했다. 전체 Phase A Outcome / Organization / Phase B 연결은 아직 없다.
 
 기존 read-only Specialist의 supplied Context, 같은 비교 단위의 Goal / Snapshot, 독립 판단 원칙을 유지한다.
 추가 분석·재검토 요청은 필요한 Context·권한·Budget 재검증을 거칠 미래 조직 실행 요구다.
@@ -180,12 +180,12 @@ Phase B도 같은 기준으로 Application 기능 소유권에서 업무 목적�
 ## 4. Phase A → Phase B Handoff Contract
 
 **목표 계약:** Handoff는 State를 복사하는 작업이 아니라 승인된 방향의 신뢰성과 후속 실행 적합성을
-검증하는 경계다. `ApprovedDecision`은 미래 개념이며 현재 타입·ID 규칙·저장 Schema·검증 API가 없다.
+검증하는 경계다. `ApprovedDecision`의 Review 참조형 Schema와 발급·조회 API는 Step 7.2에서 구현했다. Phase B Handoff의 구체적인 검증 API와 실행 계약은 아직 없다.
 
 | 개념 | 의미 | 대체하지 않는 계약 |
 | --- | --- | --- |
 | ApprovedOperatingScope | 현재 Governance가 발급하는 분석 조직·Context·호출 예산의 승인 범위 | 해결 방향 승인, Repository 수정 권한 |
-| ApprovedDecision / Approved Decision | Human이 승인한 해결 방향을 가리키는 미래 개념 | Staffing Scope, 개별 Task·Delivery 승인 |
+| ApprovedDecision / Approved Decision | Human이 실제 승인한 Review를 참조하는 방향 기록 (Step 7.2) | Staffing Scope, 개별 Task·Delivery 승인 |
 | TaskContract | 개별 Repository 실행 작업의 범위·제약·검증 계약 | 조직 전체의 방향 승인 또는 모든 Assignment의 범용 모델 |
 
 ### 필요한 의미적 정보와 검증
@@ -277,7 +277,7 @@ Agent, timeout, maxRounds, Human 콜백, executionTarget은 실행 옵션이며 
 State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하지 않는다. Schema 통과나 State의 승인
 표시만으로 호출 권한을 부여하지 않으며 현재 Specialist 경로도 저장 Scope·Reservation·Claim을 재검증한다.
 향후 Checkpoint로 State를 저장·복원하더라도 Ledger의 승인·권한 기록을 대체하지 않으며 재개 시점의
-필요한 권한 검증을 생략하는 근거가 되지 않는다. 현재 Checkpoint / Resume 기반 복구는 미구현이다.
+필요한 권한 검증을 생략하는 근거가 되지 않는다. 현재 Human Direction Review의 동일 프로세스 Interrupt / Resume만 구현했고, 영속 Checkpoint / 장애 복구는 미구현이다.
 
 ## 6. Graph / Subgraph Boundary Principles
 
@@ -362,15 +362,14 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, Synthesis 이후 Human 승인 연결,
-Human Direction Governance, ApprovedDecision Handoff, Phase B Graph, Assignment 실행 조정,
-Executive Report, Interrupt / Resume와 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
+**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision의 Phase B Handoff 검증, Phase B Graph, Assignment 실행 조정,
+Executive Report와 영속 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
 테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),
 [Phase A 통합 테스트](../src/workflows/development-organization/phase-a/tests/phase-a.integration.test.ts)와
 [CLI 테스트](../src/cli/commands/staffing/staffing.test.ts)에 있다. Node / Edge 분기·State 갱신,
 승인 대기·거부·위조 확인·정책/Repository 변경 검증과 CLI 실행 범위의 시나리오가 존재한다.
-이것은 실제 Human·Codex·전체 조직 E2E 또는 중단·재개·복구 검증의 완료를 의미하지 않는다.
+이는 mock TTY / Codex transport를 사용한 검증이며 실제 Human·Codex·전체 조직 E2E 또는 프로세스 재시작 복구 검증을 의미하지 않는다.
 
 ### 실행 대상과 Staffing CLI 경계
 
@@ -464,8 +463,7 @@ synthesis에 두고 State에는 넣지 않는다. Graph는 Stage 진입·종료�
 
 synthesisResult는 SynthesisResult Schema를 재사용하고 앞선 Stage 결과를 덮어쓰지 않는다.
 새 invoke에서는 synthesisAssignments / synthesisResult도 초기화한다. proposed는 Human 검토용 제안이지
-ApprovedDecision·Phase A 완료·Phase B 진입 허가가 아니다. Human Direction Governance는 Step 7 대상이며
-승인 기록·Handoff·Checkpoint / Resume·자동 재시도는 구현하지 않았다.
+ApprovedDecision·Phase A 완료·Phase B 진입 허가가 아니다. 당시 미구현이던 방향 승인 기록과 동일 프로세스 Resume는 Step 7.2에서 추가했다. Handoff·영속 복구·자동 재시도는 아직 없다.
 
 Application 계약과 SourceReference의 구체적인 범위·한계는
 [CEO Synthesis 구현](architecture.md#step-62--ceo-synthesis-application--graph-integration)을 따른다.
@@ -478,3 +476,72 @@ tradeoffs는 benefit / cost / reason / sources로 변경했다. 실패 값도 �
 Coverage로 구분한다. Graph fixture와 결과 소비자는 이 Output Schema 변경을 반영해야 한다.
 Propose는 쟁점별 처리 위치를 검증하고 Escalation에는 전체 배치 Coverage를 요구하지 않는다.
 상세 규칙과 정적 검증 한계는 [Synthesis 구현 계약](architecture.md#sourcereference-검증과-한계)을 따른다.
+
+### Step 7.2 — Human Direction Governance
+
+새 실행 대상 human-direction-governance만 아래 경로로 진행한다. 기존 세 실행 대상의 종료 지점은 유지한다.
+
+```text
+run-ceo-synthesis (proposed + 신뢰된 Review 등록)
+  → human-direction-review [interrupt]
+  → Command({ resume: { reviewId, binding, action, feedback? } })
+  → finalize-direction-review
+      approved / rejected / denied / failed / confirmation-required → END
+      revision-requested → run-ceo-synthesis → 새 Review → interrupt
+```
+
+Review 준비는 Synthesis Node에서 검증 직후 수행한다. 별도 prepare Node에 복사된 proposed State를
+전달하면 Application의 실제 검증 출처를 확인할 수 없기 때문이다. Decision·Comparison·Synthesis
+Application은 검증 성공 경로에서 객체 식별자와 분리된 원본을 프로세스 내부 일회용 기록으로 연결한다.
+Human Governance 대상의 Node만 이 출처를 즉시 소비하여 Ledger에 기록한다. Schema·Digest·State만
+통과한 객체나 기존 ceo-synthesis 실행 결과를 복사하여 Review로 등록하는 경로는 허용하지 않는다.
+
+Ledger의 optional directionAnalyses / directionReviews / approvedDecisions는 역사적 기록에
+기본값을 추가하거나 읽기 시 저장 형식을 바꾸지 않는다. 분석 기록은 실제 claimed Invocation과 원본
+Goal / Snapshot / Assignment에 연결된다. Governance는 이 연결을 확인하며 Synthesis의 Reference /
+Coverage·Evidence 검증을 다시 구현하지 않는다.
+
+DirectionReview는 Proposal을 한 번 저장하고 분석 Digest·Scope Version·이전 Review·Revision 번호와
+Binding으로 연결한다. 실제 Human Receipt는 Review와 정확한 action / feedback에 묶인 별도 확인 Binding을
+사용한다. approve / request-revision / reject 모두 같은 신뢰된 Confirmation 경계를 거친다.
+Human 대기는 Ledger Lock 밖에서 수행하며 이후 최신 정책·Repository를 다시 검증한다.
+결과는 directionGovernanceResult에 기록하고 승인된 경우에만 ApprovedDecision을 발급한다.
+ApprovedDecision은 Review / Binding / 실제 승인 Record를 참조하며 getApprovedDecision()으로
+Proposal·Goal·Repository Snapshot·Human 승인 근거를 복원한다. Task 실행 권한이나 Phase B Handoff 허가는 아니다.
+
+Revision은 기존 분석과 이전 Proposal·기록된 Feedback만 SynthesisContext.revision에 추가한다.
+최대 두 번이며 새 Review ID / Binding을 발급한다. Specialist·Comparison·Authorization / Claim을
+재실행하지 않는다. 새로운 조사나 Goal 변경이 필요하면 CEO는 Escalation해야 하며 자동 재분석 경로는 없다.
+정적 검증은 Feedback에 대한 답변의 의미적 충분성을 증명하지 않는다.
+
+PhaseAState에는 directionReview / directionAction / directionGovernanceResult만 추가했다.
+실제 HumanConfirmation 객체와 Agent·Callback은 State / Resume에 넣지 않는다.
+interrupt Node는 부작용 없이 중단하고 Resume 시 처음부터 다시 실행된다. Finalize는 별도 Node이며
+승인 중복 발급을 Ledger Transaction에서 차단한다. 자동 Retry / Replay는 설치하지 않는다.
+
+#### 동일 프로세스 실행 예시
+
+```ts
+const graph = createPhaseAGraph({
+  executionTarget: "human-direction-governance",
+  confirmDirection: (request) =>
+    confirmHumanAction(request.binding, JSON.stringify(request)),
+});
+const config = { configurable: { thread_id: "direction-review-1" } };
+await graph.invoke({ goal, repositoryPath }, config);
+const snapshot = await graph.getState(config);
+const review = snapshot.values.directionReview;
+await graph.invoke(new Command({
+  resume: { reviewId: review.id, binding: review.binding, action: "approve" },
+}), config);
+```
+
+Command는 @langchain/langgraph, confirmHumanAction은 infrastructure/terminal 공개 API다.
+같은 Graph 인스턴스와 Thread ID를 사용한다. MemorySaver는 해당 인스턴스의 메모리에만 있으며 프로세스
+재시작·전원 장애·저장 직후 실패의 exactly-once 복구를 지원하지 않는다. Resume 값은 인증이 아니며,
+confirmDirection 콜백이 없으면 실제 확정 없이 confirmation-required로 종료한다.
+Resume 자체가 없으면 interrupt 승인 대기를 유지한다. 새 입력 invoke는 Resume가 아닌 새 실행이다.
+새 실행에서는 이전 Review / Action / 결과를 초기화한다. 기존 Staffing CLI에는 새로운 명령을 추가하지 않았다.
+
+검증 범위는 실제 Git·signed Ledger·일회용 Receipt와 mock TTY / Codex transport를 사용하는 통합
+테스트다. 실제 Codex·Human 전체 E2E와 Phase B 진입은 후속 Phase A Checkpoint의 검증 대상이다.

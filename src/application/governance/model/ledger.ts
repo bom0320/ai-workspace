@@ -1,3 +1,8 @@
+import {
+  directionAnalysisSchema,
+  directionReviewSchema,
+  approvedDecisionSchema,
+} from "../approval/features/direction-review/model.js";
 import { invocationReservationSchema } from "../authorization/features/specialist-invocation/model/reservation.js";
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
@@ -25,6 +30,9 @@ export const governanceLedgerSchema = z
           ),
           delegations: z.array(recordedHumanDelegationPolicySchema),
           // Absent in historical ledgers. Reads never add defaults or rewrite history.
+          directionAnalyses: z.array(directionAnalysisSchema).optional(),
+          directionReviews: z.array(directionReviewSchema).optional(),
+          approvedDecisions: z.array(approvedDecisionSchema).optional(),
           reservations: z.array(invocationReservationSchema).optional(),
           issuances: z.array(
             z

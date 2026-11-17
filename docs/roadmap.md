@@ -207,7 +207,7 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
 구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
-Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node와 명시적 실행 대상으로 현재 CLI 계약을 보존했다. Step 6.2에서 CEO Synthesis까지 연결했다. 다음 기능은 Direction Governance이며 전체 Phase A 완료는 아니다.
+Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node와 명시적 실행 대상으로 현재 CLI 계약을 보존했다. Step 6.2에서 CEO Synthesis까지 연결했다. Step 7.2에서 Direction Governance와 동일 프로세스 Human Resume를 연결했다. 전체 Phase A Outcome·Phase B는 아직 없다.
 아래 LangGraph 연결·Step 6 CEO Synthesis 등의 마일스톤과 구현 상태를 유지하되, 구체적인 Graph 분리·연결 형태를 이 순서만으로 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
@@ -221,7 +221,7 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 5. **Independent Decision & Comparison — Phase A, 5.1–5.4 Implemented**: 기존 v2 / v3와 원본 Evidence 참조·독립성 유지. 5.5의 별도 검증 단계는 생략하고 후속 통합 검증으로 이관한다.
 6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 명시적 ceo-synthesis 대상에서 Graph 연결.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
-7. **Human Governance — Planned**: 해결 방향의 Approve / Override / Reject 대상·효과를 검증하고 Approved Decision만 handoff.
+7. **Human Governance — Implemented (Step 7.2), Handoff Planned**: Approve / Request Revision / Reject, 검증 출처 Review 등록, 실제 Human Receipt와 ApprovedDecision 발급. 동일 프로세스 Interrupt / Resume와 최대 두 번 Synthesis Revision을 연결했다. Direct Override·Phase B Handoff·영속 복구는 없음.
 8. **CEO Work Decomposition — Phase B (Planned)**: 승인된 방향에서 설계·구현·QA·리뷰 업무의 목적·산출물·담당자·
    의존성·진행 순서를 정한다. 현재 Phase A StaffingAssignment와 향후 Phase B Work Assignment를 동일 모델로 가정하지 않는다.
 9. **Detailed Design & Planning Handoff (Planned)**: 승인된 Decision + 개별 구현 Assignment + Repository
@@ -493,6 +493,17 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - Escalation은 관련 출처만 인용해도 가능하며 전체 배치 Coverage를 적용하지 않는다.
 - 입력·실행·Timeout·JSON·Schema·Reference·Coverage 실패를 구분하고 민감한 상세는 외부에 노출하지 않는다.
 - Risk / Uncertainty의 주제별 묶음은 허용하지만 중요도 자동 판정·의미 검증·Step 7 승인은 미구현이다.
+
+
+### Step 7.2 — Human Direction Governance
+
+- 검증된 Application 결과의 원본 출처를 claimed Invocation·승인 Scope와 연결하여 Review로 등록한다.
+- Graph State / Resume 입력은 인증이 아니다. 실제 TTY Receipt를 Action / Feedback에 묶고 최신 정책·Repository를 승인 전에 다시 확인한다.
+- ApprovedDecision은 Review / 승인 Record 참조이며 Phase B의 Task 실행 권한이 아니다.
+- Revision은 두 번까지이며 이전 Proposal / Feedback과 기존 분석만 Synthesis에 전달한다. Specialist·Comparison은 재실행하지 않는다.
+- human-direction-governance만 메모리 Checkpointer를 사용한다. 기존 Staffing / Specialist / Synthesis 대상과 CLI 종료 지점은 유지한다.
+- 실제 Git / signed Ledger / 일회용 Receipt와 mock TTY / Codex transport로 Interrupt / Resume·승인·거부·Revision·변경/재사용 차단을 검증한다.
+- 남은 검증: 실제 Human·Codex 전체 Phase A E2E, 영속 Checkpoint / 프로세스 재시작 복구, 전체 Phase A Outcome·Phase B Handoff. 과거 단계의 미구현 표기는 당시 범위의 이력이다.
 
 
 ## v5 — Evaluation

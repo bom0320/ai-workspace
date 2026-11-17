@@ -1,4 +1,9 @@
 import {
+  directionReviewSchema,
+  directionActionSchema,
+  directionGovernanceResultSchema,
+} from "@/application/governance/index.js";
+import {
   synthesisContextSchema,
   synthesisResultSchema,
 } from "@/application/synthesis/index.js";
@@ -118,6 +123,9 @@ export const phaseAState = new StateSchema({
   decisionComparisonResult: decisionComparisonResultSchema.optional(),
   synthesisAssignments: synthesisContextSchema.shape.assignments.optional(),
   synthesisResult: synthesisResultSchema.optional(),
+  directionReview: directionReviewSchema.optional(),
+  directionAction: directionActionSchema.optional(),
+  directionGovernanceResult: directionGovernanceResultSchema.optional(),
   policyLookup: policyLookupSchema.optional(),
   staffingResult: staffingRunResultSchema.optional(),
   approvalResult: z

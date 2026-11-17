@@ -48,7 +48,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
 - Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js이며 Phase A가 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인, 승인된 결과의 선택적 Specialist 실행을 조정한다. 별도 Staffing Setup Graph는 제거했으며 목표의 주요 Subgraph는 Phase A / Phase B다. 상위 Organization Graph는 Phase 간 Handoff 계약 정의 이후 구성한다. 기존 Codex 기반 Agent Execution Runtime을 재사용하며 Agent / Model Provider / Tool Calling은 LangChain으로 교체하지 않는다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis Application은 읽기 전용 Decision / Comparison Context에서 출처 검증된 제안·Escalation·실패를 반환한다. 해결 방향의 Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis Application은 읽기 전용 Decision / Comparison Context에서 출처 검증된 제안·Escalation·실패를 반환한다. 해결 방향 Human Governance는 Step 7.2에서 검증 출처 Review·실제 Human Receipt·ApprovedDecision과 동일 프로세스 Interrupt/Resume를 연결했으며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol 또는 Graph State의 존재를 durable execution으로 설명하지 않는다. Graph State는 실행 데이터이며 Governance Ledger를 대체하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 
@@ -125,3 +125,5 @@ git diff --check
 - Architecture 변경이 필요할 때 코드로 몰래 우회하지 않는다.
 - Architecture와 구현이 충돌하면 변경 전에 먼저 보고한다.
 - 작업 완료 후 변경 파일, 검증 결과, 남아 있는 한계를 보고한다.
+
+Human Direction Governance는 human-direction-governance 대상에서만 실행한다. Resume는 인증이 아니며 HumanConfirmation 객체를 State에 저장하지 않는다. MemorySaver는 영속 복구가 아니다. Revision은 기존 분석으로 Synthesis만 최대 두 번 실행하며 Specialist / Comparison / Claim을 재실행하지 않는다. ApprovedDecision은 Task 실행 권한이 아니다.

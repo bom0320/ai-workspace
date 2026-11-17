@@ -1,3 +1,4 @@
+import { rememberValidatedSynthesis } from "../validated-result.js";
 import {
   synthesisContextSchema,
   type SynthesisContext,
@@ -97,5 +98,7 @@ export async function runSynthesis(
       reason: "CEO Synthesis omitted or misplaced a concern treatment.",
     };
   }
-  return { status: "proposed", proposal: action.proposal };
+  const result = { status: "proposed" as const, proposal: action.proposal };
+  rememberValidatedSynthesis(result, { proposal: action.proposal, context });
+  return result;
 }

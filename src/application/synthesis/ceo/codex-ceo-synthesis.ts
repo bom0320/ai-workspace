@@ -30,6 +30,7 @@ export async function runCodexCEOSynthesis(
     "Each tradeoff has benefit, cost and reason explaining the chosen balance. Risk sources belong in risks or unresolvedIssues; Uncertainty sources belong in unresolvedIssues. Related original Risks/Uncertainties may be grouped under one explanation without restating every source sentence. Do not silently drop them. Citing every recommendation is not mandatory.",
     "For escalate: explain the concrete blocker and ask specific Human questions. Cite only sources relevant to those questions; full proposal coverage is NOT required. Every cited reference must exist; no duplicate reference within one list.",
     "These are proposals, not ApprovedDecisions. Do not introduce scope, approval, authority or execution fields. No markdown fences or text outside JSON.",
+    "If revision is present, address its Human feedback against the previous Proposal using ONLY the same original analysis. If it requires new investigation, changed Goal or additional Evidence, escalate rather than invent or re-analyze.",
     "SynthesisContext:",
     JSON.stringify(context),
   ].join("\n");

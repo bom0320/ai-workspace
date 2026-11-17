@@ -8,13 +8,14 @@
 [CLI and Human Interface](cli-and-human-interface.md)에 둔다.
 Development Organization의 실행 계약·Phase Handoff·Graph State / Output 소유권과 분리 판단은
 [Workflow Architecture](workflow-architecture.md)를 기준으로 한다. 이 문서는 Application·runtime의 실제 구현과 설계 이력을 유지한다.
+아래 단계별 기록에서 당시 미구현으로 남긴 방향 승인·Resume의 현재 상태는 [Step 7.2](#step-72--human-direction-governance)를 따른다.
 
 현재 구현은 v0–v3와 v4 R1/R2 Staffing·Step 3 승인·Step 4 Authorization·Step 5.1–5.4 Decision/Comparison 연결을 포함한다.
 LangGraph.js Minimal Integration Step 1은 정책 조회를, Step 2는 CEO Staffing·Approval 평가 Node와 조건부 Edge를 연결했다.
 Step 2.5는 콜백 기반 Human 확인·최종화를 연결했고, 이후 Staffing Setup Subgraph를 제거해 Policy → Staffing → Approval을 Phase A가 직접 소유하도록 통합했다. CLI의 기존 API도 현재 Phase A Graph를 호출한다.
 Step 3는 승인된 Staffing 결과와 명시적 specialist-decisions 실행 대상에서 Preflight·단일 Specialist·Comparison·완료를 일반 Node로 연결하고 반복·실패 분기를 Phase A Edge로 이전했다. 전체 Organization Graph는 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
 Step 6.2는 CEO Synthesis Application과 명시적 ceo-synthesis Graph 실행 대상을 구현했다.
-v4는 진행 중이며 해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
+v4는 진행 중이다. Step 7.2의 해결 방향 Human Governance와 동일 프로세스 Interrupt / Resume는 구현했으며 Phase B·전체 CEO Workflow는 미완성이다.
 
 ## 2. Current Architecture
 
@@ -2143,3 +2144,27 @@ Comparison 실패는 차단하고 completed 또는 단일 skipped만 Node에 진
 기존 staffing-approval / specialist-decisions·CLI 종료 범위는 유지했다. 실행 Agent와 timeout은 Graph 생성
 옵션의 synthesis에 두며 State에 직렬화하지 않는다. 추가 Authorization·분석 Loop·자동 Retry는 없다.
 Human Governance·승인 Provenance·ApprovedDecision·Phase B Handoff·Checkpoint / Resume는 미구현이다.
+
+### Step 7.2 — Human Direction Governance
+
+Governance approval/features/direction-review는 Review 출처 등록·Action Binding·Human Receipt 검증·
+승인/수정 요청/거부 기록과 ApprovedDecision 발급을 소유한다. Decision / Comparison / Synthesis
+Application의 실제 검증 성공 결과를 일회용 프로세스 내부 기록으로 확인하고 signed Ledger에 연결한다.
+Graph proposed 값이나 Digest만으로는 Review를 등록할 수 없다. Evidence / Reference / Coverage와
+의미 분석은 기존 Application에 남긴다.
+
+ApprovedDecision은 Proposal 복사본 대신 Review ID / Binding과 실제 Approval Record ID를 저장한다.
+조회 API가 원본 분석·Proposal·Goal·Snapshot·Human 기록을 재검증해 복원한다. 저장된 Scope의
+현재 Policy / Repository 검증도 재사용하며 Human 입력을 Ledger Lock 안에서 기다리지 않는다.
+역사적 Ledger에는 optional 필드를 추가하므로 읽기 시 기본값을 쓰거나 마이그레이션하지 않는다.
+
+Phase A는 human-direction-governance 대상에서만 Review / Interrupt / Finalize / Synthesis Revision
+경로를 연결한다. 준비는 Synthesis 검증 직후에 수행하여 객체 출처가 State 직렬화로 사라지기 전에
+등록한다. 승인·거부·최대 두 번의 수정은 실제 일회용 Confirmation을 필요로 한다.
+Revision은 이전 Proposal / Feedback과 동일 분석을 사용하고 과거 Reservation / Claim을 재실행하지 않는다.
+기존 세 실행 대상·Staffing CLI·Authorization / Budget 정책은 유지한다.
+
+메모리 Checkpointer는 같은 Graph 인스턴스 / Thread에서만 재개한다. 영속 Checkpoint·장애 후 복구·
+exactly-once·외부 IAM은 제공하지 않는다. Receipt는 State에 저장하지 않으며 Resume는 인증이 아니다.
+Phase B Handoff·Task 권한·Organization Graph·Direct Override는 구현하지 않았다.
+세부 State·결과·호출 예시는 [Workflow Architecture](workflow-architecture.md#step-72--human-direction-governance)를 따른다.

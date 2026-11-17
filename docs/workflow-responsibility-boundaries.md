@@ -9,8 +9,7 @@
 
 아래의 **확정 원칙**, **현재 구현 사실**, **미적용 개선 방향**을 구별한다. Step 2에서 Stage 3 / 4의 Result와 완료 시점을 분리했다.
 Step 4에서 Stage 1 / 2의 중복 통합 State도 제거했다. 이 문서는 새 타입·Schema·디렉터리·Node 수·Subgraph 수를 확정하지 않는다.
-Organization Graph, Human Direction Governance, Phase B, Interrupt / Resume와 Checkpoint
-Recovery는 미구현이다. 기존 Staffing·Governance·Decision·Comparison·Synthesis와 LangGraph 기반 Phase A는 구현되어 있다.
+Organization Graph, Phase B와 영속 Checkpoint Recovery는 미구현이다. Human Direction Governance와 동일 프로세스 Interrupt / Resume는 Step 7.2에서 구현했다. 기존 Staffing·Governance·Decision·Comparison·Synthesis와 LangGraph 기반 Phase A는 구현되어 있다.
 
 ## 1. 문제와 책임 모델
 
@@ -43,7 +42,7 @@ LangGraph의 Stage별 실행 구성은 별개 결정이며 `stages/` 도입이�
 ### Phase A의 여섯 업무 목적과 진행 조건
 
 다음은 업무 경계다. Stage 1~4의 기반 기능과 Stage 3 / 4의 독립 결과·완료 계약은 구현되었다. Step 4에서 Stage 1 / 2의 결과와 외부 반환 계약도 분리했다.
-Stage 5는 Step 6.2에서 Synthesis Application과 Graph 연결을 구현했다. Stage 6은 미구현 목표다.
+Stage 5는 Step 6.2에서 Synthesis Application과 Graph 연결을 구현했다. Stage 6은 Step 7.2에서 구현했다. Direct Override·Phase B Handoff·영속 복구는 미구현이다.
 
 | Stage | 주요 소유 Application | 입력 → 성공 결과 / 완료 조건 | 다음 Stage 진행 조건 |
 | --- | --- | --- | --- |
@@ -52,7 +51,7 @@ Stage 5는 Step 6.2에서 Synthesis Application과 Graph 연결을 구현했다.
 | 3. Independent Specialist Decisions | `decision` (실행 권한은 Governance) | 승인된 실행 대상·검증된 Context와 공통 Goal / Snapshot → 모든 대상의 독립 분석·Snapshot / Evidence 검증을 마친 `AgentDecision[]` | 전체 대상이 완료된 경우에만 비교 또는 단일 Decision 후속 경로로 진행 |
 | 4. Decision Comparison | `comparison` | 같은 비교 단위의 독립 Decision과 원본 Goal / Snapshot SHA → 관계 분석과 원본 참조 검증을 마친 `ComparisonResult` | 비교 성공 또는 허용된 생략 경로에서만 후속 종합으로 진행. 단일 Specialist의 비교는 skipped / insufficient-decisions로 명시 |
 | 5. CEO Synthesis | `synthesis` | 독립 판단·비교 결과·근거 → CEO 종합 보고안 | 보고안에 필요한 검증 후 Human Direction Governance로 전달하는 목표. CEO는 최종 승인 권한을 갖지 않음 |
-| 6. Human Governance | 향후 해결 방향의 Governance 승인·수정·거절 기능 | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인과 Handoff 검증을 충족해야 Phase B 진입. 수정·거절의 효과와 재검증은 후속 계약 대상 |
+| 6. Human Governance | 해결 방향의 Governance 승인·수정 요청·거절 기능 (Step 7.2) | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인과 Handoff 검증을 충족해야 Phase B 진입. 수정은 동일 분석의 Synthesis 재제안 두 번까지, 거절은 해당 Review 종료. Phase B Handoff는 후속 계약 대상 |
 
 Staffing Approval은 분석 조직·Context·Invocation Budget에 대한 승인이다. Human Governance는 종합된
 해결 방향의 승인·수정·거절을 담당한다. 두 승인과 Phase B의 Task Approval·Repository 수정·Delivery 권한은
@@ -198,7 +197,7 @@ Application은 실제 기능과 비즈니스 규칙의 단일 소유자다. Work
 | Decision | Specialist 실행 계약과 Snapshot / Evidence 검증 |
 | Comparison | 독립 Decision 관계 분석, 결과의 Specialist ID / Evidence Reference 유효성 검증 |
 | Synthesis | CEO 종합 분석·Proposal / Escalation·SourceReference 및 중요 원본 참조 누락 검증. 승인은 발급하지 않음 |
-| Human Governance (예정) | 해결 방향의 Human 승인 정책과 기록 |
+| Human Direction Governance | 해결 방향의 Human 승인 정책과 기록 |
 
 
 ### 현재 호출 관계와 신뢰 검증
@@ -396,8 +395,7 @@ Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구�
 
 Phase B에도 동일 기준을 적용하되 업무 분해·Assignment 모델·다중 실행·재작업·재배치·검증·진행 평가의
 구체적인 계약은 별도 설계 대상이다. 기존 Planning / Execution의 기능을 재사용하고 모든 Assignment에
-TaskContract를 강제하지 않는다. 이 판단 기준의 존재가 Phase B나 Human Governance·Organization
-Graph·Checkpoint Recovery의 구현 완료를 뜻하지 않는다.
+TaskContract를 강제하지 않는다. 이 판단 기준의 존재가 Phase B·Organization Graph·영속 Checkpoint Recovery의 구현 완료를 뜻하지 않는다. Human Direction Governance의 현재 구현 범위는 아래 Step 7.2 기록을 따른다.
 
 ### Step 6.2 적용 — Synthesis Stage와 실행 경계
 
@@ -424,3 +422,7 @@ Propose의 rationale은 근거 목록, tradeoffs는 benefit / cost / reason / so
 인용이나 원본 문장별 중복 서술은 요구하지 않는다. 중요도 정보가 없는 Risk / Uncertainty를 임의로 제외하지는 않는다.
 Escalation에는 전체 Coverage 대신 이유·질문과 해당 출처의 무결성만 요구한다. 관련성·설명의 적절성은
 여전히 정적 검증으로 증명할 수 없으며 Human이 검토해야 한다. Step 7 계약·승인 정책은 추가하지 않았다.
+
+### Step 7.2 적용 — 출처 등록과 Human 확인
+
+방향 Governance는 실제 검증 경로에서 생성된 Decision / Comparison / Synthesis를 Review에 연결하고, Action에 묶인 일회용 Human Receipt와 최신 Policy / Repository를 검증한다. Synthesis의 SourceReference / Coverage를 다시 구현하지 않는다. 검증 직후 Review 등록은 Synthesis Node에 응집시켜 State의 복사본을 인증 자료로 오인하지 않는다. Interrupt Node에는 부작용이 없고 Finalize Node는 실제 확인을 Ledger Lock 밖에서 받은 뒤 Governance를 호출한다. Revision의 반복은 Graph가, 재제안 검증은 Synthesis가 소유한다. 동일 분석의 두 차례 수정만 허용하며 Task 실행 권한은 발급하지 않는다. 과거 Step 6.2의 미구현 표기는 당시 범위이며 현재 실행 계약은 [Step 7.2](workflow-architecture.md#step-72--human-direction-governance)를 따른다.

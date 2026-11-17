@@ -3,9 +3,19 @@ import { staffingAssignmentSchema } from "@/application/staffing/index.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { agentDecisionSchema } from "@/application/decision/index.js";
 import { comparisonPayloadSchema } from "@/application/comparison/index.js";
-import { synthesisTextSchema } from "../model/proposal.js";
+import {
+  synthesisProposalSchema,
+  synthesisTextSchema,
+} from "../model/proposal.js";
 export const synthesisContextSchema = z
   .object({
+    revision: z
+      .object({
+        previousProposal: synthesisProposalSchema,
+        feedback: synthesisTextSchema,
+      })
+      .strict()
+      .optional(),
     goal: goalSpecSchema,
     repositoryCommitSha: synthesisTextSchema,
     assignments: z

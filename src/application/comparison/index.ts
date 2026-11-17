@@ -11,3 +11,5 @@ export type {
 } from "./model/comparison.js";
 export { comparisonPayloadSchema } from "./protocol/comparison.js";
 export { validateComparisonReferences } from "./flow/validation/validate-references.js";
+
+export { consumeValidatedComparison } from "./validated-result.js";

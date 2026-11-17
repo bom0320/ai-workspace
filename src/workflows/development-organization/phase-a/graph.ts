@@ -1,6 +1,11 @@
+import { humanDirectionReview } from "./features/governance/nodes/human-direction-review.js";
+import {
+  createFinalizeDirectionReviewNode,
+  type DirectionConfirmationOptions,
+} from "./features/governance/nodes/finalize-direction-review.js";
 import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
 import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
-import { END, START, StateGraph } from "@langchain/langgraph";
+import { END, START, StateGraph, MemorySaver } from "@langchain/langgraph";
 import { phaseAState, type PhaseAState } from "./state.js";
 import {
   createRunStaffingNode,
@@ -18,15 +23,21 @@ import { executeNextSpecialist } from "./features/decision/nodes/execute-next-sp
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
 
 export type PhaseAExecutionTarget =
-  "staffing-approval" | "specialist-decisions" | "ceo-synthesis";
+  | "staffing-approval"
+  | "specialist-decisions"
+  | "ceo-synthesis"
+  | "human-direction-governance";
 export type PhaseAGraphOptions = StaffingExecutionOptions &
-  StaffingConfirmationOptions & {
+  StaffingConfirmationOptions &
+  DirectionConfirmationOptions & {
     executionTarget?: PhaseAExecutionTarget;
     synthesis?: RunSynthesisOptions;
   };
 
 export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   const { executionTarget = "staffing-approval" } = options;
+
+  const humanGovernance = executionTarget === "human-direction-governance";
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph(phaseAState)
@@ -38,9 +49,21 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       createConfirmStaffingApprovalNode(options.confirmApproval)
     )
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
-    .addNode("execute-next-specialist", executeNextSpecialist)
-    .addNode("compare-specialist-decisions", compareSpecialistDecisions)
-    .addNode("run-ceo-synthesis", createRunCEOSynthesisNode(options.synthesis));
+    .addNode("execute-next-specialist", (state) =>
+      executeNextSpecialist(state, humanGovernance)
+    )
+    .addNode("compare-specialist-decisions", (state) =>
+      compareSpecialistDecisions(state, humanGovernance)
+    )
+    .addNode(
+      "run-ceo-synthesis",
+      createRunCEOSynthesisNode(options.synthesis, humanGovernance)
+    )
+    .addNode("human-direction-review", humanDirectionReview)
+    .addNode(
+      "finalize-direction-review",
+      createFinalizeDirectionReviewNode(options.confirmDirection)
+    );
 
   // 2. Connect Execution Edges
   graph.addEdge(START, "load-system-policy");
@@ -60,7 +83,8 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   // Execution target selects an endpoint; State approval is not execution authority.
   const routeAfterApproval = (state: PhaseAState) =>
     (executionTarget === "specialist-decisions" ||
-      executionTarget === "ceo-synthesis") &&
+      executionTarget === "ceo-synthesis" ||
+      humanGovernance) &&
     state.approvalResult?.status === "approved"
       ? "preflight-specialist-decisions"
       : END;
@@ -106,7 +130,7 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   graph.addConditionalEdges(
     "compare-specialist-decisions",
     (state) =>
-      executionTarget === "ceo-synthesis" &&
+      (executionTarget === "ceo-synthesis" || humanGovernance) &&
       state.specialistDecisionsResult?.status === "completed" &&
       (state.decisionComparisonResult?.status === "completed" ||
         (state.decisionComparisonResult?.status === "skipped" &&
@@ -115,13 +139,40 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         : END,
     ["run-ceo-synthesis", END]
   );
-  graph.addEdge("run-ceo-synthesis", END);
+  graph.addConditionalEdges(
+    "run-ceo-synthesis",
+    (state) =>
+      humanGovernance &&
+      state.synthesisResult?.status === "proposed" &&
+      state.directionReview &&
+      !state.directionGovernanceResult
+        ? "human-direction-review"
+        : END,
+    ["human-direction-review", END]
+  );
+  graph.addConditionalEdges(
+    "human-direction-review",
+    (state) =>
+      state.directionAction && !state.directionGovernanceResult
+        ? "finalize-direction-review"
+        : END,
+    ["finalize-direction-review", END]
+  );
+  graph.addConditionalEdges(
+    "finalize-direction-review",
+    (state) =>
+      state.directionGovernanceResult?.status === "revision-requested"
+        ? "run-ceo-synthesis"
+        : END,
+    ["run-ceo-synthesis", END]
+  );
 
-  // Approval may persist Scope: no retry policy or resume mechanism is installed.
+  // No automatic retry. Memory checkpoints support only same-process Human Resume;
+  // persisted Governance records remain the approval authority.
   // 3. Compile Graph
   // The finite Assignment cursor bounds repetition. LangGraph's default 25 steps
   // must not become an additional Invocation budget; callers may set a lower limit.
   return graph
-    .compile()
+    .compile(humanGovernance ? { checkpointer: new MemorySaver() } : {})
     .withConfig({ recursionLimit: Number.MAX_SAFE_INTEGER });
 }

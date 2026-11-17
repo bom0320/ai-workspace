@@ -1,3 +1,4 @@
+import { rememberValidatedComparison } from "../validated-result.js";
 import {
   runCodexComparator,
   type CodexComparatorOptions,
@@ -28,5 +29,6 @@ export async function compareDecisions(
 
   const payload = await runCodexComparator(context, options);
   validateComparisonReferences(context, payload);
+  rememberValidatedComparison(payload, { comparison: payload, context });
   return payload;
 }

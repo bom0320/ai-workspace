@@ -1,4 +1,3 @@
-import type { AgentDecision } from "@/application/decision/index.js";
 import {
   authorizeSpecialistInvocation,
   type AuthorizedSpecialistInvocation,
@@ -10,11 +9,7 @@ import {
 import type { PhaseAState } from "../../../state.js";
 
 export async function executeNextSpecialist(
-  state: PhaseAState,
-  recordDecision?: (
-    invocation: AuthorizedSpecialistInvocation,
-    decision: AgentDecision
-  ) => void
+  state: PhaseAState
 ): Promise<Partial<PhaseAState>> {
   // 1. Require Consistent Prepared Progress Before Reserving Budget
   const requests = state.preparedSpecialistRequests;
@@ -71,8 +66,6 @@ export async function executeNextSpecialist(
   // Failed batches expose no partial success and must not consume later budgets.
   try {
     const decision = await runAuthorizedSpecialistDecision(invocation);
-    // Human Direction Governance records the one-use result before serialization.
-    recordDecision?.(invocation, decision);
     // 4. Record Progress or Complete Stage 3 With the Last Successful Execution
     const decisions = [...collected, decision];
     const nextIndex = index + 1;

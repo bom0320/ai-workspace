@@ -28,7 +28,10 @@ import {
   type StaffingSystemPolicy,
 } from "@/application/governance/index.js";
 import { confirmHumanAction } from "@/infrastructure/terminal/index.js";
-import { withGovernanceRecords } from "@/services/governance-records/index.js";
+import {
+  withGovernanceRecords,
+  governanceDigest,
+} from "@/services/governance-records/index.js";
 import type {
   StaffingDraft,
   CEOStaffingAgent,
@@ -970,7 +973,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toBeUndefined();
   });
 
-  it.each(["binding", "action"])(
+  it.each(["binding", "action", "proposal"])(
     "rejects invalid %s in Human Resume before confirmation",
     async (kind) => {
       const confirm = vi.fn(confirmDirection);
@@ -1051,6 +1054,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       );
       expect(state.directionReview?.revision).toBe(index + 1);
       expect(state.directionReview?.previousReviewId).toBe(review.id);
+      expect(state.directionReview).not.toHaveProperty("context");
       expect(state.directionReview?.binding).not.toBe(review.binding);
       expect(state.directionGovernanceResult).toBeUndefined();
       expect(
@@ -1219,17 +1223,25 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(() => governance.getDirectionReview(review.id)).toThrow("binding");
   });
 
-  it("does not authenticate copied Decision or Comparison results by their Schema alone", async () => {
+  it("keeps one original analysis in the initial Review without per-stage Ledger writes", async () => {
     const { pending } = await pendingDirection(2);
-    const comparison = pending.decisionComparisonResult;
-    if (comparison?.status !== "completed")
-      throw new Error("Missing Comparison");
-    expect(() =>
-      governance.recordDirectionComparison(
-        pending.directionReview!.scopeId,
-        structuredClone(comparison.comparison)
-      )
-    ).toThrow("Untrusted");
+    withGovernanceRecords((raw) => {
+      const entry = Object.values(
+        (
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+        ).repositories
+      )[0];
+      expect(entry.directionAnalyses).toBeUndefined();
+      const review = entry.directionReviews![0];
+      expect(review.context?.decisions).toEqual(pending.collectedDecisions);
+      expect(review.context?.comparison).toEqual(
+        pending.decisionComparisonResult
+      );
+      expect(review.context?.goal).toEqual(options.goal);
+    });
+    expect(governance).not.toHaveProperty("registerDirectionReview");
+    expect(governance).not.toHaveProperty("recordDirectionDecision");
+    expect(governance).not.toHaveProperty("recordDirectionComparison");
   });
 
   it("does not reuse a prior Human Review when invoking fresh input on the same thread", async () => {
@@ -1263,9 +1275,17 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     configure();
     options.confirmApproval = (request) => accept(request);
     runtime();
-    vi.spyOn(governance, "registerDirectionReview").mockImplementation(() => {
-      throw new Error("cannot persist Review");
-    });
+    // A real policy change after Synthesis must prevent registration, while
+    // preserving the valid Stage 5 result independently of Governance failure.
+    const application = await import("@/application/synthesis/index.js");
+    const originalRun = application.runSynthesis;
+    vi.spyOn(application, "runSynthesis").mockImplementation(
+      async (...args) => {
+        const result = await originalRun(...args);
+        configure();
+        return result;
+      }
+    );
     const graph = createPhaseAGraph({
       ...options,
       executionTarget: "human-direction-governance",
@@ -1295,25 +1315,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(state.synthesisResult).toBeUndefined();
     expect(state.directionReview).toBeUndefined();
   });
-  it("refuses copied or modified Synthesis state as Review provenance", async () => {
+  it("refuses a changed Review Binding independently of Proposal data", async () => {
     const { pending } = await pendingDirection(1);
-    expect(pending.synthesisResult?.status).toBe("proposed");
-    if (
-      pending.synthesisResult?.status !== "proposed" ||
-      pending.approvalResult?.status !== "approved"
-    )
-      throw new Error("Missing proposed result");
-    expect(() =>
-      governance.registerDirectionReview(
-        pending.approvalResult!.status === "approved"
-          ? pending.approvalResult!.scope.id
-          : "",
-        structuredClone(pending.synthesisResult) as Extract<
-          typeof pending.synthesisResult,
-          { status: "proposed" }
-        >
-      )
-    ).toThrow("Untrusted");
     const review = pending.directionReview!;
     expect(() =>
       governance.prepareDirectionConfirmation({
@@ -1322,6 +1325,184 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         action: "approve",
       })
     ).toThrow();
+  });
+
+  it.each(["schema", "references", "coverage"] as const)(
+    "never registers or approves a %s-invalid CEO Proposal, even with forged incoming State",
+    async (failure) => {
+      prepareBatch();
+      runtime();
+      const confirm = vi.fn(confirmDirection);
+      const invalid = {
+        direction: {
+          text: "Unvalidated direction",
+          sources: [
+            { kind: "recommendation" as const, specialistId: "frontend" },
+          ],
+        },
+        rationale: [
+          {
+            text: "Original reason",
+            sources: [
+              { kind: "recommendation" as const, specialistId: "frontend" },
+            ],
+          },
+        ],
+        alternatives: [],
+        tradeoffs: [],
+        risks: [],
+        unresolvedIssues: [],
+        humanReviewItems: [
+          {
+            text: "Review",
+            sources: [
+              { kind: "recommendation" as const, specialistId: "frontend" },
+            ],
+          },
+        ],
+      };
+      const graph = createPhaseAGraph({
+        ...options,
+        executionTarget: "human-direction-governance",
+        confirmDirection: confirm,
+        synthesis: {
+          agent: async () =>
+            failure === "schema"
+              ? ({
+                  type: "propose",
+                  proposal: { direction: "Invalid" },
+                } as unknown as import("@/application/synthesis/index.js").CEOSynthesisDecision)
+              : {
+                  type: "propose",
+                  proposal:
+                    failure === "references"
+                      ? {
+                          ...invalid,
+                          direction: {
+                            ...invalid.direction,
+                            sources: [
+                              {
+                                kind: "recommendation",
+                                specialistId: "unknown",
+                              },
+                            ],
+                          },
+                        }
+                      : invalid,
+                },
+        },
+      });
+      const state = await graph.invoke(
+        {
+          goal: options.goal,
+          repositoryPath: root,
+          synthesisResult: { status: "proposed", proposal: invalid },
+          directionReview: {
+            id: "forged",
+            scopeId: "forged",
+            scopeVersion: 1,
+            analysisDigest: "forged",
+            revision: 0,
+            binding: "forged",
+            proposal: invalid,
+          },
+          directionGovernanceResult: {
+            status: "approved",
+            decision: {
+              id: "forged",
+              reviewId: "forged",
+              reviewBinding: "forged",
+              approvalRecordId: "forged",
+            },
+          },
+        },
+        { configurable: { thread_id: "invalid-proposal" } }
+      );
+      expect(state.synthesisResult).toMatchObject({
+        status: "failed",
+        failure:
+          failure === "schema"
+            ? "invalid-output"
+            : failure === "references"
+              ? "invalid-references"
+              : "incomplete-coverage",
+      });
+      expect(state.directionReview).toBeUndefined();
+      expect(state.directionGovernanceResult).toBeUndefined();
+      expect(confirm).not.toHaveBeenCalled();
+      withGovernanceRecords((raw) => {
+        const entry = Object.values(
+          (
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+          ).repositories
+        )[0];
+        expect(entry.directionReviews).toBeUndefined();
+        expect(entry.approvedDecisions).toBeUndefined();
+      });
+    }
+  );
+
+  it("reads and approves legacy per-stage Ledger history without migrating it", async () => {
+    const { pending } = await pendingDirection(2);
+    const reviewId = pending.directionReview!.id;
+    withGovernanceRecords((raw, persist) => {
+      const entry = Object.values(
+        (
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+        ).repositories
+      )[0];
+      const review = entry.directionReviews![0];
+      const context = review.context!;
+      const scope = entry.issuances.find(
+        (value) => value.scope.id === review.scopeId
+      )!.scope;
+      entry.directionAnalyses = [
+        {
+          scopeId: scope.id,
+          scopeVersion: scope.version,
+          decisions: scope.assignments.map((assignment, index) => ({
+            assignmentId: assignment.assignmentId,
+            invocationId: entry.reservations!.find(
+              (value) => value.assignmentId === assignment.assignmentId
+            )!.invocationId,
+            decision: context.decisions[index],
+          })),
+          comparison: context.comparison,
+        },
+      ];
+      delete review.context;
+      const { binding: _binding, resolution: _resolution, ...subject } = review;
+      review.binding = governanceDigest(subject);
+      persist(raw);
+    });
+    const before = withGovernanceRecords((raw) => structuredClone(raw));
+    const restored = governance.getDirectionReview(reviewId);
+    expect(restored.context.decisions).toEqual(pending.collectedDecisions);
+    expect(withGovernanceRecords((raw) => raw)).toEqual(before);
+    const action = {
+      reviewId,
+      binding: restored.review.binding,
+      action: "approve" as const,
+    };
+    const receipt = confirmDirection(
+      governance.prepareDirectionConfirmation(action)
+    );
+    const approved = governance.finalizeDirectionReview(action, receipt!);
+    expect(approved.status).toBe("approved");
+    if (approved.status !== "approved") throw new Error("Missing approval");
+    configure();
+    expect(
+      governance.getApprovedDecision(approved.decision.id).context
+    ).toEqual(restored.context);
+    withGovernanceRecords((raw) => {
+      const entry = Object.values(
+        (
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+        ).repositories
+      )[0];
+      expect(entry.directionReviews![0]).not.toHaveProperty("context");
+      expect(entry.directionAnalyses).toHaveLength(1);
+    });
   });
 
   it.each([1, 2])(

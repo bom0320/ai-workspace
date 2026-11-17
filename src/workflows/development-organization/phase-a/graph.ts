@@ -1,8 +1,3 @@
-import {
-  recordDirectionDecision,
-  recordDirectionComparison,
-  registerDirectionReview,
-} from "@/application/governance/index.js";
 import { humanDirectionReview } from "./features/governance/nodes/human-direction-review.js";
 import {
   createFinalizeDirectionReviewNode,
@@ -54,24 +49,13 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       createConfirmStaffingApprovalNode(options.confirmApproval)
     )
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
-    .addNode("execute-next-specialist", (state) =>
-      executeNextSpecialist(
-        state,
-        humanGovernance ? recordDirectionDecision : undefined
-      )
-    )
-    .addNode("compare-specialist-decisions", (state) =>
-      compareSpecialistDecisions(
-        state,
-        humanGovernance ? recordDirectionComparison : undefined
-      )
-    )
+    .addNode("execute-next-specialist", executeNextSpecialist)
+    .addNode("compare-specialist-decisions", compareSpecialistDecisions)
     .addNode(
       "run-ceo-synthesis",
-      createRunCEOSynthesisNode(
-        options.synthesis,
-        humanGovernance ? registerDirectionReview : undefined
-      )
+      createRunCEOSynthesisNode(options.synthesis, {
+        directionReview: humanGovernance,
+      })
     )
     .addNode("human-direction-review", humanDirectionReview)
     .addNode(

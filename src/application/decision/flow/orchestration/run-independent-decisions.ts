@@ -1,4 +1,3 @@
-import { rememberValidatedDecision } from "../../validated-result.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
@@ -51,7 +50,6 @@ export async function runIndependentDecisions(
     );
     assertRepositoryMatchesSnapshot(snapshot);
     validateDecisionEvidence(context, decision);
-    rememberValidatedDecision(decision, { decision, context, snapshot });
     decisions.push(decision);
   }
   return decisions;

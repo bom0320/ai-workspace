@@ -30,6 +30,7 @@ export const governanceLedgerSchema = z
           ),
           delegations: z.array(recordedHumanDelegationPolicySchema),
           // Absent in historical ledgers. Reads never add defaults or rewrite history.
+          // Legacy read compatibility only; new Reviews carry their own Context.
           directionAnalyses: z.array(directionAnalysisSchema).optional(),
           directionReviews: z.array(directionReviewSchema).optional(),
           approvedDecisions: z.array(approvedDecisionSchema).optional(),

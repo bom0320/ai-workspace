@@ -1,35 +1,39 @@
 import { randomUUID } from "node:crypto";
 import {
-  consumeValidatedSynthesis,
-  type SynthesisResult,
+  synthesisContextSchema,
+  synthesisProposalSchema,
+  type SynthesisContext,
+  type SynthesisProposal,
 } from "@/application/synthesis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import type { DirectionReview } from "../model.js";
 import {
   currentScopeSource,
-  analysisContext,
+  assertAnalysisScope,
   resolveCurrentReview,
   resolveReviewRecord,
   reviewBinding,
   sameContent,
 } from "../shared/resolve-context.js";
 
+// Internal integration writer: only the Synthesis Node may import this function,
+// immediately after runSynthesis(). It is intentionally absent from public barrels.
+// This is an in-process trusted-code boundary, not a sandbox against arbitrary code.
 export function registerDirectionReview(
   scopeId: string,
-  result: Extract<SynthesisResult, { status: "proposed" }>,
+  input: SynthesisContext,
+  proposed: SynthesisProposal,
   previousReviewId?: string
 ): DirectionReview {
-  const proof = consumeValidatedSynthesis(result);
+  const { revision, ...context } = synthesisContextSchema.parse(input);
+  const proposal = synthesisProposalSchema.parse(proposed);
   return withGovernanceLedger((ledger, save) => {
     const {
       entry,
       issuance: { scope },
     } = currentScopeSource(ledger, scopeId);
-    const context = analysisContext(entry, scope);
-    const { revision, ...original } = proof.context;
-    if (!sameContent(original, context))
-      throw new Error("Synthesis has no matching trusted analysis provenance.");
+    assertAnalysisScope(context, scope);
     let count = 0;
     if (previousReviewId) {
       // This transaction already checked current eligibility for the Scope.
@@ -39,6 +43,7 @@ export function registerDirectionReview(
         parent.scopeId !== scopeId ||
         parent.resolution?.action.action !== "request-revision" ||
         parent.revision >= 2 ||
+        parent.analysisDigest !== governanceDigest(context) ||
         !revision ||
         !sameContent(revision.previousProposal, parent.proposal) ||
         revision.feedback !== parent.resolution.action.feedback
@@ -60,7 +65,8 @@ export function registerDirectionReview(
       scopeId,
       scopeVersion: scope.version,
       analysisDigest: governanceDigest(context),
-      proposal: proof.proposal,
+      proposal,
+      ...(!previousReviewId ? { context } : {}),
       revision: count,
       ...(previousReviewId ? { previousReviewId } : {}),
     };

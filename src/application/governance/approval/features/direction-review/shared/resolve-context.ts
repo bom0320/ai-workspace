@@ -22,7 +22,7 @@ export function scopeSource(ledger: GovernanceLedger, scopeId: string) {
     throw new Error("Direction source Scope is unavailable or ambiguous.");
   return matches[0];
 }
-export function analysisContext(
+function legacyAnalysisContext(
   entry: RepositoryGovernance,
   scope: RepositoryGovernance["issuances"][number]["scope"]
 ): SynthesisContext {
@@ -78,6 +78,54 @@ export function analysisContext(
   };
 }
 
+// New records keep one Context at the initial Review. Old signed records still
+// resolve through directionAnalyses; reads never migrate or discard their history.
+function reviewContext(
+  entry: RepositoryGovernance,
+  scope: RepositoryGovernance["issuances"][number]["scope"],
+  review: DirectionReview
+): SynthesisContext {
+  if (review.context) return review.context;
+  if (review.previousReviewId) {
+    const parent = entry.directionReviews?.find(
+      (value) => value.id === review.previousReviewId
+    );
+    if (
+      !parent ||
+      parent.revision + 1 !== review.revision ||
+      parent.scopeId !== scope.id ||
+      parent.scopeVersion !== scope.version
+    )
+      throw new Error("Revision Context source is invalid.");
+    return reviewContext(entry, scope, parent);
+  }
+  return legacyAnalysisContext(entry, scope);
+}
+
+export function assertAnalysisScope(
+  context: SynthesisContext,
+  scope: RepositoryGovernance["issuances"][number]["scope"]
+): void {
+  const approved = {
+    goal: scope.goal,
+    repositoryCommitSha: scope.snapshot.commitSha,
+    assignments: scope.assignments.map(
+      ({ assignmentId, specialistId, objective }) => ({
+        assignmentId,
+        specialistId,
+        objective,
+      })
+    ),
+  };
+  const actual = {
+    goal: context.goal,
+    repositoryCommitSha: context.repositoryCommitSha,
+    assignments: context.assignments,
+  };
+  if (!sameContent(approved, actual))
+    throw new Error("Review Context does not match the approved Scope.");
+}
+
 export function reviewBinding(
   review: Omit<DirectionReview, "binding" | "resolution">
 ) {
@@ -101,7 +149,8 @@ function resolveReview(
   if (entry !== reviewEntry)
     throw new Error("Review and Scope belong to different Repository records.");
   validateIssuance(issuance, entry);
-  const context = analysisContext(entry, scope);
+  const context = reviewContext(entry, scope, review);
+  assertAnalysisScope(context, scope);
   assertReviewRecord(review, entry, scope, context);
   return { entry, review, context, snapshot: scope.snapshot };
 }

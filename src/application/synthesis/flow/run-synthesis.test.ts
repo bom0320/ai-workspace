@@ -1,4 +1,3 @@
-import { consumeValidatedSynthesis } from "../validated-result.js";
 import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -172,34 +171,6 @@ beforeEach(() => {
 });
 
 describe("CEO Synthesis Application", () => {
-  it("consumes only the original validated Synthesis once with an untouched Context", async () => {
-    const input = context(true);
-    const result = await runSynthesis(input, {
-      agent: async () => propose(input),
-    });
-    if (result.status !== "proposed")
-      throw new Error("Missing validated Proposal");
-    expect(() => consumeValidatedSynthesis(structuredClone(result))).toThrow(
-      "Untrusted"
-    );
-    const proof = consumeValidatedSynthesis(result);
-    expect(proof.context).toEqual(input);
-    expect(proof.proposal).toEqual(result.proposal);
-    expect(proof.proposal).not.toBe(result.proposal);
-    expect(() => consumeValidatedSynthesis(result)).toThrow("consumed");
-  });
-  it("rejects and consumes a changed Synthesis proposal", async () => {
-    const input = context(true);
-    const result = await runSynthesis(input, {
-      agent: async () => propose(input),
-    });
-    if (result.status !== "proposed")
-      throw new Error("Missing validated Proposal");
-    result.proposal.direction.text = "Changed after Coverage Validation";
-    expect(() => consumeValidatedSynthesis(result)).toThrow("Untrusted");
-    expect(() => consumeValidatedSynthesis(result)).toThrow("consumed");
-  });
-
   it.each([false, true])(
     "proposes from unchanged source data (single=%s)",
     async (single) => {

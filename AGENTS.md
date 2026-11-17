@@ -104,6 +104,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - 요청과 관계없는 refactoring을 하지 않는다.
 - 테스트는 가능하면 구현 파일과 co-location을 유지한다.
 - Cross-module import는 `@/*` source alias와 각 module의 `index.ts`를 사용한다.
+- 좁은 내부 연결 예외: Phase A의 `features/synthesis/nodes/run-ceo-synthesis.ts`만 Governance의 내부 `direction-review/flow/review-management.ts`에서 `registerDirectionReview`를 직접 import한다. 원시 Review 등록은 public barrel에 노출하지 않고 실제 `runSynthesis()` 검증 성공 직후에만 호출한다.
 - Same-module internal import는 상대경로를 사용하며, 상위 mega barrel은 만들지 않는다.
 
 ## 7. Validation
@@ -127,3 +128,5 @@ git diff --check
 - 작업 완료 후 변경 파일, 검증 결과, 남아 있는 한계를 보고한다.
 
 Human Direction Governance는 human-direction-governance 대상에서만 실행한다. Resume는 인증이 아니며 HumanConfirmation 객체를 State에 저장하지 않는다. MemorySaver는 영속 복구가 아니다. Revision은 기존 분석으로 Synthesis만 최대 두 번 실행하며 Specialist / Comparison / Claim을 재실행하지 않는다. ApprovedDecision은 Task 실행 권한이 아니다.
+
+Step 7.2의 신뢰 경계는 동일 프로세스의 Workflow / Application 코드를 신뢰한다. 외부 요청에 Graph updateState / 내부 Node 직접 호출 / 내부 Review writer를 노출하지 않는다. 새 invoke는 START 초기화를 거치고 Resume는 Human Action만 받는다. Decision / Comparison / Synthesis의 별도 WeakMap 증거는 사용하지 않으며 최초 Review에 원본 Context를 보존한다. directionAnalyses는 과거 Ledger 읽기 호환성에만 남긴다.

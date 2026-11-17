@@ -26,14 +26,7 @@ export { getApprovedStaffingScope } from "./features/proposal-management/flow/ge
 export { validateStoredIssuance } from "./features/proposal-management/flow/validation/staffing-issuance.js";
 
 export * from "./features/direction-review/model.js";
-export {
-  recordDirectionDecision,
-  recordDirectionComparison,
-} from "./features/direction-review/flow/analysis-provenance.js";
-export {
-  registerDirectionReview,
-  getDirectionReview,
-} from "./features/direction-review/flow/review-management.js";
+export { getDirectionReview } from "./features/direction-review/flow/review-management.js";
 export {
   prepareDirectionConfirmation,
   finalizeDirectionReview,

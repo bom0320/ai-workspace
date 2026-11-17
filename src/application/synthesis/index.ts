@@ -16,5 +16,3 @@ export type {
   CEOSynthesisDecision,
   CEOSynthesisAgent,
 } from "./protocol/ceo.js";
-
-export { consumeValidatedSynthesis } from "./validated-result.js";

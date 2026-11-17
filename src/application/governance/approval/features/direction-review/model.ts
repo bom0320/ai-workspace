@@ -8,6 +8,7 @@ import {
 import { humanConfirmationEvidenceSchema } from "../../shared/model/confirmation.js";
 
 const text = z.string().trim().min(1);
+// Read-only compatibility for ledgers written before Context-at-review storage.
 export const directionAnalysisSchema = z
   .object({
     scopeId: text,
@@ -49,6 +50,8 @@ export const directionReviewSchema = z
     scopeId: text,
     scopeVersion: z.number().int().positive(),
     analysisDigest: text,
+    // Only the initial Review stores the analysis; revisions reference their parent.
+    context: synthesisContextSchema.omit({ revision: true }).optional(),
     proposal: synthesisProposalSchema,
     revision: z.number().int().min(0).max(2),
     previousReviewId: text.optional(),

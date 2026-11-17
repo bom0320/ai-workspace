@@ -1,17 +1,16 @@
+// Narrow internal integration: raw Review registration is not a public Governance API.
+import { registerDirectionReview } from "@/application/governance/approval/features/direction-review/flow/review-management.js";
 import {
   runSynthesis,
   type RunSynthesisOptions,
   type SynthesisContext,
 } from "@/application/synthesis/index.js";
-import {
-  getDirectionReview,
-  type registerDirectionReview,
-} from "@/application/governance/index.js";
+import { getDirectionReview } from "@/application/governance/index.js";
 import type { PhaseAState } from "../../../state.js";
 
 export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
-  registerReview?: typeof registerDirectionReview
+  { directionReview: reviewEnabled = false }: { directionReview?: boolean } = {}
 ) {
   return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
     // 1. Require Completed Decisions and a Successful Comparison Stage
@@ -33,7 +32,7 @@ export function createRunCEOSynthesisNode(
 
     // 2. Select Original Analysis or a Recorded Human Revision Request
     const previousReviewId =
-      registerReview &&
+      reviewEnabled &&
       state.directionGovernanceResult?.status === "revision-requested"
         ? state.directionGovernanceResult.reviewId
         : undefined;
@@ -60,19 +59,20 @@ export function createRunCEOSynthesisNode(
 
     // 3. Execute Synthesis Without Granting Scope or Invocation Authority
     const synthesisResult = await runSynthesis(context, options);
-    if (!registerReview) return { synthesisResult };
+    if (!reviewEnabled) return { synthesisResult };
 
-    // 4. Register Validated Provenance Before Graph Serialization
-    // A separate Node would receive a copy, not the Application's one-use result.
-    // A Governance failure must preserve the already completed Stage 5 proposal.
+    // 4. Preserve the Exact Analysis and Validated Proposal for Human Review
+    // Registration is internal and follows the real Application call; State flags
+    // or Resume data never select a supplied Proposal for approval.
     try {
       let directionReview: PhaseAState["directionReview"];
       if (synthesisResult.status === "proposed") {
         if (state.approvalResult?.status !== "approved")
           throw new Error("Approved Scope is unavailable.");
-        directionReview = registerReview(
+        directionReview = registerDirectionReview(
           state.approvalResult.scope.id,
-          synthesisResult,
+          context,
+          synthesisResult.proposal,
           previousReviewId
         );
       }
@@ -90,7 +90,7 @@ export function createRunCEOSynthesisNode(
         directionGovernanceResult: {
           status: "failed",
           reason:
-            "Validated Synthesis provenance could not be registered for Human review.",
+            "Validated Synthesis could not be registered for Human review.",
         },
       };
     }

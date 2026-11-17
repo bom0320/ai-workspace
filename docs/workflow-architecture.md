@@ -490,6 +490,7 @@ run-ceo-synthesis (proposed + 신뢰된 Review 등록)
       revision-requested → run-ceo-synthesis → 새 Review → interrupt
 ```
 
+**초기 Step 7.2 설계 이력 (아래 Trust Boundary Simplification에서 변경):**
 Review 준비는 Synthesis Node에서 검증 직후 수행한다. 별도 prepare Node에 복사된 proposed State를
 전달하면 Application의 실제 검증 출처를 확인할 수 없기 때문이다. Decision·Comparison·Synthesis
 Application은 검증 성공 경로에서 객체 식별자와 분리된 원본을 프로세스 내부 일회용 기록으로 연결한다.
@@ -546,7 +547,7 @@ Resume 자체가 없으면 interrupt 승인 대기를 유지한다. 새 입력 i
 검증 범위는 실제 Git·signed Ledger·일회용 Receipt와 mock TTY / Codex transport를 사용하는 통합
 테스트다. 실제 Codex·Human 전체 E2E와 Phase B 진입은 후속 Phase A Checkpoint의 검증 대상이다.
 
-### Step 7.2 내부 책임 리팩터링
+### Step 7.2 내부 책임 리팩터링 — 당시 구조
 
 Direction Review의 단일 flow.ts는 다음 책임으로 분리했다. 공개 Governance 함수 이름과 결과 Schema는 유지한다.
 
@@ -566,3 +567,33 @@ Graph는 Human Governance 실행 대상에서만 구체적인 Provenance 기록 
 Node의 Boolean 기록 옵션은 제거했으며 Synthesis Node는 원본 / Revision Context 선택, Application 실행,
 Review 등록 순서로 읽힌다. Revision Context 조회는 내부 보조 함수로 분리하되 등록은 같은 Node에서
 직렬화 전에 수행한다. 새 Node / Subgraph / Registry는 추가하지 않았고 Interrupt / Resume Edge는 유지한다.
+
+### Step 7.2 — Trust Boundary Simplification
+
+**현재 기준:** 동일 프로세스의 Phase A Graph와 Application 실행 코드를 신뢰한다. 실제 외부 입력은
+Goal / Repository와 Resume의 Human Action이다. 새 invoke는 START에서 과거 Stage 결과를 초기화하고
+Application을 순서대로 실행한다. Resume는 action / reviewId / binding / feedback만 검사하며 Proposal
+또는 State 교체를 받지 않는다. Graph의 updateState·내부 Node 호출·내부 모듈 import는 신뢰된 운영 코드의
+기능이며 외부 입력 인터페이스로 노출하지 않는다. 이 전제를 임의 프로세스 코드 실행 방어로 확대하지 않는다.
+
+이 모델에서 세 Application의 WeakMap 결과 증거와 recordDirectionDecision / recordDirectionComparison은
+제거했다. 기존 Evidence·Reference·Synthesis Schema / SourceReference / Coverage 검증은 그대로다.
+공개 registerDirectionReview API가 허용했던 직접 등록 경로는 닫았다. 내부 writer는 Synthesis Node 한 곳에서
+실제 runSynthesis()의 proposed 결과를 받은 직후 호출한다. Governance는 분석의 타당성을 다시 증명하지 않고
+현재 Scope와 원본 Goal / Snapshot / Assignment 연결·Revision 동일 분석·Review Binding을 검증한다.
+
+```text
+Decision + Evidence 검증 → Comparison + Reference 검증 → Synthesis + Output 검증
+  → 최초 Review {원본 Context, Proposal, Binding} → Human Confirmation → 승인/수정/거부 기록
+  → Revision: 최초 Context + 이전 Proposal / 실제 Feedback → Synthesis → 새 Review / Binding
+```
+
+Context는 최초 Review에 한 번 저장한다. Revision은 previousReviewId로 같은 Context를 재사용한다.
+새 실행은 directionAnalyses를 쓰지 않는다. 과거 directionAnalyses / context 없는 Review는 기존 경로로
+조회하고 승인할 수 있으며 읽기 시 삭제·마이그레이션하지 않는다. 새 Context는 기존 Review Binding과
+analysisDigest에 포함된다. ApprovedDecision은 계속 Review / 실제 Human 기록을 참조한다.
+기록 무결성과 현재 적격성의 분리, Confirmation 일회성·Action Binding, 중복 승인 차단은 유지한다.
+
+이는 내부 raw writer를 악성 동일 프로세스 코드로부터 격리하는 보안 장치가 아니다. 내부 writer의 유일한
+cross-module 호출을 공개 barrel 규칙의 좁은 예외로 기록했다. 외부 State 복원·임의 Node 실행을 입력으로
+허용하는 모델은 현재 지원하지 않는다. 영속 복구·Phase B Handoff는 여전히 별도 범위다.

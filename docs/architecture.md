@@ -2147,7 +2147,7 @@ Human Governance·승인 Provenance·ApprovedDecision·Phase B Handoff·Checkpoi
 
 ### Step 7.2 — Human Direction Governance
 
-Governance approval/features/direction-review는 Review 출처 등록·Action Binding·Human Receipt 검증·
+초기 Step 7.2에서 Governance approval/features/direction-review는 Review 출처 등록·Action Binding·Human Receipt 검증·
 승인/수정 요청/거부 기록과 ApprovedDecision 발급을 소유한다. Decision / Comparison / Synthesis
 Application의 실제 검증 성공 결과를 일회용 프로세스 내부 기록으로 확인하고 signed Ledger에 연결한다.
 Graph proposed 값이나 Digest만으로는 Review를 등록할 수 없다. Evidence / Reference / Coverage와
@@ -2168,7 +2168,7 @@ exactly-once·외부 IAM은 제공하지 않는다. Receipt는 State에 저장�
 Phase B Handoff·Task 권한·Organization Graph·Direct Override는 구현하지 않았다.
 세부 State·결과·호출 예시는 [Workflow Architecture](workflow-architecture.md#step-72--human-direction-governance)를 따른다.
 
-#### Step 7.2 리팩터링 — 기록과 현재 적격성
+#### Step 7.2 리팩터링 — 기록과 현재 적격성 (초기 증거 구조 포함)
 
 방향 Governance의 flow.ts를 분석 Provenance, Review 관리, Human 승인 확정, ApprovedDecision 조회로 분리했다.
 공유 resolver는 Record Integrity와 Current Eligibility를 명시적으로 구분한다. 기존 Staffing 발급 검증에서
@@ -2180,3 +2180,17 @@ Graph Node는 직렬화 전 실제 Application 검증 결과를 전달하고 Gov
 각 Application의 일회용 WeakMap 증거는 그대로 유지하며 범용 Registry를 만들지 않았다.
 Revision의 선행 Review / Resolution Binding도 기록 무결성 검증에 포함한다. 현재 승인 시 최신 검증,
 Human Receipt의 일회성·Action Binding·Transaction과 중복 발급 차단은 유지한다.
+
+#### Step 7.2 — 현재 신뢰 경계 단순화
+
+초기 WeakMap 기반 검증 증거는 공개 raw Review 등록과 임의의 동일 프로세스 함수 호출까지 방어하려는
+전제에서 추가했다. 현재 지원하는 외부 경로는 START를 거치는 Graph 실행과 Human Action Resume이며,
+Workflow / Application 코드는 신뢰한다. 별도 결과 증명과 단계별 분석 기록 쓰기를 제거했다.
+Decision Evidence·Comparison Reference·Synthesis Output 검증은 기존 Application이 계속 수행한다.
+
+Review 등록은 Governance의 public API에서 제거하고 실제 Synthesis 호출 직후 내부 writer로 연결한다.
+최초 Review에 원본 Context와 Proposal을 저장하고 Revision은 원래 분석 Context를 재사용한다.
+기존 directionAnalyses와 context 없는 Review는 레거시 읽기 경로로 보존한다. 승인 기록 조회는 계속
+Record Integrity만 검사하며 진행 중 Review / 승인 확정 / Authorization은 Current Eligibility를 유지한다.
+Human Confirmation·Binding·signed Ledger·Transaction은 대체하지 않는다. 구체적인 경계와 내부 import
+예외는 [Workflow Architecture](workflow-architecture.md#step-72--trust-boundary-simplification)를 따른다.

@@ -434,3 +434,12 @@ ApprovedDecision의 과거 기록 조회는 signed Ledger·원래 Scope / Policy
 변조 여부는 다른 조건이다. Review 등록 / 확정·현재 Scope 조회·Authorization은 최신 적격성을 유지한다.
 Graph는 대상에 따라 구체적인 기록 함수를 선택하고 Node는 검증된 결과를 직렬화 전에 전달한다.
 실제 기록과 검증 의미는 Governance에 남으며 별도 Node나 공통 Provenance Registry를 도입하지 않는다.
+
+#### 현재 Step 7.2 — 신뢰된 실행과 승인 대상 보존
+
+초기 일회용 결과 증거는 제거했다. 현재 Workflow / Application 실행 코드를 신뢰하고 각 Application이
+실제 AI 결과 검증을 소유한다. Governance는 검증 성공을 다시 증명하지 않고 정확한 Context / Proposal에
+대한 Human 결정을 보존한다. raw Review 등록은 공개 API가 아니며 Synthesis Node의 정상 호출 직후에만
+연결한다. 임의 State의 proposed 플래그나 Resume 값은 등록·승인 근거가 아니다.
+새 Review는 Context를 한 번 저장하고 Revision에서 재사용하며, 과거 단계별 분석 기록은 읽기 호환성을 유지한다.
+Human Confirmation / Ledger의 권한 경계와 과거 이력 / 현재 적격성의 구분은 그대로 유지한다.

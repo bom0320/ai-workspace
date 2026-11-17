@@ -1,4 +1,3 @@
-import { rememberValidatedSynthesis } from "../validated-result.js";
 import {
   synthesisContextSchema,
   type SynthesisContext,
@@ -99,6 +98,5 @@ export async function runSynthesis(
     };
   }
   const result = { status: "proposed" as const, proposal: action.proposal };
-  rememberValidatedSynthesis(result, { proposal: action.proposal, context });
   return result;
 }

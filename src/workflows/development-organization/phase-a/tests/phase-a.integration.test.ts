@@ -821,6 +821,107 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }
   );
 
+  it.each(["policy", "repository"] as const)(
+    "reads historical Human approval after %s changes while current eligibility remains denied",
+    async (change) => {
+      const { graph, config, pending, command } = await pendingDirection(
+        1,
+        confirmDirection
+      );
+      const review = pending.directionReview!;
+      const state = await graph.invoke(
+        new Command({
+          resume: {
+            reviewId: review.id,
+            binding: review.binding,
+            action: "approve",
+          },
+        }),
+        config
+      );
+      if (state.directionGovernanceResult?.status !== "approved")
+        throw new Error("Missing ApprovedDecision");
+      const id = state.directionGovernanceResult.decision.id;
+      const original = governance.getApprovedDecision(id);
+      if (change === "policy") configure();
+      else writeFileSync(join(root, "a.ts"), "Changed after approval");
+      const calls = command.mock.calls.length;
+      const count = reservations().length;
+      expect(governance.getApprovedDecision(id)).toEqual(original);
+      expect(() => governance.getDirectionReview(review.id)).toThrow();
+      expect(governance.getApprovedStaffingScope(review.scopeId).status).toBe(
+        "denied"
+      );
+      const assignment = original.context.assignments[0];
+      expect(
+        governance.authorizeSpecialistInvocation({
+          scopeId: review.scopeId,
+          scopeVersion: review.scopeVersion,
+          assignmentId: assignment.assignmentId,
+          requestedContextPaths: ["a.ts"],
+        }).status
+      ).not.toBe("allowed");
+      expect(reservations()).toHaveLength(count);
+      expect(command).toHaveBeenCalledTimes(calls);
+      expect(original.decision).not.toHaveProperty("invocation");
+      // Even history-only lookup must still reject a modified signed record binding.
+      withGovernanceRecords((raw, persist) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        Object.values(
+          ledger.repositories
+        )[0].directionReviews![0].proposal.direction.text =
+          "Changed historical proposal";
+        persist(ledger);
+      });
+      expect(() => governance.getApprovedDecision(id)).toThrow("binding");
+    }
+  );
+
+  it("preserves historical delegated approval after delegation is superseded", async () => {
+    configure();
+    delegate();
+    runtime();
+    const graph = createPhaseAGraph({
+      ...options,
+      executionTarget: "human-direction-governance",
+      confirmDirection,
+    });
+    const config = { configurable: { thread_id: "delegation-history" } };
+    const pending = await graph.invoke(
+      { goal: options.goal, repositoryPath: root },
+      config
+    );
+    const review = pending.directionReview!;
+    const state = await graph.invoke(
+      new Command({
+        resume: {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve",
+        },
+      }),
+      config
+    );
+    if (state.directionGovernanceResult?.status !== "approved")
+      throw new Error("Missing ApprovedDecision");
+    const id = state.directionGovernanceResult.decision.id;
+    const original = governance.getApprovedDecision(id);
+    delegate();
+    expect(governance.getApprovedDecision(id)).toEqual(original);
+    expect(governance.getApprovedStaffingScope(review.scopeId).status).toBe(
+      "denied"
+    );
+    expect(() => governance.getDirectionReview(review.id)).toThrow();
+    expect(() =>
+      governance.prepareDirectionConfirmation({
+        reviewId: review.id,
+        binding: review.binding,
+        action: "approve",
+      })
+    ).toThrow();
+  });
+
   it("records Reject without issuing an ApprovedDecision", async () => {
     const { graph, config, pending } = await pendingDirection(
       1,
@@ -1000,6 +1101,20 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       config
     );
     expect(approved.directionGovernanceResult?.status).toBe("approved");
+    if (approved.directionGovernanceResult?.status !== "approved")
+      throw new Error("Missing ApprovedDecision");
+    const decisionId = approved.directionGovernanceResult.decision.id;
+    expect(governance.getApprovedDecision(decisionId).review.revision).toBe(2);
+    withGovernanceRecords((raw, persist) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      Object.values(
+        ledger.repositories
+      )[0].directionReviews![0].proposal.direction.text =
+        "Changed ancestor Proposal";
+      persist(ledger);
+    });
+    expect(() => governance.getApprovedDecision(decisionId)).toThrow("binding");
   });
 
   it("rejects policy changes made while waiting at the Human interrupt", async () => {
@@ -1208,6 +1323,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       })
     ).toThrow();
   });
+
   it.each([1, 2])(
     "connects real Governance, v2/v3 and Synthesis for %i Assignments",
     async (count) => {

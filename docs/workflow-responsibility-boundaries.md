@@ -426,3 +426,11 @@ Escalation에는 전체 Coverage 대신 이유·질문과 해당 출처의 무�
 ### Step 7.2 적용 — 출처 등록과 Human 확인
 
 방향 Governance는 실제 검증 경로에서 생성된 Decision / Comparison / Synthesis를 Review에 연결하고, Action에 묶인 일회용 Human Receipt와 최신 Policy / Repository를 검증한다. Synthesis의 SourceReference / Coverage를 다시 구현하지 않는다. 검증 직후 Review 등록은 Synthesis Node에 응집시켜 State의 복사본을 인증 자료로 오인하지 않는다. Interrupt Node에는 부작용이 없고 Finalize Node는 실제 확인을 Ledger Lock 밖에서 받은 뒤 Governance를 호출한다. Revision의 반복은 Graph가, 재제안 검증은 Synthesis가 소유한다. 동일 분석의 두 차례 수정만 허용하며 Task 실행 권한은 발급하지 않는다. 과거 Step 6.2의 미구현 표기는 당시 범위이며 현재 실행 계약은 [Step 7.2](workflow-architecture.md#step-72--human-direction-governance)를 따른다.
+
+#### Step 7.2 리팩터링 — 조회와 권한 검증의 분리
+
+ApprovedDecision의 과거 기록 조회는 signed Ledger·원래 Scope / Policy / Delegation·분석·Review·Human
+기록의 연결을 검증한다. 최신 정책이나 Repository 변경으로 현재 실행이 거부되는 것과 과거 기록의
+변조 여부는 다른 조건이다. Review 등록 / 확정·현재 Scope 조회·Authorization은 최신 적격성을 유지한다.
+Graph는 대상에 따라 구체적인 기록 함수를 선택하고 Node는 검증된 결과를 직렬화 전에 전달한다.
+실제 기록과 검증 의미는 Governance에 남으며 별도 Node나 공통 Provenance Registry를 도입하지 않는다.

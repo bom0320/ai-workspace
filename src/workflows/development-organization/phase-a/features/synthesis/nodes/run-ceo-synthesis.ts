@@ -2,17 +2,16 @@ import {
   runSynthesis,
   type RunSynthesisOptions,
   type SynthesisContext,
-  type SynthesisResult,
 } from "@/application/synthesis/index.js";
 import {
   getDirectionReview,
-  registerDirectionReview,
+  type registerDirectionReview,
 } from "@/application/governance/index.js";
 import type { PhaseAState } from "../../../state.js";
 
 export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
-  prepareReview = false
+  registerReview?: typeof registerDirectionReview
 ) {
   return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
     // 1. Require Completed Decisions and a Successful Comparison Stage
@@ -31,59 +30,61 @@ export function createRunCEOSynthesisNode(
             "Synthesis requires completed Decisions and completed or legitimately skipped Comparison.",
         },
       };
-    let synthesisResult: SynthesisResult | undefined;
+
+    // 2. Select Original Analysis or a Recorded Human Revision Request
+    const previousReviewId =
+      registerReview &&
+      state.directionGovernanceResult?.status === "revision-requested"
+        ? state.directionGovernanceResult.reviewId
+        : undefined;
+    let context: SynthesisContext;
     try {
-      // 2. Reuse Original Analysis; Revisions Add Only Recorded Human Feedback
-      let context: SynthesisContext = {
-        ...state.specialistComparisonContext!,
-        assignments: state.synthesisAssignments!,
-        decisions: decisions.decisions,
-        comparison,
+      context = previousReviewId
+        ? loadRevisionContext(previousReviewId)
+        : {
+            ...state.specialistComparisonContext!,
+            assignments: state.synthesisAssignments!,
+            decisions: decisions.decisions,
+            comparison,
+          };
+    } catch {
+      return {
+        directionReview: undefined,
+        directionAction: undefined,
+        directionGovernanceResult: {
+          status: "failed",
+          reason: "Recorded Synthesis revision context could not be verified.",
+        },
       };
-      let previousReviewId: string | undefined;
-      if (
-        prepareReview &&
-        state.directionGovernanceResult?.status === "revision-requested"
-      ) {
-        previousReviewId = state.directionGovernanceResult.reviewId;
-        const previous = getDirectionReview(previousReviewId);
-        if (previous.review.resolution?.action.action !== "request-revision")
-          throw new Error("Recorded revision request is unavailable.");
-        context = {
-          ...previous.context,
-          revision: {
-            previousProposal: previous.review.proposal,
-            feedback: previous.review.resolution.action.feedback,
-          },
-        };
+    }
+
+    // 3. Execute Synthesis Without Granting Scope or Invocation Authority
+    const synthesisResult = await runSynthesis(context, options);
+    if (!registerReview) return { synthesisResult };
+
+    // 4. Register Validated Provenance Before Graph Serialization
+    // A separate Node would receive a copy, not the Application's one-use result.
+    // A Governance failure must preserve the already completed Stage 5 proposal.
+    try {
+      let directionReview: PhaseAState["directionReview"];
+      if (synthesisResult.status === "proposed") {
+        if (state.approvalResult?.status !== "approved")
+          throw new Error("Approved Scope is unavailable.");
+        directionReview = registerReview(
+          state.approvalResult.scope.id,
+          synthesisResult,
+          previousReviewId
+        );
       }
-      synthesisResult = await runSynthesis(context, options);
-      // 3. Register Validated Provenance Before Graph Serialization
-      // A separate preparation Node would receive a copied result, not the
-      // Application's one-use validated result. Graph State never authenticates it.
-      const directionReview =
-        prepareReview && synthesisResult.status === "proposed"
-          ? registerDirectionReview(
-              state.approvalResult?.status === "approved"
-                ? state.approvalResult.scope.id
-                : "",
-              synthesisResult,
-              previousReviewId
-            )
-          : undefined;
       return {
         synthesisResult,
-        ...(prepareReview
-          ? {
-              directionReview,
-              directionAction: undefined,
-              directionGovernanceResult: undefined,
-            }
-          : {}),
+        directionReview,
+        directionAction: undefined,
+        directionGovernanceResult: undefined,
       };
     } catch {
       return {
-        ...(synthesisResult ? { synthesisResult } : {}),
+        synthesisResult,
         directionReview: undefined,
         directionAction: undefined,
         directionGovernanceResult: {
@@ -93,5 +94,16 @@ export function createRunCEOSynthesisNode(
         },
       };
     }
+  };
+}
+
+function loadRevisionContext(reviewId: string): SynthesisContext {
+  const { review, context } = getDirectionReview(reviewId);
+  const action = review.resolution?.action;
+  if (action?.action !== "request-revision")
+    throw new Error("Recorded revision request is unavailable.");
+  return {
+    ...context,
+    revision: { previousProposal: review.proposal, feedback: action.feedback },
   };
 }

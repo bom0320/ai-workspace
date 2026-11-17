@@ -507,7 +507,7 @@ Binding으로 연결한다. 실제 Human Receipt는 Review와 정확한 action /
 Human 대기는 Ledger Lock 밖에서 수행하며 이후 최신 정책·Repository를 다시 검증한다.
 결과는 directionGovernanceResult에 기록하고 승인된 경우에만 ApprovedDecision을 발급한다.
 ApprovedDecision은 Review / Binding / 실제 승인 Record를 참조하며 getApprovedDecision()으로
-Proposal·Goal·Repository Snapshot·Human 승인 근거를 복원한다. Task 실행 권한이나 Phase B Handoff 허가는 아니다.
+Proposal·Goal·Repository Snapshot·Human 승인 근거를 복원한다. 이 조회는 과거 Record Integrity만 검사한다. 최신 Policy / Repository / Delegation에 대한 Current Eligibility는 Review 등록·확정, Scope 조회·Authorization 경로에서 계속 검증한다. Task 실행 권한이나 Phase B Handoff 허가는 아니다.
 
 Revision은 기존 분석과 이전 Proposal·기록된 Feedback만 SynthesisContext.revision에 추가한다.
 최대 두 번이며 새 Review ID / Binding을 발급한다. Specialist·Comparison·Authorization / Claim을
@@ -545,3 +545,24 @@ Resume 자체가 없으면 interrupt 승인 대기를 유지한다. 새 입력 i
 
 검증 범위는 실제 Git·signed Ledger·일회용 Receipt와 mock TTY / Codex transport를 사용하는 통합
 테스트다. 실제 Codex·Human 전체 E2E와 Phase B 진입은 후속 Phase A Checkpoint의 검증 대상이다.
+
+### Step 7.2 내부 책임 리팩터링
+
+Direction Review의 단일 flow.ts는 다음 책임으로 분리했다. 공개 Governance 함수 이름과 결과 Schema는 유지한다.
+
+- flow/analysis-provenance.ts: 실제 검증 결과의 일회용 증거를 소비하여 claimed Invocation / Decision / Comparison 기록을 연결한다.
+- flow/review-management.ts: 검증된 Synthesis와 기존 분석을 연결하고 Review Binding·Revision 등록·현재 Review 조회를 관리한다.
+- flow/direction-approval.ts: pending Action과 Confirmation Binding을 확인하고 Human 승인·수정 요청·거부를 Transaction에서 확정한다.
+- flow/approved-decision.ts: 과거 인간 승인 기록과 원본 분석·Proposal을 조회한다.
+- shared/resolve-context.ts: 동일 Repository의 Scope·분석·Review·Revision 선행 기록과 Resolution Binding을 복원·검증한다.
+
+getApprovedDecision()은 signed Ledger와 발급 당시 Policy / Delegation / Scope 및 Review·실제 Human Record의 연결을 검증한다.
+이후 정책 갱신·위임 교체·Repository 변경만으로 과거 기록 조회를 막지 않는다. 반면 getDirectionReview()는
+진행 중인 Workflow / Revision 입력용이므로 기존 최신 적격성 검증을 유지한다. prepareDirectionConfirmation() /
+finalizeDirectionReview()와 getApprovedStaffingScope() / Authorization도 최신 검증을 생략하지 않는다.
+읽을 수 있는 승인 기록이 있다는 사실은 현재 후속 실행 허가가 아니다. Phase B Handoff는 여전히 미구현이다.
+
+Graph는 Human Governance 실행 대상에서만 구체적인 Provenance 기록 함수를 Node에 제공한다.
+Node의 Boolean 기록 옵션은 제거했으며 Synthesis Node는 원본 / Revision Context 선택, Application 실행,
+Review 등록 순서로 읽힌다. Revision Context 조회는 내부 보조 함수로 분리하되 등록은 같은 Node에서
+직렬화 전에 수행한다. 새 Node / Subgraph / Registry는 추가하지 않았고 Interrupt / Resume Edge는 유지한다.

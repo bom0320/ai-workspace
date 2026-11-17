@@ -1,10 +1,12 @@
-import { recordDirectionComparison } from "@/application/governance/index.js";
-import { compareDecisions } from "@/application/comparison/index.js";
+import {
+  compareDecisions,
+  type ComparisonResult,
+} from "@/application/comparison/index.js";
 import type { PhaseAState } from "../../../state.js";
 
 export async function compareSpecialistDecisions(
   state: PhaseAState,
-  recordProvenance = false
+  recordComparison?: (scopeId: string, comparison: ComparisonResult) => void
 ): Promise<Partial<PhaseAState>> {
   try {
     // 1. Require Completed Specialist Decisions
@@ -29,10 +31,10 @@ export async function compareSpecialistDecisions(
       ...state.specialistComparisonContext,
       decisions: result.decisions,
     });
-    if (recordProvenance) {
+    if (recordComparison) {
       if (state.approvalResult?.status !== "approved")
         throw new Error("Approved Scope is unavailable.");
-      recordDirectionComparison(state.approvalResult.scope.id, comparison);
+      recordComparison(state.approvalResult.scope.id, comparison);
     }
     return { decisionComparisonResult: { status: "completed", comparison } };
   } catch (error) {

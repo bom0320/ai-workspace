@@ -1,3 +1,4 @@
+import { consumeValidatedDecision } from "../../validated-result.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GoalSpec } from "@/contracts/goal.js";
@@ -73,6 +74,31 @@ beforeEach(() => {
 });
 
 describe("runIndependentDecisions", () => {
+  it("consumes only the original validated Decision once, with its original Snapshot", async () => {
+    runSpecialistMock
+      .mockReset()
+      .mockResolvedValueOnce(structuredClone(decisions[0]));
+    const [result] = await runIndependentDecisions(snapshot, goal, [inputs[0]]);
+    expect(() => consumeValidatedDecision(structuredClone(result))).toThrow(
+      "Untrusted"
+    );
+    const proof = consumeValidatedDecision(result);
+    expect(proof.snapshot).toEqual(snapshot);
+    expect(proof.context.goal).toEqual(goal);
+    expect(proof.decision).toEqual(result);
+    expect(proof.decision).not.toBe(result);
+    expect(() => consumeValidatedDecision(result)).toThrow("consumed");
+  });
+  it("rejects and consumes a changed Decision result", async () => {
+    runSpecialistMock
+      .mockReset()
+      .mockResolvedValueOnce(structuredClone(decisions[0]));
+    const [result] = await runIndependentDecisions(snapshot, goal, [inputs[0]]);
+    result.recommendation = "Changed after Evidence Validation";
+    expect(() => consumeValidatedDecision(result)).toThrow("Untrusted");
+    expect(() => consumeValidatedDecision(result)).toThrow("consumed");
+  });
+
   it("awaits each Specialist before starting the next and returns decisions in input order", async () => {
     let finishFirst!: (decision: AgentDecision) => void;
     runSpecialistMock.mockReset();

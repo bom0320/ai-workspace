@@ -1,3 +1,4 @@
+import { consumeValidatedComparison } from "../validated-result.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runCodexComparator } from "../comparator/codex-comparator.js";
@@ -49,6 +50,26 @@ beforeEach(() => {
 });
 
 describe("compareDecisions", () => {
+  it("consumes only the original validated Comparison once, with detached provenance", async () => {
+    comparatorMock.mockResolvedValueOnce(structuredClone(payload));
+    const result = await compareDecisions(context);
+    expect(() => consumeValidatedComparison(structuredClone(result))).toThrow(
+      "Untrusted"
+    );
+    const proof = consumeValidatedComparison(result);
+    expect(proof.context).toEqual(context);
+    expect(proof.comparison).toEqual(result);
+    expect(proof.comparison).not.toBe(result);
+    expect(() => consumeValidatedComparison(result)).toThrow("consumed");
+  });
+  it("rejects and consumes a changed Comparison result", async () => {
+    comparatorMock.mockResolvedValueOnce(structuredClone(payload));
+    const result = await compareDecisions(context);
+    result.findings[0].rationale = "Changed after Reference Validation";
+    expect(() => consumeValidatedComparison(result)).toThrow("Untrusted");
+    expect(() => consumeValidatedComparison(result)).toThrow("consumed");
+  });
+
   it("awaits Comparator output, validates references and returns the same payload", async () => {
     const before = structuredClone(context);
     const options = { timeoutMs: 1234 };

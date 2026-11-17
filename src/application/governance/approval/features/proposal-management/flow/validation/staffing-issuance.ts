@@ -42,8 +42,7 @@ function assertApprovalBinding(
   const system = entry.systems.find(
     ({ version }) => version === approval.systemPolicyVersion
   );
-  if (!system || entry.systems.at(-1)?.version !== system.version)
-    throw new Error("Issuance is not bound to the current System Policy.");
+  if (!system) throw new Error("Issuance System Policy record is unavailable.");
   if (
     scope.version !== 1 ||
     scope.proposalId !== proposal.id ||
@@ -102,29 +101,56 @@ function assertDelegatedApprovalSource(
     throw new Error("Delegated approval source is no longer valid.");
 }
 
+// Record integrity uses the original signed policy/delegation records. It must
+// remain readable after expiration, policy updates or Repository changes.
+export function validateStoredIssuanceRecord(
+  issuance: StaffingIssuance,
+  entry: RepositoryGovernance
+): void {
+  assertApprovalBinding(issuance, entry);
+  assertScopeContents(issuance);
+  const { approval } = issuance;
+  if (approval.source.type === "direct-human") {
+    if (
+      approval.source.confirmation.uid !== process.getuid?.() ||
+      Date.parse(approval.source.confirmation.confirmedAt) >
+        Date.parse(approval.approvedAt)
+    )
+      throw new Error("Direct Human confirmation does not match the issuance.");
+    return;
+  }
+  const source = approval.source;
+  const delegation = entry.delegations.find(
+    (record) =>
+      record.id === source.delegationPolicyId &&
+      record.version === source.delegationPolicyVersion
+  );
+  if (
+    !delegation ||
+    delegation.approval.id !== source.delegationApprovalId ||
+    Date.parse(delegation.approval.confirmedAt) >
+      Date.parse(approval.approvedAt) ||
+    Date.parse(delegation.expiresAt) <= Date.parse(approval.approvedAt)
+  )
+    throw new Error("Delegated approval does not match its historical source.");
+}
+
+// Current eligibility remains mandatory for Scope lookup, Authorization and
+// approval mutation. A readable historical record grants no execution authority.
 export function validateStoredIssuance(
   issuance: StaffingIssuance,
   entry: RepositoryGovernance
 ): InspectedFile[] {
-  assertApprovalBinding(issuance, entry);
-  assertScopeContents(issuance);
+  if (entry.systems.at(-1)?.version !== issuance.approval.systemPolicyVersion)
+    throw new Error("Issuance is not bound to the current System Policy.");
+  validateStoredIssuanceRecord(issuance, entry);
   assertDelegatedApprovalSource(issuance, entry);
-  const { approval } = issuance;
-  // A direct approval is bound to its own Human receipt, not an unrelated
-  // delegation's lifecycle. Both sources still require current System Policy.
   const files = validateCurrentStaffingPolicy(issuance.proposal, entry);
   if (
-    approval.source.type === "human-delegation" &&
+    issuance.approval.source.type === "human-delegation" &&
     evaluateDelegationCoverage(issuance.proposal, entry, Date.now()) !==
       "delegated"
   )
     throw new Error("Current evaluation no longer permits delegated approval.");
-  if (
-    approval.source.type === "direct-human" &&
-    (approval.source.confirmation.uid !== process.getuid?.() ||
-      Date.parse(approval.source.confirmation.confirmedAt) >
-        Date.parse(approval.approvedAt))
-  )
-    throw new Error("Direct Human confirmation does not match the issuance.");
   return files;
 }

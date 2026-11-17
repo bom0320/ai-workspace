@@ -2154,8 +2154,7 @@ Graph proposed 값이나 Digest만으로는 Review를 등록할 수 없다. Evid
 의미 분석은 기존 Application에 남긴다.
 
 ApprovedDecision은 Proposal 복사본 대신 Review ID / Binding과 실제 Approval Record ID를 저장한다.
-조회 API가 원본 분석·Proposal·Goal·Snapshot·Human 기록을 재검증해 복원한다. 저장된 Scope의
-현재 Policy / Repository 검증도 재사용하며 Human 입력을 Ledger Lock 안에서 기다리지 않는다.
+조회 API는 원본 분석·Proposal·Goal·Snapshot·Human 기록의 무결성을 검증해 복원한다. Step 7.2 리팩터링에서 과거 기록 조회와 현재 실행 적격성을 분리했다. Review 등록·확정과 Scope 조회·Authorization은 현재 Policy / Repository 검증을 계속 재사용하며 Human 입력을 Ledger Lock 안에서 기다리지 않는다.
 역사적 Ledger에는 optional 필드를 추가하므로 읽기 시 기본값을 쓰거나 마이그레이션하지 않는다.
 
 Phase A는 human-direction-governance 대상에서만 Review / Interrupt / Finalize / Synthesis Revision
@@ -2168,3 +2167,16 @@ Revision은 이전 Proposal / Feedback과 동일 분석을 사용하고 과거 R
 exactly-once·외부 IAM은 제공하지 않는다. Receipt는 State에 저장하지 않으며 Resume는 인증이 아니다.
 Phase B Handoff·Task 권한·Organization Graph·Direct Override는 구현하지 않았다.
 세부 State·결과·호출 예시는 [Workflow Architecture](workflow-architecture.md#step-72--human-direction-governance)를 따른다.
+
+#### Step 7.2 리팩터링 — 기록과 현재 적격성
+
+방향 Governance의 flow.ts를 분석 Provenance, Review 관리, Human 승인 확정, ApprovedDecision 조회로 분리했다.
+공유 resolver는 Record Integrity와 Current Eligibility를 명시적으로 구분한다. 기존 Staffing 발급 검증에서
+순수 기록 연결 검사를 validateStoredIssuanceRecord()로 추출했으며 validateStoredIssuance()는 이 검사와
+현재 Policy·Delegation·Snapshot 검증을 계속 수행한다. 따라서 과거 승인 이력을 조회할 수 있어도 현재
+Scope나 Invocation이 허용되는 것은 아니다. Phase B 진입 API는 추가하지 않았다.
+
+Graph Node는 직렬화 전 실제 Application 검증 결과를 전달하고 Governance가 이를 기록한다.
+각 Application의 일회용 WeakMap 증거는 그대로 유지하며 범용 Registry를 만들지 않았다.
+Revision의 선행 Review / Resolution Binding도 기록 무결성 검증에 포함한다. 현재 승인 시 최신 검증,
+Human Receipt의 일회성·Action Binding·Transaction과 중복 발급 차단은 유지한다.

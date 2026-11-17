@@ -19,6 +19,8 @@ export function buildTaskContract({
     id: taskId,
     goalId,
     targetRepository: goal.targetRepository,
-    constraints: [...new Set([...(goal.constraints ?? []), ...draft.constraints])],
+    constraints: [
+      ...new Set([...(goal.constraints ?? []), ...draft.constraints]),
+    ],
   });
 }

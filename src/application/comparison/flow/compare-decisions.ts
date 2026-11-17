@@ -8,7 +8,7 @@ import { validateComparisonReferences } from "./validation/validate-references.j
 
 export async function compareDecisions(
   context: ComparisonContext,
-  options: CodexComparatorOptions = {},
+  options: CodexComparatorOptions = {}
 ): Promise<ComparisonResult> {
   if (context.decisions.length < 2) {
     throw new Error("Comparison requires at least two decisions.");
@@ -16,7 +16,9 @@ export async function compareDecisions(
   const specialistIds = new Set<string>();
   for (const decision of context.decisions) {
     if (specialistIds.has(decision.specialistId)) {
-      throw new Error(`Duplicate comparison source specialist: ${decision.specialistId}.`);
+      throw new Error(
+        `Duplicate comparison source specialist: ${decision.specialistId}.`
+      );
     }
     specialistIds.add(decision.specialistId);
   }

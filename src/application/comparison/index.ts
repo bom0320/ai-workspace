@@ -9,3 +9,5 @@ export type {
   ComparisonGap,
   ComparisonResult,
 } from "./model/comparison.js";
+export { comparisonPayloadSchema } from "./protocol/comparison.js";
+export { validateComparisonReferences } from "./flow/validation/validate-references.js";

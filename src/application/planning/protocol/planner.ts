@@ -44,4 +44,7 @@ export const plannerDecisionSchema = z.discriminatedUnion("type", [
 
 export type PlannerDecision = z.infer<typeof plannerDecisionSchema>;
 
-export type Planner = (state: PlanningState, limits: PlanningLimits) => Promise<PlannerDecision>;
+export type Planner = (
+  state: PlanningState,
+  limits: PlanningLimits
+) => Promise<PlannerDecision>;

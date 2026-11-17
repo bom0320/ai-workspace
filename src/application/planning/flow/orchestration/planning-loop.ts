@@ -8,23 +8,30 @@ import type { Planner, TaskDraft } from "../../protocol/planner.js";
 import type { PlanningLimits } from "../../model/limits.js";
 import type { PlanningResult } from "../../model/result.js";
 import { buildTaskContract } from "../transformation/build-task-contract.js";
-import { inspectFiles, InspectionRequestError } from "../inspection/inspect-files.js";
+import {
+  inspectFiles,
+  InspectionRequestError,
+} from "../inspection/inspect-files.js";
 
 function hasValidLimits(limits: PlanningLimits): boolean {
-  return Object.values(limits).every((value) => Number.isSafeInteger(value) && value >= 0);
+  return Object.values(limits).every(
+    (value) => Number.isSafeInteger(value) && value >= 0
+  );
 }
 
 function prepareInspection(
   state: PlanningState,
   request: InspectRequest,
-  limits: PlanningLimits,
+  limits: PlanningLimits
 ): { paths: string[]; reason?: never } | { reason: string; paths?: never } {
   if (request.paths.length > limits.maxFilesPerRequest) {
     return { reason: "Inspection request exceeds maxFilesPerRequest." };
   }
 
   const root = state.repository.repositoryRoot;
-  const seen = new Set(state.inspectedFiles.map((file) => resolve(root, file.path)));
+  const seen = new Set(
+    state.inspectedFiles.map((file) => resolve(root, file.path))
+  );
   const paths: string[] = [];
   for (const path of request.paths) {
     const absolutePath = resolve(root, path);
@@ -43,9 +50,15 @@ function prepareInspection(
   return { paths };
 }
 
-function inspectNewContext(state: PlanningState, paths: string[]): PlanningState {
+function inspectNewContext(
+  state: PlanningState,
+  paths: string[]
+): PlanningState {
   const result = inspectFiles(state.repository.repositoryRoot, { paths });
-  return { ...state, inspectedFiles: [...state.inspectedFiles, ...result.files] };
+  return {
+    ...state,
+    inspectedFiles: [...state.inspectedFiles, ...result.files],
+  };
 }
 
 function completePlanning(
@@ -53,7 +66,7 @@ function completePlanning(
   draft: TaskDraft,
   goalId: string,
   taskId: string,
-  rounds: number,
+  rounds: number
 ): PlanningResult {
   try {
     const task = buildTaskContract({ draft, goal: state.goal, goalId, taskId });
@@ -61,7 +74,9 @@ function completePlanning(
   } catch (error) {
     if (error instanceof ZodError) {
       return {
-        status: "failed", state, rounds,
+        status: "failed",
+        state,
+        rounds,
         reason: "Planner returned a task draft that could not be finalized.",
       };
     }
@@ -85,7 +100,10 @@ export async function runPlanningLoop({
   let state = initialState;
   let rounds = 0;
   const fail = (reason: string): PlanningResult => ({
-    status: "failed", state, rounds, reason,
+    status: "failed",
+    state,
+    rounds,
+    reason,
   });
 
   if (!hasValidLimits(limits)) {

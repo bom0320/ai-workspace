@@ -16,7 +16,9 @@ describe("goalSpecSchema", () => {
   it("parses a GoalSpec without constraints", () => {
     const { constraints: _constraints, ...withoutConstraints } = validGoalSpec;
 
-    expect(goalSpecSchema.parse(withoutConstraints)).toEqual(withoutConstraints);
+    expect(goalSpecSchema.parse(withoutConstraints)).toEqual(
+      withoutConstraints
+    );
   });
 
   it.each(["objective", "targetRepository"] as const)(
@@ -26,9 +28,9 @@ describe("goalSpecSchema", () => {
         goalSpecSchema.safeParse({
           ...validGoalSpec,
           [field]: "",
-        }).success,
+        }).success
       ).toBe(false);
-    },
+    }
   );
 
   it("rejects an empty string in constraints", () => {
@@ -36,7 +38,7 @@ describe("goalSpecSchema", () => {
       goalSpecSchema.safeParse({
         ...validGoalSpec,
         constraints: [""],
-      }).success,
+      }).success
     ).toBe(false);
   });
 });

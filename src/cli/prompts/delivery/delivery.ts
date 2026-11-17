@@ -2,7 +2,10 @@ import { createInterface } from "node:readline";
 
 async function readAnswer(): Promise<string> {
   if (process.stdin.readableEnded || process.stdin.destroyed) return "";
-  const reader = createInterface({ input: process.stdin, output: process.stdout });
+  const reader = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   try {
     for await (const answer of reader) return answer;
     return "";

@@ -25,7 +25,9 @@ vi.mock("@/services/artifacts/index.js", () => ({
   preserveExecutionChanges: vi.fn(),
   writeExecutionResult: vi.fn(),
 }));
-vi.mock("@/services/evidence/index.js", () => ({ collectChangedPaths: vi.fn() }));
+vi.mock("@/services/evidence/index.js", () => ({
+  collectChangedPaths: vi.fn(),
+}));
 vi.mock("@/infrastructure/git/index.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),
@@ -73,30 +75,64 @@ beforeEach(() => {
 
 describe("executeTask", async () => {
   it("passes warm-start context separately to Worker", async () => {
-    const workerContext = { inspectedFiles: [{ path: "src/example.ts", content: "Existing content" }] };
+    const workerContext = {
+      inspectedFiles: [{ path: "src/example.ts", content: "Existing content" }],
+    };
     await executeTask(task, "/repositories/example", { workerContext });
-    expect(runCodexWorkerMock).toHaveBeenCalledWith(task, "/tmp/execution-workspace", undefined, expect.any(Object), workerContext);
+    expect(runCodexWorkerMock).toHaveBeenCalledWith(
+      task,
+      "/tmp/execution-workspace",
+      undefined,
+      expect.any(Object),
+      workerContext
+    );
     expect(task).not.toHaveProperty("inspectedFiles");
   });
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("records monotonic stage timing separately from evidence and persists the same telemetry", async () => {
     let clock = 0;
     vi.spyOn(performance, "now").mockImplementation(() => clock);
-    createExecutionRunMock.mockImplementation(() => { clock += 1; return "/runs/run-001"; });
-    createExecutionWorkspaceMock.mockImplementation(() => { clock += 2; return "/tmp/execution-workspace"; });
-    getExecutionBaseCommitMock.mockImplementation(() => { clock += 7; return "base"; });
-    runCodexWorkerMock.mockImplementation(async () => { clock += 3; return "complete"; });
-    runVerificationMock.mockImplementation(async () => { clock += 4; return { passed: true, commands: [] }; });
-    preserveExecutionChangesMock.mockImplementation(() => { clock += 6; });
-    removeExecutionWorkspaceMock.mockImplementation(() => { clock += 5; });
+    createExecutionRunMock.mockImplementation(() => {
+      clock += 1;
+      return "/runs/run-001";
+    });
+    createExecutionWorkspaceMock.mockImplementation(() => {
+      clock += 2;
+      return "/tmp/execution-workspace";
+    });
+    getExecutionBaseCommitMock.mockImplementation(() => {
+      clock += 7;
+      return "base";
+    });
+    runCodexWorkerMock.mockImplementation(async () => {
+      clock += 3;
+      return "complete";
+    });
+    runVerificationMock.mockImplementation(async () => {
+      clock += 4;
+      return { passed: true, commands: [] };
+    });
+    preserveExecutionChangesMock.mockImplementation(() => {
+      clock += 6;
+    });
+    removeExecutionWorkspaceMock.mockImplementation(() => {
+      clock += 5;
+    });
     const result = await executeTask(task, "/repositories/example");
     expect(result.telemetry).toEqual({
-      workspaceDurationMs: 2, workerDurationMs: 3, verificationDurationMs: 4,
+      workspaceDurationMs: 2,
+      workerDurationMs: 3,
+      verificationDurationMs: 4,
       totalDurationMs: 23,
     });
     expect(result.evidence).not.toHaveProperty("telemetry");
-    expect(writeExecutionResultMock).toHaveBeenCalledWith("/runs/run-001", expect.objectContaining({ telemetry: result.telemetry }));
+    expect(writeExecutionResultMock).toHaveBeenCalledWith(
+      "/runs/run-001",
+      expect.objectContaining({ telemetry: result.telemetry })
+    );
   });
 
   it("records attempted worker timing on failure and omits skipped verification", async () => {
@@ -105,7 +141,8 @@ describe("executeTask", async () => {
     expect(result.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
     expect(result.telemetry!.cleanupDurationMs).toBeUndefined();
     expect(result.telemetry!.verificationDurationMs).toBeUndefined();
-    for (const duration of Object.values(result.telemetry!)) expect(duration).toBeGreaterThanOrEqual(0);
+    for (const duration of Object.values(result.telemetry!))
+      expect(duration).toBeGreaterThanOrEqual(0);
   });
   it("returns complete evidence and scope after a successful ordered execution", async () => {
     const result = await executeTask(task, "/repositories/example");
@@ -126,37 +163,37 @@ describe("executeTask", async () => {
         baseCommit: "base-commit-sha",
       },
     });
-    expect(createExecutionWorkspaceMock.mock.invocationCallOrder[0]).toBeLessThan(
-      runCodexWorkerMock.mock.invocationCallOrder[0],
-    );
+    expect(
+      createExecutionWorkspaceMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(runCodexWorkerMock.mock.invocationCallOrder[0]);
     expect(runCodexWorkerMock.mock.invocationCallOrder[0]).toBeLessThan(
-      collectChangedPathsMock.mock.invocationCallOrder[0],
+      collectChangedPathsMock.mock.invocationCallOrder[0]
     );
     expect(collectChangedPathsMock.mock.invocationCallOrder[0]).toBeLessThan(
-      checkScopeMock.mock.invocationCallOrder[0],
+      checkScopeMock.mock.invocationCallOrder[0]
     );
     expect(checkScopeMock.mock.invocationCallOrder[0]).toBeLessThan(
-      runVerificationMock.mock.invocationCallOrder[0],
+      runVerificationMock.mock.invocationCallOrder[0]
     );
     expect(runVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(
-      collectChangedPathsMock.mock.invocationCallOrder[1],
+      collectChangedPathsMock.mock.invocationCallOrder[1]
     );
     expect(collectChangedPathsMock.mock.invocationCallOrder[1]).toBeLessThan(
-      preserveExecutionChangesMock.mock.invocationCallOrder[0],
+      preserveExecutionChangesMock.mock.invocationCallOrder[0]
     );
-    expect(preserveExecutionChangesMock.mock.invocationCallOrder[0]).toBeLessThan(
-      writeExecutionResultMock.mock.invocationCallOrder[0],
-    );
+    expect(
+      preserveExecutionChangesMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(writeExecutionResultMock.mock.invocationCallOrder[0]);
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
     expect(collectChangedPathsMock).toHaveBeenNthCalledWith(
       1,
       "/tmp/execution-workspace",
-      "base-commit-sha",
+      "base-commit-sha"
     );
     expect(collectChangedPathsMock).toHaveBeenNthCalledWith(
       2,
       "/tmp/execution-workspace",
-      "base-commit-sha",
+      "base-commit-sha"
     );
   });
 
@@ -192,7 +229,7 @@ describe("executeTask", async () => {
     expect(result.evidence).toEqual({ changedPaths: ["src/example.ts"] });
     expect(collectChangedPathsMock).toHaveBeenCalledWith(
       "/tmp/execution-workspace",
-      "base-commit-sha",
+      "base-commit-sha"
     );
     expect(checkScopeMock).not.toHaveBeenCalled();
     expect(runVerificationMock).not.toHaveBeenCalled();
@@ -202,8 +239,8 @@ describe("executeTask", async () => {
   it("keeps Worker timeout and records paths changed before timeout", async () => {
     runCodexWorkerMock.mockRejectedValue(
       new Error(
-        "Failed to run Codex worker: Codex worker timed out after 25 ms.",
-      ),
+        "Failed to run Codex worker: Codex worker timed out after 25 ms."
+      )
     );
     collectChangedPathsMock.mockReturnValue(["partial-change.txt"]);
 
@@ -216,7 +253,7 @@ describe("executeTask", async () => {
       "/tmp/execution-workspace",
       25,
       expect.any(Object),
-      undefined,
+      undefined
     );
     expect(result.evidence.changedPaths).toEqual(["partial-change.txt"]);
     expect(result.failures).toEqual([
@@ -336,26 +373,37 @@ describe("executeTask", async () => {
     expect(result.passed).toBe(false);
     expect(result.evidence.verification).toBe(verification);
     expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
-    expect(result.failures).toEqual([{ stage: "verification", message: "Verification failed." }]);
+    expect(result.failures).toEqual([
+      { stage: "verification", message: "Verification failed." },
+    ]);
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("does not let cleanup errors affect successful execution", async () => {
-    removeExecutionWorkspaceMock.mockImplementation(() => { throw new Error("removal failed"); });
+    removeExecutionWorkspaceMock.mockImplementation(() => {
+      throw new Error("removal failed");
+    });
     const result = await executeTask(task, "/repositories/example");
     expect(result.passed).toBe(true);
     expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
     expect(result.evidence.workerOutput).toBe("Codex final output");
     expect(result.failures).toEqual([]);
-    expect(writeExecutionResultMock).toHaveBeenCalledWith("/runs/run-001", expect.objectContaining({ passed: true, workspace: result.workspace }));
+    expect(writeExecutionResultMock).toHaveBeenCalledWith(
+      "/runs/run-001",
+      expect.objectContaining({ passed: true, workspace: result.workspace })
+    );
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
 
   it("preserves Worker failure without attempting workspace cleanup", async () => {
     runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
-    removeExecutionWorkspaceMock.mockImplementation(() => { throw new Error("cleanup failed"); });
+    removeExecutionWorkspaceMock.mockImplementation(() => {
+      throw new Error("cleanup failed");
+    });
     const result = await executeTask(task, "/repositories/example");
-    expect(result.failures).toEqual([{ stage: "worker", message: "worker failed" }]);
+    expect(result.failures).toEqual([
+      { stage: "worker", message: "worker failed" },
+    ]);
     expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
   });
@@ -407,7 +455,7 @@ describe("executeTask", async () => {
 
     const result = await executeTask(
       taskWithVerificationOutput,
-      "/repositories/example",
+      "/repositories/example"
     );
 
     expect(result.evidence.changedPaths).toEqual([

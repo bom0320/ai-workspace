@@ -4,9 +4,7 @@ import { runVerification } from "@/services/verification/index.js";
 import { collectChangedPaths } from "@/services/evidence/index.js";
 
 import { runCodexWorker } from "../../worker/codex-worker.js";
-import type {
-  ExecutionFailureStage,
-} from "../../model/result.js";
+import type { ExecutionFailureStage } from "../../model/result.js";
 import type {
   ExecutionState,
   TaskExecutionOptions,
@@ -58,7 +56,7 @@ export async function runWorkerStage(
       workspaceRoot,
       options.workerTimeoutMs,
       state.telemetry,
-      options.workerContext,
+      options.workerContext
     );
 
     return true;
@@ -66,7 +64,8 @@ export async function runWorkerStage(
     addExecutionFailure(state, "worker", error);
     return false;
   } finally {
-    if (state.telemetry) state.telemetry.workerDurationMs = performance.now() - startedAt;
+    if (state.telemetry)
+      state.telemetry.workerDurationMs = performance.now() - startedAt;
   }
 }
 
@@ -123,7 +122,8 @@ export async function runVerificationStage(
     addExecutionFailure(state, "verification", error);
     return;
   } finally {
-    if (state.telemetry) state.telemetry.verificationDurationMs = performance.now() - startedAt;
+    if (state.telemetry)
+      state.telemetry.verificationDurationMs = performance.now() - startedAt;
   }
 
   if (!state.evidence.verification.passed) {

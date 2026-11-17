@@ -5,7 +5,9 @@ export type HumanInteractionTiming = {
   approvalWaitDurationMs?: number;
 };
 
-export function presentTiming(timing: HumanInteractionTiming & Partial<ExecutionTelemetry>): void {
+export function presentTiming(
+  timing: HumanInteractionTiming & Partial<ExecutionTelemetry>
+): void {
   console.log("\nTiming\n------");
   const rows = [
     ["Planning", timing.planningDurationMs],
@@ -20,6 +22,7 @@ export function presentTiming(timing: HumanInteractionTiming & Partial<Execution
     ["Total", timing.totalDurationMs],
   ] as const;
   for (const [label, duration] of rows) {
-    if (duration !== undefined) console.log(`${label}: ${(duration / 1_000).toFixed(1)}s`);
+    if (duration !== undefined)
+      console.log(`${label}: ${(duration / 1_000).toFixed(1)}s`);
   }
 }

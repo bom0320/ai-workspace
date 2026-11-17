@@ -108,7 +108,10 @@ describe("createFastPathTaskDraft", () => {
     const input = state("notes.txt의 오타를 수정해줘", "notes.txt");
 
     expect(createFastPathTaskDraft(input)?.allowedPaths).toEqual(["notes.txt"]);
-    expect(createFastPathTaskDraft(state("notes.txt의 문구를 수정해줘", "notes.txt"))?.allowedPaths).toEqual(["notes.txt"]);
+    expect(
+      createFastPathTaskDraft(state("notes.txt의 문구를 수정해줘", "notes.txt"))
+        ?.allowedPaths
+    ).toEqual(["notes.txt"]);
   });
 
   it("never uses the fast path for source files", () => {

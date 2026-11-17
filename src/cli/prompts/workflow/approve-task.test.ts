@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { approveTask } from "./approve-task.js";
 
 vi.mock("node:readline", () => ({ createInterface: vi.fn() }));
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("approveTask", () => {
   it.each([
@@ -19,7 +21,9 @@ describe("approveTask", () => {
     const close = vi.fn();
     vi.mocked(createInterface).mockReturnValue({
       close,
-      async *[Symbol.asyncIterator]() { yield* lines; },
+      async *[Symbol.asyncIterator]() {
+        yield* lines;
+      },
     } as unknown as ReturnType<typeof createInterface>);
     vi.spyOn(console, "log").mockImplementation(() => {});
     expect(await approveTask()).toBe(approved);

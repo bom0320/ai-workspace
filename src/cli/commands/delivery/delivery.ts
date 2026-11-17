@@ -10,14 +10,20 @@ export type DeliveryResult = {
   push?: PushResult;
 };
 
-export async function runPostExecutionDelivery({ repositoryRoot, executionResult }: {
+export async function runPostExecutionDelivery({
+  repositoryRoot,
+  executionResult,
+}: {
   repositoryRoot: string;
   executionResult: ExecutionResult;
 }): Promise<DeliveryResult> {
   const apply = await runApplyCommand(repositoryRoot, executionResult);
   const result: DeliveryResult = { apply };
   if (apply.status !== "applied") return result;
-  result.commit = await runCommitCommand(repositoryRoot, executionResult.evidence.changedPaths ?? []);
+  result.commit = await runCommitCommand(
+    repositoryRoot,
+    executionResult.evidence.changedPaths ?? []
+  );
   if (result.commit.status !== "committed") return result;
   result.push = await runPushCommand(repositoryRoot, result.commit.commitSha);
   return result;

@@ -8,8 +8,8 @@ describe("checkScope", () => {
       checkScope(
         ["src/cli.ts", "src/cli.test.ts"],
         ["src/cli.ts", "src/cli.test.ts"],
-        [],
-      ),
+        []
+      )
     ).toEqual({ passed: true, violations: [] });
   });
 
@@ -32,19 +32,16 @@ describe("checkScope", () => {
       checkScope(
         ["docs/architecture.md"],
         ["docs/architecture.md"],
-        ["docs/architecture.md"],
-      ),
+        ["docs/architecture.md"]
+      )
     ).toEqual({ passed: false, violations: ["docs/architecture.md"] });
   });
 
   it("gives forbidden paths priority over allowed paths", () => {
-    expect(
-      checkScope(
-        ["src/cli.ts"],
-        ["src/cli.ts"],
-        ["src/cli.ts"],
-      ),
-    ).toEqual({ passed: false, violations: ["src/cli.ts"] });
+    expect(checkScope(["src/cli.ts"], ["src/cli.ts"], ["src/cli.ts"])).toEqual({
+      passed: false,
+      violations: ["src/cli.ts"],
+    });
   });
 
   it("returns every violation in deterministic order", () => {
@@ -52,8 +49,8 @@ describe("checkScope", () => {
       checkScope(
         ["z-last.ts", "a-first.ts", "src/allowed.ts"],
         ["src/allowed.ts"],
-        [],
-      ),
+        []
+      )
     ).toEqual({
       passed: false,
       violations: ["a-first.ts", "z-last.ts"],
@@ -68,8 +65,9 @@ describe("checkScope", () => {
   });
 
   it("returns each violation only once", () => {
-    expect(
-      checkScope(["README.md", "README.md"], [], ["README.md"]),
-    ).toEqual({ passed: false, violations: ["README.md"] });
+    expect(checkScope(["README.md", "README.md"], [], ["README.md"])).toEqual({
+      passed: false,
+      violations: ["README.md"],
+    });
   });
 });

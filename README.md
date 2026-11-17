@@ -3,7 +3,8 @@
 AI Workspace는 개발자와 기존 AI Coding Agent가 실제 Git Repository에서 함께 일하기 위한
 Agent Development Environment(ADE)이자 Development Governance Harness다. 개발자와 팀의
 작업 방식·권한·검증 규칙을 코드화하여 실행 범위, Context, Evidence, Human approval을 통제한다.
-현재 operator interface는 Node.js CLI로 제공된다.
+현재 operator interface는 Node.js CLI로 제공된다. 최종 목표는 CEO가 여러 전문 AI 직원의 의사결정과
+상세 설계·구현·테스트·리뷰를 관리하고 Human이 승인과 Evidence로 통제하는 AI Development Organization이다.
 
 현재 다음 흐름이 구현되어 있다.
 
@@ -17,21 +18,37 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
   Agreement / Conflict / Trade-off와 Uncertainty / Limitation / Separate Concern을 구조화하고,
   원본 Specialist / Evidence reference를 검증한다.
 
-Agent discussion / synthesis / CEO / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
+Agent discussion / CEO 전체 조직 운영 / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
 미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
 
 문서는 다음 책임으로 나눈다.
 
 - [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
 - [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
-- [Roadmap](docs/roadmap.md): 어디로 가는가 — v0–v3와 이후 검증 단계
+- [Roadmap](docs/roadmap.md): 어디로 가는가 — 구현 상태와 v4 이후 검증 단계
 - [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
 
-**v4 — CEO Governance / AI Organization Orchestration은 Planned**다. Workflow Runtime은
-**LangGraph.js 채택 확정 / 설치·통합 미구현**이며, 기존 Codex 기반 Agent 실행과 v0–v3 API를 재사용한다.
-Human Goal → CEO의 Staffing / Context / Budget 제안 → Human 승인 → 독립 Decision / Comparison
-→ CEO Synthesis → Human Governance → 승인된 TaskContract / Repository 실행 → Change Review / Delivery
-→ CEO Executive Report까지 전체 E2E 연결이 목표다. 단일 Synthesis 생성으로 완료하지 않는다.
+**v4 — CEO Governance / AI Organization Orchestration은 진행 중이며 전체 Workflow는 미완성**이다.
+CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffing Approval·Delegation,
+Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
+동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
+CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
+CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B와 실제 전체 조직 E2E는 아직 없다.
+
+목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
+CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
+여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
+현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
+Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2·2.5·3을 구현**했다.
+Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 조건부 Edge로 연결한다.
+정책 거부·Staffing 실패/Escalation이면 중단하며, 직접 승인이 필요한 경우에만 Human Confirmation 콜백과 Governance 최종 승인으로 진행한다.
+콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter에서 staffing-approval 실행 대상을 명시해 승인 단계 결과만 반환한다. 별도 Staffing Setup Graph는 없다.
+specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다.
+ceo-synthesis 실행 대상은 Comparison 성공 또는 단일 생략 후 CEO Synthesis 제안 / Escalation / 실패까지 진행한다. 이 결과는 Phase A 전체 완료나 해결 방향 승인이 아니다.
+Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회와 개별 staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult / synthesisResult를 소유한다.
+기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. human-direction-governance 대상은 실제 Human Confirmation을 거친 방향 승인 / 수정 요청 / 거부와 같은 프로세스 Interrupt / Resume를 제공한다. 영속 장애 복구는 없으며 자세한 계약은 [Workflow Architecture](docs/workflow-architecture.md#step-72--human-direction-governance)를 따른다.
+상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
+State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 
 LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
 소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.
@@ -43,7 +60,7 @@ LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evi
 
 ## 사전 준비
 
-- Node.js와 pnpm
+- Node.js 20 이상과 pnpm (설치된 LangChain core의 Node 요구사항)
 - Git과 하나 이상의 commit이 있는 대상 Repository
 - PATH에서 실행할 수 있고 인증이 완료된 `codex` CLI
 - 대상 Repository의 검증 명령이 요구하는 도구와 dependency
@@ -93,6 +110,17 @@ pnpm dev execute ./tasks/example.json /absolute/path/to/target-repository
 
 Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행된다.
 원본 작업 디렉터리 반영은 실행 후 별도의 Apply 승인으로만 진행한다.
+
+## v4 현재 진입점
+
+| 진입점 | 현재 연결 범위 |
+| --- | --- |
+| `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
+| `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
+| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | 정책 조회 → Staffing → Approval → 선택적 Preflight·Specialist 반복·Comparison(Node / Edge). 기본값은 승인까지만 실행; API의 executionTarget으로 분석 명시 |
+
+Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
+API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.
 
 ## Decision quick example
 

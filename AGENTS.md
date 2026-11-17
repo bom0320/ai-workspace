@@ -8,16 +8,25 @@
 
 > Reliable Worker before Agent Team
 
-다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
+v4 목표는 CEO가 해결 방향의 판단·Human 승인(Phase A) 이후에도 여러 Specialist의 상세 설계·개발·검증과
+재작업·재배치·진행 평가(Phase B)를 관리하는 AI Development Organization이다. 전체 Workflow는 미완성이며
+Authority / Staffing·Finalization, Human Approval / Delegation, Authorization / Reservation / Claim과
+승인 Scope의 순차 Specialist Decision·Comparison Workflow가 구현되어 있다.
+LangGraph Phase A Graph가 System Policy 조회 → Staffing → Approval 평가 → 필요한 Human Confirmation·최종 승인을 조정한다. CLI의 runStaffingApproval()은 현재 Phase A Graph를 호출하는 Adapter다. Step 3에서 specialist-decisions 실행 대상으로 Preflight → 단일 Specialist 실행·반복 → Comparison을 일반 Node와 Edge에 통합했다. 함수형 Specialist Orchestrator는 제거했다. 기본값과 Staffing CLI는 staffing-approval로 종료한다.
+
+다중 Agent 조직을 먼저 만들기보다 하나의 제한된 작업을 안전하게 실행하고 검증하는 기반을 우선한다. 시스템의 책임과 경계에 관한 기준 문서는 `docs/architecture.md`다.
+Development Organization 실행 계약·Phase Handoff·Graph State / Output 소유권의 기준은
+[Workflow Architecture](docs/workflow-architecture.md)다. Organization을 최상위, Phase A / Phase B를 주요 Subgraph로 두는 목표 계층과 현재 구현 범위를 구분한다. 구현이 문서와 충돌하거나 문서에 없는 중요한 경계를 요구하면 임의로 결정하지 말고 먼저 보고한다.
 
 ## 2. Current Stack
 
-- Node.js
+- Node.js 20 이상
 - TypeScript
 - pnpm
 - tsx
 - Vitest
 - Zod
+- LangGraph.js (`@langchain/langgraph`, 필수 `@langchain/core`)
 
 이 Repository는 Next.js / React 애플리케이션이 아니다. Node.js 기반 CLI 및 development tooling 프로젝트다.
 
@@ -37,20 +46,36 @@
 
 - Human은 승인과 최종 governance 결정을 소유한다.
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
-- Worker는 scoped execution, Specialist는 supplied Context의 독립 판단을 수행한다.
-- Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js 채택 확정 / 설치·통합 미구현이며, 기존 Codex 기반 Agent Execution Runtime을 우선 재사용한다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / Human governance history는 미구현이며 v4는 CEO Agent의 판단·종합·보고와 전체 조직 workflow를 목표로 하되 현재 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
+- 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
+- Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js이며 Phase A가 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인, 승인된 결과의 선택적 Specialist 실행을 조정한다. 별도 Staffing Setup Graph는 제거했으며 목표의 주요 Subgraph는 Phase A / Phase B다. 상위 Organization Graph는 Phase 간 Handoff 계약 정의 이후 구성한다. 기존 Codex 기반 Agent Execution Runtime을 재사용하며 Agent / Model Provider / Tool Calling은 LangChain으로 교체하지 않는다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis Application은 읽기 전용 Decision / Comparison Context에서 출처 검증된 제안·Escalation·실패를 반환한다. 해결 방향 Human Governance는 Step 7.2에서 검증 출처 Review·실제 Human Receipt·ApprovedDecision과 동일 프로세스 Interrupt/Resume를 연결했으며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
-현재 GoalSpec / TaskContract와 Decision model / protocol의 존재를 장기 Shared State나 durable execution으로 설명하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
+현재 GoalSpec / TaskContract와 Decision model / protocol 또는 Graph State의 존재를 durable execution으로 설명하지 않는다. Graph State는 실행 데이터이며 Governance Ledger를 대체하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 
 ## 5. Repository Structure
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
+- `docs/workflow-architecture.md`: Organization 실행 계약·Phase Handoff·State / Output 소유권과 Step 2.5 재검토 기준
 - `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
-- `src/contracts/`: runtime-validated contract와 TaskContract loader
+- `src/contracts/`: 여러 Application이 공유하는 도메인별 runtime-validated 데이터 계약
+- `src/cli/commands/execute/load-task-contract.ts`: Execute Command의 TaskContract 파일 로딩
 - `src/application/planning/`: Goal-to-Task Planning use-case와 public API
 - `src/application/decision/`: 독립 Decision use-case와 public API; flow/context, orchestration, validation은 실제 책임별 grouping
-- `src/application/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; Decision 실행과의 조합은 CLI command가 담당
+- `src/application/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; 기존 CLI command와 v4 Phase A Workflow가 독립 API를 조합
+- `src/application/staffing/`: CEO Staffing·Snapshot Context·Proposal Finalization
+- `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
+- `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
+- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 개별 결과와 specialistDecisionsResult / decisionComparisonResult / synthesisResult
+- `src/workflows/development-organization/phase-a/features/staffing/nodes/`: CEO Staffing Application 실행 연결
+- `src/workflows/development-organization/phase-a/features/governance/nodes/`: System Policy 조회·Staffing Approval·Human 확인; 외부 결과 변환은 Entry Point가 담당
+- `src/workflows/development-organization/phase-a/features/decision/nodes/`, `features/comparison/nodes/`: 독립 Decision과 Comparison의 실행 Node; 순서·반복·분기는 Phase A Graph가 소유하며 마지막 Specialist 실행 Node가 Stage 3 완료 결과를 함께 확정
+- `src/workflows/development-organization/phase-a/features/`: 기능별 Workflow 내부 실행 모듈. Application 계층을 추가하거나 정책을 재구현하지 않음
+- `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Phase A Graph의 staffing-approval 실행 대상을 명시하고 기존 결과 계약 유지
+- `src/workflows/development-organization/phase-a/features/decision/validation/`: 전체 Specialist 요청의 동기 Preflight 검증·분리
+- `src/workflows/development-organization/phase-a/features/decision/execution/`: 단일 Invocation Claim·기존 v2 Decision 실행; 반복·실패 분기·Comparison 진입은 Phase A Graph가 소유
+- `src/application/synthesis/`: CEO Synthesis Context·Proposal·SourceReference 계약과 출처 / 누락 검증. 제안은 ApprovedDecision이나 실행 권한이 아님
+- `src/workflows/development-organization/phase-a/features/synthesis/nodes/`: 명시적 ceo-synthesis 대상에서만 기존 Stage 결과를 Application 입력으로 연결
+- `src/infrastructure/codex/`: Staffing / Synthesis가 공유하는 Context-only Codex 실행 옵션·임시 디렉터리 lifecycle; 역할·정책·출력 검증은 Application 소유
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델
@@ -61,6 +86,7 @@
 - `src/services/evidence/`: 실행 중 변경 사실 수집
 - `src/infrastructure/process/`: 외부 command 실행과 process lifecycle
 - `src/infrastructure/git/`: Repository resolution과 격리된 Git worktree lifecycle
+- `src/workflows/development-organization/phase-a/tests/`: Phase A Graph 계약·분기와 Workflow 통합 테스트; 개별 기능 테스트는 해당 구현과 co-location 유지
 - co-located `*.test.ts`: 해당 구현 모듈의 unit test
 
 현재 존재하지 않는 디렉터리를 예상 구조로 미리 추가하지 않는다.
@@ -68,6 +94,7 @@
 ## 6. Coding Rules
 
 - TypeScript의 strict 설정을 유지한다.
+- TypeScript 포맷은 `.prettierrc.json`을 따른다. `pnpm format`으로 적용하고 `pnpm format:check`로 확인한다.
 - Runtime boundary validation에는 Zod schema를 사용한다.
 - Contract는 Zod schema를 source of truth로 삼고 `z.infer`로 TypeScript 타입을 생성한다.
 - 불필요한 class hierarchy를 만들지 않는다.
@@ -77,6 +104,7 @@
 - 요청과 관계없는 refactoring을 하지 않는다.
 - 테스트는 가능하면 구현 파일과 co-location을 유지한다.
 - Cross-module import는 `@/*` source alias와 각 module의 `index.ts`를 사용한다.
+- 좁은 내부 연결 예외: Phase A의 `features/synthesis/nodes/run-ceo-synthesis.ts`만 Governance의 내부 `direction-review/flow/review-management.ts`에서 `registerDirectionReview`를 직접 import한다. 원시 Review 등록은 public barrel에 노출하지 않고 실제 `runSynthesis()` 검증 성공 직후에만 호출한다.
 - Same-module internal import는 상대경로를 사용하며, 상위 mega barrel은 만들지 않는다.
 
 ## 7. Validation
@@ -85,6 +113,7 @@
 
 ```sh
 pnpm typecheck
+pnpm format:check
 pnpm test
 git diff --check
 ```
@@ -97,3 +126,7 @@ git diff --check
 - Architecture 변경이 필요할 때 코드로 몰래 우회하지 않는다.
 - Architecture와 구현이 충돌하면 변경 전에 먼저 보고한다.
 - 작업 완료 후 변경 파일, 검증 결과, 남아 있는 한계를 보고한다.
+
+Human Direction Governance는 human-direction-governance 대상에서만 실행한다. Resume는 인증이 아니며 HumanConfirmation 객체를 State에 저장하지 않는다. MemorySaver는 영속 복구가 아니다. Revision은 기존 분석으로 Synthesis만 최대 두 번 실행하며 Specialist / Comparison / Claim을 재실행하지 않는다. ApprovedDecision은 Task 실행 권한이 아니다.
+
+Step 7.2의 신뢰 경계는 동일 프로세스의 Workflow / Application 코드를 신뢰한다. 외부 요청에 Graph updateState / 내부 Node 직접 호출 / 내부 Review writer를 노출하지 않는다. 새 invoke는 START 초기화를 거치고 Resume는 Human Action만 받는다. Decision / Comparison / Synthesis의 별도 WeakMap 증거는 사용하지 않으며 최초 Review에 원본 Context를 보존한다. directionAnalyses는 과거 Ledger 읽기 호환성에만 남긴다.

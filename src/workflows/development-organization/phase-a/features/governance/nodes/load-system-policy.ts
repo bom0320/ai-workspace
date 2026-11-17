@@ -11,6 +11,8 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
       collectedDecisions: undefined,
       specialistComparisonContext: undefined,
       decisionComparisonResult: undefined,
+      synthesisAssignments: undefined,
+      synthesisResult: undefined,
       staffingResult: undefined,
       approvalResult: undefined,
       policyLookup: {
@@ -36,6 +38,8 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
     collectedDecisions: undefined,
     specialistComparisonContext: undefined,
     decisionComparisonResult: undefined,
+    synthesisAssignments: undefined,
+    synthesisResult: undefined,
     staffingResult: undefined,
     approvalResult: undefined,
   };

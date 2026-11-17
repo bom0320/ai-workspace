@@ -207,8 +207,8 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
 구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
-Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node와 명시적 실행 대상으로 현재 CLI 계약을 보존했다. 다음 기능은 CEO Synthesis / Direction Governance이며 전체 Phase A 완료는 아니다.
-아래 LangGraph 연결·Step 6 CEO Synthesis 등의 기존 예정 마일스톤은 유지하되, 구체적인 Graph 분리·연결 형태를 이 순서만으로 확정하지 않는다.
+Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node와 명시적 실행 대상으로 현재 CLI 계약을 보존했다. Step 6.2에서 CEO Synthesis까지 연결했다. 다음 기능은 Direction Governance이며 전체 Phase A 완료는 아니다.
+아래 LangGraph 연결·Step 6 CEO Synthesis 등의 마일스톤과 구현 상태를 유지하되, 구체적인 Graph 분리·연결 형태를 이 순서만으로 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
    현재 기반 구현은 아래 상태를 따르며 실제 Authorization 완료를 의미하지 않는다.
@@ -219,7 +219,7 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 4. **Context Routing & Authorization — Implemented**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
    Authorized Specialist Invocation 발급. Step 5.2 Claim과 Step 5.3 실행 Workflow가 사용을 연결한다.
 5. **Independent Decision & Comparison — Phase A, 5.1–5.4 Implemented**: 기존 v2 / v3와 원본 Evidence 참조·독립성 유지. 5.5의 별도 검증 단계는 생략하고 후속 통합 검증으로 이관한다.
-6. **CEO Synthesis — Planned**: Recommendation, Rationale / Evidence, Trade-off, Unresolved Issues / Escalation 표현.
+6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 명시적 ceo-synthesis 대상에서 Graph 연결.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
 7. **Human Governance — Planned**: 해결 방향의 Approve / Override / Reject 대상·효과를 검증하고 Approved Decision만 handoff.
 8. **CEO Work Decomposition — Phase B (Planned)**: 승인된 방향에서 설계·구현·QA·리뷰 업무의 목적·산출물·담당자·
@@ -374,7 +374,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - **Step 3 Tested:** 실제 Graph·Staffing·Governance·Ledger·기존 v2/v3 검증에 fake CEO / mock TTY / 모의 Codex를 조합해
   단일·복수 성공과 Authorization / Claim / Decision / Comparison 실패를 검증한다. CLI의 Specialist 미실행·단일 Scope 발급도 확인한다.
 - **Not integrated**: Organization Graph, Phase B Graph, Phase 간 Handoff,
-  CEO Synthesis / Direction Governance, Interrupt/Resume·Checkpoint·자동 재시도/복구.
+  Direction Governance, Interrupt/Resume·Checkpoint·자동 재시도/복구.
   현재 Graph 재실행은 새 Staffing·Scope를 만들 수 있으며 전체 idempotency / crash recovery를 보장하지 않는다.
 
 ### Step 3 — Staffing Approval & Human Delegation — Implemented
@@ -474,6 +474,16 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - 직접 Graph State 소비자는 Stage별 결과로 이전한다. 기존 Staffing CLI·Entry Point API / JSON은 유지한다.
 - Stage 3 / 4 계약·Preflight 단일 조회·Governance 정책·Human 확인·Scope 발급과 Authorization / Claim은 유지한다.
 - 최종 Phase A Outcome·Checkpoint / Resume는 후속 설계 대상이다.
+
+
+### Step 6.2 — CEO Synthesis Application & Graph Integration (Implemented / Tested)
+
+- runSynthesis()가 기존 Goal·Assignment projection·Decision / Comparison Schema를 재사용한다.
+- proposed / escalated / failed와 SourceReference 구조·범위·중요 참조 누락 검증을 구현했다.
+- ceo-synthesis 대상에서 Stage 3 완료와 Stage 4 completed / 단일 skipped 이후만 실행한다.
+- 단일·복수 Graph 실행, 잘못된 참조·누락·입력 변조·실패 분기·결과 초기화와 기존 대상 미실행을 테스트한다.
+- 실제 Governance·Reservation·Claim·v2/v3·Synthesis를 모의 Codex process로 연결한 통합 테스트를 포함한다.
+- 실제 Codex 모델의 종합 품질·전체 Human E2E는 미검증이며 Step 7의 방향 승인·기록·Phase B Handoff는 미구현이다.
 
 
 ## v5 — Evaluation

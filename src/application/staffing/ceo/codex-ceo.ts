@@ -1,8 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { runCommand } from "@/infrastructure/process/index.js";
+import { runContextOnlyCodex } from "@/infrastructure/codex/index.js";
 
 import {
   ceoStaffingDecisionSchema,
@@ -71,57 +67,28 @@ export async function runCodexCEO(
     JSON.stringify(input),
   ].join("\n");
 
-  const cwd = mkdtempSync(join(tmpdir(), "ai-workspace-codex-ceo-"));
-  try {
-    const result = await runCommand(
-      "codex",
-      [
-        "exec",
-        "--ignore-user-config",
-        "--ignore-rules",
-        "--strict-config",
-        "--ephemeral",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-        "--color",
-        "never",
-        "-c",
-        'approval_policy="never"',
-        "-c",
-        'web_search="disabled"',
-        "-c",
-        "project_doc_max_bytes=0",
-        "-c",
-        "features={shell_tool=false,unified_exec=false,view_image=false,code_mode=false,code_mode_host=false,apps=false,plugins=false,browser_use=false,computer_use=false,multi_agent=false,multi_agent_v2=false,hooks=false,image_generation=false,skill_search=false,memories=false,shell_snapshot=false}",
-        prompt,
-      ],
-      { cwd, timeoutMs }
+  const result = await runContextOnlyCodex(prompt, timeoutMs);
+  if (result.timedOut)
+    throw new CodexCEOError(
+      "timeout",
+      `Codex CEO timed out after ${timeoutMs} ms.`
     );
-    if (result.timedOut)
-      throw new CodexCEOError(
-        "timeout",
-        `Codex CEO timed out after ${timeoutMs} ms.`
-      );
-    if (result.error || result.exitCode !== 0) {
-      throw new CodexCEOError(
-        "agent-process",
-        `Codex CEO process failed (exit code ${result.exitCode ?? "unavailable"}).`,
-        result.error ?? new Error(result.stderr)
-      );
-    }
-    let output: unknown;
-    try {
-      output = JSON.parse(result.stdout.trim());
-    } catch (error) {
-      throw new CodexCEOError(
-        "malformed-json",
-        "Codex CEO returned malformed JSON.",
-        error
-      );
-    }
-    return ceoStaffingDecisionSchema.parse(output);
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
+  if (result.error || result.exitCode !== 0) {
+    throw new CodexCEOError(
+      "agent-process",
+      `Codex CEO process failed (exit code ${result.exitCode ?? "unavailable"}).`,
+      result.error ?? new Error(result.stderr)
+    );
   }
+  let output: unknown;
+  try {
+    output = JSON.parse(result.stdout.trim());
+  } catch (error) {
+    throw new CodexCEOError(
+      "malformed-json",
+      "Codex CEO returned malformed JSON.",
+      error
+    );
+  }
+  return ceoStaffingDecisionSchema.parse(output);
 }

@@ -136,8 +136,8 @@ Preflight Node는 저장 Scope의 ID / Version을 승인 결과와 대조하고 
 
 초기의 단일 Node → 함수형 runSpecialistDecisions() 위임 구조는 내부 실행 제어가 Graph 밖에 남았으므로
 제거했다. Preflight 검증과 단일 Invocation 실행 기능은 유지하며 Governance / v2 / v3 정책을 재구현하지 않는다.
-새 Subgraph나 Assignment 선택 Agent는 없다. CEO Synthesis, Human Direction Governance와 전체 Phase A
-완료는 여전히 미구현이다.
+새 Subgraph나 Assignment 선택 Agent는 없다. Step 6.2에서 명시적 ceo-synthesis 대상에 Stage 5를 연결했다.
+Human Direction Governance와 전체 Phase A 완료는 여전히 미구현이다.
 
 기존 read-only Specialist의 supplied Context, 같은 비교 단위의 Goal / Snapshot, 독립 판단 원칙을 유지한다.
 추가 분석·재검토 요청은 필요한 Context·권한·Budget 재검증을 거칠 미래 조직 실행 요구다.
@@ -233,7 +233,7 @@ Organization State에 모든 Phase의 중간 데이터나 중복 상태 플래�
 | 코드 | 현재 실제 필드 / 관계 |
 | --- | --- |
 | [developmentOrganizationState](../src/workflows/development-organization/state.ts) | `goal`, `repositoryPath`만 정의. 전체 진행 상태·Organization Graph는 없음 |
-| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `specialistDecisionsResult`, `decisionComparisonResult`와 준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
+| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `specialistDecisionsResult`, `decisionComparisonResult`, `synthesisResult`와 synthesisAssignments·준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
 | 같은 파일의 `specialistDecisionsResult` | Stage 3: completed와 비어 있지 않은 AgentDecision[] 또는 failed / preflight·authorization·claim·decision / reason·assignmentId? |
 | 같은 파일의 `decisionComparisonResult` | Stage 4: completed / comparison, skipped / insufficient-decisions, failed / reason. 기존 Comparison Schema 재사용 |
 
@@ -257,8 +257,8 @@ Stage 4는 Stage 3의 완료 결과를 입력받는다. 단일 Decision이면 �
 skipped / insufficient-decisions를 기록한다. 복수 Decision은 기존 v3 Comparison / Reference 검증을 거쳐
 completed / comparison 또는 failed / reason을 기록한다. Comparison 실패 시 Stage 3의 completed와 검증된
 Decision 및 collectedDecisions를 보존하며 Stage 3을 실패로 바꾸지 않는다.
-이 경우 전체 성공으로 판단하거나 향후 Synthesis / 승인으로 진행해서는 안 된다. 현재 Graph는 Stage 4의
-모든 결과에서 END로 종료하며 최종 Phase A Outcome이나 후속 Node는 아직 없다.
+이 경우 전체 성공으로 판단하거나 향후 Synthesis / 승인으로 진행해서는 안 된다. 현재 기존 specialist-decisions 대상은 Stage 4에서 END로 종료한다. ceo-synthesis 대상은
+completed 또는 단일 skipped일 때만 Stage 5로 진행한다. 최종 Phase A Outcome은 아직 없다.
 
 preparedSpecialistRequests와 currentSpecialistIndex는 전체 Preflight를 통과한 요청과 다음 실행 위치,
 collectedDecisions는 Stage 3의 중간 수집 데이터다. specialistComparisonContext는 저장 Scope에서 확인한
@@ -362,7 +362,7 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, CEO Synthesis 이후의 Phase A 연결,
+**Planned / Not Integrated:** 전체 Organization Graph, Synthesis 이후 Human 승인 연결,
 Human Direction Governance, ApprovedDecision Handoff, Phase B Graph, Assignment 실행 조정,
 Executive Report, Interrupt / Resume와 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
@@ -446,3 +446,26 @@ Stage 3의 완료 결과는 마지막 execute-next-specialist 업데이트에서
 Decision 수·커서 일치를 확인한다. Stage 3 / 4 Schema와 Preflight 단일 조회·개별 Authorization / Claim은 그대로다.
 별도 완료 Stream 이벤트 대신 마지막 Execute 업데이트로 Stage 3 완료를 관찰하며 Stage 4 실패는 완료된
 Stage 3을 지우지 않는다. Phase A 전체 완료·해결 방향 승인이나 재시도·복구를 의미하지 않는다.
+
+### Step 6.2 — CEO Synthesis 실행 계약 (Implemented)
+
+```text
+executionTarget: ceo-synthesis
+  승인 → Preflight → Specialist 반복 → Comparison
+    ├─ failed → END (Synthesis 미실행)
+    └─ completed / 단일 skipped → run-ceo-synthesis → END
+                                  proposed / escalated / failed
+```
+
+기존 staffing-approval / specialist-decisions 대상은 각각 기존 종료 지점을 유지한다.
+Synthesis Node는 저장 Scope에서 Preflight가 추출한 synthesisAssignments와 기존 공통 Goal / SHA,
+Stage 3 Decisions와 Stage 4 결과를 Synthesis Application에 전달한다. Agent·timeout은 Graph 생성 옵션의
+synthesis에 두고 State에는 넣지 않는다. Graph는 Stage 진입·종료만 제어하며 출처 검증은 Application이 한다.
+
+synthesisResult는 SynthesisResult Schema를 재사용하고 앞선 Stage 결과를 덮어쓰지 않는다.
+새 invoke에서는 synthesisAssignments / synthesisResult도 초기화한다. proposed는 Human 검토용 제안이지
+ApprovedDecision·Phase A 완료·Phase B 진입 허가가 아니다. Human Direction Governance는 Step 7 대상이며
+승인 기록·Handoff·Checkpoint / Resume·자동 재시도는 구현하지 않았다.
+
+Application 계약과 SourceReference의 구체적인 범위·한계는
+[CEO Synthesis 구현](architecture.md#step-62--ceo-synthesis-application--graph-integration)을 따른다.

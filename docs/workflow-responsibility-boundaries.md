@@ -9,8 +9,8 @@
 
 아래의 **확정 원칙**, **현재 구현 사실**, **미적용 개선 방향**을 구별한다. Step 2에서 Stage 3 / 4의 Result와 완료 시점을 분리했다.
 Step 4에서 Stage 1 / 2의 중복 통합 State도 제거했다. 이 문서는 새 타입·Schema·디렉터리·Node 수·Subgraph 수를 확정하지 않는다.
-Organization Graph, CEO Synthesis, Human Direction Governance, Phase B, Interrupt / Resume와 Checkpoint
-Recovery는 미구현이다. 기존 Staffing·Governance·Decision·Comparison과 LangGraph 기반 Phase A는 구현되어 있다.
+Organization Graph, Human Direction Governance, Phase B, Interrupt / Resume와 Checkpoint
+Recovery는 미구현이다. 기존 Staffing·Governance·Decision·Comparison·Synthesis와 LangGraph 기반 Phase A는 구현되어 있다.
 
 ## 1. 문제와 책임 모델
 
@@ -43,7 +43,7 @@ LangGraph의 Stage별 실행 구성은 별개 결정이며 `stages/` 도입이�
 ### Phase A의 여섯 업무 목적과 진행 조건
 
 다음은 업무 경계다. Stage 1~4의 기반 기능과 Stage 3 / 4의 독립 결과·완료 계약은 구현되었다. Step 4에서 Stage 1 / 2의 결과와 외부 반환 계약도 분리했다.
-Stage 5~6은 목표이며 새 Application 패키지가 존재한다는 뜻이 아니다.
+Stage 5는 Step 6.2에서 Synthesis Application과 Graph 연결을 구현했다. Stage 6은 미구현 목표다.
 
 | Stage | 주요 소유 Application | 입력 → 성공 결과 / 완료 조건 | 다음 Stage 진행 조건 |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ Stage 5~6은 목표이며 새 Application 패키지가 존재한다는 뜻이 �
 | 2. Human Staffing Approval | `governance/approval` | 원본 Proposal과 적용 정책·필요한 Human 확인 → 실제 승인과 `ApprovalRecord`, `ApprovedOperatingScope` 발급·저장 확정 | 승인된 경우에만 실행 대상으로 진행. 대기·거부·확인 실패는 차단; 실행 전 최신 권한 검증은 별도 |
 | 3. Independent Specialist Decisions | `decision` (실행 권한은 Governance) | 승인된 실행 대상·검증된 Context와 공통 Goal / Snapshot → 모든 대상의 독립 분석·Snapshot / Evidence 검증을 마친 `AgentDecision[]` | 전체 대상이 완료된 경우에만 비교 또는 단일 Decision 후속 경로로 진행 |
 | 4. Decision Comparison | `comparison` | 같은 비교 단위의 독립 Decision과 원본 Goal / Snapshot SHA → 관계 분석과 원본 참조 검증을 마친 `ComparisonResult` | 비교 성공 또는 허용된 생략 경로에서만 후속 종합으로 진행. 단일 Specialist의 비교는 skipped / insufficient-decisions로 명시 |
-| 5. CEO Synthesis | 향후 `synthesis` 기능 | 독립 판단·비교 결과·근거 → CEO 종합 보고안 | 보고안에 필요한 검증 후 Human Direction Governance로 전달하는 목표. CEO는 최종 승인 권한을 갖지 않음 |
+| 5. CEO Synthesis | `synthesis` | 독립 판단·비교 결과·근거 → CEO 종합 보고안 | 보고안에 필요한 검증 후 Human Direction Governance로 전달하는 목표. CEO는 최종 승인 권한을 갖지 않음 |
 | 6. Human Governance | 향후 해결 방향의 Governance 승인·수정·거절 기능 | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인과 Handoff 검증을 충족해야 Phase B 진입. 수정·거절의 효과와 재검증은 후속 계약 대상 |
 
 Staffing Approval은 분석 조직·Context·Invocation Budget에 대한 승인이다. Human Governance는 종합된
@@ -197,7 +197,7 @@ Application은 실제 기능과 비즈니스 규칙의 단일 소유자다. Work
 | Governance Authorization | Invocation 적격성, 최신 Scope / Assignment / Context·정책·예산 검증, Reservation 및 Claim |
 | Decision | Specialist 실행 계약과 Snapshot / Evidence 검증 |
 | Comparison | 독립 Decision 관계 분석, 결과의 Specialist ID / Evidence Reference 유효성 검증 |
-| Synthesis (예정) | CEO 종합 분석, 보고안 검증과 결과 계약 |
+| Synthesis | CEO 종합 분석·Proposal / Escalation·SourceReference 및 중요 원본 참조 누락 검증. 승인은 발급하지 않음 |
 | Human Governance (예정) | 해결 방향의 Human 승인 정책과 기록 |
 
 
@@ -361,7 +361,7 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 3. **선택한 원칙:** 업무상 Decision 생성·검증과 관계 비교를 별도 Stage로 보고 Stage 3 완료 뒤 Stage 4로 진행한다. Step 2에서 코드·결과 Schema·테스트에 적용했다.
 4. **이유와 대안:** 결합 결과 유지는 외부 실패 처리가 간단하지만 실패 의미·완료 시점이 섞인다. 결과 분리는 관찰을 개선하지만 State 중복과 외부 API·부분 결과 공개의 설계 부담이 생긴다.
 5. **유지할 계약:** Comparison 실패를 전체 성공이나 후속 진행 허용으로 반환하지 않는다. 같은 Goal / Snapshot 비교, 단일 Comparison 생략, Reference 검증을 유지한다.
-6. **한계와 후속 과제:** Stage 3 / 4 결과·단일 skipped·완료 순서를 분리하고 중복 specialistComparison 채널을 제거했다. 외부 소비자는 새 결과 구조로 이전해야 하며 최종 Phase A Outcome·Synthesis 진입은 미구현이다. 독립 Stage라는 이유로 새 Subgraph를 만들지 않았다.
+6. **한계와 후속 과제:** Stage 3 / 4 결과·단일 skipped·완료 순서를 분리하고 중복 specialistComparison 채널을 제거했다. 외부 소비자는 새 결과 구조로 이전해야 하며 당시 미구현이던 Synthesis 진입은 Step 6.2에서 연결했다. 최종 Phase A Outcome은 여전히 미구현이다. 독립 Stage라는 이유로 새 Subgraph를 만들지 않았다.
 
 ### 5.5 Preflight와 Governance 신뢰 검증의 구분
 
@@ -396,5 +396,17 @@ Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구�
 
 Phase B에도 동일 기준을 적용하되 업무 분해·Assignment 모델·다중 실행·재작업·재배치·검증·진행 평가의
 구체적인 계약은 별도 설계 대상이다. 기존 Planning / Execution의 기능을 재사용하고 모든 Assignment에
-TaskContract를 강제하지 않는다. 이 판단 기준의 존재가 Phase B나 Synthesis·Human Governance·Organization
+TaskContract를 강제하지 않는다. 이 판단 기준의 존재가 Phase B나 Human Governance·Organization
 Graph·Checkpoint Recovery의 구현 완료를 뜻하지 않는다.
+
+### Step 6.2 적용 — Synthesis Stage와 실행 경계
+
+Synthesis Node는 완료된 Stage 3과 성공 / 단일 생략 Stage 4를 Application으로 전달한다.
+Preflight가 Governance 조회 결과에서 추출한 Assignment ID·Specialist ID·Objective만 Context에 넣고
+Scope / Receipt / Invocation을 전달하지 않는다. Application은 입력의 Assignment·Decision 일치,
+기존 Comparison Reference 검증과 새로운 SourceReference·중요 참조 누락 검증을 소유한다.
+Node와 Graph는 이 규칙을 복제하지 않는다. proposed / escalated / failed는 synthesisResult에만 기록한다.
+
+명시적인 ceo-synthesis 실행 대상만 Stage 5로 진행하며 기존 두 대상과 Staffing CLI의 종료 범위는 그대로다.
+이것은 Human 승인이나 Phase B 권한이 아니다. 출처의 구조적 존재와 누락 여부를 확인할 뿐,
+Conflict 해결의 적절성·분석의 사실성·자연어 Constraints 준수를 자동 증명하지 않는다.

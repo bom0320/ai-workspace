@@ -48,7 +48,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - Harness는 개발 도메인의 Contract / Authority / Context / Evidence / Verification 의미와 use-case 상태 제어를 소유한다.
 - 현재 Worker는 scoped execution, v2 Specialist는 supplied Context의 read-only 독립 판단을 수행한다. 목표 Phase B의 구현 업무 배치·다중 직원 실행은 미구현이며 현재 Specialist의 권한을 확대하는 근거가 아니다.
 - Git / Process 및 runtime은 기술적 실행 수단이다. v4 Workflow Runtime은 LangGraph.js이며 Phase A가 정책 조회·Staffing·Approval 및 콜백 기반 Human 확인, 승인된 결과의 선택적 Specialist 실행을 조정한다. 별도 Staffing Setup Graph는 제거했으며 목표의 주요 Subgraph는 Phase A / Phase B다. 상위 Organization Graph는 Phase 간 Handoff 계약 정의 이후 구성한다. 기존 Codex 기반 Agent Execution Runtime을 재사용하며 Agent / Model Provider / Tool Calling은 LangChain으로 교체하지 않는다. Harness가 Governance 의미·실행 허용 조건을 소유하고 LangGraph.js는 workflow 실행 메커니즘을 맡는다.
-- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis / 해결 방향의 Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
+- Comparison은 기존 독립 Decision의 Concern별 관계와 source reference를 다룬다. Synthesis Application은 읽기 전용 Decision / Comparison Context에서 출처 검증된 제안·Escalation·실패를 반환한다. 해결 방향의 Human governance history는 미구현이며 v4는 CEO의 판단·종합, 승인 후 업무 분해·실행 조정·진행 평가·보고를 목표로 하며 CEO Staffing 호출·Loop는 구현했지만 전체 조직 Workflow는 미구현이다. 별도 Coordinator / DecisionRun / DecisionRound는 선행 구현하지 않는다.
 
 현재 GoalSpec / TaskContract와 Decision model / protocol 또는 Graph State의 존재를 durable execution으로 설명하지 않는다. Graph State는 실행 데이터이며 Governance Ledger를 대체하지 않는다. 범용 기능과 실행 모델 변경은 Project Direction의 Design Decision Filter로 평가한다.
 
@@ -65,7 +65,7 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/application/staffing/`: CEO Staffing·Snapshot Context·Proposal Finalization
 - `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
 - `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
-- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 개별 결과와 specialistDecisionsResult / decisionComparisonResult
+- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 개별 결과와 specialistDecisionsResult / decisionComparisonResult / synthesisResult
 - `src/workflows/development-organization/phase-a/features/staffing/nodes/`: CEO Staffing Application 실행 연결
 - `src/workflows/development-organization/phase-a/features/governance/nodes/`: System Policy 조회·Staffing Approval·Human 확인; 외부 결과 변환은 Entry Point가 담당
 - `src/workflows/development-organization/phase-a/features/decision/nodes/`, `features/comparison/nodes/`: 독립 Decision과 Comparison의 실행 Node; 순서·반복·분기는 Phase A Graph가 소유하며 마지막 Specialist 실행 Node가 Stage 3 완료 결과를 함께 확정
@@ -73,6 +73,9 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Phase A Graph의 staffing-approval 실행 대상을 명시하고 기존 결과 계약 유지
 - `src/workflows/development-organization/phase-a/features/decision/validation/`: 전체 Specialist 요청의 동기 Preflight 검증·분리
 - `src/workflows/development-organization/phase-a/features/decision/execution/`: 단일 Invocation Claim·기존 v2 Decision 실행; 반복·실패 분기·Comparison 진입은 Phase A Graph가 소유
+- `src/application/synthesis/`: CEO Synthesis Context·Proposal·SourceReference 계약과 출처 / 누락 검증. 제안은 ApprovedDecision이나 실행 권한이 아님
+- `src/workflows/development-organization/phase-a/features/synthesis/nodes/`: 명시적 ceo-synthesis 대상에서만 기존 Stage 결과를 Application 입력으로 연결
+- `src/infrastructure/codex/`: Staffing / Synthesis가 공유하는 Context-only Codex 실행 옵션·임시 디렉터리 lifecycle; 역할·정책·출력 검증은 Application 소유
 - `src/application/execution/`: Task 실행 모듈의 public API
 - `src/application/execution/flow/`: Task 실행 순서와 orchestration
 - `src/application/execution/model/`: 실행 상태와 결과 모델

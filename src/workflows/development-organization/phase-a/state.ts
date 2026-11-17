@@ -1,3 +1,7 @@
+import {
+  synthesisContextSchema,
+  synthesisResultSchema,
+} from "@/application/synthesis/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
@@ -112,6 +116,8 @@ export const phaseAState = new StateSchema({
     .strict()
     .optional(),
   decisionComparisonResult: decisionComparisonResultSchema.optional(),
+  synthesisAssignments: synthesisContextSchema.shape.assignments.optional(),
+  synthesisResult: synthesisResultSchema.optional(),
   policyLookup: policyLookupSchema.optional(),
   staffingResult: staffingRunResultSchema.optional(),
   approvalResult: z

@@ -33,7 +33,7 @@ CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffin
 Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
 동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
 CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
-CEO Synthesis·해결 방향 Human Governance·Phase B와 전체 조직 E2E는 아직 없다.
+CEO Synthesis는 API / Graph에 연결했으며 해결 방향 Human Governance·Phase B와 전체 조직 E2E는 아직 없다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
@@ -43,9 +43,10 @@ Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2·2.5·3을 구�
 Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 조건부 Edge로 연결한다.
 정책 거부·Staffing 실패/Escalation이면 중단하며, 직접 승인이 필요한 경우에만 Human Confirmation 콜백과 Governance 최종 승인으로 진행한다.
 콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter에서 staffing-approval 실행 대상을 명시해 승인 단계 결과만 반환한다. 별도 Staffing Setup Graph는 없다.
-specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다. 이 완료도 Phase A 전체 완료나 해결 방향 승인은 아니다.
-Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회와 개별 staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult를 소유한다.
-기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. CEO Synthesis·Human Direction Governance는 아직 없다.
+specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다.
+ceo-synthesis 실행 대상은 Comparison 성공 또는 단일 생략 후 CEO Synthesis 제안 / Escalation / 실패까지 진행한다. 이 결과는 Phase A 전체 완료나 해결 방향 승인이 아니다.
+Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회와 개별 staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult / synthesisResult를 소유한다.
+기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. CEO Synthesis Application과 Graph 연결은 구현했으며 Human Direction Governance는 아직 없다.
 상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
 State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
 

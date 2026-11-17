@@ -41,6 +41,13 @@ export function preflightSpecialistDecisionsNode(
       return { specialistDecisionsResult: prepared };
     return {
       preparedSpecialistRequests: prepared.requests,
+      synthesisAssignments: prepared.scope.assignments.map(
+        ({ assignmentId, specialistId, objective }) => ({
+          assignmentId,
+          specialistId,
+          objective,
+        })
+      ),
       currentSpecialistIndex: 0,
       collectedDecisions: [],
       specialistComparisonContext: {

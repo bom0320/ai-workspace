@@ -1,3 +1,7 @@
+import type {
+  CEOSynthesisDecision,
+  SynthesisContext,
+} from "@/application/synthesis/index.js";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
@@ -137,6 +141,7 @@ describe("Phase A Staffing Approval execution", () => {
       "execute-next-specialist",
       "load-system-policy",
       "preflight-specialist-decisions",
+      "run-ceo-synthesis",
       "run-staffing",
     ]);
     const edges = graph.edges.map(({ source, target }) => [source, target]);
@@ -182,6 +187,8 @@ describe("Phase A Staffing Approval execution", () => {
       "specialistComparisonContext",
       "specialistDecisionsResult",
       "staffingResult",
+      "synthesisAssignments",
+      "synthesisResult",
     ]);
     expectTypeOf<
       NonNullable<PhaseAState["policyLookup"]>
@@ -1109,6 +1116,14 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       });
       const state = await createPhaseAGraph({ executionTarget }).invoke({
         ...specialistInput,
+        synthesisResult: {
+          status: "failed",
+          failure: "agent-execution",
+          reason: "Stale",
+        },
+        synthesisAssignments: [
+          { assignmentId: "stale", specialistId: "stale", objective: "Stale" },
+        ],
         specialistDecisionsResult: completed,
         preparedSpecialistRequests: [
           {
@@ -1133,6 +1148,8 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         "specialistComparisonContext",
         "decisionComparisonResult",
         "specialistDecisionsResult",
+        "synthesisAssignments",
+        "synthesisResult",
       ] as const)
         expect(state[key]).toBeUndefined();
       expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
@@ -1141,4 +1158,166 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(state.decisionComparisonResult).toBeUndefined();
     }
   );
+  function synthesisAction(context: SynthesisContext): CEOSynthesisDecision {
+    const sources = context.decisions.map((decision) => ({
+      kind: "recommendation" as const,
+      specialistId: decision.specialistId,
+    }));
+    const statement = {
+      text: "Human should review a reversible direction",
+      sources,
+    };
+    return {
+      type: "propose",
+      proposal: {
+        direction: statement,
+        rationale: statement,
+        alternatives: [],
+        tradeoffs: [],
+        risks: [],
+        unresolvedIssues: [],
+        humanReviewItems: [statement],
+      },
+    };
+  }
+  it.each([1, 2])(
+    "synthesizes %i approved Decisions only for the explicit CEO target",
+    async (count) => {
+      const stored = count === 2 ? twoAssignments() : structuredClone(approved);
+      const agent = vi.fn(async (context: SynthesisContext) =>
+        synthesisAction(context)
+      );
+      const state = await createPhaseAGraph({
+        executionTarget: "ceo-synthesis",
+        synthesis: { agent },
+      }).invoke(specialistInput);
+      expect(state.synthesisResult?.status).toBe("proposed");
+      expect(state.specialistDecisionsResult?.status).toBe("completed");
+      expect(state.decisionComparisonResult?.status).toBe(
+        count === 1 ? "skipped" : "completed"
+      );
+      expect(agent).toHaveBeenCalledExactlyOnceWith({
+        goal: stored.scope.goal,
+        repositoryCommitSha: stored.scope.snapshot.commitSha,
+        assignments: stored.scope.assignments.map(
+          ({ assignmentId, specialistId, objective }) => ({
+            assignmentId,
+            specialistId,
+            objective,
+          })
+        ),
+        decisions: state.collectedDecisions,
+        comparison: state.decisionComparisonResult,
+      });
+      expect(agent.mock.calls[0][0]).not.toHaveProperty("scope");
+      expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(count);
+      expect(runAuthorizedSpecialistDecision).toHaveBeenCalledTimes(count);
+      expect(getApprovedStaffingScope).toHaveBeenCalledTimes(1);
+    }
+  );
+  it.each(["escalated", "invalid-output", "agent-execution"])(
+    "preserves earlier Stages when Synthesis is %s",
+    async (outcome) => {
+      const agent = vi.fn(
+        async (context: SynthesisContext): Promise<CEOSynthesisDecision> => {
+          if (outcome === "agent-execution") throw new Error("CEO unavailable");
+          if (outcome === "escalated")
+            return {
+              type: "escalate",
+              reason: "Need Human priority",
+              questions: ["Which direction?"],
+              sources: [{ kind: "recommendation", specialistId: "frontend" }],
+            };
+          const action = synthesisAction(context);
+          if (action.type === "propose")
+            action.proposal.direction.sources = [{ kind: "gap", index: 99 }];
+          return action;
+        }
+      );
+      const state = await createPhaseAGraph({
+        executionTarget: "ceo-synthesis",
+        synthesis: { agent },
+      }).invoke(specialistInput);
+      expect(state.synthesisResult).toMatchObject(
+        outcome === "escalated"
+          ? { status: "escalated" }
+          : { status: "failed", failure: outcome }
+      );
+      expect(state.specialistDecisionsResult).toEqual(completed);
+      expect(state.decisionComparisonResult?.status).toBe("skipped");
+      expect(agent).toHaveBeenCalledTimes(1);
+      expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(1);
+    }
+  );
+  it.each(["staffing-approval", "specialist-decisions"] as const)(
+    "does not synthesize for the existing %s target",
+    async (executionTarget) => {
+      const agent = vi.fn(async (context: SynthesisContext) =>
+        synthesisAction(context)
+      );
+      const state = await createPhaseAGraph({
+        executionTarget,
+        synthesis: { agent },
+      }).invoke(specialistInput);
+      expect(agent).not.toHaveBeenCalled();
+      expect(state.synthesisResult).toBeUndefined();
+    }
+  );
+  it.each(["approval", "preflight", "decision", "comparison"])(
+    "does not synthesize after %s failure",
+    async (failure) => {
+      twoAssignments();
+      if (failure === "approval")
+        vi.mocked(approveStaffingProposal).mockReturnValue({
+          status: "denied",
+          reason: "Denied",
+        });
+      if (failure === "preflight")
+        vi.mocked(getApprovedStaffingScope).mockReturnValue({
+          status: "denied",
+          reason: "Denied",
+        });
+      if (failure === "decision")
+        vi.mocked(runAuthorizedSpecialistDecision).mockRejectedValueOnce(
+          new Error("Decision failed")
+        );
+      if (failure === "comparison")
+        vi.mocked(compareDecisions).mockRejectedValueOnce(
+          new Error("Comparison failed")
+        );
+      const agent = vi.fn(async (context: SynthesisContext) =>
+        synthesisAction(context)
+      );
+      const state = await createPhaseAGraph({
+        executionTarget: "ceo-synthesis",
+        synthesis: { agent },
+      }).invoke(specialistInput);
+      expect(agent).not.toHaveBeenCalled();
+      expect(state.synthesisResult).toBeUndefined();
+      if (failure === "comparison") {
+        expect(state.specialistDecisionsResult?.status).toBe("completed");
+        expect(state.decisionComparisonResult?.status).toBe("failed");
+      }
+    }
+  );
+  it("does not reuse previous Synthesis on a new invocation with failed Comparison", async () => {
+    twoAssignments();
+    const agent = vi.fn(async (context: SynthesisContext) =>
+      synthesisAction(context)
+    );
+    const graph = createPhaseAGraph({
+      executionTarget: "ceo-synthesis",
+      synthesis: { agent },
+    });
+    const first = await graph.invoke(specialistInput);
+    expect(first.synthesisResult?.status).toBe("proposed");
+    vi.mocked(compareDecisions).mockRejectedValueOnce(
+      new Error("Comparison failed")
+    );
+    const second = await graph.invoke(first);
+    expect(second.synthesisResult).toBeUndefined();
+    expect(second.decisionComparisonResult?.status).toBe("failed");
+    expect(agent).toHaveBeenCalledTimes(1);
+    expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(4);
+  });
 });

@@ -13,7 +13,8 @@ Development Organization의 실행 계약·Phase Handoff·Graph State / Output �
 LangGraph.js Minimal Integration Step 1은 정책 조회를, Step 2는 CEO Staffing·Approval 평가 Node와 조건부 Edge를 연결했다.
 Step 2.5는 콜백 기반 Human 확인·최종화를 연결했고, 이후 Staffing Setup Subgraph를 제거해 Policy → Staffing → Approval을 Phase A가 직접 소유하도록 통합했다. CLI의 기존 API도 현재 Phase A Graph를 호출한다.
 Step 3는 승인된 Staffing 결과와 명시적 specialist-decisions 실행 대상에서 Preflight·단일 Specialist·Comparison·완료를 일반 Node로 연결하고 반복·실패 분기를 Phase A Edge로 이전했다. 전체 Organization Graph는 아직 없다. Future responsibility는 현재 runtime이나 추가할 폴더의 명세가 아니다.
-v4는 진행 중이며 CEO Synthesis·해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
+Step 6.2는 CEO Synthesis Application과 명시적 ceo-synthesis Graph 실행 대상을 구현했다.
+v4는 진행 중이며 해결 방향 Human Governance·Phase B·전체 CEO Workflow는 미완성이다.
 
 ## 2. Current Architecture
 
@@ -42,7 +43,7 @@ Codex role implementations / Git and Process infrastructure → Target Repositor
   Review / Apply / Commit / Push / Cleanup 및 결과 presentation.
 
 현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod / LangGraph.js와 필수 LangChain core다. Codex CLI는 외부 실행 도구이며
-package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 자체 범용 Agent runtime layer는 없다. Synthesis / Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
+package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 자체 범용 Agent runtime layer는 없다. Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
 automatic retry / crash resume는 미구현이다. Decision / Comparison 결과는 메모리와 terminal에만 존재하며 persistence가 없다.
 Decision과 Comparison은 독립 application capability다. 기존 CLI command와 v4 Phase A Workflow가 각각 공개 API를 조합한다.
 
@@ -282,7 +283,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 ### v4 Target Workflow — Planned
 
 다음은 두 Phase로 구성한 목표 Workflow다. 기반 schema와 Context Discovery의 구현이 전체 Workflow의
-완료를 뜻하지 않는다. CLI는 v0–v3와 명시적 Staffing / Governance 명령을 제공한다. 승인 Scope의 Decision·Comparison API는 구현했지만 CEO Synthesis 이후와 전체 Graph 연결은 예정 상태다.
+완료를 뜻하지 않는다. CLI는 v0–v3와 명시적 Staffing / Governance 명령을 제공한다. 승인 Scope의 Decision·Comparison API는 구현했지만 CEO Synthesis는 명시적 실행 대상으로 연결했고 이후 Human 방향 승인과 전체 Organization Graph 연결은 예정 상태다.
 
 #### Phase A — Decision & Approval
 
@@ -674,7 +675,7 @@ maxAgentInvocations(이후 Specialist 활동 제안), Approved Scope Budget(향�
 allowlist로 1 Round 직접 propose를 확인했고 HEAD / Working Tree는 유지되었다. 실제 모델의 inspect 재호출,
 반복 품질이나 성공률 검증을 했다는 의미는 아니다. 원본 Goal / Snapshot과 Draft의 연결을 보존하는
 Proposal Finalization / 제한된 Policy Validation은 아래 R2, Staffing Approval / Scope issuance는 Step 3에서 구현했다.
-Authorization은 Step 4, 단일·복수 Specialist 실행 연결은 Step 5.3–5.4에서 구현했다. CEO Synthesis / Phase B / 전체 Workflow는 미구현이다.
+Authorization은 Step 4, 단일·복수 Specialist 실행 연결은 Step 5.3–5.4에서 구현했다. 당시 미구현이던 CEO Synthesis는 Step 6.2에서 연결했다. Phase B / 전체 Workflow는 미구현이다.
 
 ### R2 — Staffing Proposal Finalization & Policy Validation — 구현
 
@@ -1014,7 +1015,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | InvocationReservation | Implemented | authorization/features/specialist-invocation/model/reservation.ts의 발급 입력 digest와 Scope 전체 호출 예산 예약. 실행 완료·환불 기록은 아님 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
-| CEO Synthesis / 전체 조직 workflow / Executive Report | v4 Planned | Staffing 및 승인 Scope의 Specialist 실행·Comparison은 구현; CEO 종합·Phase B 실행 조정·전체 보고 연결은 미구현 |
+| CEO Synthesis / 전체 조직 workflow / Executive Report | Synthesis Implemented / 나머지 Planned | Step 6.2에서 CEO 제안·출처 검증·Graph 연결 구현; 방향 승인·Phase B 실행 조정·전체 보고 연결은 미구현 |
 | Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
@@ -1310,7 +1311,8 @@ src/
 │        │  │  │  └─ execute-next-specialist.ts
 │        │  │  ├─ validation/validate-specialist-request-batch.ts
 │        │  │  └─ execution/authorized-specialist-decision.ts
-│        │  └─ comparison/nodes/compare-specialist-decisions.ts
+│        │  ├─ comparison/nodes/compare-specialist-decisions.ts
+│        │  └─ synthesis/nodes/run-ceo-synthesis.ts
 │        └─ entrypoints/run-staffing-approval.ts
 ├─ contracts/  # goal / task / repository / specialist / staffing
 ├─ services/
@@ -1369,7 +1371,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
 - Evidence와 Telemetry, TaskContract와 file content, 내부 상태와 역할 간 protocol을 구분한다.
 - Scope / verification 통과를 자연어 요구 충족의 증명으로 과장하지 않는다.
-- v2 독립 Decision 생성과 v3 Structured Comparison은 별도 use-case이며 CLI와 Phase A Workflow가 공개 API를 조합한다. Synthesis / Human governance history는 미구현이다.
+- v2 독립 Decision 생성과 v3 Structured Comparison은 별도 use-case이며 CLI와 Phase A Workflow가 공개 API를 조합한다. Synthesis는 별도 Application으로 구현했고 Human governance history는 미구현이다.
 - Decision Context는 Snapshot commit의 explicit files이며 다른 Specialist의 Decision을 포함하지 않는다.
 - Schema 및 Evidence path / line 검증을 Decision의 의미적 정확성 보장으로 과장하지 않는다.
 - Generic runtime 문제는 기존 기술을 먼저 평가한다. Runtime은 교체 가능하며 governance 의미는 프로젝트가 소유한다.
@@ -1737,7 +1739,7 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | `index.ts`, `state.ts` | Organization State 타입 공개와 원본 GoalSpec·repositoryPath 공통 입력 소유; Organization Graph는 없음 |
 | `phase-a/index.ts` | createPhaseAGraph·PhaseAState와 기존 Phase A Workflow 공개 API |
 | `phase-a/state.ts` | 공통 입력·policyLookup / staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult; 최종 Phase A Output은 미정 |
-| `phase-a/graph.ts` | 7개 일반 Node 직접 등록, 승인·실행 대상·Specialist 반복·실패에 따른 조건부 Edge 연결, compile |
+| `phase-a/graph.ts` | 8개 일반 Node 직접 등록, 승인·실행 대상·Specialist 반복·실패에 따른 조건부 Edge 연결, compile |
 | `phase-a/features/governance/nodes/load-system-policy.ts` | Repository 경로 확인 → Governance 조회; 이전 Staffing / Approval 결과 제거 |
 | `phase-a/features/staffing/nodes/run-staffing.ts` | ready Policy와 Human Goal로 기존 runStaffing() 실행; 실행 옵션은 closure에 보관 |
 | `phase-a/features/governance/nodes/evaluate-staffing-approval.ts` | proposed의 원본 Proposal을 기존 approveStaffingProposal()에 전달 |
@@ -1745,6 +1747,7 @@ Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반
 | `phase-a/features/decision/nodes/preflight-specialist-decisions.ts` | 저장 Scope ID / Version 확인·전체 Assignment 요청 구성 → 기존 Preflight 검증 |
 | `phase-a/features/decision/nodes/execute-next-specialist.ts` | 한 Assignment의 Authorization → 기존 Claim / v2 실행 → Index 갱신 |
 | `phase-a/features/comparison/nodes/compare-specialist-decisions.ts` | 완전한 Decision 묶음으로 기존 v3 Comparison 호출 |
+| `phase-a/features/synthesis/nodes/run-ceo-synthesis.ts` | Stage 3·4 성공 후 Synthesis Application 호출; 결과는 제안이지 승인 아님 |
 | `phase-a/features/decision/nodes/execute-next-specialist.ts`의 마지막 성공 | Stage 3 완료 결과 확정 (Step 3.1: 별도 Complete Node 제거) |
 | `phase-a/entrypoints/run-staffing-approval.ts` | staffing-approval 대상을 명시한 Phase A invoke → 기존 Staffing Approval 반환 계약 유지 |
 | `phase-a/tests/graph.test.ts` | Node·Edge·State·조건부 실행과 결과 검증; 이전 두 Graph의 중복 시나리오 통합 |
@@ -1759,7 +1762,7 @@ const state = await graph.invoke({ goal, repositoryPath });
 ```
 
 Organization State는 goal / repositoryPath만 소유한다. Phase A State는 동일 입력 Schema와 기존 Domain Schema를 재사용해
-policyLookup / staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult와 Specialist 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 최종 Phase A Outcome은 아직 없으며
+policyLookup / staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult / synthesisResult와 synthesisAssignments·Specialist 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 최종 Phase A Outcome은 아직 없으며
 향후 Organization 공개 Output은 해결 방향 승인이 구현될 때 확정한다. policyLookup은 기존 Governance API의
 StaffingSystemPolicyResult와 같은 ready / denied 구조이며 configuration은 기존 Domain Schema를 그대로 쓴다.
 Node는 정책 조회 결과 전체를 교체하므로 denied 뒤에 이전 configuration/version이 남거나
@@ -1995,7 +1998,7 @@ Step 3.1부터 마지막 execute-next-specialist 업데이트가 Stage 3을 확�
 Stage 4는 Stage 3 완료 결과를 읽어 단일 Decision은 skipped / insufficient-decisions, 복수 Decision은
 기존 v3를 호출해 completed / comparison 또는 failed / reason을 decisionComparisonResult에 기록한다.
 Stage 4 실패 시 Stage 3과 검증된 Decision은 보존한다. Stage 3 실패 시 미완료 묶음은 성공으로 노출하지 않고
-Stage 4를 실행하지 않는다. 현재 Stage 4의 모든 결과는 END이며 향후 실패 결과에서 Synthesis로 진입하면 안 된다.
+Stage 4를 실행하지 않는다. 기존 specialist-decisions 대상은 Stage 4에서 END다. ceo-synthesis 대상도 Stage 4 실패에서 Synthesis로 진입하지 않는다.
 InvocationClaimError로 Claim / Decision을 구분하며 Claim 세부 원인을 추측하지 않는다. 기존 Domain Schema·
 Reference / Evidence 검증을 재사용하고, 새 invoke는 두 Stage 결과와 요청·Index·중간 데이터를 초기화한다.
 기존 SpecialistDecisionsWorkflowResult는 Stage 3 의미로 좁아졌고 DecisionComparisonStageResult를 공개했다.
@@ -2004,7 +2007,7 @@ Graph State 소비자는 comparison 필드 대신 새 Stage 4 결과를 확인�
 Authorization은 예약 시 예산을 소비하고 Claim은 일회성이다. 실패 후 Claim / 예산을 자동으로 취소·환불하지
 않으며 Node / Graph에 자동 Retry / Replay를 설치하지 않는다. 이관 전후 정책과 부작용 경계는 동일하다.
 이 단계의 END / completed는 분석·비교 범위의 종료일 뿐 Phase A 전체 완료나 해결 방향 승인이 아니다.
-CEO Synthesis·Human Direction Governance·Organization / Phase B Graph·Handoff·Interrupt / Resume /
+Human Direction Governance·Organization / Phase B Graph·Handoff·Interrupt / Resume /
 Checkpoint와 자동 복구는 여전히 미구현이다. 같은 Graph를 다시 invoke하면 새 Staffing·Scope·Invocation이
 생길 수 있으므로 전체 idempotency나 저장 이후 장애 복구, 정확히 한 번의 실행 완료를 보장하지 않는다.
 
@@ -2055,3 +2058,63 @@ runStaffingApproval()은 실행 후 독립 Stage 결과를 기존 StaffingApprov
 Graph State 변경은 내부 Entry Point와 테스트에 반영했고 저장소에서 기타 직접 호출자는 발견되지 않았다.
 외부 Graph 소비자에게는 State 계약 변경이지만 기존 Staffing CLI·Entry Point API / JSON은 유지한다.
 최종 Phase A Outcome·Checkpoint / Resume는 별도 설계 대상이다.
+
+### Step 6.2 — CEO Synthesis Application & Graph Integration
+
+`src/application/synthesis/`는 SourceReference 기반 해결 방향 제안을 생성한다.
+이 단계는 ApprovedDecision이나 승인 기록을 만들지 않으며 Human Governance는 Step 7의 책임이다.
+
+| 파일 | 책임 |
+| --- | --- |
+| contracts.ts | 기존 GoalSpec·Staffing Assignment pick·AgentDecision·Comparison Schema를 재사용한 Context, SourceReference, Proposal, Action / Result 계약 |
+| validation.ts | Assignment / Decision 일치·기존 Comparison 참조 검사 재사용, Synthesis SourceReference 및 누락 검증 |
+| run-synthesis.ts | 입력 캡처·CEO 단일 호출·출력 검증·proposed / escalated / failed 구분 |
+| codex-ceo-synthesis.ts | Synthesis 전용 역할·출력 프롬프트, 기존 Context-only Codex 실행 방식 재사용 |
+| infrastructure/codex/context-only-codex.ts | Staffing과 공유하는 Codex 옵션·임시 빈 cwd·cleanup. 역할과 Domain 정책을 소유하지 않는 구체적인 transport 함수 |
+| phase-a/features/synthesis/nodes/run-ceo-synthesis.ts | Stage 선행조건 검사와 Application 호출, 부분 State 업데이트 |
+
+#### Input / Output
+
+SynthesisContext는 원본 goal / repositoryCommitSha, assignments의 assignmentId / specialistId / objective,
+검증된 decisions와 comparison의 completed / comparison 또는 skipped / insufficient-decisions를 받는다.
+Assignment·Decision이 정확히 1:1이어야 하며 단일 Decision만 비교를 생략한다. completed Comparison의
+참조는 기존 Comparison Application validator를 재사용해 확인한다. 입력을 Zod로 복사·검증하고 Agent에는
+다시 분리한 사본을 전달해 Agent 변조로 검증 기준이 바뀌지 않게 한다. Graph는 Preflight의 Governance 조회
+결과에서 Assignment projection을 저장한다. Context에 Scope·Budget·Receipt·Invocation 권한 객체는 없다.
+
+CEO action은 propose / escalate뿐이다. SynthesisResult는 proposed / proposal, escalated / reason·questions·sources,
+failed / failure·reason이다. failure는 invalid-input / agent-execution / invalid-output이며 출력 파싱·검증 또는
+실행 오류를 Escalation으로 바꾸지 않는다. 실패 메시지에는 raw process 출력이나 민감한 Context를 넣지 않는다.
+Proposal은 direction / rationale, alternatives(description·reasonNotChosen), tradeoffs / risks / unresolvedIssues /
+humanReviewItems를 가진다. direction / rationale과 각 항목에 non-empty sources를 붙인다.
+Human Review 항목과 Escalation 질문은 최소 하나이며 다른 Proposal 배열은 필요 없으면 비울 수 있다.
+
+#### SourceReference 검증과 한계
+
+- recommendation: specialistId로 원본 recommendation 참조.
+- evidence / risk / uncertainty: specialistId와 0-based index로 해당 Decision 배열 참조.
+- finding / gap: 0-based index로 원본 Comparison 배열 참조. skipped에서는 사용할 수 없다.
+
+없는 Specialist·범위 밖/음수/소수 index·목록 내 중복·추가 Evidence 필드를 거부한다.
+모든 Specialist recommendation·원본 Risk / Uncertainty, 모든 Conflict / Trade-off Finding과 Gap의 참조가
+Proposal 또는 Escalation에 포함되어야 한다. 중요도 평가를 새로 만들지 않고 이 원본 범주 전체를 확인한다.
+모든 Evidence를 의무 인용하지는 않지만 인용된 Evidence는 반드시 원본에 존재해야 한다.
+
+이는 어떤 항목에서 원본 쟁점을 다뤘는지 추적하는 구조적 coverage다. 인용만으로 실제 Conflict 해결의 적절성,
+Evidence의 사실성·판단 의미·자연어 Constraints 준수를 증명하지 않는다. 새 Evidence 생성은 허용하지 않지만
+출처가 붙은 자연어의 모든 주장이 참인지 자동 보장하지는 않는다. Human이 원본 Goal·근거와 제안을 검토해야 한다.
+Context의 승인·출처 인증은 상위 Governance 실행 경계에 있고 이 API가 권한을 발급하지 않는다.
+
+#### Runtime / Graph
+
+Staffing의 임시 디렉터리와 Codex exec 옵션을 공통 transport로 추출했으며 Staffing 프로토콜·오류 의미는 유지했다.
+Synthesis 역할은 별도다. Repository/도구/네트워크/추가 조사·Specialist 재실행·TaskContract·구현 계획 확정·승인을
+금지한다. 빈 임시 cwd, read-only sandbox, user config/rules 무시, 도구·multi-agent·web 비활성화 옵션을 재사용한다.
+실제 Codex 모델 호출·품질·격리의 전체 E2E를 이번 테스트로 검증했다고 해석하지 않는다.
+
+명시적 ceo-synthesis 대상은 기존 승인 → Specialist → Comparison 이후 Stage 5까지 진행한다.
+Comparison 실패는 차단하고 completed 또는 단일 skipped만 Node에 진입한다. synthesisResult는 독립 결과로
+기록하며 앞선 Stage를 지우지 않는다. synthesisAssignments / synthesisResult는 새 invoke에서 초기화한다.
+기존 staffing-approval / specialist-decisions·CLI 종료 범위는 유지했다. 실행 Agent와 timeout은 Graph 생성
+옵션의 synthesis에 두며 State에 직렬화하지 않는다. 추가 Authorization·분석 Loop·자동 Retry는 없다.
+Human Governance·승인 Provenance·ApprovedDecision·Phase B Handoff·Checkpoint / Resume는 미구현이다.

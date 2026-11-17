@@ -1,3 +1,5 @@
+import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
+import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
 import { END, START, StateGraph } from "@langchain/langgraph";
 import { phaseAState, type PhaseAState } from "./state.js";
 import {
@@ -16,9 +18,12 @@ import { executeNextSpecialist } from "./features/decision/nodes/execute-next-sp
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
 
 export type PhaseAExecutionTarget =
-  "staffing-approval" | "specialist-decisions";
+  "staffing-approval" | "specialist-decisions" | "ceo-synthesis";
 export type PhaseAGraphOptions = StaffingExecutionOptions &
-  StaffingConfirmationOptions & { executionTarget?: PhaseAExecutionTarget };
+  StaffingConfirmationOptions & {
+    executionTarget?: PhaseAExecutionTarget;
+    synthesis?: RunSynthesisOptions;
+  };
 
 export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   const { executionTarget = "staffing-approval" } = options;
@@ -34,7 +39,8 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     )
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
     .addNode("execute-next-specialist", executeNextSpecialist)
-    .addNode("compare-specialist-decisions", compareSpecialistDecisions);
+    .addNode("compare-specialist-decisions", compareSpecialistDecisions)
+    .addNode("run-ceo-synthesis", createRunCEOSynthesisNode(options.synthesis));
 
   // 2. Connect Execution Edges
   graph.addEdge(START, "load-system-policy");
@@ -53,7 +59,8 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   );
   // Execution target selects an endpoint; State approval is not execution authority.
   const routeAfterApproval = (state: PhaseAState) =>
-    executionTarget === "specialist-decisions" &&
+    (executionTarget === "specialist-decisions" ||
+      executionTarget === "ceo-synthesis") &&
     state.approvalResult?.status === "approved"
       ? "preflight-specialist-decisions"
       : END;
@@ -95,8 +102,20 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     },
     [END, "execute-next-specialist", "compare-specialist-decisions"]
   );
-  // All Stage 4 outcomes end the current range. Failure cannot enter future Synthesis.
-  graph.addEdge("compare-specialist-decisions", END);
+  // Stage 4 failure never enters Synthesis, and existing execution targets keep their endpoint.
+  graph.addConditionalEdges(
+    "compare-specialist-decisions",
+    (state) =>
+      executionTarget === "ceo-synthesis" &&
+      state.specialistDecisionsResult?.status === "completed" &&
+      (state.decisionComparisonResult?.status === "completed" ||
+        (state.decisionComparisonResult?.status === "skipped" &&
+          state.specialistDecisionsResult.decisions.length === 1))
+        ? "run-ceo-synthesis"
+        : END,
+    ["run-ceo-synthesis", END]
+  );
+  graph.addEdge("run-ceo-synthesis", END);
 
   // Approval may persist Scope: no retry policy or resume mechanism is installed.
   // 3. Compile Graph

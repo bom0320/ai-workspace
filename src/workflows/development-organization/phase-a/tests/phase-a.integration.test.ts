@@ -658,6 +658,41 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       .spyOn(processRuntime, "runCommand")
       .mockImplementation(async (_name, args) => {
         const prompt = args.at(-1)!;
+        if (prompt.includes("SynthesisContext:\n")) {
+          const context = JSON.parse(prompt.split("SynthesisContext:\n")[1]);
+          const sources = [
+            ...context.decisions.map((d: { specialistId: string }) => ({
+              kind: "recommendation",
+              specialistId: d.specialistId,
+            })),
+            ...(context.comparison.status === "completed"
+              ? context.comparison.comparison.gaps.map(
+                  (_: unknown, index: number) => ({ kind: "gap", index })
+                )
+              : []),
+          ];
+          const statement = {
+            text: "Propose reversible direction while retaining unresolved coverage",
+            sources,
+          };
+          return {
+            stdout: JSON.stringify({
+              type: "propose",
+              proposal: {
+                direction: statement,
+                rationale: statement,
+                alternatives: [],
+                tradeoffs: [],
+                risks: [],
+                unresolvedIssues: [statement],
+                humanReviewItems: [statement],
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+          };
+        }
         if (prompt.includes("ComparisonContext:\n")) {
           const context = JSON.parse(prompt.split("ComparisonContext:\n")[1]);
           const specialistIds = context.decisions.map(
@@ -702,6 +737,48 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         };
       });
   }
+  it.each([1, 2])(
+    "connects real Governance, v2/v3 and Synthesis for %i Assignments",
+    async (count) => {
+      if (count === 2) prepareBatch();
+      else {
+        configure();
+        options.confirmApproval = (request) => accept(request);
+      }
+      const command = runtime();
+      const state = await createPhaseAGraph({
+        ...options,
+        executionTarget: "ceo-synthesis",
+      }).invoke({ goal: options.goal, repositoryPath: root });
+      expect(state.synthesisResult?.status).toBe("proposed");
+      expect(state.specialistDecisionsResult?.status).toBe("completed");
+      expect(state.decisionComparisonResult?.status).toBe(
+        count === 1 ? "skipped" : "completed"
+      );
+      const prompts = command.mock.calls.map((call) => call[1].at(-1)!);
+      const synthesisPrompts = prompts.filter((prompt) =>
+        prompt.includes("SynthesisContext:\n")
+      );
+      expect(synthesisPrompts).toHaveLength(1);
+      const context = JSON.parse(
+        synthesisPrompts[0].split("SynthesisContext:\n")[1]
+      );
+      expect(context.goal).toEqual(options.goal);
+      expect(context.repositoryCommitSha).toBe(
+        state.specialistComparisonContext?.repositoryCommitSha
+      );
+      expect(context.assignments).toEqual(state.synthesisAssignments);
+      expect(context.decisions).toEqual(state.collectedDecisions);
+      expect(context.comparison).toEqual(state.decisionComparisonResult);
+      expect(context).not.toHaveProperty("scope");
+      expect(context).not.toHaveProperty("approval");
+      expect(prompts.at(-1)).toBe(synthesisPrompts[0]);
+      expect(command).toHaveBeenCalledTimes(count === 1 ? 2 : 4);
+      expect(reservations()).toHaveLength(count);
+      expect(reservations().every((r) => r.claimedAt !== undefined)).toBe(true);
+      expect(issuanceCount()).toBe(1);
+    }
+  );
   it("runs approved dynamic Assignments in order and passes original Goal/SHA/Decisions to v3", async () => {
     prepareBatch();
     const command = runtime();
@@ -1165,6 +1242,8 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
     "specialistComparisonContext",
     "specialistDecisionsResult",
     "staffingResult",
+    "synthesisAssignments",
+    "synthesisResult",
   ]);
   expect(options.agent).toHaveBeenCalledTimes(1);
   expect(confirmApproval).toHaveBeenCalledTimes(1);

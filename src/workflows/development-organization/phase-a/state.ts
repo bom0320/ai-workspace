@@ -96,36 +96,9 @@ export const staffingApprovalEvaluationSchema = z.discriminatedUnion("status", [
   Exclude<StaffingApprovalResult, { status: "configured" }>
 >;
 
-// Shared inputs reuse their original schemas. A lookup result is runtime data,
-// not a substitute for the Governance Ledger's approval and authority records.
-export const staffingApprovalResultSchema = z.union([
-  staffingRunResultSchema.options[1],
-  staffingRunResultSchema.options[2],
-  staffingApprovalEvaluationSchema.options[0],
-  staffingApprovalEvaluationSchema.options[2],
-  z
-    .object({
-      status: z.literal("approval-required"),
-      request: staffingApprovalEvaluationSchema.options[1],
-    })
-    .strict(),
-  z
-    .object({ status: z.literal("rejected"), reason: z.string().min(1) })
-    .strict(),
-  z
-    .object({
-      status: z.literal("failed"),
-      failure: z.enum(["system-policy", "confirmation"]),
-      reason: z.string().min(1),
-      rounds: z.number().int().nonnegative(),
-    })
-    .strict(),
-]);
-
-// This is the Staffing Approval stage result, not a final Phase A Outcome.
+// Stage results are execution data, not Ledger authority or a final Phase A Outcome.
 export const phaseAState = new StateSchema({
   ...developmentOrganizationState.fields,
-  staffingApprovalResult: staffingApprovalResultSchema.optional(),
   specialistDecisionsResult: specialistDecisionsResultSchema.optional(),
   preparedSpecialistRequests: z.array(invokeSpecialistRequestSchema).optional(),
   currentSpecialistIndex: z.number().int().nonnegative().optional(),
@@ -160,6 +133,3 @@ export const phaseAState = new StateSchema({
 });
 
 export type PhaseAState = typeof phaseAState.State;
-export type StaffingApprovalStageResult = z.infer<
-  typeof staffingApprovalResultSchema
->;

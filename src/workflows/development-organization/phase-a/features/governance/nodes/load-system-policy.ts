@@ -5,7 +5,6 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
     return {
-      staffingApprovalResult: undefined,
       specialistDecisionsResult: undefined,
       preparedSpecialistRequests: undefined,
       currentSpecialistIndex: undefined,
@@ -31,7 +30,6 @@ export function loadSystemPolicy(state: PhaseAState): Partial<PhaseAState> {
   // A fresh invocation cannot reuse downstream results from an earlier run.
   return {
     policyLookup,
-    staffingApprovalResult: undefined,
     specialistDecisionsResult: undefined,
     preparedSpecialistRequests: undefined,
     currentSpecialistIndex: undefined,

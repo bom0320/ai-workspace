@@ -7,9 +7,9 @@ export function preflightSpecialistDecisionsNode(
 ): Partial<PhaseAState> {
   // 1. Resolve the Stored Approved Scope
   try {
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Specialist Decisions require approved Staffing.");
-    const approvedScope = state.staffingApprovalResult.scope;
+    const approvedScope = state.approvalResult.scope;
     const stored = getApprovedStaffingScope(approvedScope.id);
     if (stored.status !== "approved")
       throw new Error(

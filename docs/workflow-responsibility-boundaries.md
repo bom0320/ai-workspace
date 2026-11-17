@@ -8,7 +8,7 @@
 [Roadmap](roadmap.md)을 따른다.
 
 아래의 **확정 원칙**, **현재 구현 사실**, **미적용 개선 방향**을 구별한다. Step 2에서 Stage 3 / 4의 Result와 완료 시점을 분리했다.
-Stage 1 / 2의 결합 계약 정리는 미적용이다. 이 문서는 새 타입·Schema·디렉터리·Node 수·Subgraph 수를 확정하지 않는다.
+Step 4에서 Stage 1 / 2의 중복 통합 State도 제거했다. 이 문서는 새 타입·Schema·디렉터리·Node 수·Subgraph 수를 확정하지 않는다.
 Organization Graph, CEO Synthesis, Human Direction Governance, Phase B, Interrupt / Resume와 Checkpoint
 Recovery는 미구현이다. 기존 Staffing·Governance·Decision·Comparison과 LangGraph 기반 Phase A는 구현되어 있다.
 
@@ -21,7 +21,7 @@ Assignment 반복·실패·Comparison 진입을 Phase A Edge로 옮겼다.
 
 하지만 실행 제어 이관만으로 업무 책임이 분리되지는 않았다. Specialist의 배치 검증·단일 실행·결과 확정은
 Workflow의 여러 위치에 있었고 Staffing / Approval 및 Decision / Comparison 결과 계약이 결합되어 있었다.
-Step 2에서 후자의 결과·완료 순서는 분리했으며 Staffing / Approval의 결합은 남아 있다. 코드가 흩어졌다는 사실만으로 다시 합치거나 Node를 더 나누면 소유권과 실행 범위를 재차 혼동할 수 있다.
+Step 2에서 후자의 결과·완료 순서는 분리했고 Step 4에서 Staffing / Approval의 중복 내부 결과도 제거했다. 코드가 흩어졌다는 사실만으로 다시 합치거나 Node를 더 나누면 소유권과 실행 범위를 재차 혼동할 수 있다.
 따라서 **기능의 소유자 → 업무 목적과 완료 조건 → 실행·관찰 단위 → 코드 배치** 순서로 판단한다.
 
 Stage는 Application의 기능 소유권을 바탕으로 Workflow에서 달성할 **업무 목적, 입력·출력 계약과
@@ -42,7 +42,7 @@ LangGraph의 Stage별 실행 구성은 별개 결정이며 `stages/` 도입이�
 
 ### Phase A의 여섯 업무 목적과 진행 조건
 
-다음은 업무 경계다. Stage 1~4의 기반 기능과 Stage 3 / 4의 독립 결과·완료 계약은 구현되었다. Stage 1 / 2의 결과 분리는 미적용이다.
+다음은 업무 경계다. Stage 1~4의 기반 기능과 Stage 3 / 4의 독립 결과·완료 계약은 구현되었다. Step 4에서 Stage 1 / 2의 결과와 외부 반환 계약도 분리했다.
 Stage 5~6은 목표이며 새 Application 패키지가 존재한다는 뜻이 아니다.
 
 | Stage | 주요 소유 Application | 입력 → 성공 결과 / 완료 조건 | 다음 Stage 진행 조건 |
@@ -80,14 +80,14 @@ Graph의 END는 실행 경로의 종료다. Stage 성공이나 전체 업무 완
 실행 성공과 구분하되, 어떤 생략이 후속 진행을 허용하는지는 업무 계약으로 판단한다. 현재 단일 Decision은
 Comparison을 호출하지 않는 허용 경로이며 Stage 4에 skipped / insufficient-decisions를 기록한다.
 
-### 현재 결합 계약과 분리 이유
+### 현재 Stage 계약과 이전 결합을 분리한 이유
 
 [PhaseAState](../src/workflows/development-organization/phase-a/state.ts)의 현재 계약은 다음과 같다.
 
 | 현재 데이터 / 실행 | 현재 의미와 관찰 한계 |
 | --- | --- |
-| staffingResult / approvalResult | 각 실행의 중간 결과가 존재하지만 외부 Staffing API는 아래 결합 결과를 반환 |
-| staffingApprovalResult | 정책 조회 실패·Staffing 실패/Escalation과 Approval의 승인·대기·거부·확인 실패를 한 결과로 정규화 |
+| staffingResult / approvalResult | Stage 1의 proposed / failed / escalated와 Stage 2의 approved / approval-required / denied / rejected / confirmation failed를 독립 관리 |
+| runStaffingApproval()의 반환 | Entry Point가 policyLookup / staffingResult / approvalResult를 기존 외부 StaffingApprovalWorkflowResult로 변환. 합친 결과를 State에 저장하지 않음 |
 | specialistDecisionsResult | Stage 3만 표현. completed와 비어 있지 않은 Decision 배열 또는 preflight / authorization / claim / decision 실패 |
 | decisionComparisonResult | Stage 4의 completed / comparison, skipped / insufficient-decisions, failed / reason |
 | execute-next-specialist의 마지막 성공 업데이트 | 전체 Assignment 성공을 확인해 Stage 3을 확정한 뒤 Stage 4로 진행. Comparison은 완료 결과를 소비 |
@@ -97,7 +97,7 @@ completed가 되었고, Comparison 실패가 Decision 생성 실패처럼 보였
 Stage 4로 진행하도록 분리했다. Stage 3 실패 시 미완료 묶음은 여전히 성공으로 반환하지 않는다.
 반면 Stage 4만 실패하면 이미 검증된 Decision을 보존한다. 이것은 전체 Phase A 성공이나 후속 진행 허용이 아니다.
 기존 specialistDecisionsResult의 comparison / comparison 실패 단계와 specialistComparison 채널을 제거했으므로
-호출자는 새 Stage 4 결과를 확인해야 한다. Stage 1 / 2와 최종 Phase A Output 계약은 여전히 후속 과제다.
+호출자는 새 Stage 4 결과를 확인해야 한다. Stage 1 / 2는 Step 4에서 독립 결과로 정리했으며 최종 Phase A Output은 여전히 후속 과제다.
 
 ## 3. 두 번째 경계 — Graph Node
 
@@ -132,7 +132,7 @@ Node가 다른 Node를 직접 호출해 별도의 Orchestrator를 만들지 않�
 | [run-staffing](../src/workflows/development-organization/phase-a/features/staffing/nodes/run-staffing.ts) | 기존 runStaffing을 한 번 호출해 proposed / failed / escalated 관찰 | 유지 근거: 독립 CEO 실행과 성공·실패·Escalation 분기. Proposal 완성 Loop·최종화는 Application 내부에 유지 |
 | [evaluate-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/evaluate-staffing-approval.ts) | 원본 Proposal로 approveStaffingProposal 호출, approved / approval-required / denied에 따라 다음 경로 선택 | 유지 근거: Human 확인 필요 여부가 바뀌는 분기. 위임 승인 시 여기서 Scope 발급까지 완료될 수 있어 순수 조회로 취급하거나 무조건 재실행하면 안 됨 |
 | [confirm-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/confirm-staffing-approval.ts) | 승인 필요 시 분리된 review로 Human 콜백 호출, 원본 Proposal·실제 receipt로 최종 승인 요청 | 유지 근거: Human 대기·거부·예외와 최신 정책 재검증의 경계. 내부의 확인과 확정을 함수 개수만으로 나누지 않음. 현재 Interrupt / Resume는 아님 |
-| [collect-staffing-approval-result](../src/workflows/development-organization/phase-a/features/governance/nodes/collect-staffing-approval-result.ts) | 정책·Staffing·Approval의 종료 경로를 staffingApprovalResult로 정규화. 신규 정책 판단은 없음 | 통합 검토: 현재는 CLI 반환 계약과 공통 후속 라우팅을 위한 수집 지점. Stage별 결과를 분리한 뒤에도 독립 관찰·제어 지점이 필요한지 검토. 단순 변환이면 별도 Node를 강제하지 않음 |
+| 과거 collect-staffing-approval-result (Step 4에서 제거) | Stage 1 / 2 종료 결과를 다시 통합해 저장하던 Node | Graph의 분기는 각 Stage 결과로, 외부 반환 변환은 Entry Point로 분리. 별도 Node·중복 State 없이 기존 CLI 계약 유지 |
 | [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. Step 3에서 Scope 조회는 Node 한 곳에 두고 helper는 순수 배치 검증으로 변경 |
 | [execute-next-specialist](../src/workflows/development-organization/phase-a/features/decision/nodes/execute-next-specialist.ts) | 한 요청의 Authorization → Claim·v2 실행 → Decision 수집·Index 갱신. authorization / claim / decision 실패와 준비 요청 부재 시 preflight 실패 기록 | 유지 근거: Assignment별 실행·관찰과 즉시 중단. 반복은 Edge가 결정하며 Invocation은 로컬 변수. 권한 부작용을 고려해 무조건 여러 Node로 쪼개지 않음 |
 | [compare-specialist-decisions](../src/workflows/development-organization/phase-a/features/comparison/nodes/compare-specialist-decisions.ts) | 모든 Decision 수집 후 Stage 3 완료 결과로 기존 compareDecisions 호출 또는 단일 비교 생략 | 독립 Stage 4로 completed / skipped / failed 기록. 실패해도 Stage 3 결과 보존 |
@@ -343,7 +343,7 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 3. **선택한 원칙:** 실행·분기·실패·신뢰/재실행 요구로 독립 Node의 필요성을 판단하며 한 Node의 여러 Application 조합을 허용한다.
 4. **이유와 대안:** 함수마다 나누면 관찰은 세밀해지지만 Reservation·Claim 사이 복원 상태와 중복 부작용 관리가 늘어난다. 모두 합치면 독립 실패·분기 지점이 사라지므로 두 극단을 피한다.
 5. **유지할 계약:** Human 확인은 Lock 밖에서 수행하고 원본 Proposal을 최종 승인에 사용한다. Invocation과 receipt는 State의 권한 증거로 보관하지 않는다.
-6. **한계와 후속 과제:** collect Node의 독립 관찰·라우팅 필요성을 결과 분리와 함께 검토한다. 미구현 기능의 Node 수나 재개 정책을 선행 결정하지 않는다.
+6. **적용 결과와 후속 과제:** Step 4에서 collect Node와 중복 State를 제거하고 분기는 Graph, 외부 표현은 Entry Point에 배치했다. 미구현 기능의 Node 수나 재개 정책을 선행 결정하지 않는다.
 
 ### 5.3 함수형 Specialist Orchestrator에서 Graph 반복으로
 
@@ -372,6 +372,15 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 5. **유지할 계약:** Preflight 실패 시 예약하지 않으며 통과 후에도 개별 Authorization / Claim을 수행한다. State / Checkpoint는 Ledger를 대체하지 않는다.
 6. **적용 결과와 한계:** Step 3에서 Node의 단일 Governance 조회와 순수 배치 검증으로 분리하고 Specialist 중복 정책 검사는 Staffing에 일원화했다. 개별 Authorization / Claim의 최신 검증은 유지하며 조회와 실행 사이 TOCTOU를 제거한 것은 아니다.
 
+### 5.6 Stage 1 / 2 내부 결과와 외부 반환 계약 분리 — Step 4
+
+1. **기존 문제:** Staffing / Approval 결과가 이미 있었지만 Collect Node가 staffingApprovalResult로 다시 저장했다. 분기와 CLI 표현이 한 결과에 결합되었다.
+2. **판단:** Stage 1은 staffingResult, Stage 2는 approvalResult를 소유한다. 정책 조회 실패는 policyLookup에 남기며 Approval에 Staffing 실패·Escalation을 넣지 않는다.
+3. **선택 이유:** Graph는 각 Stage 결과로 종료·Human 확인·Specialist 진입을 정하고 Entry Point만 기존 외부 결과로 변환한다. 단순 결과 변환은 별도 실행·관찰 Node가 필요하지 않다.
+4. **트레이드오프:** 직접 Graph 호출자는 제거된 staffingApprovalResult 대신 Stage별 결과를 읽어야 한다. 저장소에서는 Entry Point와 테스트가 해당 소비자였으며 외부 배포 소비자는 확인할 수 없다. 기존 runStaffingApproval / CLI 반환은 유지한다.
+5. **검증과 안전성:** 미승인 시 Specialist 차단, 최신 정책·Repository 재검증, 원본 Proposal·일회 Receipt·Scope 발급과 Preflight 단일 Governance 조회를 유지한다. 새 invoke는 Stage 결과를 초기화한다. Stream에서는 Staffing과 Approval을 독립 관찰한다.
+6. **남은 한계:** 최종 Phase A Outcome과 Checkpoint / Resume는 별도 설계다. Stage 결과나 State Schema가 승인·실행 권한의 원본이 되지 않는다.
+
 ## 6. 향후 리팩토링의 적용 순서와 미결정 사항
 
 1. 실제 호출과 기능·정책의 소유 Application을 확인한다. 새 Workflow에 기존 검증을 복사하지 않는다.
@@ -381,8 +390,8 @@ State Schema 통과, approved 표시, 저장한 Scope 객체나 Invocation만으
 5. 승인·Reservation·Claim·Repository 부작용에 대해 실패·재실행·재개 시 무엇이 남는지 확인한다.
 6. 현재 API / CLI·실패 결과·부분 성공 공개·State / Ledger의 경계를 보존하며 계약 변경과 검증을 함께 계획한다.
 
-Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구현했다. 다음 검토 대상은 Stage 1 / 2의
-결과 계약·collect Node의 책임이다. Step 3에서 Preflight 조회는 한 번으로 정리했고 Step 3.1에서는 완료 검사를 마지막 Execute 업데이트에 통합했다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
+Step 2는 Stage 3 / 4 결과·완료 시점과 단일 Comparison 생략을 구현했다. Step 4에서 Stage 1 / 2의
+중복 결과·collect Node도 제거했다. Step 3에서 Preflight 조회는 한 번으로 정리했고 Step 3.1에서는 완료 검사를 마지막 Execute 업데이트에 통합했다. 미래 Result 필드·Zod Schema·폴더 구조·추가 Subgraph·
 미래 Node 수·Retry / Resume 정책은 이번 기록에서 확정하지 않는다.
 
 Phase B에도 동일 기준을 적용하되 업무 분해·Assignment 모델·다중 실행·재작업·재배치·검증·진행 평가의

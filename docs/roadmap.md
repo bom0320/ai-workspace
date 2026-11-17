@@ -348,7 +348,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 
 - 기존 LangGraph / Node / Domain Schema를 재사용해 Policy → Staffing → Approval → 결과 수집을 Phase A에 통합했다.
 - Organization State는 goal / repositoryPath만 유지한다. Phase A State는 policyLookup / staffingResult /
-  approvalResult / staffingApprovalResult / specialistDecisionsResult / decisionComparisonResult와 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 단계 결과는 최종 Phase A Outcome이나 실행 권한이 아니다.
+  approvalResult / specialistDecisionsResult / decisionComparisonResult와 준비 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유한다. 단계 결과는 최종 Phase A Outcome이나 실행 권한이 아니다.
 - 책임 기반 디렉터리 정리 후 Node는 features/ 아래 staffing / governance / decision / comparison의 nodes/에 배치한다.
   결과 정규화 Node는 features/governance/nodes에, Workflow 검증·실행 보조 함수는 features/decision/validation·execution에 둔다.
   파일 위치와 참조만 변경했으며 Stage 결과·Graph 분기·Preflight 중복 검증은 유지한다.
@@ -359,7 +359,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - 기존 두 Graph의 동일 테스트를 한 벌로 통합하고 분기·State 갱신·실패·거절·정책 재조회 시나리오를 유지한다.
   실제 Staffing·서명 Ledger·fake CEO / mock TTY의 직접/위임 승인, 정책/Repository 변경 거부와 중복 발급 방지를 검증한다.
   실제 Human·Codex·Checkpoint E2E가 검증됐다는 뜻은 아니다.
-- **Step 3 Implemented:** collect-staffing-approval-result 이후 approved + specialist-decisions 대상만 Preflight Node로 진행한다.
+- **Step 3 Implemented:** approved + specialist-decisions 대상만 Preflight Node로 진행한다. 당시 Collect Node를 사용했고 후속 Refactoring Step 4에서 승인 결과의 직접 분기로 바뀌었다.
   저장 Scope ID / Version을 대조하고 모든 요청을 검증한 뒤 execute-next-specialist 한 번에 한 Assignment를 처리한다.
   Phase A Edge가 반복·실패 종료·단일 Comparison 생략·복수 Comparison 및 완료를 조정한다.
   기존 runSpecialistDecisions 함수·specialist-decisions/ 디렉터리는 제거하고 검증 helper / 단일 Claim·v2 실행만 유지했다.
@@ -454,7 +454,7 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - Specialist 중복 금지는 Staffing 정책에 일원화한다. Governance의 저장 Scope 재검증도 같은 정책을 사용한다.
 - 당시 Complete Node는 불완전한 배치 방어·완료 관찰을 위해 유지했다. 후속 Step 3.1에서 검사와 완료 결과를 Execute Node에 통합했다.
 - Node 선행조건·반환 Schema 검사 및 Invocation별 최신 Authorization / Claim·Evidence / Reference 검증은 유지한다.
-- Stage 1 / 2 결과 분리와 재시도·Checkpoint 복구는 후속 과제다.
+- 당시 후속 과제였던 Stage 1 / 2 결과 분리는 Step 4에서 적용했다. 재시도·Checkpoint 복구는 미구현이다.
 
 
 ### Phase A Refactoring Step 3.1 — Specialist 완료 처리 통합 (Implemented)
@@ -464,6 +464,16 @@ Human 승인 기록만으로 발급 출처를 증명하지 않는다. 신뢰된 
 - Graph는 반복·실패 종료·completed 이후 Comparison 진입을 담당한다. Stage 3 / 4 결과 Schema는 유지한다.
 - 별도 완료 이벤트 대신 마지막 Execute Stream 업데이트로 완료를 관찰한다. Comparison 실패 시 Stage 3을 보존한다.
 - Preflight 단일 조회·Governance Authorization / Claim·기존 Staffing CLI 범위와 v2 / v3 검증은 유지한다.
+
+
+### Phase A Refactoring Step 4 — Staffing / Approval 결과 경계 정리 (Implemented)
+
+- staffingApprovalResult State·통합 Schema·타입과 collect-staffing-approval-result Node를 제거했다.
+- Graph는 policyLookup / staffingResult / approvalResult로 분기하고 Entry Point는 기존 외부 반환 형식으로만 변환한다.
+- Staffing failed / escalated는 Stage 1에, Confirmation failed / rejected와 승인 대기는 Stage 2에 남는다.
+- 직접 Graph State 소비자는 Stage별 결과로 이전한다. 기존 Staffing CLI·Entry Point API / JSON은 유지한다.
+- Stage 3 / 4 계약·Preflight 단일 조회·Governance 정책·Human 확인·Scope 발급과 Authorization / Claim은 유지한다.
+- 최종 Phase A Outcome·Checkpoint / Resume는 후속 설계 대상이다.
 
 
 ## v5 — Evaluation

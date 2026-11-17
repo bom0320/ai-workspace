@@ -65,9 +65,9 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/application/staffing/`: CEO Staffing·Snapshot Context·Proposal Finalization
 - `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
 - `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
-- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 중간 상태와 staffingApprovalResult / specialistDecisionsResult / decisionComparisonResult
+- `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 개별 결과와 specialistDecisionsResult / decisionComparisonResult
 - `src/workflows/development-organization/phase-a/features/staffing/nodes/`: CEO Staffing Application 실행 연결
-- `src/workflows/development-organization/phase-a/features/governance/nodes/`: System Policy 조회·Staffing Approval·Human 확인과 승인 단계 결과 정규화
+- `src/workflows/development-organization/phase-a/features/governance/nodes/`: System Policy 조회·Staffing Approval·Human 확인; 외부 결과 변환은 Entry Point가 담당
 - `src/workflows/development-organization/phase-a/features/decision/nodes/`, `features/comparison/nodes/`: 독립 Decision과 Comparison의 실행 Node; 순서·반복·분기는 Phase A Graph가 소유하며 마지막 Specialist 실행 Node가 Stage 3 완료 결과를 함께 확정
 - `src/workflows/development-organization/phase-a/features/`: 기능별 Workflow 내부 실행 모듈. Application 계층을 추가하거나 정책을 재구현하지 않음
 - `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Phase A Graph의 staffing-approval 실행 대상을 명시하고 기존 결과 계약 유지

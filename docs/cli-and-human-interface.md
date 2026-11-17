@@ -398,7 +398,7 @@ LangGraph Step 2.5의 `phase-a/index.ts` / `createPhaseAGraph()`는 정책 조�
 approval-required인 경우에만 Human Confirmation Node로 진행한다. 콜백이 없으면 원본 Proposal·Binding과 승인 대기를 보존하며,
 콜백이 있으면 분리된 review 사본을 전달하고 원본 Proposal과 실제 receipt로 Governance에 최종 승인을 요청한다.
 CLI staffing은 기존 runStaffingApproval() API를 통해 현재 createPhaseAGraph()를 실행하고 review·/dev/tty I/O를 제공한다.
-별도 Staffing Setup Graph는 제거했으며 Entry Point는 staffingApprovalResult만 기존 반환 계약으로 전달한다.
+별도 Staffing Setup Graph는 제거했으며 Entry Point는 개별 policyLookup / staffingResult / approvalResult를 기존 반환 계약으로 변환한다.
 Step 3에서 Entry Point가 executionTarget: staffing-approval을 명시하도록 고정했다. Graph의 기본값도 승인까지만 실행하며, specialist-decisions를 명시한 API 호출만 승인 후 분석을 수행한다. 실행 대상은 Governance 우회 옵션이 아니다.
 별도 Graph 명령은 추가하지 않았다. Decision은 API의 실행 대상으로 연결했으며 CEO Synthesis·Direction Governance·Interrupt·Resume·Checkpoint는 없다.
 Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.

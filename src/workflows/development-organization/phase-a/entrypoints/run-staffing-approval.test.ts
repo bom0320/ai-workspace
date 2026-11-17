@@ -1,3 +1,5 @@
+import * as phaseAGraph from "../graph.js";
+import type { PhaseAState } from "../state.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
@@ -290,6 +292,50 @@ describe("Staffing Approval Graph adapter", () => {
       expect(approveStaffingProposal).toHaveBeenCalledTimes(
         failure === "callback" ? 1 : 2
       );
+    }
+  });
+  it.each([
+    "missing-policy",
+    "missing-staffing",
+    "denied-with-staffing",
+    "failed-with-approval",
+    "missing-approval",
+  ])("rejects an impossible Graph outcome: %s", async (kind) => {
+    const ready = {
+      status: "ready" as const,
+      configuration: policy,
+      version: 1,
+    };
+    const proposed = { status: "proposed" as const, proposal, rounds: 1 };
+    const state: Partial<PhaseAState> =
+      kind === "missing-policy"
+        ? {}
+        : kind === "missing-staffing"
+          ? { policyLookup: ready }
+          : kind === "denied-with-staffing"
+            ? {
+                policyLookup: { status: "denied", reason: "No policy" },
+                staffingResult: proposed,
+              }
+            : kind === "failed-with-approval"
+              ? {
+                  policyLookup: ready,
+                  staffingResult: {
+                    status: "failed",
+                    failure: "agent-process",
+                    reason: "CEO failed",
+                    rounds: 1,
+                  },
+                  approvalResult: approved,
+                }
+              : { policyLookup: ready, staffingResult: proposed };
+    const graph = vi.spyOn(phaseAGraph, "createPhaseAGraph").mockReturnValue({
+      invoke: async () => state,
+    } as unknown as ReturnType<typeof phaseAGraph.createPhaseAGraph>);
+    try {
+      await expect(runStaffingApproval(options)).rejects.toThrow();
+    } finally {
+      graph.mockRestore();
     }
   });
 });

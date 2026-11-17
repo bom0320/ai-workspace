@@ -1,5 +1,5 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { phaseAState } from "./state.js";
+import { phaseAState, type PhaseAState } from "./state.js";
 import {
   createRunStaffingNode,
   type StaffingExecutionOptions,
@@ -10,8 +10,6 @@ import {
   createConfirmStaffingApprovalNode,
   type StaffingConfirmationOptions,
 } from "./features/governance/nodes/confirm-staffing-approval.js";
-
-import { collectStaffingApprovalResult } from "./features/governance/nodes/collect-staffing-approval-result.js";
 
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
@@ -34,7 +32,6 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       "confirm-staffing-approval",
       createConfirmStaffingApprovalNode(options.confirmApproval)
     )
-    .addNode("collect-staffing-approval-result", collectStaffingApprovalResult)
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
     .addNode("execute-next-specialist", executeNextSpecialist)
     .addNode("compare-specialist-decisions", compareSpecialistDecisions);
@@ -43,42 +40,35 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   graph.addEdge(START, "load-system-policy");
   graph.addConditionalEdges(
     "load-system-policy",
-    (state) =>
-      state.policyLookup?.status === "ready"
-        ? "run-staffing"
-        : "collect-staffing-approval-result",
-    ["run-staffing", "collect-staffing-approval-result"]
+    (state) => (state.policyLookup?.status === "ready" ? "run-staffing" : END),
+    ["run-staffing", END]
   );
   graph.addConditionalEdges(
     "run-staffing",
     (state) =>
       state.staffingResult?.status === "proposed"
         ? "evaluate-staffing-approval"
-        : "collect-staffing-approval-result",
-    ["evaluate-staffing-approval", "collect-staffing-approval-result"]
+        : END,
+    ["evaluate-staffing-approval", END]
   );
+  // Execution target selects an endpoint; State approval is not execution authority.
+  const routeAfterApproval = (state: PhaseAState) =>
+    executionTarget === "specialist-decisions" &&
+    state.approvalResult?.status === "approved"
+      ? "preflight-specialist-decisions"
+      : END;
   graph.addConditionalEdges(
     "evaluate-staffing-approval",
     (state) =>
       state.approvalResult?.status === "approval-required"
         ? "confirm-staffing-approval"
-        : "collect-staffing-approval-result",
-    ["confirm-staffing-approval", "collect-staffing-approval-result"]
+        : routeAfterApproval(state),
+    ["confirm-staffing-approval", "preflight-specialist-decisions", END]
   );
-  graph.addEdge(
-    "confirm-staffing-approval",
-    "collect-staffing-approval-result"
-  );
-  // Execution target selects an endpoint; it never grants approval or authority.
-  graph.addConditionalEdges(
-    "collect-staffing-approval-result",
-    (state) =>
-      executionTarget === "specialist-decisions" &&
-      state.staffingApprovalResult?.status === "approved"
-        ? "preflight-specialist-decisions"
-        : END,
-    ["preflight-specialist-decisions", END]
-  );
+  graph.addConditionalEdges("confirm-staffing-approval", routeAfterApproval, [
+    "preflight-specialist-decisions",
+    END,
+  ]);
   graph.addConditionalEdges(
     "preflight-specialist-decisions",
     (state) =>

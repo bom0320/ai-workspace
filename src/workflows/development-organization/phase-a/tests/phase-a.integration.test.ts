@@ -711,7 +711,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     const result = state.specialistDecisionsResult;
-    const approval = state.staffingApprovalResult;
+    const approval = state.approvalResult;
     if (!result || approval?.status !== "approved")
       throw new Error("Missing Graph results");
     const scope = approval.scope;
@@ -780,13 +780,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "preflight",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[0].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(0);
     expect(command).not.toHaveBeenCalled();
@@ -832,13 +831,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "authorization",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[0].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(0);
     expect(command).not.toHaveBeenCalled();
@@ -850,13 +848,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "authorization",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[1].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[1].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(command).toHaveBeenCalledTimes(1);
@@ -873,14 +870,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toEqual({
       status: "failed",
       stage: "claim",
       reason: "Invocation claim denied",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[0].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0]).not.toHaveProperty("claimedAt");
@@ -900,13 +896,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "decision",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[0].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[0].assignmentId,
     });
     expect(reservations()).toHaveLength(1);
     expect(reservations()[0].claimedAt).toEqual(expect.any(String));
@@ -927,7 +922,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     const result = state.specialistDecisionsResult;
-    expect(state.staffingApprovalResult?.status).toBe("approved");
+    expect(state.approvalResult?.status).toBe("approved");
     expect(result).toEqual({
       status: "completed",
       decisions: state.collectedDecisions,
@@ -963,13 +958,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
-    if (state.staffingApprovalResult?.status !== "approved")
+    if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
     expect(state.specialistDecisionsResult).toMatchObject({
       status: "failed",
       stage: "authorization",
-      assignmentId:
-        state.staffingApprovalResult.scope.assignments[1].assignmentId,
+      assignmentId: state.approvalResult.scope.assignments[1].assignmentId,
     });
     expect(command).toHaveBeenCalledTimes(1);
     expect(reservations()).toHaveLength(1);
@@ -1027,7 +1021,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         ...options,
         executionTarget: "specialist-decisions",
       }).invoke({ goal: options.goal, repositoryPath: root });
-      expect(state.staffingApprovalResult?.status).toBe("approved");
+      expect(state.approvalResult?.status).toBe("approved");
       expect(options.agent).toHaveBeenCalledTimes(1);
       expect(issuanceCount()).toBe(1);
       expect(state.goal).toEqual(options.goal);
@@ -1037,7 +1031,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         expect(result?.status).toBe("completed");
         if (result?.status !== "completed")
           throw new Error(JSON.stringify(result));
-        const approval = state.staffingApprovalResult;
+        const approval = state.approvalResult;
         if (approval?.status !== "approved") throw new Error("Expected Scope");
         const scope = approval.scope;
         expect(
@@ -1096,7 +1090,7 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
         maxRounds: options.maxRounds,
         agent: options.agent,
       }).invoke({ goal: options.goal, repositoryPath: root });
-      const outcome = state.staffingApprovalResult;
+      const outcome = state.approvalResult;
       expect(state.goal).toEqual(options.goal);
       expect(options.agent).toHaveBeenCalledTimes(1);
       if (mode === "delegated") {
@@ -1114,8 +1108,8 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
         expect(outcome?.status).toBe("approval-required");
         if (outcome?.status !== "approval-required")
           throw new Error(JSON.stringify(state));
-        expect(outcome.request.subject?.goal).toEqual(options.goal);
-        expect(outcome.request.binding).toEqual(expect.any(String));
+        expect(outcome.subject?.goal).toEqual(options.goal);
+        expect(outcome.binding).toEqual(expect.any(String));
         expect(issuanceCount()).toBe(0);
       }
       withGovernanceRecords((raw) => {
@@ -1144,7 +1138,7 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
       goal: options.goal,
       repositoryPath: root,
     });
-    expect(state.staffingApprovalResult?.status).toBe("denied");
+    expect(state.approvalResult?.status).toBe("denied");
     expect(agent).toHaveBeenCalledTimes(1);
     expect(issuanceCount()).toBe(0);
   });
@@ -1158,7 +1152,7 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
   const state = await createPhaseAGraph({ ...options, confirmApproval }).invoke(
     { goal: options.goal, repositoryPath: root }
   );
-  expect(state.staffingApprovalResult?.status).toBe("approved");
+  expect(state.approvalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
     "approvalResult",
     "collectedDecisions",
@@ -1170,7 +1164,6 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
     "repositoryPath",
     "specialistComparisonContext",
     "specialistDecisionsResult",
-    "staffingApprovalResult",
     "staffingResult",
   ]);
   expect(options.agent).toHaveBeenCalledTimes(1);

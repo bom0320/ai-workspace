@@ -46,8 +46,31 @@ export async function runStaffingApproval(
     repositoryPath: options.repositoryPath,
   });
 
-  // 2. Return the Existing Workflow Contract
-  if (!state.staffingApprovalResult)
+  // 2. Project Independent Stage Results Into the Existing External Contract
+  // This adapter owns presentation of the combined result, never Graph State.
+  const { policyLookup, staffingResult, approvalResult } = state;
+  if (policyLookup?.status === "denied") {
+    if (staffingResult || approvalResult)
+      throw new Error(
+        "Policy denial cannot contain Staffing or Approval results."
+      );
+    return {
+      status: "failed",
+      failure: "system-policy",
+      reason: policyLookup.reason,
+      rounds: 0,
+    };
+  }
+  if (policyLookup?.status !== "ready" || !staffingResult)
     throw new Error("Phase A returned no Staffing Approval outcome.");
-  return state.staffingApprovalResult;
+  if (staffingResult.status !== "proposed") {
+    if (approvalResult)
+      throw new Error("Approval requires a proposed Staffing result.");
+    return staffingResult;
+  }
+  if (!approvalResult)
+    throw new Error("Phase A returned no Staffing Approval outcome.");
+  if (approvalResult.status === "approval-required")
+    return { status: "approval-required", request: approvalResult };
+  return approvalResult;
 }

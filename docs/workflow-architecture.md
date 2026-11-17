@@ -116,7 +116,7 @@ Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이�
 해결 방향에 대한 승인이다. 두 승인은 서로 다르며 Staffing Scope만으로 해결 방향이 승인됐다고 보지 않는다.
 Override도 변경 대상의 검증과 필요한 승인을 충족해야 하며, CEO의 제안은 승인이나 권한이 아니다.
 
-**현재:** Phase A Graph가 정책 조회 → Staffing → Approval 평가 → 필요한 Human 확인·최종화 → 결과 수집을 실행한다.
+**현재:** Phase A Graph가 정책 조회 → Staffing → Approval 평가 → 필요한 Human 확인·최종화를 실행한다.
 `executionTarget: "specialist-decisions"`에서 승인된 결과에만 다음 일반 Node / Edge를 연결한다.
 
 ```text
@@ -233,8 +233,7 @@ Organization State에 모든 Phase의 중간 데이터나 중복 상태 플래�
 | 코드 | 현재 실제 필드 / 관계 |
 | --- | --- |
 | [developmentOrganizationState](../src/workflows/development-organization/state.ts) | `goal`, `repositoryPath`만 정의. 전체 진행 상태·Organization Graph는 없음 |
-| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `staffingApprovalResult`, `specialistDecisionsResult`, `decisionComparisonResult`와 준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
-| 같은 파일의 `staffingApprovalResultSchema` | Staffing 실패·Escalation과 Approval 결과를 함께 표현하는 결합 계약. 최종 Phase A Outcome이 아님 |
+| [phaseAState](../src/workflows/development-organization/phase-a/state.ts) | 공통 입력과 `policyLookup`, `staffingResult`, `approvalResult`, `specialistDecisionsResult`, `decisionComparisonResult`와 준비된 요청·현재 Index·수집 Decision·Comparison 입력/결과를 소유 |
 | 같은 파일의 `specialistDecisionsResult` | Stage 3: completed와 비어 있지 않은 AgentDecision[] 또는 failed / preflight·authorization·claim·decision / reason·assignmentId? |
 | 같은 파일의 `decisionComparisonResult` | Stage 4: completed / comparison, skipped / insufficient-decisions, failed / reason. 기존 Comparison Schema 재사용 |
 
@@ -242,11 +241,13 @@ Organization State에 모든 Phase의 중간 데이터나 중복 상태 플래�
 현재 Graph.invoke는 Phase A State를 반환하며 별도 Output StateSchema는 없다. 향후 Organization에 공개할
 최종 Phase A Output은 해결 방향 승인이 구현될 때 확정한다. 현재 중간 State 전체를 미래 부모의 공개 계약으로 고정하지 않는다.
 
-현재 Staffing / Approval 결합 경로는 collect-staffing-approval-result Node에서 결과를 수집하며,
-`proposed`만을 이 결합 경로의 성공 결과로 반환하지 않는다.
-`staffingApprovalResult`는 approved / approval-required / denied / rejected / failed / escalated를 구분한다.
-승인 대기는 원본 Proposal과 Binding을 담은 request를 보존한다. 이 결과는 Staffing 승인 단계만 표현하며
-Phase A 전체 성공이나 Phase B 진입 승인이 아니다.
+Stage 1의 staffingResult는 proposed / failed / escalated, Stage 2의 approvalResult는 approved /
+approval-required / denied / rejected / failed(confirmation)만 표현한다. 정책 조회 실패는 policyLookup에
+보존한다. 과거 collect-staffing-approval-result와 staffingApprovalResult Schema / State는 Step 4에서 제거했다.
+Graph는 proposed일 때 승인 평가, approval-required일 때 Human 확인, approved + specialist-decisions일 때만
+Preflight로 진행한다. 승인 요청의 원본 Proposal·Binding은 approvalResult 자체에 보존한다.
+Entry Point는 Stage 결과를 기존 StaffingApprovalWorkflowResult로 변환하며 승인 대기는 request로 감싼다.
+없거나 모순된 결과는 성공으로 변환하지 않는다. 이 반환은 전체 Phase A 성공이나 Phase B 진입 승인이 아니다.
 
 Stage 3은 전체 준비 요청의 Decision 생성·검증이 끝나고 비어 있지 않은 묶음일 때만 완료한다.
 Preflight·Authorization·Claim·Decision 실패는 즉시 종료하고 이후 Invocation / Stage 4를 실행하지 않는다.
@@ -343,9 +344,9 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 
 | 항목 | 코드에서 확인한 현재 상태 | 전체 Workflow 통합 수준 |
 | --- | --- | --- |
-| LangGraph Runtime / Phase A Graph | [createPhaseAGraph](../src/workflows/development-organization/phase-a/graph.ts) 구현 | 정책 → Staffing → Approval → 결과 수집 → 실행 대상·승인에 따른 선택적 Specialist 실행 |
-| Staffing / Approval Nodes | [결과 수집](../src/workflows/development-organization/phase-a/features/governance/nodes/collect-staffing-approval-result.ts) 등 5개 Node 구현 | 기존 Application 호출·최소 선행조건·State 업데이트. 별도 Setup Graph는 없음 |
-| Staffing CLI | [runStaffingApproval](../src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts)이 staffing-approval 실행 대상을 명시하고 staffingApprovalResult 반환 | 기존 입력·Human 확인·출력 유지, Specialist 실행 없음 |
+| LangGraph Runtime / Phase A Graph | [createPhaseAGraph](../src/workflows/development-organization/phase-a/graph.ts) 구현 | 정책 → Staffing → Approval → 실행 대상·승인에 따른 선택적 Specialist 실행 |
+| Staffing / Approval Nodes | 정책 조회·Staffing·승인 평가·Human 확인 4개 Node 구현 | 기존 Application 호출·최소 선행조건·State 업데이트. 별도 Setup Graph나 결과 수집 Node는 없음 |
+| Staffing CLI | [runStaffingApproval](../src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts)이 staffing-approval 실행 대상을 명시하고 개별 Stage 결과를 기존 반환 형식으로 변환 | 기존 입력·Human 확인·출력 유지, Specialist 실행 없음 |
 | Staffing / Governance | [Staffing API](../src/application/staffing/index.ts), [Governance API](../src/application/governance/index.ts) 구현 | Proposal Finalization, 직접/위임 승인·Scope 발급, Authorization / Reservation / 일회 Claim 제공 |
 | Specialist Decisions / Comparison | [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)의 일반 Specialist Node / Edge가 기존 Governance·v2 / v3를 조합 | 순차 반복·Fail-fast는 Edge가 제어. 단일 Decision은 Comparison 생략; Staffing CLI에서는 미실행 |
 | Planning / Execution | [v1 Planning](../src/application/planning/index.ts), [v0 Execution](../src/application/execution/index.ts) 구현 | 독립 CLI / Application capability. ApprovedDecision 입력·Phase B 실행 조정은 없음 |
@@ -355,13 +356,11 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 않는다. Budget은 예약 시 소비하고 실행 실패 후 Claim 자동 취소·재시도·환불은 제공하지 않는다.
 Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하지 않는다.
 
-### 현재 구현에서 남은 책임 정리 대상
+### Stage 1 / 2 책임 정리 — Step 4 적용
 
-| 현재 구현 사실 | 권장 개선 방향 / 검토 이유 |
-| --- | --- |
-| staffingApprovalResult가 Staffing 실패·Escalation과 Approval 결과를 결합 | Stage 1의 Proposal 생성과 Stage 2의 승인·Scope 발급 결과를 구분해 완료·대기·실패를 관찰 |
-
-위 항목은 **미적용 개선 방향**이다. 현재 Result 타입·Schema·Edge를 바꾼 것으로 해석하지 않는다.
+이전 staffingApprovalResult 결합 State와 Collect Node는 제거했다. 내부 Stage 결과는 독립적으로 유지하며
+Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
+이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
 **Planned / Not Integrated:** 전체 Organization Graph, CEO Synthesis 이후의 Phase A 연결,
 Human Direction Governance, ApprovedDecision Handoff, Phase B Graph, Assignment 실행 조정,
@@ -432,7 +431,7 @@ CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 
 4. **중복 Orchestration — 현재 경계:** Graph가 순서·반복·분기를 단독 소유한다. 검증 helper와 단일 Claim / v2 실행 함수만 재사용하고 Governance와 Application의 판단 규칙은 유지한다.
 5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. Handoff 저장·검증 API와 실제 Graph 연결은 후속 과제다.
 6. **CLI / 폴더 제약 — Step 3 구현:** CLI 호환성만으로 Subgraph를 만들지 않는다. 같은 Graph의 staffing-approval / specialist-decisions 실행 대상 구분으로 현재 CLI 범위를 보존한다.
-7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과 분리와 최종 Phase A Outcome은 후속 과제다.
+7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과는 Step 4에서 분리했으며 최종 Phase A Outcome은 후속 과제다.
 8. **Preflight 책임 — Step 3 적용:** 단일 Governance 조회와 순수 배치 검증으로 분리했다. 당시 Complete Node를 유지했으나 Step 3.1에서 실행 전 진행 상태 검사와 마지막 실행의 완료 확정으로 통합했다. 실행 시점 Authorization / Claim은 생략하지 않는다.
 9. **Node / 배치 구조 — 판단 기준 확정, 배치 미정:** Application 함수당 Node나 Stage당 완료 Node를 강제하지 않는다. stages/ 디렉터리·미래 Node 수·새 Subgraph·재시도/복구 정책은 결정하지 않는다.
 

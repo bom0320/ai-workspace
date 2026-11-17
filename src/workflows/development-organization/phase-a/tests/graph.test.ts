@@ -20,10 +20,8 @@ import { compareSpecialistDecisions } from "../features/comparison/nodes/compare
 import {
   phaseAState,
   type PhaseAState,
-  type StaffingApprovalStageResult,
   type DecisionComparisonStageResult,
 } from "../state.js";
-import type { StaffingApprovalWorkflowResult } from "../entrypoints/run-staffing-approval.js";
 import { developmentOrganizationState } from "../../state.js";
 import type { SpecialistDecisionsWorkflowResult } from "../state.js";
 import {
@@ -128,12 +126,11 @@ beforeEach(() => {
 });
 
 describe("Phase A Staffing Approval execution", () => {
-  it("registers Phase A Nodes directly and collects every terminal branch", () => {
+  it("registers Phase A Nodes directly and preserves every terminal branch", () => {
     const graph = createPhaseAGraph().getGraph();
     expect(Object.keys(graph.nodes).sort()).toEqual([
       "__end__",
       "__start__",
-      "collect-staffing-approval-result",
       "compare-specialist-decisions",
       "confirm-staffing-approval",
       "evaluate-staffing-approval",
@@ -147,13 +144,14 @@ describe("Phase A Staffing Approval execution", () => {
       expect.arrayContaining([
         ["__start__", "load-system-policy"],
         ["load-system-policy", "run-staffing"],
-        ["load-system-policy", "collect-staffing-approval-result"],
+        ["load-system-policy", "__end__"],
         ["run-staffing", "evaluate-staffing-approval"],
-        ["run-staffing", "collect-staffing-approval-result"],
+        ["run-staffing", "__end__"],
         ["evaluate-staffing-approval", "confirm-staffing-approval"],
-        ["evaluate-staffing-approval", "collect-staffing-approval-result"],
-        ["confirm-staffing-approval", "collect-staffing-approval-result"],
-        ["collect-staffing-approval-result", "__end__"],
+        ["evaluate-staffing-approval", "__end__"],
+        ["evaluate-staffing-approval", "preflight-specialist-decisions"],
+        ["confirm-staffing-approval", "preflight-specialist-decisions"],
+        ["confirm-staffing-approval", "__end__"],
         ["preflight-specialist-decisions", "execute-next-specialist"],
         ["execute-next-specialist", "execute-next-specialist"],
         ["execute-next-specialist", "compare-specialist-decisions"],
@@ -183,13 +181,22 @@ describe("Phase A Staffing Approval execution", () => {
       "repositoryPath",
       "specialistComparisonContext",
       "specialistDecisionsResult",
-      "staffingApprovalResult",
       "staffingResult",
     ]);
     expectTypeOf<
       NonNullable<PhaseAState["policyLookup"]>
     >().toEqualTypeOf<StaffingSystemPolicyResult>();
-    expectTypeOf<StaffingApprovalStageResult>().toExtend<StaffingApprovalWorkflowResult>();
+    expectTypeOf<
+      NonNullable<PhaseAState["staffingResult"]>
+    >().toEqualTypeOf<StaffingRunResult>();
+    expect(
+      phaseAState.fields.approvalResult.safeParse({
+        status: "escalated",
+        reason: "Help",
+        questions: [],
+        rounds: 1,
+      }).success
+    ).toBe(false);
     expectTypeOf<
       NonNullable<PhaseAState["specialistDecisionsResult"]>
     >().toEqualTypeOf<SpecialistDecisionsWorkflowResult>();
@@ -246,10 +253,6 @@ describe("Phase A Staffing Approval execution", () => {
       },
       staffingResult: proposed,
       approvalResult: required,
-      staffingApprovalResult: {
-        status: "approval-required",
-        request: required,
-      },
     });
     expect(getStaffingSystemPolicy).toHaveBeenCalledExactlyOnceWith(
       "/repository"
@@ -266,6 +269,71 @@ describe("Phase A Staffing Approval execution", () => {
     expect(claimAuthorizedInvocation).not.toHaveBeenCalled();
   });
 
+  it.each(["immediate", "confirmed"])(
+    "streams independent Staffing and %s Approval before Preflight",
+    async (mode) => {
+      vi.mocked(getStaffingSystemPolicy).mockReturnValue({
+        status: "ready",
+        configuration: systemPolicy,
+        version: 1,
+      });
+      if (mode === "confirmed")
+        vi.mocked(approveStaffingProposal)
+          .mockReturnValueOnce(required)
+          .mockReturnValueOnce(approved);
+      else vi.mocked(approveStaffingProposal).mockReturnValue(approved);
+      vi.mocked(getApprovedStaffingScope).mockReturnValue({
+        status: "denied",
+        reason: "Stop before Authorization",
+      });
+      const updates: Array<Record<string, Partial<PhaseAState>>> = [];
+      const stream = await createPhaseAGraph({
+        executionTarget: "specialist-decisions",
+        confirmApproval: () => ({ token: "receipt" }),
+      }).stream(
+        { goal, repositoryPath: "/repository" },
+        { streamMode: "updates" }
+      );
+      for await (const update of stream) updates.push(update);
+      const staffingIndex = updates.findIndex(
+        (update) => "run-staffing" in update
+      );
+      const approvalNode =
+        mode === "confirmed"
+          ? "confirm-staffing-approval"
+          : "evaluate-staffing-approval";
+      const approvalIndex = updates.findIndex(
+        (update) => approvalNode in update
+      );
+      const preflightIndex = updates.findIndex(
+        (update) => "preflight-specialist-decisions" in update
+      );
+      expect(staffingIndex).toBeGreaterThanOrEqual(0);
+      expect(updates[staffingIndex]["run-staffing"].staffingResult).toEqual(
+        proposed
+      );
+      expect(
+        updates[staffingIndex]["run-staffing"].approvalResult
+      ).toBeUndefined();
+      expect(approvalIndex).toBeGreaterThan(staffingIndex);
+      expect(updates[approvalIndex][approvalNode].approvalResult).toEqual(
+        approved
+      );
+      expect(
+        updates[approvalIndex][approvalNode].staffingResult
+      ).toBeUndefined();
+      expect(preflightIndex).toBeGreaterThan(approvalIndex);
+      expect(
+        updates.some((update) => "collect-staffing-approval-result" in update)
+      ).toBe(false);
+      for (const update of updates)
+        for (const partial of Object.values(update))
+          expect(partial).not.toHaveProperty("staffingApprovalResult");
+      expect(runStaffing).toHaveBeenCalledTimes(1);
+      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
+    }
+  );
+
   it("denies unavailable policy without Staffing, even when caller supplies stale internal results", async () => {
     vi.mocked(getStaffingSystemPolicy).mockReturnValue({
       status: "denied",
@@ -281,22 +349,12 @@ describe("Phase A Staffing Approval execution", () => {
       },
       staffingResult: proposed,
       approvalResult: required,
-      staffingApprovalResult: {
-        status: "approval-required" as const,
-        request: required,
-      },
     };
     const result = await createPhaseAGraph().invoke(input);
     expect(result).toMatchObject({
       goal,
       repositoryPath: "/repository",
       policyLookup: { status: "denied", reason: "System Policy unavailable" },
-      staffingApprovalResult: {
-        status: "failed",
-        failure: "system-policy",
-        reason: "System Policy unavailable",
-        rounds: 0,
-      },
     });
     expect(result.staffingResult).toBeUndefined();
     expect(result.approvalResult).toBeUndefined();
@@ -311,12 +369,12 @@ describe("Phase A Staffing Approval execution", () => {
       goal,
       repositoryPath: "   ",
     });
-    expect(result.staffingApprovalResult).toEqual({
-      status: "failed",
-      failure: "system-policy",
+    expect(result.policyLookup).toEqual({
+      status: "denied",
       reason: "Repository path is required.",
-      rounds: 0,
     });
+    expect(result.staffingResult).toBeUndefined();
+    expect(result.approvalResult).toBeUndefined();
     expect(getStaffingSystemPolicy).not.toHaveBeenCalled();
     expect(runStaffing).not.toHaveBeenCalled();
     expect(approveStaffingProposal).not.toHaveBeenCalled();
@@ -335,17 +393,14 @@ describe("Phase A Staffing Approval execution", () => {
       });
     const graph = createPhaseAGraph();
     const first = await graph.invoke({ goal, repositoryPath: "/repository" });
-    expect(first.staffingApprovalResult).toEqual({
-      status: "approval-required",
-      request: required,
-    });
+    expect(first.approvalResult).toEqual(required);
     const second = await graph.invoke(first);
-    expect(second.staffingApprovalResult).toEqual({
-      status: "failed",
-      failure: "system-policy",
+    expect(second.policyLookup).toEqual({
+      status: "denied",
       reason: "Policy no longer available",
-      rounds: 0,
     });
+    expect(second.staffingResult).toBeUndefined();
+    expect(second.approvalResult).toBeUndefined();
     expect(getStaffingSystemPolicy).toHaveBeenCalledTimes(2);
     expect(runStaffing).toHaveBeenCalledTimes(1);
     expect(approveStaffingProposal).toHaveBeenCalledTimes(1);
@@ -381,7 +436,7 @@ describe("Phase A Staffing Approval execution", () => {
         approvalResult: required,
       };
       const result = await createPhaseAGraph().invoke(input);
-      expect(result.staffingApprovalResult).toEqual(staffingResult);
+      expect(result.staffingResult).toEqual(staffingResult);
       expect(result.approvalResult).toBeUndefined();
       expect(runStaffing).toHaveBeenCalledTimes(1);
       expect(approveStaffingProposal).not.toHaveBeenCalled();
@@ -407,7 +462,7 @@ describe("Phase A Staffing Approval execution", () => {
         goal,
         repositoryPath: "/repository",
       });
-      expect(result.staffingApprovalResult).toEqual({
+      expect(result.approvalResult).toEqual({
         status: "denied",
         reason:
           kind === "denied"
@@ -470,7 +525,7 @@ describe("Phase A Staffing Approval execution", () => {
         goal,
         repositoryPath: "/repository",
       });
-      expect(result.staffingApprovalResult).toEqual(
+      expect(result.approvalResult).toEqual(
         mode === "reject"
           ? {
               status: "rejected",
@@ -616,7 +671,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       const state = await createPhaseAGraph({ executionTarget }).invoke(
         specialistInput
       );
-      expect(state.staffingApprovalResult?.status).toBe("approved");
+      expect(state.approvalResult?.status).toBe("approved");
       expect(state.specialistDecisionsResult).toBeUndefined();
       expect(state.decisionComparisonResult).toBeUndefined();
       expect(getApprovedStaffingScope).not.toHaveBeenCalled();
@@ -655,7 +710,10 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       ...specialistOptions,
       confirmApproval: status === "rejected" ? () => null : undefined,
     }).invoke(specialistInput);
-    expect(state.staffingApprovalResult?.status).toBe(status);
+    if (status === "failed" || status === "escalated") {
+      expect(state.staffingResult?.status).toBe(status);
+      expect(state.approvalResult).toBeUndefined();
+    } else expect(state.approvalResult?.status).toBe(status);
     expect(state.specialistDecisionsResult).toBeUndefined();
     expect(state.decisionComparisonResult).toBeUndefined();
     expect(getApprovedStaffingScope).not.toHaveBeenCalled();

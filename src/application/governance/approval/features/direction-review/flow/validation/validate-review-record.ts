@@ -80,3 +80,49 @@ export function assertReviewRecord(
       throw new Error("Direction resolution provenance is invalid.");
   }
 }
+
+export function validateRevisionRequest({
+  scopeId,
+  context,
+  revision,
+  previousReviewId,
+  previousReview,
+}: {
+  scopeId: string;
+  context: SynthesisContext;
+  revision: SynthesisContext["revision"];
+  previousReviewId?: string;
+  previousReview?: DirectionReview;
+}): number {
+  if (previousReviewId) {
+    if (
+      !previousReview ||
+      previousReview.scopeId !== scopeId ||
+      previousReview.resolution?.action.action !== "request-revision" ||
+      previousReview.revision >= 2 ||
+      previousReview.analysisDigest !== governanceDigest(context) ||
+      !revision ||
+      !sameContent(revision.previousProposal, previousReview.proposal) ||
+      revision.feedback !== previousReview.resolution.action.feedback
+    )
+      throw new Error("Revision does not match Human feedback.");
+    return previousReview.revision + 1;
+  }
+  if (revision) throw new Error("Revision requires a recorded Human request.");
+  return 0;
+}
+
+export function assertReviewNotRegistered(
+  reviews: RepositoryGovernance["directionReviews"],
+  scopeId: string,
+  previousReviewId?: string
+): void {
+  if (
+    reviews?.some((review) =>
+      previousReviewId
+        ? review.previousReviewId === previousReviewId
+        : review.scopeId === scopeId
+    )
+  )
+    throw new Error("Direction Review has already been registered.");
+}

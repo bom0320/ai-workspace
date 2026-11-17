@@ -16,7 +16,8 @@ import {
 import {
   assertAnalysisScope,
   reviewBinding,
-  sameContent,
+  validateRevisionRequest,
+  assertReviewNotRegistered,
 } from "./validation/validate-review-record.js";
 
 // Internal integration writer: only the Synthesis Node may import this function,
@@ -28,40 +29,39 @@ export function registerDirectionReview(
   proposed: SynthesisProposal,
   previousReviewId?: string
 ): DirectionReview {
+  // 1. Parse the Synthesis Context and Proposal
   const { revision, ...context } = synthesisContextSchema.parse(input);
   const proposal = synthesisProposalSchema.parse(proposed);
   return withGovernanceLedger((ledger, save) => {
+    // 2. Resolve the Approved Scope and Match the Analysis
     const {
       entry,
       issuance: { scope },
     } = currentScopeSource(ledger, scopeId);
     assertAnalysisScope(context, scope);
-    let count = 0;
-    if (previousReviewId) {
-      // This transaction already checked current eligibility for the Scope.
-      // The parent must match that same Scope; only its historical binding remains.
-      const parent = resolveReviewRecord(ledger, previousReviewId).review;
-      if (
-        parent.scopeId !== scopeId ||
-        parent.resolution?.action.action !== "request-revision" ||
-        parent.revision >= 2 ||
-        parent.analysisDigest !== governanceDigest(context) ||
-        !revision ||
-        !sameContent(revision.previousProposal, parent.proposal) ||
-        revision.feedback !== parent.resolution.action.feedback
-      )
-        throw new Error("Revision does not match Human feedback.");
-      count = parent.revision + 1;
-    } else if (revision)
-      throw new Error("Revision requires a recorded Human request.");
-    if (
-      entry.directionReviews?.some((value) =>
-        previousReviewId
-          ? value.previousReviewId === previousReviewId
-          : value.scopeId === scopeId
-      )
-    )
-      throw new Error("Direction Review has already been registered.");
+
+    // 3. Validate the Revision Against Its Stored Human Request
+    // Current eligibility for this Scope was checked in this transaction;
+    // resolve the parent record without repeating that live-policy check.
+    const previousReview = previousReviewId
+      ? resolveReviewRecord(ledger, previousReviewId).review
+      : undefined;
+    const revisionRound = validateRevisionRequest({
+      scopeId,
+      context,
+      revision,
+      previousReviewId,
+      previousReview,
+    });
+
+    // 4. Reject Duplicate Initial or Revision Reviews
+    assertReviewNotRegistered(
+      entry.directionReviews,
+      scopeId,
+      previousReviewId
+    );
+
+    // 5. Create and Persist the Bound Review
     const subject = {
       id: randomUUID(),
       scopeId,
@@ -69,7 +69,7 @@ export function registerDirectionReview(
       analysisDigest: governanceDigest(context),
       proposal,
       ...(!previousReviewId ? { context } : {}),
-      revision: count,
+      revision: revisionRound,
       ...(previousReviewId ? { previousReviewId } : {}),
     };
     const review = { ...subject, binding: reviewBinding(subject) };

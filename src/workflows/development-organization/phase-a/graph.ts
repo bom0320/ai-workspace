@@ -6,7 +6,7 @@ import {
 import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
 import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
 import { END, START, StateGraph, MemorySaver } from "@langchain/langgraph";
-import { phaseAState, type PhaseAState } from "./state.js";
+import { phaseAState } from "./state.js";
 import {
   createRunStaffingNode,
   type StaffingExecutionOptions,
@@ -22,11 +22,15 @@ import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/pref
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
 
-export type PhaseAExecutionTarget =
-  | "staffing-approval"
-  | "specialist-decisions"
-  | "ceo-synthesis"
-  | "human-direction-governance";
+import {
+  routeAfterStaffingApproval,
+  routeAfterSpecialistExecution,
+  routeAfterComparison,
+  routeAfterSynthesis,
+  type PhaseAExecutionTarget,
+} from "./routing.js";
+
+export type { PhaseAExecutionTarget } from "./routing.js";
 export type PhaseAGraphOptions = StaffingExecutionOptions &
   StaffingConfirmationOptions &
   DirectionConfirmationOptions & {
@@ -78,26 +82,19 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         : END,
     ["evaluate-staffing-approval", END]
   );
-  // Execution target selects an endpoint; State approval is not execution authority.
-  const routeAfterApproval = (state: PhaseAState) =>
-    (executionTarget === "specialist-decisions" ||
-      executionTarget === "ceo-synthesis" ||
-      humanGovernance) &&
-    state.approvalResult?.status === "approved"
-      ? "preflight-specialist-decisions"
-      : END;
   graph.addConditionalEdges(
     "evaluate-staffing-approval",
     (state) =>
       state.approvalResult?.status === "approval-required"
         ? "confirm-staffing-approval"
-        : routeAfterApproval(state),
+        : routeAfterStaffingApproval(state, executionTarget),
     ["confirm-staffing-approval", "preflight-specialist-decisions", END]
   );
-  graph.addConditionalEdges("confirm-staffing-approval", routeAfterApproval, [
-    "preflight-specialist-decisions",
-    END,
-  ]);
+  graph.addConditionalEdges(
+    "confirm-staffing-approval",
+    (state) => routeAfterStaffingApproval(state, executionTarget),
+    ["preflight-specialist-decisions", END]
+  );
   graph.addConditionalEdges(
     "preflight-specialist-decisions",
     (state) =>
@@ -109,43 +106,18 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   // Sequential repetition and fail-fast belong to the Graph, never to a Node loop.
   graph.addConditionalEdges(
     "execute-next-specialist",
-    (state) => {
-      if (state.specialistDecisionsResult?.status === "failed") return END;
-      if (state.specialistDecisionsResult?.status === "completed")
-        return "compare-specialist-decisions";
-      if (
-        state.currentSpecialistIndex !== undefined &&
-        state.currentSpecialistIndex > 0 &&
-        state.currentSpecialistIndex <
-          (state.preparedSpecialistRequests?.length ?? 0)
-      )
-        return "execute-next-specialist";
-      return END;
-    },
+    routeAfterSpecialistExecution,
     [END, "execute-next-specialist", "compare-specialist-decisions"]
   );
   // Stage 4 failure never enters Synthesis, and existing execution targets keep their endpoint.
   graph.addConditionalEdges(
     "compare-specialist-decisions",
-    (state) =>
-      (executionTarget === "ceo-synthesis" || humanGovernance) &&
-      state.specialistDecisionsResult?.status === "completed" &&
-      (state.decisionComparisonResult?.status === "completed" ||
-        (state.decisionComparisonResult?.status === "skipped" &&
-          state.specialistDecisionsResult.decisions.length === 1))
-        ? "run-ceo-synthesis"
-        : END,
+    (state) => routeAfterComparison(state, executionTarget),
     ["run-ceo-synthesis", END]
   );
   graph.addConditionalEdges(
     "run-ceo-synthesis",
-    (state) =>
-      humanGovernance &&
-      state.synthesisResult?.status === "proposed" &&
-      state.directionReview &&
-      !state.directionGovernanceResult
-        ? "human-direction-review"
-        : END,
+    (state) => routeAfterSynthesis(state, executionTarget),
     ["human-direction-review", END]
   );
   graph.addConditionalEdges(

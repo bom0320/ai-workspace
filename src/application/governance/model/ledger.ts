@@ -1,8 +1,8 @@
+import { approvedDecisionSchema } from "../approval/features/direction-review/model/result.js";
 import {
   directionAnalysisSchema,
   directionReviewSchema,
-  approvedDecisionSchema,
-} from "../approval/features/direction-review/model.js";
+} from "../approval/features/direction-review/model/review.js";
 import { invocationReservationSchema } from "../authorization/features/specialist-invocation/model/reservation.js";
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";

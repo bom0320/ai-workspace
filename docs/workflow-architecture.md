@@ -555,7 +555,8 @@ Direction Review의 단일 flow.ts는 다음 책임으로 분리했다. 공개 G
 - flow/review-management.ts: 검증된 Synthesis와 기존 분석을 연결하고 Review Binding·Revision 등록·현재 Review 조회를 관리한다.
 - flow/direction-approval.ts: pending Action과 Confirmation Binding을 확인하고 Human 승인·수정 요청·거부를 Transaction에서 확정한다.
 - flow/approved-decision.ts: 과거 인간 승인 기록과 원본 분석·Proposal을 조회한다.
-- shared/resolve-context.ts: 동일 Repository의 Scope·분석·Review·Revision 선행 기록과 Resolution Binding을 복원·검증한다.
+- 당시 shared/resolve-context.ts에 있던 조회·복원은 현재 flow/context/resolve-review-context.ts, Scope·Review Binding 및 Revision 무결성 검증은 flow/validation/validate-review-record.ts로 분리했다.
+- Direction Review 계약은 model/action.ts / review.ts / result.ts가 소유한다. Model 간 의존성은 action → review → result 순서로 구성하며 공개 Export·Schema 의미와 Flow 실행 순서는 유지한다.
 
 getApprovedDecision()은 signed Ledger와 발급 당시 Policy / Delegation / Scope 및 Review·실제 Human Record의 연결을 검증한다.
 이후 정책 갱신·위임 교체·Repository 변경만으로 과거 기록 조회를 막지 않는다. 반면 getDirectionReview()는

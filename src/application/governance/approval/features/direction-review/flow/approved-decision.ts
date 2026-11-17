@@ -1,5 +1,5 @@
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
-import { resolveReviewRecord } from "../shared/resolve-context.js";
+import { resolveReviewRecord } from "./context/resolve-review-context.js";
 
 // Resolves direction, original Goal/Snapshot and the actual Human record without
 // duplicating the Proposal in ApprovedDecision. This grants no Task execution right.

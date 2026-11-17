@@ -25,7 +25,23 @@ export { getApprovedStaffingScope } from "./features/proposal-management/flow/ge
 // Reusable issuance validation for callers already inside a trusted Ledger transaction.
 export { validateStoredIssuance } from "./features/proposal-management/flow/validation/staffing-issuance.js";
 
-export * from "./features/direction-review/model.js";
+export {
+  directionActionSchema,
+  type DirectionAction,
+} from "./features/direction-review/model/action.js";
+export {
+  directionAnalysisSchema,
+  directionReviewSchema,
+  type DirectionReview,
+} from "./features/direction-review/model/review.js";
+export {
+  approvedDecisionSchema,
+  directionGovernanceResultSchema,
+  directionConfirmationRequestSchema,
+  type ApprovedDecision,
+  type DirectionGovernanceResult,
+  type DirectionConfirmationRequest,
+} from "./features/direction-review/model/result.js";
 export { getDirectionReview } from "./features/direction-review/flow/review-management.js";
 export {
   prepareDirectionConfirmation,

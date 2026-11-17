@@ -7,15 +7,17 @@ import {
 } from "@/application/synthesis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
-import type { DirectionReview } from "../model.js";
+import type { DirectionReview } from "../model/review.js";
 import {
   currentScopeSource,
-  assertAnalysisScope,
   resolveCurrentReview,
   resolveReviewRecord,
+} from "./context/resolve-review-context.js";
+import {
+  assertAnalysisScope,
   reviewBinding,
   sameContent,
-} from "../shared/resolve-context.js";
+} from "./validation/validate-review-record.js";
 
 // Internal integration writer: only the Synthesis Node may import this function,
 // immediately after runSynthesis(). It is intentionally absent from public barrels.

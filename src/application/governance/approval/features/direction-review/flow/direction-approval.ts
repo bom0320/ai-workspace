@@ -5,12 +5,14 @@ import { withGovernanceLedger } from "../../../../records/governance-transaction
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import {
   directionActionSchema,
-  type DirectionReview,
   type DirectionAction,
-  type DirectionConfirmationRequest,
-  type DirectionGovernanceResult,
-} from "../model.js";
-import { resolveCurrentReview } from "../shared/resolve-context.js";
+} from "../model/action.js";
+import type { DirectionReview } from "../model/review.js";
+import type {
+  DirectionConfirmationRequest,
+  DirectionGovernanceResult,
+} from "../model/result.js";
+import { resolveCurrentReview } from "./context/resolve-review-context.js";
 
 function assertPendingAction(
   review: DirectionReview,

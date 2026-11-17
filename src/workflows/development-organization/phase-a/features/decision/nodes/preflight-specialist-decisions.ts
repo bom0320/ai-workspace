@@ -1,5 +1,5 @@
 import { getApprovedStaffingScope } from "@/application/governance/index.js";
-import { preflightSpecialistDecisions } from "../validation/preflight-specialist-decisions.js";
+import { validateSpecialistRequestBatch } from "../validation/validate-specialist-request-batch.js";
 import type { PhaseAState } from "../../../state.js";
 
 export function preflightSpecialistDecisionsNode(
@@ -33,7 +33,7 @@ export function preflightSpecialistDecisionsNode(
       requestedContextPaths: [...assignment.contextPaths],
     }));
     // 3. Validate and Detach the Entire Batch Before Any Reservation
-    const prepared = preflightSpecialistDecisions(
+    const prepared = validateSpecialistRequestBatch(
       { scopeId: scope.id, requests },
       scope
     );

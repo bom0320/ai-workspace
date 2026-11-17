@@ -268,7 +268,7 @@ Evidence 경로·줄 범위 또는 Reference 구조의 유효성이 AI 분석 �
 Step 3 이전에는 Preflight Node와 Workflow Validation이 각각 getApprovedStaffingScope()를 호출했다.
 현재 [Preflight Node](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts)가
 Governance를 통해 한 번 조회하고 State의 승인 ID / Version과 대조한다. 이어
-[순수 배치 검증 함수](../src/workflows/development-organization/phase-a/features/decision/validation/preflight-specialist-decisions.ts)에
+[순수 배치 검증 함수](../src/workflows/development-organization/phase-a/features/decision/validation/validate-specialist-request-batch.ts)에
 그 Scope와 생성한 요청을 전달한다. 함수는 조회·예약·승인 인증을 하지 않는다.
 
 | 검사 / 시점 | 현재 소유자와 유지·제거 이유 |

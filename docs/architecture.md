@@ -1308,7 +1308,7 @@ src/
 │        │  │  ├─ nodes/
 │        │  │  │  ├─ preflight-specialist-decisions.ts
 │        │  │  │  └─ execute-next-specialist.ts
-│        │  │  ├─ validation/preflight-specialist-decisions.ts
+│        │  │  ├─ validation/validate-specialist-request-batch.ts
 │        │  │  └─ execution/authorized-specialist-decision.ts
 │        │  └─ comparison/nodes/compare-specialist-decisions.ts
 │        └─ entrypoints/run-staffing-approval.ts
@@ -1969,7 +1969,7 @@ execute-next-specialist ← remaining Assignment
 ```
 
 Preflight Node는 getApprovedStaffingScope()로 저장된 Scope를 재조회해 승인 결과의 ID / Version과 대조한다.
-모든 Assignment의 순서·contextPaths를 복사한 요청을 `features/decision/validation/preflight-specialist-decisions.ts`의
+모든 Assignment의 순서·contextPaths를 복사한 요청을 `features/decision/validation/validate-specialist-request-batch.ts`의
 순수 배치 검증 함수에 전달한다. Phase A Refactoring Step 3에서 이 함수의 중복 Scope 조회를 제거했다.
 Workflow는 요청 Schema·Scope / Version 일관성·소속·중복 요청·누락·순서·Sparse Array를 검사한다.
 Specialist 중복 금지는 Staffing 정책 검증을 Governance가 재사용하므로 Workflow의 별도 검사를 제거했다.

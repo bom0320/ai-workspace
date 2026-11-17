@@ -9,7 +9,7 @@ export type SpecialistDecisionsWorkflowInput = {
   requests: InvokeSpecialistRequest[];
 };
 
-export function preflightSpecialistDecisions(
+export function validateSpecialistRequestBatch(
   input: SpecialistDecisionsWorkflowInput,
   scope: ApprovedOperatingScope
 ):

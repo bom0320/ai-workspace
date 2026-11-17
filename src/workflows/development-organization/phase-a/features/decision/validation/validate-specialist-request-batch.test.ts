@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as governance from "@/application/governance/index.js";
-import { preflightSpecialistDecisions } from "./preflight-specialist-decisions.js";
+import { validateSpecialistRequestBatch } from "./validate-specialist-request-batch.js";
 vi.mock("@/application/governance/index.js", async (original) => ({
   ...(await original<typeof governance>()),
   getApprovedStaffingScope: vi.fn(),
@@ -61,7 +61,7 @@ describe("Specialist request preflight", () => {
     if (kind === "malformed") input.requests[1].requestedContextPaths = [];
     if (kind === "missing") input.requests.pop();
     if (kind === "reordered") input.requests.reverse();
-    const result = preflightSpecialistDecisions(input, scope);
+    const result = validateSpecialistRequestBatch(input, scope);
     expect(result).toMatchObject({
       status: "failed",
       stage: "preflight",
@@ -79,7 +79,7 @@ describe("Specialist request preflight", () => {
   });
   it("detaches every request before asynchronous execution can begin", () => {
     const input = { scopeId: scope.id, requests: requests() };
-    const result = preflightSpecialistDecisions(input, scope);
+    const result = validateSpecialistRequestBatch(input, scope);
     if (result.status !== "ready") throw new Error(result.reason);
     input.requests[1].assignmentId = "tampered";
     input.requests[1].requestedContextPaths.push("unapproved.ts");

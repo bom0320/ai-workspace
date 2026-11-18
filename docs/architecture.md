@@ -370,7 +370,7 @@ Phase B Work Decomposition은 Work Item의 목적·산출물·의존성을 정�
 
 ### CEO와 Planner의 handoff — Planned
 
-초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. R5.1 / R5.2는 기존 v1의 독립 호출을 보존하면서 개별 Work Item Planning 입력을 확장했다. 계획 가능 시점과 선행 결과 전달은 R5.3에서 다룬다.
+초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. R5.1 / R5.2는 기존 v1의 독립 호출을 보존하면서 개별 Work Item Planning 입력을 확장했다. R5.3 Planning Coordination은 R5.4 Graph 연결과 함께 완성한다. 검증된 선행 결과 전달은 후속 실행 계약에서 다룬다.
 
 현재 runStaffing()은 CEO의 Draft를 검증·최종화해 StaffingProposal / Escalation / Failure를 반환할 뿐
 planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은

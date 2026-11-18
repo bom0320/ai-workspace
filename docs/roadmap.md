@@ -233,7 +233,7 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 | --- | --- | --- | --- | --- |
 | 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성하고 Phase B Graph에서 실행 | Graph Integrated |
 | 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
-| 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Work Item의 입력 계약과 v1 Detailed Planning 재사용. Multi-Work Coordination은 후속 | R5.1 / R5.2 Implemented · R5.3 Planned |
+| 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Detailed Planning 재사용. 업무 선택과 결과 관리는 Phase B Graph에서 연결 | R5.1 / R5.2 Implemented · R5.3 / R5.4 Planned |
 | 4 | 10 | Work Execution Contract | 읽기 전용·Repository 변경 업무 구분, Shell 실행, 업무별 승인·권한 계약 | Planned |
 | 5 | 10 | Multi-Specialist / Worker Execution | 협업, 순차·병렬 실행, 기존 v0 연동, Worktree 격리·통합과 충돌 처리 | Planned |
 | 6 | 11 | Verification & Review | 산출물·Evidence·Acceptance Criteria와 실패 검증 | Planned |

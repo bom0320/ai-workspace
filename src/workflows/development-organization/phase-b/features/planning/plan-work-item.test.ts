@@ -172,6 +172,34 @@ describe("planWorkItem", () => {
     });
   });
 
+  it("plans a dependent Work Item without a prerequisite execution result", async () => {
+    const repositoryPath = createRepository();
+    restoreApproval(repositoryPath);
+    const workItem = {
+      ...phaseB.workItem,
+      id: "examples",
+      objective: "Plan examples for the revised introduction",
+      dependsOn: [phaseB.workItem.id],
+    };
+    const planner = vi.fn<Planner>().mockResolvedValue({
+      type: "complete",
+      task: { ...task, objective: workItem.objective },
+    });
+
+    const result = await planWorkItem({
+      phaseB: { approvedDecisionId: phaseB.approvedDecisionId, workItem },
+      repositoryPath,
+      limits,
+      planner,
+    });
+
+    expect(result).toMatchObject({
+      status: "completed",
+      task: { objective: workItem.objective },
+    });
+    expect(planner).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { approvedDecisionId: "", workItem: phaseB.workItem },
     { ...phaseB, workItem: { ...phaseB.workItem, deliverable: "" } },

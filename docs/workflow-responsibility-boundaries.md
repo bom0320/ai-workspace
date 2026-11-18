@@ -453,7 +453,7 @@ Phase B Graph는 Work Decomposition Application을 단일 Node에서 실행하�
 | 승인 기록과 현재 Repository 검증을 별도 Handoff Validation에 모으는 안 | Step 7.2의 Governance 조회가 검증한 승인 기록을 복원하고, Planning / Execution이 각 사용 시점의 적격성을 검증한다. 중복 검증을 줄이고 전환 이후 바뀔 수 있는 Repository 상태를 확인할 수 있다. |
 | Phase A Staffing을 구현 업무 배치에 재사용하거나 Specialist·파일별로 업무를 나누는 안 | 완료·검증 가능한 산출물을 Work Item의 기준으로 삼는다. 여러 Specialist가 하나의 산출물을 만들 수 있고, 한 Specialist가 독립적인 여러 업무를 맡을 수도 있다. 업무 분해와 역할 배치의 수명과 변경 이유가 다르다. |
 | Single / Independent / Dependent를 별도 Workflow로 나누는 안 | Work Item 수와 선행 관계로 세 형태와 혼합 계획을 표현한다. 같은 의존 규칙을 적용할 수 있고 분류 필드와 실제 관계가 어긋날 가능성이 줄어든다. |
-| 모든 업무의 TaskContract를 한 번에 생성하거나 단일·복수 Planning 엔진을 따로 만드는 안 | Planning Coordination이 준비된 업무의 순서를 정하고 Detailed Planning을 업무별로 재사용한다. 선행 산출물에 의존하는 계획은 해당 결과의 검증 이후에 확정해 추측과 재작업을 줄인다. |
+| 모든 업무의 TaskContract를 한 번에 생성하거나 단일·복수 Planning 엔진을 따로 만드는 안 | Phase B Graph가 Work Item과 기존 선행 관계를 사용해 업무별 Detailed Planning을 조정하고 결과를 기록한다. 의존 관계와 계획 가능 여부를 구분하며, 선행 산출물이 실제로 필요한 계획에는 검증된 결과가 필요하다. |
 
 ### 업무 분해와 의존성 검증
 

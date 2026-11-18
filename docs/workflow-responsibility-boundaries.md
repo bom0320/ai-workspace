@@ -446,7 +446,7 @@ Human Confirmation / Ledger의 권한 경계와 과거 이력 / 현재 적격성
 
 ## Phase B 설계 판단과 책임
 
-Phase B Graph는 Work Decomposition Application을 단일 Node에서 실행하며, 후속 Planning과 실행 조정은 설계 단계다. [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)과 [개발 로드맵](roadmap.md#phase-b-개발-로드맵)에 적용한다.
+Phase B Graph는 Work Decomposition을 실행하고, 명시적으로 선택된 업무의 Detailed Planning을 조정한다. Worker 실행 조정은 후속 범위다. [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)과 [개발 로드맵](roadmap.md#phase-b-개발-로드맵)에 적용한다.
 
 | 기존 전제와 검토한 대안 | 선택한 방향과 이유 |
 | --- | --- |

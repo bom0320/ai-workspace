@@ -4,7 +4,7 @@
 Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
 [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
 Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval, Specialist Decisions / Comparison, CEO Synthesis와 선택적 Human Direction Governance까지 통합했으며
-Phase B Graph는 CEO Work Decomposition까지 실행한다. Organization Graph와 Phase 간 자동 연결은 아직 없다.
+Phase B Graph는 CEO Work Decomposition과 명시적으로 선택된 Work Item의 Detailed Planning을 실행한다. Organization Graph와 Phase 간 자동 연결은 아직 없다.
 
 문서별 기준은 다음과 같다.
 
@@ -184,7 +184,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 **현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID만 전달한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
 
-**현재 Graph 계약:** `createPhaseBGraph({ agent?, timeoutMs? })`의 실행 입력은 `approvedDecisionId`다. `START → run-work-decomposition → END`에서 Node는 Application을 한 번 호출하고 기존 Result Schema의 `workDecompositionResult`를 기록한다. 세 결과 모두 END에서 반환한다. Agent와 Timeout은 Node의 실행 옵션으로 전달하며 State는 ID와 결과만 보유한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
+**현재 Graph 계약:** Graph 입력은 `approvedDecisionId`다. Work Decomposition Node가 Application을 한 번 호출해 `workDecompositionResult`를 기록한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
 
 #### Work Item / Specialist Assignment / TaskContract
 
@@ -206,7 +206,7 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 
 Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 확인한 뒤 기존 Working Tree 조사와 Planning Loop를 실행한다. Phase B Planning 기능은 원본 Goal / Constraints와 승인 방향의 텍스트, Work Item의 Objective·Deliverable만 상세 계획 입력으로 구성한다. Planning Application은 일반화된 `detail`과 실제 Repository Context로 계획을 수립하며, 승인 참조와 Work Item 계약은 Workflow 기능에서 소유한다. Goal 문자열 기반 Fast Path는 생략하며, TaskDraft의 최종화에는 기존 ID 발급과 Constraints 병합을 사용한다. 이 경로는 Work Item의 실행 자격이나 선행 업무 완료를 판단하지 않는다. 현재 Repository와 승인 Snapshot의 commit 차이에 대한 정책은 후속 과제다.
 
-**R5.3 / R5.4 예정:** Planning Coordination은 Phase B Graph 연결과 함께 완성한다. Graph는 `proposed` 결과의 `workItems`에서 다음 업무를 선택하고, 기존 `planWorkItem()`을 호출하며, Work Item ID별 `PlanningResult`를 기록한다. Work Item별 반복과 다음 대상 선택은 LangGraph가 담당한다. `failed`와 `escalated`는 Planning에 진입하지 않는다.
+**R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { repositoryPath, limits, planner?, selectWorkItemIds } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `planWorkItem()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
 
 선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약과 읽기 전용 업무의 실행 방식은 후속 범위다. v0 `executeTask()`는 격리 worktree의 단일 Task 실행 기능으로 재사용할 대상이다.
 
@@ -294,7 +294,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 Work Decomposition Application의 입력 Schema에서 `approvedDecisionId`를 가져오고, 기존 결과 Schema를 선택적 `workDecompositionResult`로 사용한다. Phase A 내부 State와 Agent 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `approvedDecisionId`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 공개 입력은 Work Decomposition 입력 Schema에서 가져온 승인 ID만 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 
@@ -316,7 +316,7 @@ Approval / Authorization / Claim / Evidence / Comparison의 호출·정책 소�
 - 중단·재개 및 실패 복구의 독립적인 경계가 필요한가?
 - 실제 실행 단위의 재사용 요구가 존재하는가?
 
-다음은 **결정된 상위 계층과 향후 검토할 내부 책임 구조**다. Organization Graph는 아직 없다. Phase A는 Staffing / Approval과 선택적 후속 Node를 실행하고 Phase B Graph는 Work Decomposition만 실행한다. 아래 내부 항목은 목표 책임을 표시한다.
+다음은 **결정된 상위 계층과 향후 검토할 내부 책임 구조**다. Organization Graph는 아직 없다. Phase A는 Staffing / Approval과 선택적 후속 Node를 실행하고 Phase B Graph는 Work Decomposition과 선택적 Detailed Planning을 실행한다. 아래 내부 항목은 목표 책임을 표시한다.
 
 ```text
 DevelopmentOrganizationGraph
@@ -378,7 +378,7 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 자동 Phase 전환, Phase B Planning 및 Assignment 실행 조정,
+**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 자동 Phase 전환, Phase B Assignment 실행 조정,
 Executive Report와 영속 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
 테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),

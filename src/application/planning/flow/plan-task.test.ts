@@ -13,17 +13,17 @@ import { planTask } from "./plan-task.js";
 import { createPlannerContext } from "./transformation/create-planner-context.js";
 
 const temporaryDirectories: string[] = [];
-const goal: GoalSpec = {
+const goal = {
   objective: "Implement the goal",
   targetRepository: "example",
   constraints: ["Keep changes scoped"],
-};
+} satisfies GoalSpec;
 const task: TaskDraft = {
   objective: goal.objective,
   targetRepository: goal.targetRepository,
   allowedPaths: ["example.ts"],
   forbiddenPaths: [],
-  constraints: goal.constraints!,
+  constraints: goal.constraints,
   acceptanceCriteria: ["The goal is implemented"],
   verification: ["pnpm test"],
 };
@@ -33,6 +33,7 @@ const simpleDetail = {
   direction: "Fix typos in README.md",
   deliverable: "Corrected typos in README.md",
 };
+const documentationGoal = { ...goal, objective: "Improve the documentation" };
 
 function createRepository(): string {
   const root = mkdtempSync(join(tmpdir(), "ai-workspace-plan-task-"));
@@ -81,7 +82,7 @@ describe("planTask", () => {
             verification: ["git diff --check"],
             id: expect.stringMatching(/^task-/),
             goalId: expect.stringMatching(/^goal-/),
-            constraints: expect.arrayContaining(goal.constraints!),
+            constraints: expect.arrayContaining(goal.constraints),
           },
         });
       }
@@ -90,22 +91,39 @@ describe("planTask", () => {
     }
   );
 
-  it.each(["README.md", "docs/notes.txt"])(
-    "plans an explicitly approved typo correction in %s without Codex",
-    async (path) => {
+  it.each([
+    ["README.md", documentationGoal, simpleDetail],
+    [
+      "README.md",
+      { ...goal, objective: "문서 품질 개선" },
+      {
+        objective: "README.md의 오타를 수정해줘",
+        direction: "README.md의 오타를 교정한다.",
+        deliverable: "오타를 교정한 README.md",
+      },
+    ],
+    [
+      "docs/notes.txt",
+      {
+        ...documentationGoal,
+        constraints: ["Only modify docs/notes.txt.", "Do not change code."],
+      },
+      {
+        objective: "Correct spelling errors in docs/notes.txt.",
+        direction: "Fix typos in docs/notes.txt",
+        deliverable: "docs/notes.txt with typos corrected",
+      },
+    ],
+  ])(
+    "plans an explicitly approved typo correction in %s for %j without Codex",
+    async (path, humanGoal, detail) => {
       const root = createRepository();
       mkdirSync(join(root, "docs"));
       writeFileSync(join(root, path), "Introduciton");
       const planner = vi.fn<Planner>();
       const factory = vi.spyOn(codex, "createCodexPlanner");
-      const detail = {
-        objective: `Fix typos in ${path}`,
-        direction: `Fix typos in ${path}`,
-        deliverable: `Corrected typos in ${path}`,
-      };
-
       const result = await planTask({
-        goal,
+        goal: humanGoal,
         detail,
         repositoryPath: root,
         limits,
@@ -115,12 +133,15 @@ describe("planTask", () => {
       expect(result).toMatchObject({
         status: "completed",
         rounds: 0,
-        state: { goal, inspectedFiles: [{ path, content: "Introduciton" }] },
+        state: {
+          goal: humanGoal,
+          inspectedFiles: [{ path, content: "Introduciton" }],
+        },
         task: {
           objective: detail.objective,
           allowedPaths: [path],
           acceptanceCriteria: [detail.deliverable],
-          constraints: expect.arrayContaining(goal.constraints!),
+          constraints: expect.arrayContaining(humanGoal.constraints),
         },
       });
       expect(planner).not.toHaveBeenCalled();
@@ -138,6 +159,37 @@ describe("planTask", () => {
     ],
     ["unclear direction", { direction: "Improve the documentation" }],
     ["conflicting direction", { direction: "Fix typos in notes.txt" }],
+    [
+      "deliverable for a different file",
+      { deliverable: "Corrected typos in notes.txt" },
+    ],
+    [
+      "disallowed goal target",
+      {},
+      {
+        ...documentationGoal,
+        objective: "Improve the documentation without modifying README.md",
+      },
+    ],
+    ["unrecognized goal", {}, goal],
+    [
+      "conflicting human constraints",
+      {},
+      { ...documentationGoal, constraints: ["Only modify notes.txt"] },
+    ],
+    [
+      "human constraints requiring interpretation",
+      {},
+      { ...documentationGoal, constraints: ["Preserve contractual wording"] },
+    ],
+    [
+      "typo request for a source file",
+      {
+        objective: "Fix typos in example.ts",
+        direction: "Correct typos in example.ts",
+        deliverable: "example.ts with typos corrected",
+      },
+    ],
     [
       "additional direction requirements",
       {
@@ -168,7 +220,7 @@ describe("planTask", () => {
     ],
   ])(
     "uses the Planner Loop for detailed planning with %s",
-    async (_, input) => {
+    async (_, input, humanGoal = documentationGoal) => {
       const root = createRepository();
       writeFileSync(join(root, "README.md"), "Introduciton");
       writeFileSync(join(root, "notes.txt"), "Ntoes");
@@ -178,7 +230,7 @@ describe("planTask", () => {
       const detail = { ...simpleDetail, ...input };
 
       const result = await planTask({
-        goal,
+        goal: humanGoal,
         detail,
         repositoryPath: root,
         limits,
@@ -187,7 +239,7 @@ describe("planTask", () => {
 
       expect(result).toMatchObject({ status: "completed", rounds: 1 });
       expect(planner).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ goal, detail }),
+        expect.objectContaining({ goal: humanGoal, detail }),
         limits
       );
     }

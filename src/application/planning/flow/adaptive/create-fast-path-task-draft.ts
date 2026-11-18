@@ -60,22 +60,72 @@ function isSimpleTextEdit(objective: string): boolean {
   );
 }
 
+function matchesPhrase(text: string, phrases: string[]): boolean {
+  return phrases.includes(text.trim().replace(/\.$/, ""));
+}
+
+function isTypoCorrection(text: string, path: string): boolean {
+  return matchesPhrase(text, [
+    `Fix typos in ${path}`,
+    `Correct typos in ${path}`,
+    `Correct spelling errors in ${path}`,
+    `${path}의 오타를 수정해줘`,
+    `${path}의 오타를 교정한다`,
+    `${path} 오타 수정`,
+  ]);
+}
+
+function isTypoCorrectionDeliverable(text: string, path: string): boolean {
+  return matchesPhrase(text, [
+    `Corrected typos in ${path}`,
+    `${path} with typos corrected`,
+    `${path}의 오타 수정본`,
+    `오타를 교정한 ${path}`,
+  ]);
+}
+
+function supportsDetailedFastPath(
+  goal: PlanningState["goal"],
+  direction: string,
+  path: string
+): boolean {
+  return (
+    isTypoCorrection(direction, path) &&
+    (isTypoCorrection(goal.objective, path) ||
+      matchesPhrase(goal.objective, [
+        "Improve the documentation",
+        "Improve documentation quality",
+        "문서 품질 개선",
+        "문서 품질을 개선한다",
+      ])) &&
+    (goal.constraints ?? []).every((constraint) =>
+      matchesPhrase(constraint, [
+        "Keep changes scoped",
+        "Keep changes minimal",
+        "Do not change code",
+        "Do not add or update dependencies",
+        "Do not make unrelated edits",
+        `Only modify ${path}`,
+      ])
+    )
+  );
+}
+
 function getFastPathObjective(
   { detail, goal, repository }: PlanningState,
   filePath: string
 ): string | undefined {
   if (detail) {
     const path = filePath.split(sep).join("/");
-    // Match the complete text of a supported operation and its deliverable.
-    // Additional requirements and paraphrases need the Planner.
-    const objective = `Fix typos in ${path}`;
+    // Restrict the path token and match whole supported phrases. Free-form
+    // goals, approval directions, and constraints require the Planner.
     if (
       /^(?:[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(
         path
       ) &&
-      detail.objective === objective &&
-      detail.direction === objective &&
-      detail.deliverable === `Corrected typos in ${path}`
+      isTypoCorrection(detail.objective, path) &&
+      isTypoCorrectionDeliverable(detail.deliverable, path) &&
+      supportsDetailedFastPath(goal, detail.direction, path)
     ) {
       return detail.objective;
     }

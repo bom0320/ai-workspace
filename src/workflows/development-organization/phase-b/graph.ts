@@ -5,12 +5,12 @@ import {
   createSelectPlanningWorkItemsNode,
   type SelectWorkItemIds,
 } from "./features/planning/nodes/select-planning-work-items.js";
-import type { planWorkItem } from "./features/planning/execution/plan-work-item.js";
+import type { executeWorkItemPlanning } from "./features/planning/execution/execute-work-item-planning.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { phaseBInput, phaseBState, type PhaseBState } from "./state.js";
 
 export type PhaseBGraphOptions = RunWorkDecompositionOptions & {
-  planning?: Omit<Parameters<typeof planWorkItem>[0], "phaseB"> & {
+  planning?: Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB"> & {
     selectWorkItemIds: SelectWorkItemIds;
   };
 };

@@ -18,7 +18,7 @@ export const phaseBPlanningInputSchema = workDecompositionInputSchema.extend({
 
 export type PhaseBPlanningInput = z.infer<typeof phaseBPlanningInputSchema>;
 
-export async function planWorkItem({
+export async function executeWorkItemPlanning({
   phaseB,
   repositoryPath,
   limits,

@@ -202,11 +202,11 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 - **Multi-Work Planning:** Work Item의 선행 관계와 상세 계획에 필요한 정보를 확인한다. 필요한 설계 정보가 충분하면 선행 업무 실행 전에도 상세 계획을 수립할 수 있다.
 - **공통 Detailed Planning:** 개별 Work Item의 계획 기능을 두 경우에 재사용한다. 모든 `TaskContract`를 최초 Planning 시점에 일괄 생성할 필요는 없다.
 
-**R5.1 / R5.2 구현 범위:** 기존 v1 `planTask({ goal, repositoryPath, limits, planner? })` 호출과 Fast Path를 유지한다. Phase B Planning 기능은 `planWorkItem({ phaseB: { approvedDecisionId, workItem }, repositoryPath, limits, planner? })`로 선택한 Repository 변경 업무 하나를 계획한다. 입력은 기존 Work Item Schema를 재사용하며 Goal과 승인 Proposal은 Governance에서 복원한다. 형식 오류, 승인 복원 실패, Repository 불일치는 Planning 시작 전에 호출 오류로 전달된다.
+**R5.1 / R5.2 구현 범위:** 기존 v1 `planTask({ goal, repositoryPath, limits, planner? })` 호출과 Fast Path를 유지한다. Phase B Planning 기능은 `executeWorkItemPlanning({ phaseB: { approvedDecisionId, workItem }, repositoryPath, limits, planner? })`로 선택한 Repository 변경 업무 하나를 계획한다. 입력은 기존 Work Item Schema를 재사용하며 Goal과 승인 Proposal은 Governance에서 복원한다. 형식 오류, 승인 복원 실패, Repository 불일치는 Planning 시작 전에 호출 오류로 전달된다.
 
 Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 확인한 뒤 기존 Working Tree 조사와 Planning Loop를 실행한다. Phase B Planning 기능은 원본 Goal / Constraints와 승인 방향의 텍스트, Work Item의 Objective·Deliverable만 상세 계획 입력으로 구성한다. Planning Application은 일반화된 `detail`과 실제 Repository Context로 계획을 수립하며, 승인 참조와 Work Item 계약은 Workflow 기능에서 소유한다. Goal 문자열 기반 Fast Path는 생략하며, TaskDraft의 최종화에는 기존 ID 발급과 Constraints 병합을 사용한다. 이 경로는 Work Item의 실행 자격이나 선행 업무 완료를 판단하지 않는다. 현재 Repository와 승인 Snapshot의 commit 차이에 대한 정책은 후속 과제다.
 
-**R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { repositoryPath, limits, planner?, selectWorkItemIds } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `planWorkItem()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
+**R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { repositoryPath, limits, planner?, selectWorkItemIds } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `executeWorkItemPlanning()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
 
 선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약과 읽기 전용 업무의 실행 방식은 후속 범위다. v0 `executeTask()`는 격리 worktree의 단일 Task 실행 기능으로 재사용할 대상이다.
 

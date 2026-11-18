@@ -8,7 +8,7 @@ import * as governance from "@/application/governance/index.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 
 import type { TaskDraft, Planner } from "@/application/planning/index.js";
-import { planWorkItem } from "./plan-work-item.js";
+import { executeWorkItemPlanning } from "./execute-work-item-planning.js";
 
 const temporaryDirectories: string[] = [];
 const goal: GoalSpec = {
@@ -47,7 +47,7 @@ afterEach(() => {
   }
 });
 
-describe("planWorkItem", () => {
+describe("executeWorkItemPlanning", () => {
   const phaseB = {
     approvedDecisionId: "approved-1",
     workItem: {
@@ -135,7 +135,7 @@ describe("planWorkItem", () => {
         },
       });
 
-    const result = await planWorkItem({
+    const result = await executeWorkItemPlanning({
       phaseB,
       repositoryPath,
       limits,
@@ -185,7 +185,7 @@ describe("planWorkItem", () => {
       task: { ...task, objective: workItem.objective },
     });
 
-    const result = await planWorkItem({
+    const result = await executeWorkItemPlanning({
       phaseB: { approvedDecisionId: phaseB.approvedDecisionId, workItem },
       repositoryPath,
       limits,
@@ -209,7 +209,12 @@ describe("planWorkItem", () => {
       const lookup = vi.spyOn(governance, "getApprovedDecision");
       const planner = vi.fn<Planner>();
       await expect(
-        planWorkItem({ phaseB: input, repositoryPath, limits, planner })
+        executeWorkItemPlanning({
+          phaseB: input,
+          repositoryPath,
+          limits,
+          planner,
+        })
       ).rejects.toThrow();
       expect(lookup).not.toHaveBeenCalled();
       expect(planner).not.toHaveBeenCalled();
@@ -223,7 +228,7 @@ describe("planWorkItem", () => {
     });
     const planner = vi.fn<Planner>();
     await expect(
-      planWorkItem({ phaseB, repositoryPath, limits, planner })
+      executeWorkItemPlanning({ phaseB, repositoryPath, limits, planner })
     ).rejects.toThrow("ApprovedDecision is unavailable.");
     expect(planner).not.toHaveBeenCalled();
   });
@@ -233,7 +238,7 @@ describe("planWorkItem", () => {
     restoreApproval(createRepository());
     const planner = vi.fn<Planner>();
     await expect(
-      planWorkItem({ phaseB, repositoryPath, limits, planner })
+      executeWorkItemPlanning({ phaseB, repositoryPath, limits, planner })
     ).rejects.toThrow(
       "Planning repository does not match the Approved Decision."
     );

@@ -1,8 +1,8 @@
-import { planWorkItem } from "../execution/plan-work-item.js";
+import { executeWorkItemPlanning } from "../execution/execute-work-item-planning.js";
 import type { PhaseBState } from "../../../state.js";
 
 export function createPlanWorkItemNode(
-  options?: Omit<Parameters<typeof planWorkItem>[0], "phaseB">
+  options?: Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB">
 ) {
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
     const proposal = state.workDecompositionResult;
@@ -16,7 +16,7 @@ export function createPlanWorkItemNode(
     }
 
     const { repositoryPath, limits, planner } = options;
-    const result = await planWorkItem({
+    const result = await executeWorkItemPlanning({
       repositoryPath,
       limits,
       planner,

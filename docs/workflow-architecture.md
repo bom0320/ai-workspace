@@ -4,7 +4,7 @@
 Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
 [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
 Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval, Specialist Decisions / Comparison, CEO Synthesis와 선택적 Human Direction Governance까지 통합했으며
-Organization Graph·Phase B·후속 분석과 Handoff의 구체적인 계약을 선행 구현하지 않는다.
+Organization Graph와 Phase B 실행은 아직 구현하지 않았다. 아래 Phase B 절과 Handoff 절은 구현에 앞서 정한 설계 기준이다.
 
 문서별 기준은 다음과 같다.
 
@@ -58,12 +58,12 @@ CLI는 사용자 입력, Human Confirmation, 결과 출력 계층이다. 현재 
 | --- | --- | --- |
 | Human 입력 | 원본 Goal / Constraints와 대상 Repository를 전달 | 기존 Domain 계약을 재사용하고 Agent가 제약을 임의 변경하지 않음 |
 | Phase A | 판단·승인 Workflow 실행과 결과 확인 | Staffing, 판단 근거 검증, 해결 방향 승인 의미는 해당 Application / Governance가 소유 |
-| Phase B 진입 | 승인된 방향과 Handoff 검증이 모두 충족된 경우에만 실행 허용 경로로 진행 | State의 승인 표시를 믿지 않고 승인 근거·대상·Repository 기준을 검증 |
+| Phase B 진입 | 최종 Human 방향 승인의 `ApprovedDecision`을 기존 Governance API로 복원한 뒤 업무 분해로 전달 | Governance는 승인 기록의 무결성을 검증하고 Planning / Execution은 실제 사용 시점의 적격성을 검증 |
 | Phase B | 상세 업무 실행·검증·진행 평가 결과를 수집 | 개별 업무의 승인·권한·Scope·Budget·Verification을 별도로 충족 |
 | 전체 종료 | 결과·미완료 사유·Human 판단 필요 여부를 구분해 반환 | 업무 완료 및 보고의 근거를 보존하고 실패를 성공으로 바꾸지 않음 |
 
 Organization은 Domain 검증을 Graph의 조건문으로 다시 구현하지 않는다. Graph는 검증 API의 결과에
-따라 이동할 뿐이며, 구체적인 Handoff 검증 API와 Organization Result Schema는 아직 정의하지 않았다.
+따라 이동한다. Phase 연결 인터페이스와 Organization Result Schema는 아직 정의하지 않았다.
 
 ### 종료 의미와 후속 실행
 
@@ -145,71 +145,76 @@ Step 7.2에서 Human Direction Governance를 연결했다. 전체 Phase A Outcom
 
 ### Phase B — Detailed Design & Execution
 
-승인된 방향을 실제 업무로 구체화하고 실행·검증·진행을 관리하는 것이 목적이다. 다음은 목표 흐름이다.
+승인된 방향을 실제 업무로 구체화하고 실행·검증·진행을 관리한다. 다음은 목표 흐름이며 구현 상태는
+[Phase B 개발 로드맵](roadmap.md#phase-b-개발-로드맵--planned)을 따른다.
 
 ```text
-Approved Decision
-→ CEO Work Decomposition
-→ Assignment Planning: 목적 / 산출물 / 담당자 / 의존성 / 진행 순서
-→ Detailed Design / Planning
-→ TaskDraft → Harness TaskContract (Repository 실행 계약이 필요한 업무)
-→ Human Task Approval (필요한 경우)
-→ Authorized Specialist / Worker Execution
-→ Verification / Review
-→ CEO Progress Evaluation
-   ├─ Continue → 다음 승인된 업무
-   ├─ Rework → 재작업 → 필요한 재검증·재승인
-   ├─ Reassign → 재배치 → 필요한 재검증·재승인
-   ├─ Escalate → Human 판단 / 승인 대기
-   └─ Complete → Human Change Review / Delivery → Executive Report
+ApprovedDecision → Governance 조회 → CEO Work Decomposition
+→ Planning Coordination → 계획 가능한 Work Item의 Detailed Planning
+→ Work Execution Contract → 승인·권한 확인 → Specialist / Worker Execution
+→ Verification & Review → CEO Progress Evaluation
+   ├─ Continue → 다음 계획 또는 실행 가능 업무
+   ├─ Rework → 업무 재계획 및 필요한 재검증·재승인
+   ├─ Reassign → 담당 재배치 및 필요한 재검증·재승인
+   ├─ Escalate → Human 판단 대기
+   └─ Complete → Human Change Review & Delivery → CEO Executive Report
 ```
 
-기존 v1 Planning의 `planTask()`와 v0 Execution의 `executeTask()`를 재사용하는 방향을 유지한다.
-Work Decomposition은 어떤 업무를 누구에게 맡길지를, Task Planning은 개별 Repository 업무의 범위·제약·
-완료 조건·검증을 구체화한다. 모든 분석·설계·QA·리뷰 Assignment에 TaskContract를 강제하지 않는다.
+선행 업무 결과가 필요한 경우 해당 결과의 검증 이후 후속 업무의 상세 계획을 확정한다. 각 행은 실행 목적을 표현하며 함수·Node·Subgraph 배치는 후속 설계에서 결정한다.
 
-**현재 한계:** `planTask()`는 goal / repositoryPath / limits / 선택적 planner를 받으며 ApprovedDecision
-Handoff를 검증하지 않는다. 기존 Planning은 Working Tree 기반이고 v0 Execution은 격리 worktree에서
-제한된 단일 Task를 실행한다. 이 capability의 존재는 Phase B 통합 완료를 뜻하지 않는다.
-Phase B Work Assignment 모델, 다중 Worker 실행·병렬성·통합·충돌 처리, 반복·재작업·재배치 정책과
-진행 평가·최종 보고의 구체적인 계약은 아직 설계 대상이다. 현재 Phase A StaffingAssignment와 동일 모델로 가정하지 않는다.
-Phase B도 같은 기준으로 Application 기능 소유권에서 업무 목적·완료 조건을 식별하고, 그 결과를 관찰해
-다음 실행을 제어할 필요가 있는 단위를 Node로 구성한다. 위 목표 흐름의 각 행을 Stage나 Node 하나로
-강제하지 않으며 Assignment 모델·Node 수·반복 및 복구 경계를 이번 문서에서 확정하지 않는다.
+#### CEO Work Decomposition
+
+CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는 하나 이상의 Work Item으로 구성하고 선행 의존성을 정의한다. 별도 업무로 분리할 판단 기준과 DAG 검증 책임은 [설계 판단 근거](workflow-responsibility-boundaries.md#phase-b-설계-판단과-책임)를 따른다.
+
+| 구분 | Phase A CEO Staffing (Implemented) | Phase B CEO Work Decomposition (Planned) |
+| --- | --- | --- |
+| 목적 | 해결 방향을 판단할 분석 조직 구성 | 승인된 방향을 실현할 업무 구성 |
+| 입력 | Original Human Goal / Constraints와 분석 Context | `ApprovedDecision`에서 복원된 승인 방향과 근거 |
+| 출력 | `StaffingAssignment`를 포함한 StaffingProposal | Work Item과 선행 의존성으로 구성한 Work Decomposition |
+| 초점 | Specialist·분석 Context·Budget | 업무 독립성·기대 산출물·의존성 |
+| 실행 권한 | 제안 이후 별도 Governance 승인·Authorization 필요 | 분해 결과와 별도로 업무별 승인·Authorization 필요 |
+
+| 분해 형태 | 예시 | Work Item과 실행 관계 |
+| --- | --- | --- |
+| Type A — Single Work | 작은 작업 입력 UI의 접근성과 피드백 개선 | 독립적인 완료·검증 단위 1개. 여러 Specialist가 함께 참여할 수 있다. |
+| Type B — Independent Works | 서로 독립적인 관리자 통계 화면과 알림 설정 개선 | 선행 의존성 없는 복수 업무. 권한과 변경 범위가 허용하면 병렬 실행을 고려한다. |
+| Type C — Dependent Works | Backend API 계약 변경 → Frontend 연동 → 통합 검증 | 복수 업무의 선행 관계를 기록한다. 선행 산출물에 따라 후속 상세 계획이 달라질 수 있다. |
+
+독립 업무와 의존 업무는 한 계획에 섞일 수 있다. 세 형태는 Work Item 수와 의존 관계에서 파악하므로 별도 Workflow 모드나 분류용 `type` 필드가 필요하지 않다.
+
+#### Work Item / Specialist Assignment / TaskContract
+
+| 개념 | 책임 |
+| --- | --- |
+| Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. Phase B 모델과 정확한 Schema는 Planned다. |
+| Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 등록·선정과 배치 계약은 Planned이며, 기존 Phase A `StaffingAssignment`는 분석 배치 계약으로 유지한다. |
+| `TaskContract` | Repository 변경의 수정 가능·금지 범위, Constraints, Acceptance Criteria, Verification을 구체화하는 기존 v1/v0 계약. 필요한 Human Task Approval과 Execution의 입력이다. |
+
+CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계약 생성은 개별 Planning의 책임이며 실행 권한은 Governance 경계에서 확인한다. 읽기 전용 분석·설계·검토는 업무에 맞는 Context와 권한 계약을 사용한다. Repository 변경은 `TaskContract`와 필요한 Human Task Approval을 거친다. 테스트 명령처럼 Shell을 사용하는 업무는 변경 여부와 관계없이 별도의 실행 권한 검증이 필요하다.
+
+#### R5 — Phase B Planning Coordination & Detailed Planning
+
+- **Single Planning:** Work Item 하나의 목적·산출물을 실제 Repository Context에서 구체화하고, Repository 변경 업무라면 `TaskContract`를 구성한다.
+- **Multi-Work Planning:** 의존성과 잠재적인 변경 범위 충돌을 확인한다. 현재 계획할 수 있는 업무와 선행 결과가 필요한 업무를 구분하고, 검증된 선행 산출물이 확보되면 해당 업무의 상세 계획을 확정한다.
+- **공통 Detailed Planning:** 개별 Work Item의 계획 기능을 두 경우에 재사용한다. 모든 `TaskContract`를 최초 Planning 시점에 일괄 생성할 필요는 없다.
+
+현재 v1 `planTask()`는 `goal`, `repositoryPath`, `limits`, 선택적 `planner`를 받아 Working Tree를 조사하고, 성공 시 한 번에 하나의 `TaskContract`를 반환한다. Phase B에서는 기존 Planning을 확장·재사용한다. 상세 계획에 Original Goal / Constraints, Approved Direction, Work Item의 목적·산출물, 필요한 선행 Work Item의 검증된 결과, 실제 Repository Context를 전달한다.
+
+Planning Coordination은 어떤 업무를 언제 계획할지 정하고, 개별 Detailed Planning은 해당 업무의 실행 범위·완료 조건·검증을 구체화한다. 승인된 방향이나 원본 Constraints 안에서 상세 계획을 세울 수 없다면 상위 판단과 필요한 재승인을 요청한다. 정확한 입력 Schema, 기존 독립 호출의 호환성을 보존하는 API 확장 방식, 함수·Node·Subgraph 배치는 R5에서 결정한다. v0 `executeTask()`는 격리 worktree의 단일 Task 실행 기능으로 재사용할 대상이다.
 
 ## 4. Phase A → Phase B Handoff Contract
 
-**목표 계약:** Handoff는 State를 복사하는 작업이 아니라 승인된 방향의 신뢰성과 후속 실행 적합성을
-검증하는 경계다. `ApprovedDecision`의 Review 참조형 Schema와 발급·조회 API는 Step 7.2에서 구현했다. Phase B Handoff의 구체적인 검증 API와 실행 계약은 아직 없다.
+**설계 결정:** Phase A의 최종 Human Direction Approval에서 발급한 `ApprovedDecision`을 사용한다. Step 7.2에 구현된 Governance의 `getApprovedDecision(decision.id)`로 승인된 Review의 Proposal, 원본 Goal / Constraints, 승인 시점의 Snapshot, Decision / Comparison Context 및 Human 승인 근거를 복원한다. 승인 대기·거부·Escalation·실패 또는 기록 복원 실패 시 승인 방향에 근거한 업무 분해를 진행하지 않는다. [기존 승인 조회 구현](../src/application/governance/approval/features/direction-review/flow/approved-decision.ts)
 
-| 개념 | 의미 | 대체하지 않는 계약 |
-| --- | --- | --- |
-| ApprovedOperatingScope | 현재 Governance가 발급하는 분석 조직·Context·호출 예산의 승인 범위 | 해결 방향 승인, Repository 수정 권한 |
-| ApprovedDecision / Approved Decision | Human이 실제 승인한 Review를 참조하는 방향 기록 (Step 7.2) | Staffing Scope, 개별 Task·Delivery 승인 |
-| TaskContract | 개별 Repository 실행 작업의 범위·제약·검증 계약 | 조직 전체의 방향 승인 또는 모든 Assignment의 범용 모델 |
-
-### 필요한 의미적 정보와 검증
-
-아래 항목은 정보 요구사항이며 필드명·직렬화 형식이나 새로운 데이터 모델의 명세가 아니다.
-
-| 필요한 정보 | Handoff에서 확인할 의미 |
+| 경계 | 검증 책임 |
 | --- | --- |
-| Original Human Goal / Constraints | 원본 목표·제약이 보존되고 전달 과정에서 임의 완화되지 않았는가? |
-| Approved Direction | 실제 Human이 승인한 방향이며 전달된 방향이 승인 대상과 일치하는가? |
-| Direction Approval Provenance | 누가 무엇을 승인했는지 신뢰할 근거가 있는가? State 플래그·CEO 주장만으로 승인으로 보지 않음 |
-| Decision / Comparison / Synthesis Evidence | 종합 판단과 승인 결과를 원본 판단·비교·Evidence까지 추적할 수 있는가? |
-| Repository Baseline | 판단·승인에 사용한 기준 상태와 후속 업무의 Repository 상태가 유효하게 연결되는가? |
+| 승인 기록의 무결성 | Governance가 저장된 승인과 Review·Scope·분석 Context·Human 결정의 연결을 검증한다. Graph State의 승인 표시나 CEO 주장 자체에는 승인 효력이 없다. |
+| Planning 시점의 적격성 | Planning에 쓰는 Repository Context가 승인된 방향·원본 제약·선행 산출물과 일치하는지 실제 사용 시점에 확인한다. |
+| Execution 시점의 적격성 | 실제 Repository 기준 상태, 정책, 업무별 Scope·권한과 필요한 Human 승인을 실행 전에 검증한다. |
 
-후속 작업이 승인된 방향·범위·원본 Constraints와 일치하는지도 검증해야 한다. 근거 부족·불일치·검증
-실패가 있거나 해결 방향이 승인 대기·거부·Escalation 상태라면 Phase B를 실행하지 않는다.
-Evidence 연결의 검증이 자연어 recommendation의 의미적 정확성을 증명하는 것은 아니다.
+초기 설계는 승인 출처와 현재 Repository 기준을 Handoff의 검증 항목으로 함께 두었다. Step 7.2에서 기록 복원이 구현되면서 Governance의 검증을 그대로 사용하고, 변할 수 있는 Repository와 실행 조건은 해당 정보를 실제로 사용하는 Application 경계에서 확인하기로 했다. 별도 Handoff Validation 계층·Node·Governance API는 추가하지 않는다. Snapshot에서 후속 실행 기준으로 전환하는 방식, 허용할 drift, 재검토·재승인 조건은 후속 설계 과제다.
 
-Phase A의 고정 Snapshot에서 Phase B의 변경 가능한 실행 기준으로 넘어가는 방법, 허용할 drift,
-재검토·재승인이 필요한 조건은 후속 설계·검증 대상이다. 항상 최초 commit을 유지한다고 가정하거나
-현재 Phase A Scope 검증을 그대로 Phase B 권한 정책으로 확장하지 않는다.
-
-Phase A 방향 승인은 Phase B의 Task Approval, Authorization, Repository 수정 또는 Apply / Commit / Push
-권한을 대신하지 않는다. 승인 Provenance의 기록 방식·유효성·조회 API와 실행 시점의 재검증도 아직 확정하지 않았다.
+Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승인한다. Repository 변경에는 업무별 Task Approval과 Execution Authorization을 적용하고, 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다. 승인 기록의 복원 자체에는 Task 승인이나 Repository 수정 권한이 수반되지 않는다.
 
 ## 5. Graph State & Output Ownership
 
@@ -362,7 +367,7 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision의 Phase B Handoff 검증, Phase B Graph, Assignment 실행 조정,
+**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 Phase 전환, Phase B Graph, Assignment 실행 조정,
 Executive Report와 영속 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
 테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),
@@ -428,14 +433,14 @@ CLI의 기존 실행 범위를 전체 Graph 구조의 제약으로 고정하던 
 2. **State / Output — 현재 통합:** Staffing 중간 결과는 Phase A가 소유한다. 최종 Phase A Outcome과 Organization 공개 Output은 아직 미정이다.
 3. **Specialist Analysis — Step 3 통합:** Preflight·단일 실행·Comparison·완료를 일반 Node로 두고 반복·실패 분기를 Phase A Edge로 이관했다. 기존 함수형 Orchestrator와 specialist-decisions/ 디렉터리는 제거했다.
 4. **중복 Orchestration — 현재 경계:** Graph가 순서·반복·분기를 단독 소유한다. 검증 helper와 단일 Claim / v2 실행 함수만 재사용하고 Governance와 Application의 판단 규칙은 유지한다.
-5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. Handoff 저장·검증 API와 실제 Graph 연결은 후속 과제다.
+5. **Phase 연결 — 목표 계층 결정 / 구현 미정:** Organization Graph 아래 Phase A / Phase B를 주요 Subgraph로 둔다. 당시에는 Handoff 저장·검증 API를 후속 과제로 남겼다. Step 7.2 이후 기존 Governance 조회 재사용으로 정리했으며 실제 연결은 후속 과제다.
 6. **CLI / 폴더 제약 — Step 3 구현:** CLI 호환성만으로 Subgraph를 만들지 않는다. 같은 Graph의 staffing-approval / specialist-decisions 실행 대상 구분으로 현재 CLI 범위를 보존한다.
 7. **Stage 계약 — 일부 구현 / 후속 검토:** Step 2에서 Stage 3 / 4 결과·완료 시점을 분리하고 단일 비교의 skipped를 명시했다. Staffing / Approval 결과는 Step 4에서 분리했으며 최종 Phase A Outcome은 후속 과제다.
 8. **Preflight 책임 — Step 3 적용:** 단일 Governance 조회와 순수 배치 검증으로 분리했다. 당시 Complete Node를 유지했으나 Step 3.1에서 실행 전 진행 상태 검사와 마지막 실행의 완료 확정으로 통합했다. 실행 시점 Authorization / Claim은 생략하지 않는다.
 9. **Node / 배치 구조 — 판단 기준 확정, 배치 미정:** Application 함수당 Node나 Stage당 완료 Node를 강제하지 않는다. stages/ 디렉터리·미래 Node 수·새 Subgraph·재시도/복구 정책은 결정하지 않는다.
 
 Step 3은 승인된 Staffing 단계 결과와 명시적 Specialist 실행 대상에만 후속 분석을 허용한다.
-Phase B 진입은 여전히 승인된 해결 방향과 Handoff 검증을 별도로 요구한다.
+이후 Phase B 설계에서 승인 기록의 복원과 Planning / Execution 적격성 확인을 서로 다른 시점에 두기로 결정했다. 현재 기준은 [Phase A → Phase B Handoff Contract](#4-phase-a--phase-b-handoff-contract)를 따른다.
 
 ### Phase A Refactoring Step 3.1 — Specialist 완료 실행 경계 통합
 

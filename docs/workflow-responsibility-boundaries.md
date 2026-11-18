@@ -51,7 +51,7 @@ Stage 5는 Step 6.2에서 Synthesis Application과 Graph 연결을 구현했다.
 | 3. Independent Specialist Decisions | `decision` (실행 권한은 Governance) | 승인된 실행 대상·검증된 Context와 공통 Goal / Snapshot → 모든 대상의 독립 분석·Snapshot / Evidence 검증을 마친 `AgentDecision[]` | 전체 대상이 완료된 경우에만 비교 또는 단일 Decision 후속 경로로 진행 |
 | 4. Decision Comparison | `comparison` | 같은 비교 단위의 독립 Decision과 원본 Goal / Snapshot SHA → 관계 분석과 원본 참조 검증을 마친 `ComparisonResult` | 비교 성공 또는 허용된 생략 경로에서만 후속 종합으로 진행. 단일 Specialist의 비교는 skipped / insufficient-decisions로 명시 |
 | 5. CEO Synthesis | `synthesis` | 독립 판단·비교 결과·근거 → CEO 종합 보고안 | 보고안에 필요한 검증 후 Human Direction Governance로 전달하는 목표. CEO는 최종 승인 권한을 갖지 않음 |
-| 6. Human Governance | 해결 방향의 Governance 승인·수정 요청·거절 기능 (Step 7.2) | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인과 Handoff 검증을 충족해야 Phase B 진입. 수정은 동일 분석의 Synthesis 재제안 두 번까지, 거절은 해당 Review 종료. Phase B Handoff는 후속 계약 대상 |
+| 6. Human Governance | 해결 방향의 Governance 승인·수정 요청·거절 기능 (Step 7.2) | 종합 보고안과 원본 Goal / Constraints·근거 → Human이 승인한 방향인 `ApprovedDecision` | 실제 방향 승인 기록을 Governance로 복원한 뒤 Phase B 업무 분해로 연결할 계획. 수정은 동일 분석의 Synthesis 재제안 두 번까지, 거절은 해당 Review 종료. Phase B Handoff는 후속 계약 대상 |
 
 Staffing Approval은 분석 조직·Context·Invocation Budget에 대한 승인이다. Human Governance는 종합된
 해결 방향의 승인·수정·거절을 담당한다. 두 승인과 Phase B의 Task Approval·Repository 수정·Delivery 권한은
@@ -443,3 +443,34 @@ Graph는 대상에 따라 구체적인 기록 함수를 선택하고 Node는 검
 연결한다. 임의 State의 proposed 플래그나 Resume 값은 등록·승인 근거가 아니다.
 새 Review는 Context를 한 번 저장하고 Revision에서 재사용하며, 과거 단계별 분석 기록은 읽기 호환성을 유지한다.
 Human Confirmation / Ledger의 권한 경계와 과거 이력 / 현재 적격성의 구분은 그대로 유지한다.
+
+## Phase B 설계 판단과 책임
+
+Phase B는 구현 전 설계 단계다. [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)과 [개발 로드맵](roadmap.md#phase-b-개발-로드맵--planned)에 적용한다.
+
+| 기존 전제와 검토한 대안 | 선택한 방향과 이유 |
+| --- | --- |
+| 승인 기록과 현재 Repository 검증을 별도 Handoff Validation에 모으는 안 | Step 7.2의 Governance 조회가 검증한 승인 기록을 복원하고, Planning / Execution이 각 사용 시점의 적격성을 검증한다. 중복 검증을 줄이고 전환 이후 바뀔 수 있는 Repository 상태를 확인할 수 있다. |
+| Phase A Staffing을 구현 업무 배치에 재사용하거나 Specialist·파일별로 업무를 나누는 안 | 완료·검증 가능한 산출물을 Work Item의 기준으로 삼는다. 여러 Specialist가 하나의 산출물을 만들 수 있고, 한 Specialist가 독립적인 여러 업무를 맡을 수도 있다. 업무 분해와 역할 배치의 수명과 변경 이유가 다르다. |
+| Single / Independent / Dependent를 별도 Workflow로 나누는 안 | Work Item 수와 선행 관계로 세 형태와 혼합 계획을 표현한다. 같은 의존 규칙을 적용할 수 있고 분류 필드와 실제 관계가 어긋날 가능성이 줄어든다. |
+| 모든 업무의 TaskContract를 한 번에 생성하거나 단일·복수 Planning 엔진을 따로 만드는 안 | Planning Coordination이 준비된 업무의 순서를 정하고 Detailed Planning을 업무별로 재사용한다. 선행 산출물에 의존하는 계획은 해당 결과의 검증 이후에 확정해 추측과 재작업을 줄인다. |
+
+### 업무 분해와 의존성 검증
+
+CEO는 독립적인 완료·검증이 필요한지, 수정 범위나 위험에 따라 별도 승인·검증이 필요한지, 다른 업무의 산출물이 선행조건인지 판단한다. 하나의 Work Item에서 Specialist가 협업해도 충분한지, 과도한 분리가 실행·승인 비용을 늘리는지도 고려한다. 파일 수와 Specialist 수는 각각 업무 수를 정하는 기준으로 사용하지 않는다.
+
+CEO가 Work Item과 선행조건을 제안하면 Harness가 존재하지 않는 참조, 자기 참조, 순환 의존성을 차단한다. 순환에 포함된 업무는 모두 서로의 선행조건을 기다려 실행을 시작할 수 없다. LangGraph는 검증된 비순환 관계에 따라 진행 상태와 실행 순서를 제어한다. 독립 업무의 병렬 실행 여부는 실제 권한과 변경 범위에 달려 있다. 실행 중 협업은 역할 배치에 속하며, 이미 수행한 업무의 재작업·재구성은 CEO Progress Evaluation에서 판단하고 필요한 재검증·재승인을 거친다. 초기 구현은 이 관계에 필요한 DAG 검증 범위로 제한하며 범용 Dependency Framework를 도입하지 않는다.
+
+### Application / Workflow 책임
+
+| 소유자 | 책임 |
+| --- | --- |
+| CEO / Work Decomposition Application | CEO는 승인 방향에 근거해 업무·산출물·의존성을 제안한다. Application은 해당 use-case의 입력과 CEO 결과 계약을 소유한다. |
+| Governance / Harness | 승인 기록을 검증·복원하고, 참조·의존성·Scope·Context·권한·Evidence의 의미와 실행 허용 조건을 적용한다. Human은 방향, 필요한 Task 승인, 변경 검토와 Delivery 결정을 소유한다. |
+| Planning Application | 실제 Repository Context와 승인된 방향·제약으로 개별 업무를 구체화한다. Repository 변경 업무의 TaskDraft를 실행 계약으로 최종화하는 기존 v1 경계를 재사용한다. |
+| Execution / Verification | 업무별 권한과 실제 Repository 기준을 확인하고 승인 범위에서 실행한다. 산출물과 Evidence를 Acceptance Criteria에 대조해 검증 결과를 제공한다. |
+| Workflow / LangGraph | Application 결과에 따라 Phase 전환, Planning Coordination, 준비된 업무 실행, 검증 이후 진행 평가와 Human 대기를 조정한다. Domain 승인이나 의존성의 유효성을 자체 정책으로 판정하지 않는다. |
+
+### 미확정 구현 계약
+
+Work Item의 Schema와 식별자, Work Decomposition의 Input / Output 및 CEO 실행 Agent와 반환 상태는 해당 계약 단계에서 정한다. Specialist의 등록·선정과 배치 형식, Single / Multi Planning 인터페이스, 업무별 승인과 Execution Authorization도 후속 설계 대상이다. 병렬 Worker의 Worktree 격리·변경 통합·충돌 처리, 실행 이후 Work Plan 변경과 Rework 정책, Phase B Graph / Node 구성은 실행 경계의 요구가 확인될 때 결정한다.

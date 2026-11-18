@@ -222,24 +222,33 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 명시적 ceo-synthesis 대상에서 Graph 연결.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
 7. **Human Governance — Implemented (Step 7.2), Handoff Planned**: Approve / Request Revision / Reject, 검증 출처 Review 등록, 실제 Human Receipt와 ApprovedDecision 발급. 동일 프로세스 Interrupt / Resume와 최대 두 번 Synthesis Revision을 연결했다. Direct Override·Phase B Handoff·영속 복구는 없음.
-8. **CEO Work Decomposition — Phase B (Planned)**: 승인된 방향에서 설계·구현·QA·리뷰 업무의 목적·산출물·담당자·
-   의존성·진행 순서를 정한다. 현재 Phase A StaffingAssignment와 향후 Phase B Work Assignment를 동일 모델로 가정하지 않는다.
-9. **Detailed Design & Planning Handoff (Planned)**: 승인된 Decision + 개별 구현 Assignment + Repository
-   Context를 기존 v1 Planner에 전달해 수정 범위·Constraints·Acceptance Criteria·Verification을 구체화한다.
-   Repository 변경 계약이 필요한 업무에 TaskDraft / TaskContract와 Human Task Approval을 적용하며 읽기 전용
-   분석·설계 검토·비교에 일괄 강제하지 않는다. 원본 Goal / Constraints와 승인 방향을 보존하고, 범위 이탈·모순은
-   상위 판단·필요한 재승인으로 돌려야 한다. 현재 planTask() 입력 확장과 검증·반환 경로는 미구현이다.
-10. **Multi-Specialist Execution Coordination**: 승인된 개별 업무의 Specialist / Worker 실행을 기존 v0
-    Harness에 연결한다. 다중 Writing Worker·병렬성·Worktree 변경 통합과 충돌 해결 정책은 별도로 설계·검증한다.
-11. **Verification / Review & CEO Progress Evaluation**: 산출물·Evidence·의존성·실패를 검토하여
-    Continue / Rework / Reassign / Escalate / Complete를 판단하고 재검증·필요한 재승인을 거쳐 후속 업무로 연결.
-12. **Delivery & Executive Reporting**: Human Change Review / Apply / Commit / Push gate를 보존하고,
-    최종 결과와 재작업·미해결 사항·승인·Verification / Evidence를 Human에게 보고.
-13. **E2E & Evaluation**: 두 Phase 전체를 검증하고 CEO 판단 품질과 runtime 안정성을 분리 평가.
+
+8–13은 Phase B 마일스톤 번호를 유지한다. 세부 개발 순서와 상태는 아래 표에서 관리한다.
+
+### Phase B 개발 로드맵 — Planned
+
+Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조회를 사용하므로 별도 Handoff Validation 마일스톤을 두지 않는다. 기존 Step 9의 Detailed Design & Planning Handoff는 개별 구현 Assignment를 Planner에 전달하는 흐름에 초점을 두었다. 선행 결과에 따라 계획 가능 시점이 달라지는 복수 Work Item을 지원하기 위해 R5에서 Planning Coordination과 Detailed Planning을 함께 다룬다.
+
+| 순서 | 기존 마일스톤 | 단계 | 내용 | 상태 |
+| --- | --- | --- | --- | --- |
+| 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성 | Planned |
+| 2 | 8 | Work Decomposition Contract | Input / Output, Work Item Schema·식별자, Dependency, CEO 결과 검증 계약 확정 | Planned |
+| 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | Single / Multi Planning 시점 조정과 v1 Planning 확장·재사용 | Planned |
+| 4 | 10 | Work Execution Contract | 읽기 전용·Repository 변경 업무 구분, Shell 실행, 업무별 승인·권한 계약 | Planned |
+| 5 | 10 | Multi-Specialist / Worker Execution | 협업, 순차·병렬 실행, 기존 v0 연동, Worktree 격리·통합과 충돌 처리 | Planned |
+| 6 | 11 | Verification & Review | 산출물·Evidence·Acceptance Criteria와 실패 검증 | Planned |
+| 7 | 11 | CEO Progress Evaluation | Continue / Rework / Reassign / Escalate / Complete 및 재계획 검토 | Planned |
+| 8 | 12 | Human Change Review & Delivery | Human 변경 검토와 Apply / Commit / Push 경계 | Planned |
+| 9 | 12 | CEO Executive Report | 수행 결과·판단 근거·검증·미해결 사항 보고 | Planned |
+| 10 | 13 | Phase B E2E & Evaluation | Type A — Single Work, Type B — Independent Works, Type C — Dependent Works 및 혼합 계획 검증. CEO 판단 품질과 Runtime 안정성 분리 평가 | Planned |
 
 LangGraph.js의 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합은
 이 순서 중 실제로 필요한 단계에서 진행한다. Graph 설계·checkpoint backend·CEO 호출 방식·Domain
 schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 구조적 대칭만을 위해 미리 만들지 않는다.
+
+### Compatibility Refactoring — runDecision() (Planned)
+
+기존 Decision CLI의 `runDecision()`은 Frontend / UX Specialist를 고정 구성한다. `runIndependentDecisions()`는 이미 호출자가 제공한 Specialist를 받고, Phase A는 승인·Claim을 거친 동적 Specialist 입력으로 이를 재사용한다. CLI와 v2 호환성을 유지하면서 하드코딩된 선정을 개선하고, 동적 입력을 공개할 필요와 방식을 검토한다. 기존 Phase A의 선정·권한 경로를 중복 구현하지 않으며 Phase B의 선행조건으로 두지 않는다.
 
 ### Step 1 진행 상태
 

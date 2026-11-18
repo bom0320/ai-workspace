@@ -275,7 +275,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 | Phase A → Staffing Setup 및 콜백 기반 승인 연결; CLI는 Setup 직접 실행. 전체 Organization Graph는 미구현 |
+| Workflow Runtime | LangGraph.js 채택 | Phase A가 Staffing / Approval을 직접 조정하고 명시적 실행 대상에서 Specialist Decisions / Comparison, Synthesis 및 Human Direction Governance를 연결. Staffing CLI는 Phase A의 staffing-approval을 사용. Organization / Phase B Graph는 미구현 |
 | Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
@@ -284,7 +284,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 ### v4 Target Workflow — Planned
 
 다음은 두 Phase로 구성한 목표 Workflow다. 기반 schema와 Context Discovery의 구현이 전체 Workflow의
-완료를 뜻하지 않는다. CLI는 v0–v3와 명시적 Staffing / Governance 명령을 제공한다. 승인 Scope의 Decision·Comparison API는 구현했지만 CEO Synthesis는 명시적 실행 대상으로 연결했고 이후 Human 방향 승인과 전체 Organization Graph 연결은 예정 상태다.
+완료를 뜻하지 않는다. CLI는 v0–v3와 명시적 Staffing / Governance 명령을 제공한다. 승인 Scope의 Decision·Comparison, CEO Synthesis와 Human Direction Governance는 Phase A에 구현했다. Organization Graph와 Phase B는 예정 상태다.
 
 #### Phase A — Decision & Approval
 
@@ -296,8 +296,7 @@ Staffing·권한 발급·독립 판단·Comparison 이후 CEO Synthesis와 Human
 초기 Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이고, Human Governance는 종합된
 해결 방향에 대한 최종 판단이다. 두 승인은 서로 다르며 코드 변경 전체의 포괄 승인도 아니다.
 StaffingDraft / Proposal은 권한이 아니다. 목표 흐름에서는 승인 후에도 Harness가 Scope와 최신 권한을
-검증하고 예산을 확보하여 실행 입력을 발급해야 한다. 현재 evaluateInvocationRequest()는 Eligibility만
-평가하고 Scope issuance, Budget Reservation, AuthorizedSpecialistInvocation 구성·실행 연결은 하지 않는다.
+검증하고 예산을 확보하여 실행 입력을 발급해야 한다. `evaluateInvocationRequest()`는 Eligibility를 평가한다. 후속 Scope 발급, Reservation, Claim 및 단일 Specialist 실행은 각 Governance / Workflow 경계에서 수행한다.
 기존 v2 CLI가 이 후속 v4 Authorization을 이미 통과해 실행되는 것으로 해석하지 않는다.
 
 이 Phase의 Specialist 판단은 v2의 read-only / supplied Context / 같은 비교 단위의 Snapshot / 독립성 원칙을
@@ -335,8 +334,8 @@ Budget / Evidence / Verification / Human Approval을 통제한다. 재작업·�
 
 현재 TaskDraft는 TaskContract schema에서 id / goalId를 제외해 파생한다. 기존 v1의 목적은 자연어 Goal을
 Codex Worker가 수행할 구체적인 업무 명세로 변환하는 것이며, 이 의미와 Planner를 유지한다.
-현재 StaffingAssignmentDraft는 Phase A의 판단 업무 제안이다. Phase B의 구현 업무를 배치할
-Implementation Assignment / `ImplementationAssignment` 등은 **Proposed Concept**이며 현재 타입·Schema·API가
+현재 StaffingAssignmentDraft는 Phase A의 판단 업무 제안이다. Phase B의
+Work Item과 Specialist Assignment는 **Proposed Concept**이며 현재 타입·Schema·API가
 존재하지 않는다. 이를 현재 StaffingAssignment와 동일시하거나 필드·파일 구조를 선행 확정하지 않는다.
 
 목표 관계는 분석 배치 → AgentDecision → CEO 종합 → Human의 해결 방향 승인 → CEO의 업무 분해 →
@@ -367,30 +366,11 @@ IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 C
 문제 이해와 전문가 판단·배치의 근거를 만드는 것이고, v1의 목적은 실행 계약을 만드는 것이다.
 공통 Intent Analysis 모듈을 추출하거나 두 Application의 State / Loop를 통합하지 않는다.
 
-Work Decomposition은 필요한 업무·목적·담당자·의존성·진행 순서를 정한다. Task Planning은 그중 개별
-Repository 변경 업무의 실행 범위·제약·완료 조건·검증을 정한다. 읽기 전용 분석·설계 검토·비교에
-TaskContract를 일괄 강제하지 않으며, 앞서 설명한 Phase A StaffingAssignment와 향후 Phase B Work Assignment도
-같은 모델로 가정하지 않는다.
+Phase B Work Decomposition은 Work Item의 목적·산출물·의존성을 정의한다. Specialist Assignment는 해당 업무에서 맡을 역할과 작업을 표현한다. 기존 Phase A StaffingAssignment는 분석 배치 계약으로 유지한다. Repository 변경 업무의 상세 계획에서 기존 TaskDraft / TaskContract를 활용한다. 세 개념과 실행 권한의 관계는 [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)을 따른다.
 
 ### CEO와 Planner의 handoff — Planned
 
-```text
-Approved Decision + Implementation Assignment + Repository Context
-→ 기존 v1 Planner → TaskDraft → Harness TaskContract → Human Task Approval
-```
-
-CEO는 해결 방향 선택과 업무 분해·배치를, Planner는 그 방향과 개별 업무를 실행 가능한 명세로 구체화하는
-책임을 맡는다. Planner가 원본 Goal만 보고 승인된 Decision과 충돌하는 방향을 다시 선택해서는 안 된다.
-Harness는 원본 Goal / Constraints와 승인된 방향의 provenance를 보존하고 범위 확대·모순을 검증해야 한다.
-CEO나 Planner는 원본 Goal / Constraints를 임의 변경할 수 없다. 승인된 방향·범위·제약으로 계약을 만들 수
-없다면 임의 진행하지 않고 상위 판단과 필요한 재승인을 요청해야 한다. 이 검증·반환 경로는 향후 설계한다.
-Staffing Approval(분석 배치), Governance Approval(해결 방향), Task Approval(구체 실행 작업),
-Change Review / Delivery Approval(결과 검토·반영)은 각각 별도이며 이전 승인이 후속 승인을 대체하지 않는다.
-
-현재 planTask() 입력은 goal / repositoryPath / limits / optional planner뿐이며 Approved Decision이나
-Implementation Assignment를 받지 않는다. 현재 v1은 Working Tree 기반 조사다. 위 handoff의 입력 계약,
-Snapshot에서 실행 기준 상태로의 전환·drift 처리와 일치 검증은 **향후 통합 요구사항**이다. 기존 Planner를
-폐기하거나 대체 Planner를 새로 만드는 방향이 아니다.
+초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. 기존 v1의 독립 호출 경계를 유지하며 통합 입력 Schema와 API는 R5에서 결정한다.
 
 현재 runStaffing()은 CEO의 Draft를 검증·최종화해 StaffingProposal / Escalation / Failure를 반환할 뿐
 planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
@@ -1016,7 +996,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | InvocationReservation | Implemented | authorization/features/specialist-invocation/model/reservation.ts의 발급 입력 digest와 Scope 전체 호출 예산 예약. 실행 완료·환불 기록은 아님 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
-| CEO Synthesis / 전체 조직 workflow / Executive Report | Synthesis Implemented / 나머지 Planned | Step 6.2에서 CEO 제안·출처 검증·Graph 연결 구현; 방향 승인·Phase B 실행 조정·전체 보고 연결은 미구현 |
+| CEO Synthesis / 전체 조직 workflow / Executive Report | Synthesis Implemented / 나머지 Planned | Step 6.2에서 CEO 제안·출처 검증·Graph 연결, Step 7.2에서 방향 승인 구현. Phase B 실행 조정·전체 보고 연결은 미구현 |
 | Approved Decision / Implementation Assignment / Progress Evaluation | Proposed Concept | Phase A 승인 후 업무 분해·다중 직원 관리의 목표 개념. 해당 Schema / API와 통합·충돌 해결은 미구현 |
 | 별도 Coordinator Agent | Conditional | LangGraph.js의 coordination mechanism과 구분; 별도 Agent를 필수 구성으로 전제하지 않음 |
 | Human governance history / long-lived governance records | Future / Conditional | 후속 Human 결정과 provenance 연결 요구가 생길 때. 현재 Decision persistence 없음 |
@@ -1728,8 +1708,9 @@ Graph를 다시 실행하면 새 Staffing·Scope·Authorization으로 새 예약
 
 LangGraph.js는 최종적으로 Development Organization 전체 실행 Runtime을 맡는다. 실행 책임은
 Organization Graph의 Phase 간 순서·데이터 전달과 Phase A Graph의 내부 Node 순서·조건부 분기로 나눈다.
-현재 실행 가능한 Graph는 Phase A 정책 조회·Staffing·Approval·Human 확인과 선택적 Specialist Decisions / Comparison까지다. 상위 Organization Graph는 Phase 간 Handoff 계약이
-정의된 시점에 구성하며 단순히 Phase A를 다시 감싸는 Wrapper는 만들지 않았다.
+Runtime Foundation 당시에는 상위 Organization Graph를 도입하지 않고 Phase A부터 연결했다.
+이후 Phase A에 Specialist Decisions / Comparison, CEO Synthesis와 Human Direction Governance를 연결했다.
+상위 Organization Graph는 여전히 미구현이며 Phase 간 실제 연결 책임이 생기는 시점에 구성한다.
 [공식 Graph API](https://docs.langchain.com/oss/javascript/langgraph/graph-api)의 StateSchema / StateGraph / compile / invoke를 사용한다.
 Agent / Model Provider / Tool Calling은 도입하지 않고 기존 Codex 기반 Agent Runtime을 유지한다.
 

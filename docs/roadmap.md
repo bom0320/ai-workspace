@@ -231,7 +231,7 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 
 | 순서 | 기존 마일스톤 | 단계 | 내용 | 상태 |
 | --- | --- | --- | --- | --- |
-| 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성 | Application Implemented |
+| 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성하고 Phase B Graph에서 실행 | Graph Integrated |
 | 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
 | 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | Single / Multi Planning 시점 조정과 v1 Planning 확장·재사용 | Planned |
 | 4 | 10 | Work Execution Contract | 읽기 전용·Repository 변경 업무 구분, Shell 실행, 업무별 승인·권한 계약 | Planned |

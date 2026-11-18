@@ -446,7 +446,7 @@ Human Confirmation / Ledger의 권한 경계와 과거 이력 / 현재 적격성
 
 ## Phase B 설계 판단과 책임
 
-Phase B의 Work Decomposition Application은 구현했으며 전체 실행 Workflow는 설계 단계다. [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)과 [개발 로드맵](roadmap.md#phase-b-개발-로드맵)에 적용한다.
+Phase B Graph는 Work Decomposition Application을 단일 Node에서 실행하며, 후속 Planning과 실행 조정은 설계 단계다. [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)과 [개발 로드맵](roadmap.md#phase-b-개발-로드맵)에 적용한다.
 
 | 기존 전제와 검토한 대안 | 선택한 방향과 이유 |
 | --- | --- |
@@ -473,4 +473,4 @@ CEO가 Work Item과 선행조건을 제안하면 Harness가 존재하지 않는 
 
 ### 미확정 구현 계약
 
-Work Decomposition의 초기 Input / Output, 제안 내부 Work Item ID, Context-only CEO 실행과 반환 상태는 Application에서 구현했다. 실행 시점의 업무 식별과 재계획에서의 ID 유지 정책은 미정이다. Specialist의 등록·선정과 배치 형식, Single / Multi Planning 인터페이스, 업무별 승인과 Execution Authorization도 후속 설계 대상이다. 병렬 Worker의 Worktree 격리·변경 통합·충돌 처리, 실행 이후 Work Plan 변경과 Rework 정책, Phase B Graph / Node 구성은 실행 경계의 요구가 확인될 때 결정한다.
+Work Decomposition의 초기 Input / Output, 제안 내부 Work Item ID, Context-only CEO 실행과 반환 상태는 Application에서 구현했다. 실행 시점의 업무 식별과 재계획에서의 ID 유지 정책은 미정이다. Specialist의 등록·선정과 배치 형식, Single / Multi Planning 인터페이스, 업무별 승인과 Execution Authorization도 후속 설계 대상이다. 병렬 Worker의 Worktree 격리·변경 통합·충돌 처리, 실행 이후 Work Plan 변경과 Rework 정책, Work Decomposition 이후의 Phase B Graph / Node 구성은 실행 경계의 요구가 확인될 때 결정한다.

@@ -4,7 +4,7 @@
 Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
 [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
 Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval, Specialist Decisions / Comparison, CEO Synthesis와 선택적 Human Direction Governance까지 통합했으며
-Phase B의 CEO Work Decomposition Application은 구현했다. Organization Graph와 Phase B 실행 Workflow는 아직 연결하지 않았다.
+Phase B Graph는 CEO Work Decomposition까지 실행한다. Organization Graph와 Phase 간 자동 연결은 아직 없다.
 
 문서별 기준은 다음과 같다.
 
@@ -166,7 +166,7 @@ ApprovedDecision → Governance 조회 → CEO Work Decomposition
 
 CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는 하나 이상의 Work Item으로 구성하고 선행 의존성을 정의한다. 별도 업무로 분리할 판단 기준과 DAG 검증 책임은 [설계 판단 근거](workflow-responsibility-boundaries.md#phase-b-설계-판단과-책임)를 따른다.
 
-| 구분 | Phase A CEO Staffing (Implemented) | Phase B CEO Work Decomposition (Application Implemented) |
+| 구분 | Phase A CEO Staffing (Implemented) | Phase B CEO Work Decomposition (Graph Integrated) |
 | --- | --- | --- |
 | 목적 | 해결 방향을 판단할 분석 조직 구성 | 승인된 방향을 실현할 업무 구성 |
 | 입력 | Original Human Goal / Constraints와 분석 Context | `ApprovedDecision`에서 복원된 승인 방향과 근거 |
@@ -183,6 +183,8 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 독립 업무와 의존 업무는 한 계획에 섞일 수 있다. 세 형태는 Work Item 수와 의존 관계에서 파악하므로 별도 Workflow 모드나 분류용 `type` 필드가 필요하지 않다.
 
 **현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID만 전달한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
+
+**현재 Graph 계약:** `createPhaseBGraph({ agent?, timeoutMs? })`의 실행 입력은 `approvedDecisionId`다. `START → run-work-decomposition → END`에서 Node는 Application을 한 번 호출하고 기존 Result Schema의 `workDecompositionResult`를 기록한다. 세 결과 모두 END에서 반환한다. Agent와 Timeout은 Node의 실행 옵션으로 전달하며 State는 ID와 결과만 보유한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
 
 #### Work Item / Specialist Assignment / TaskContract
 
@@ -286,6 +288,10 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 향후 Checkpoint로 State를 저장·복원하더라도 Ledger의 승인·권한 기록을 대체하지 않으며 재개 시점의
 필요한 권한 검증을 생략하는 근거가 되지 않는다. 현재 Human Direction Review의 동일 프로세스 Interrupt / Resume만 구현했고, 영속 Checkpoint / 장애 복구는 미구현이다.
 
+### 현재 Phase B StateSchema
+
+`phaseBState`는 Work Decomposition Application의 입력 Schema에서 `approvedDecisionId`를 가져오고, 기존 결과 Schema를 선택적 `workDecompositionResult`로 사용한다. Phase A 내부 State와 Agent 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+
 ## 6. Graph / Subgraph Boundary Principles
 
 Node의 실행·분기·실패·신뢰/재실행 판단 기준과 9개 실제 Node의 검토 근거는
@@ -306,8 +312,7 @@ Approval / Authorization / Claim / Evidence / Comparison의 호출·정책 소�
 - 중단·재개 및 실패 복구의 독립적인 경계가 필요한가?
 - 실제 실행 단위의 재사용 요구가 존재하는가?
 
-다음은 **결정된 상위 계층과 향후 검토할 내부 책임 구조**다. Organization / Phase B Graph는 아직 없으며
-내부 항목들이 모두 Subgraph라는 뜻도 아니다. 현재 Phase A는 Staffing / Approval과 선택적 Specialist Node를 실행한다.
+다음은 **결정된 상위 계층과 향후 검토할 내부 책임 구조**다. Organization Graph는 아직 없다. Phase A는 Staffing / Approval과 선택적 후속 Node를 실행하고 Phase B Graph는 Work Decomposition만 실행한다. 아래 내부 항목은 목표 책임을 표시한다.
 
 ```text
 DevelopmentOrganizationGraph
@@ -326,7 +331,7 @@ DevelopmentOrganizationGraph
 
 | 실행 단위 | 현재 판단 / 검토 방향 |
 | --- | --- |
-| Phase A / Phase B | 전체 Lifecycle의 주요 Subgraph 경계로 결정. 현재 Phase A만 실행 가능하며 Organization / Phase B Graph는 아직 없음 |
+| Phase A / Phase B | 전체 Lifecycle의 주요 Subgraph 경계로 결정. 현재 두 Phase Graph를 각각 실행할 수 있으며 상위 Organization Graph 연결은 미구현 |
 | Staffing / Approval | 별도 Staffing Setup Graph를 제거하고 Phase A Node 실행 과정으로 통합. CLI 호환성만을 위해 별도 Graph를 유지하지 않음 |
 | Specialist Analysis | 현재 일반 Node와 Phase A Edge로 Preflight·반복·실패·Comparison을 제어. 함수형 Orchestrator와 별도 Subgraph는 없음 |
 | Assignment Execution | Phase B의 업무 모델·권한·검증·반복 및 복구 요구가 정해질 때 검토할 Subgraph 후보 |
@@ -369,7 +374,7 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 Phase 전환, Phase B Graph, Assignment 실행 조정,
+**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 자동 Phase 전환, Phase B Planning 및 Assignment 실행 조정,
 Executive Report와 영속 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
 테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),

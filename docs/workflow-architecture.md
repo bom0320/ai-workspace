@@ -4,7 +4,7 @@
 Graph 계층을 설명한다. Stage / Node / Application의 설계 판단 기준은
 [Workflow Responsibility Boundaries](workflow-responsibility-boundaries.md)에 둔다. Step 2.5에서는 Organization을 최상위 Graph, Phase A / Phase B를 주요
 Subgraph로 두는 실행 계층을 결정했다. 현재 구현은 Phase A의 Staffing / Approval, Specialist Decisions / Comparison, CEO Synthesis와 선택적 Human Direction Governance까지 통합했으며
-Organization Graph와 Phase B 실행은 아직 구현하지 않았다. 아래 Phase B 절과 Handoff 절은 구현에 앞서 정한 설계 기준이다.
+Phase B의 CEO Work Decomposition Application은 구현했다. Organization Graph와 Phase B 실행 Workflow는 아직 연결하지 않았다.
 
 문서별 기준은 다음과 같다.
 
@@ -146,7 +146,7 @@ Step 7.2에서 Human Direction Governance를 연결했다. 전체 Phase A Outcom
 ### Phase B — Detailed Design & Execution
 
 승인된 방향을 실제 업무로 구체화하고 실행·검증·진행을 관리한다. 다음은 목표 흐름이며 구현 상태는
-[Phase B 개발 로드맵](roadmap.md#phase-b-개발-로드맵--planned)을 따른다.
+[Phase B 개발 로드맵](roadmap.md#phase-b-개발-로드맵)을 따른다.
 
 ```text
 ApprovedDecision → Governance 조회 → CEO Work Decomposition
@@ -166,7 +166,7 @@ ApprovedDecision → Governance 조회 → CEO Work Decomposition
 
 CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는 하나 이상의 Work Item으로 구성하고 선행 의존성을 정의한다. 별도 업무로 분리할 판단 기준과 DAG 검증 책임은 [설계 판단 근거](workflow-responsibility-boundaries.md#phase-b-설계-판단과-책임)를 따른다.
 
-| 구분 | Phase A CEO Staffing (Implemented) | Phase B CEO Work Decomposition (Planned) |
+| 구분 | Phase A CEO Staffing (Implemented) | Phase B CEO Work Decomposition (Application Implemented) |
 | --- | --- | --- |
 | 목적 | 해결 방향을 판단할 분석 조직 구성 | 승인된 방향을 실현할 업무 구성 |
 | 입력 | Original Human Goal / Constraints와 분석 Context | `ApprovedDecision`에서 복원된 승인 방향과 근거 |
@@ -182,11 +182,13 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 독립 업무와 의존 업무는 한 계획에 섞일 수 있다. 세 형태는 Work Item 수와 의존 관계에서 파악하므로 별도 Workflow 모드나 분류용 `type` 필드가 필요하지 않다.
 
+**현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID만 전달한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
+
 #### Work Item / Specialist Assignment / TaskContract
 
 | 개념 | 책임 |
 | --- | --- |
-| Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. Phase B 모델과 정확한 Schema는 Planned다. |
+| Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. 구현된 Schema는 제안 내부 ID, objective, deliverable, dependsOn, rationale과 선택적 suggestedRoles를 정의한다. |
 | Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 등록·선정과 배치 계약은 Planned이며, 기존 Phase A `StaffingAssignment`는 분석 배치 계약으로 유지한다. |
 | `TaskContract` | Repository 변경의 수정 가능·금지 범위, Constraints, Acceptance Criteria, Verification을 구체화하는 기존 v1/v0 계약. 필요한 Human Task Approval과 Execution의 입력이다. |
 

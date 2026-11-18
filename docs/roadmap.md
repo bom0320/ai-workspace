@@ -225,14 +225,14 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 
 8–13은 Phase B 마일스톤 번호를 유지한다. 세부 개발 순서와 상태는 아래 표에서 관리한다.
 
-### Phase B 개발 로드맵 — Planned
+### Phase B 개발 로드맵
 
 Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조회를 사용하므로 별도 Handoff Validation 마일스톤을 두지 않는다. 기존 Step 9의 Detailed Design & Planning Handoff는 개별 구현 Assignment를 Planner에 전달하는 흐름에 초점을 두었다. 선행 결과에 따라 계획 가능 시점이 달라지는 복수 Work Item을 지원하기 위해 R5에서 Planning Coordination과 Detailed Planning을 함께 다룬다.
 
 | 순서 | 기존 마일스톤 | 단계 | 내용 | 상태 |
 | --- | --- | --- | --- | --- |
-| 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성 | Planned |
-| 2 | 8 | Work Decomposition Contract | Input / Output, Work Item Schema·식별자, Dependency, CEO 결과 검증 계약 확정 | Planned |
+| 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성 | Application Implemented |
+| 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
 | 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | Single / Multi Planning 시점 조정과 v1 Planning 확장·재사용 | Planned |
 | 4 | 10 | Work Execution Contract | 읽기 전용·Repository 변경 업무 구분, Shell 실행, 업무별 승인·권한 계약 | Planned |
 | 5 | 10 | Multi-Specialist / Worker Execution | 협업, 순차·병렬 실행, 기존 v0 연동, Worktree 격리·통합과 충돌 처리 | Planned |

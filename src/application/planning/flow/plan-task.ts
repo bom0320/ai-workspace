@@ -52,9 +52,7 @@ export async function planTask({
     ),
   };
 
-  const fastPathDraft = detail
-    ? undefined
-    : createFastPathTaskDraft(initialState);
+  const fastPathDraft = createFastPathTaskDraft(initialState);
   if (fastPathDraft) {
     const task = buildTaskContract({
       draft: fastPathDraft,

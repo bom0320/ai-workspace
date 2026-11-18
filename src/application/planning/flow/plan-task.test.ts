@@ -28,6 +28,11 @@ const task: TaskDraft = {
   verification: ["pnpm test"],
 };
 const limits = { maxRounds: 3, maxFilesPerRequest: 2, maxTotalFiles: 2 };
+const simpleDetail = {
+  objective: "Fix typos in README.md",
+  direction: "Fix typos in README.md",
+  deliverable: "Corrected typos in README.md",
+};
 
 function createRepository(): string {
   const root = mkdtempSync(join(tmpdir(), "ai-workspace-plan-task-"));
@@ -82,6 +87,109 @@ describe("planTask", () => {
       }
       expect(planner).not.toHaveBeenCalled();
       expect(factory).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["README.md", "docs/notes.txt"])(
+    "plans an explicitly approved typo correction in %s without Codex",
+    async (path) => {
+      const root = createRepository();
+      mkdirSync(join(root, "docs"));
+      writeFileSync(join(root, path), "Introduciton");
+      const planner = vi.fn<Planner>();
+      const factory = vi.spyOn(codex, "createCodexPlanner");
+      const detail = {
+        objective: `Fix typos in ${path}`,
+        direction: `Fix typos in ${path}`,
+        deliverable: `Corrected typos in ${path}`,
+      };
+
+      const result = await planTask({
+        goal,
+        detail,
+        repositoryPath: root,
+        limits,
+        planner,
+      });
+
+      expect(result).toMatchObject({
+        status: "completed",
+        rounds: 0,
+        state: { goal, inspectedFiles: [{ path, content: "Introduciton" }] },
+        task: {
+          objective: detail.objective,
+          allowedPaths: [path],
+          acceptanceCriteria: [detail.deliverable],
+          constraints: expect.arrayContaining(goal.constraints!),
+        },
+      });
+      expect(planner).not.toHaveBeenCalled();
+      expect(factory).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    [
+      "additional code work",
+      {
+        objective: "Fix typos in README.md and change the API",
+        direction: "Fix typos in README.md and change the API",
+      },
+    ],
+    ["unclear direction", { direction: "Improve the documentation" }],
+    ["conflicting direction", { direction: "Fix typos in notes.txt" }],
+    [
+      "additional direction requirements",
+      {
+        direction: "Fix typos in README.md and verify all links",
+      },
+    ],
+    [
+      "additional deliverables",
+      {
+        deliverable: "Corrected typos in README.md and a migration guide",
+      },
+    ],
+    [
+      "multiple files",
+      {
+        objective: "Fix typos in README.md and notes.txt",
+        direction: "Fix typos in README.md and notes.txt",
+        deliverable: "Corrected typos in README.md and notes.txt",
+      },
+    ],
+    [
+      "missing target",
+      {
+        objective: "Fix typos in missing.md",
+        direction: "Fix typos in missing.md",
+        deliverable: "Corrected typos in missing.md",
+      },
+    ],
+  ])(
+    "uses the Planner Loop for detailed planning with %s",
+    async (_, input) => {
+      const root = createRepository();
+      writeFileSync(join(root, "README.md"), "Introduciton");
+      writeFileSync(join(root, "notes.txt"), "Ntoes");
+      const planner = vi
+        .fn<Planner>()
+        .mockResolvedValue({ type: "complete", task });
+      const detail = { ...simpleDetail, ...input };
+
+      const result = await planTask({
+        goal,
+        detail,
+        repositoryPath: root,
+        limits,
+        planner,
+      });
+
+      expect(result).toMatchObject({ status: "completed", rounds: 1 });
+      expect(planner).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ goal, detail }),
+        limits
+      );
     }
   );
 

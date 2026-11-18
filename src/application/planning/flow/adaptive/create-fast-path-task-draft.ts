@@ -60,6 +60,38 @@ function isSimpleTextEdit(objective: string): boolean {
   );
 }
 
+function getFastPathObjective(
+  { detail, goal, repository }: PlanningState,
+  filePath: string
+): string | undefined {
+  if (detail) {
+    const path = filePath.split(sep).join("/");
+    // Match the complete text of a supported operation and its deliverable.
+    // Additional requirements and paraphrases need the Planner.
+    const objective = `Fix typos in ${path}`;
+    if (
+      /^(?:[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(
+        path
+      ) &&
+      detail.objective === objective &&
+      detail.direction === objective &&
+      detail.deliverable === `Corrected typos in ${path}`
+    ) {
+      return detail.objective;
+    }
+    return;
+  }
+
+  const objective = goal.objective.trim();
+  const targetNames = getTargetNames(filePath, repository.fileTree);
+  if (
+    mentionsTargetFile(objective, targetNames) &&
+    isSimpleTextEdit(objective)
+  ) {
+    return goal.objective;
+  }
+}
+
 export function createFastPathTaskDraft(
   state: PlanningState
 ): TaskDraft | undefined {
@@ -81,20 +113,13 @@ export function createFastPathTaskDraft(
     return;
   }
 
-  const targetNames = getTargetNames(file.path, state.repository.fileTree);
-
-  const objective = state.goal.objective.trim();
-
-  if (!mentionsTargetFile(objective, targetNames)) {
-    return;
-  }
-
-  if (!isSimpleTextEdit(objective)) {
+  const objective = getFastPathObjective(state, file.path);
+  if (!objective) {
     return;
   }
 
   return {
-    objective: state.goal.objective,
+    objective,
     targetRepository: state.goal.targetRepository,
     allowedPaths: [file.path],
     forbiddenPaths: [],
@@ -104,7 +129,8 @@ export function createFastPathTaskDraft(
       "Do not make unrelated edits.",
     ],
     acceptanceCriteria: [
-      `${file.path} reflects the requested textual change without unrelated edits.`,
+      state.detail?.deliverable ??
+        `${file.path} reflects the requested textual change without unrelated edits.`,
     ],
     verification: ["git diff --check"],
   };

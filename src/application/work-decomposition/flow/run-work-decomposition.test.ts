@@ -89,7 +89,6 @@ function work(id: string, ...dependsOn: string[]): WorkItem {
     objective: `Complete ${id}`,
     deliverable: `Result for ${id}`,
     dependsOn,
-    rationale: "Independently verifiable",
   };
 }
 
@@ -116,9 +115,30 @@ describe("runWorkDecomposition", () => {
     {
       name: "Dependent Works",
       items: [
-        work("integration", "frontend", "api"),
-        work("frontend", "api"),
-        work("api"),
+        {
+          id: "auth-contract",
+          objective: "Define the authentication API contract",
+          deliverable: "Shared request, response, and error definitions",
+          dependsOn: [],
+          rationale:
+            "The frontend and backend need a shared contract they can review independently of implementation.",
+        },
+        {
+          id: "auth-server",
+          objective: "Implement the authentication API and session management",
+          deliverable: "Server endpoints and session lifecycle tests",
+          dependsOn: ["auth-contract"],
+          rationale:
+            "Server-side security and session behavior require their own verification boundary.",
+        },
+        {
+          id: "login-ui",
+          objective: "Implement the login UI and client state management",
+          deliverable: "Login screen and client interaction tests",
+          dependsOn: ["auth-contract"],
+          rationale:
+            "Client interaction and state belong to the frontend and have distinct acceptance criteria.",
+        },
       ],
     },
     {
@@ -194,6 +214,8 @@ describe("runWorkDecomposition", () => {
       [],
       [{ ...work("api"), objective: " " }],
       [{ ...work("api"), deliverable: undefined }],
+      [{ ...work("api"), rationale: "" }],
+      [{ ...work("api"), rationale: "   " }],
       [{ ...work("api"), authority: { repositoryAccess: "write" } }],
       [{ ...work("api"), specialistId: "registered-specialist" }],
     ].map((items) => ({ items }))
@@ -261,6 +283,8 @@ describe("runWorkDecomposition", () => {
     expect(executable).toBe("codex");
     expect(args).toContain("read-only");
     expect(args?.at(-1)).toContain(JSON.stringify(approved.review.proposal));
+    expect(args?.at(-1)).toContain('Optional fields are "rationale"');
+    expect(args?.at(-1)).toContain("Do not use rationale to repeat dependsOn");
     expect(args?.at(-1)).not.toContain(approved.decision.reviewBinding);
     expect(options?.timeoutMs).toBe(1234);
   });

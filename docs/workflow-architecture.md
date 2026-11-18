@@ -190,7 +190,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 | 개념 | 책임 |
 | --- | --- |
-| Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. 구현된 Schema는 제안 내부 ID, objective, deliverable, dependsOn, rationale과 선택적 suggestedRoles를 정의한다. |
+| Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. 구현된 Schema는 제안 내부 ID, objective, deliverable, dependsOn과 선택적 rationale·suggestedRoles를 정의한다. rationale은 업무를 독립 실행 단위로 분리한 근거이며, 작성 시 비어 있지 않아야 한다. 복수 업무 제안에서 CEO는 각 업무의 책임·산출물·검증 경계를 근거로 분리 이유를 설명한다. 선행 관계는 dependsOn에 기록한다. |
 | Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 등록·선정과 배치 계약은 Planned이며, 기존 Phase A `StaffingAssignment`는 분석 배치 계약으로 유지한다. |
 | `TaskContract` | Repository 변경의 수정 가능·금지 범위, Constraints, Acceptance Criteria, Verification을 구체화하는 기존 v1/v0 계약. 필요한 Human Task Approval과 Execution의 입력이다. |
 

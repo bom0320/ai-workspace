@@ -9,7 +9,8 @@ export const workItemSchema = z
     objective: text,
     deliverable: text,
     dependsOn: z.array(text),
-    rationale: text,
+    // Why this work warrants its own execution unit.
+    rationale: text.optional(),
     suggestedRoles: z.array(text).optional(),
   })
   .strict();

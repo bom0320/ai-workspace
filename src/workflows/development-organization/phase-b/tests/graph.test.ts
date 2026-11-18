@@ -95,7 +95,6 @@ const workItems = [
     objective: direction.text,
     deliverable: "Visible feedback and a regression check",
     dependsOn: [],
-    rationale: "One independently verifiable outcome",
   },
 ];
 

@@ -55,7 +55,6 @@ describe("planWorkItem", () => {
       objective: "Clarify the messaging in README.md",
       deliverable: "README.md with one revised introduction",
       dependsOn: [],
-      rationale: "The wording can be verified independently",
     },
   };
   const originalGoal = { ...goal, objective: "Fix the wording in README.md" };
@@ -115,7 +114,7 @@ describe("planWorkItem", () => {
     });
   }
 
-  it("plans the selected Work Item across inspection rounds even when the original Goal qualifies for Fast Path", async () => {
+  it("plans a Work Item without rationale across inspection rounds and skips Fast Path", async () => {
     const repositoryPath = createRepository();
     writeFileSync(join(repositoryPath, "README.md"), "Introduction");
     const lookup = restoreApproval(repositoryPath);

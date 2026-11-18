@@ -1,16 +1,17 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import type {
-  RunWorkDecompositionOptions,
-  WorkItem,
-} from "@/application/work-decomposition/index.js";
+import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
 import { createPlanWorkItemNode } from "./features/planning/nodes/plan-work-item.js";
-import type { planWorkItem } from "./features/planning/plan-work-item.js";
+import {
+  createSelectPlanningWorkItemsNode,
+  type SelectWorkItemIds,
+} from "./features/planning/nodes/select-planning-work-items.js";
+import type { planWorkItem } from "./features/planning/execution/plan-work-item.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { phaseBInput, phaseBState, type PhaseBState } from "./state.js";
 
 export type PhaseBGraphOptions = RunWorkDecompositionOptions & {
   planning?: Omit<Parameters<typeof planWorkItem>[0], "phaseB"> & {
-    selectWorkItemIds: (workItems: readonly WorkItem[]) => readonly string[];
+    selectWorkItemIds: SelectWorkItemIds;
   };
 };
 
@@ -27,48 +28,39 @@ export function createPhaseBGraph({
 }: PhaseBGraphOptions = {}) {
   const selectWorkItemIds = planning?.selectWorkItemIds;
 
-  return new StateGraph({ state: phaseBState, input: phaseBInput })
+  // 1. Register Workflow Nodes
+  const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
     .addNode(
       "run-work-decomposition",
       createRunWorkDecompositionNode(decompositionOptions)
     )
-    .addNode("select-planning-work-items", (state) => {
-      const proposal = state.workDecompositionResult;
-      if (proposal?.status !== "proposed" || !selectWorkItemIds) return {};
-      const validIds = new Set(proposal.workItems.map(({ id }) => id));
-      const selectedIds = selectWorkItemIds(
-        structuredClone(proposal.workItems)
-      );
-      if (
-        !Array.isArray(selectedIds) ||
-        [...selectedIds].some((id) => !validIds.has(id))
-      ) {
-        throw new Error("Planning selection contains an unknown Work Item ID.");
-      }
-      return {
-        pendingPlanningIds: [...new Set(selectedIds)],
-        planningResults: [],
-      };
-    })
-    .addNode("plan-work-item", createPlanWorkItemNode(planning))
-    .addEdge(START, "run-work-decomposition")
-    .addConditionalEdges(
-      "run-work-decomposition",
-      (state) =>
-        selectWorkItemIds &&
-        state.workDecompositionResult?.status === "proposed"
-          ? "select-planning-work-items"
-          : END,
-      ["select-planning-work-items", END]
+    .addNode(
+      "select-planning-work-items",
+      createSelectPlanningWorkItemsNode(selectWorkItemIds)
     )
-    .addConditionalEdges("select-planning-work-items", routeAfterPlanning, [
-      "plan-work-item",
-      END,
-    ])
-    .addConditionalEdges("plan-work-item", routeAfterPlanning, [
-      "plan-work-item",
-      END,
-    ])
+    .addNode("plan-work-item", createPlanWorkItemNode(planning));
+
+  // 2. Connect Execution Edges
+  graph.addEdge(START, "run-work-decomposition");
+  graph.addConditionalEdges(
+    "run-work-decomposition",
+    (state) =>
+      selectWorkItemIds && state.workDecompositionResult?.status === "proposed"
+        ? "select-planning-work-items"
+        : END,
+    ["select-planning-work-items", END]
+  );
+  graph.addConditionalEdges("select-planning-work-items", routeAfterPlanning, [
+    "plan-work-item",
+    END,
+  ]);
+  graph.addConditionalEdges("plan-work-item", routeAfterPlanning, [
+    "plan-work-item",
+    END,
+  ]);
+
+  // 3. Compile Graph
+  return graph
     .compile()
     .withConfig({ recursionLimit: Number.MAX_SAFE_INTEGER });
 }

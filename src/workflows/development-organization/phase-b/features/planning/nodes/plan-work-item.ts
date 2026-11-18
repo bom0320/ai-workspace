@@ -1,4 +1,4 @@
-import { planWorkItem } from "../plan-work-item.js";
+import { planWorkItem } from "../execution/plan-work-item.js";
 import type { PhaseBState } from "../../../state.js";
 
 export function createPlanWorkItemNode(

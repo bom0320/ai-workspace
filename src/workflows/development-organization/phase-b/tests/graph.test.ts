@@ -3,13 +3,13 @@ import type { PlanningResult } from "@/application/planning/index.js";
 import { getApprovedDecision } from "@/application/governance/index.js";
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
 import { runCommand } from "@/infrastructure/process/index.js";
-import { planWorkItem } from "../features/planning/plan-work-item.js";
+import { planWorkItem } from "../features/planning/execution/plan-work-item.js";
 import { createPhaseBGraph, type PhaseBGraphOptions } from "../index.js";
 
 vi.mock("@/application/governance/index.js", () => ({
   getApprovedDecision: vi.fn(),
 }));
-vi.mock("../features/planning/plan-work-item.js", () => ({
+vi.mock("../features/planning/execution/plan-work-item.js", () => ({
   planWorkItem: vi.fn(),
 }));
 vi.mock("@/infrastructure/process/index.js", () => ({

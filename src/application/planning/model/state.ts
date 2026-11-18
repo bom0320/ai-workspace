@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 
 import type { InspectedFile } from "../protocol/inspection.js";
@@ -10,8 +11,20 @@ export type RepositoryInfo = {
   instructions?: string;
 };
 
+const planningText = z.string().trim().min(1);
+export const detailedPlanningInputSchema = z
+  .object({
+    objective: planningText,
+    deliverable: planningText,
+    direction: planningText,
+  })
+  .strict();
+
+export type DetailedPlanningInput = z.infer<typeof detailedPlanningInputSchema>;
+
 export type PlanningState = {
   goal: GoalSpec;
+  detail?: DetailedPlanningInput;
   repository: RepositoryInfo;
   inspectedFiles: InspectedFile[];
 };

@@ -202,9 +202,11 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 - **Multi-Work Planning:** 의존성과 잠재적인 변경 범위 충돌을 확인한다. 현재 계획할 수 있는 업무와 선행 결과가 필요한 업무를 구분하고, 검증된 선행 산출물이 확보되면 해당 업무의 상세 계획을 확정한다.
 - **공통 Detailed Planning:** 개별 Work Item의 계획 기능을 두 경우에 재사용한다. 모든 `TaskContract`를 최초 Planning 시점에 일괄 생성할 필요는 없다.
 
-현재 v1 `planTask()`는 `goal`, `repositoryPath`, `limits`, 선택적 `planner`를 받아 Working Tree를 조사하고, 성공 시 한 번에 하나의 `TaskContract`를 반환한다. Phase B에서는 기존 Planning을 확장·재사용한다. 상세 계획에 Original Goal / Constraints, Approved Direction, Work Item의 목적·산출물, 필요한 선행 Work Item의 검증된 결과, 실제 Repository Context를 전달한다.
+**R5.1 / R5.2 구현 범위:** 기존 v1 `planTask({ goal, repositoryPath, limits, planner? })` 호출과 Fast Path를 유지한다. Phase B Planning 기능은 `planWorkItem({ phaseB: { approvedDecisionId, workItem }, repositoryPath, limits, planner? })`로 선택한 Repository 변경 업무 하나를 계획한다. 입력은 기존 Work Item Schema를 재사용하며 Goal과 승인 Proposal은 Governance에서 복원한다. 형식 오류, 승인 복원 실패, Repository 불일치는 Planning 시작 전에 호출 오류로 전달된다.
 
-Planning Coordination은 어떤 업무를 언제 계획할지 정하고, 개별 Detailed Planning은 해당 업무의 실행 범위·완료 조건·검증을 구체화한다. 승인된 방향이나 원본 Constraints 안에서 상세 계획을 세울 수 없다면 상위 판단과 필요한 재승인을 요청한다. 정확한 입력 Schema, 기존 독립 호출의 호환성을 보존하는 API 확장 방식, 함수·Node·Subgraph 배치는 R5에서 결정한다. v0 `executeTask()`는 격리 worktree의 단일 Task 실행 기능으로 재사용할 대상이다.
+Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 확인한 뒤 기존 Working Tree 조사와 Planning Loop를 실행한다. Phase B Planning 기능은 원본 Goal / Constraints와 승인 방향의 텍스트, Work Item의 Objective·Deliverable만 상세 계획 입력으로 구성한다. Planning Application은 일반화된 `detail`과 실제 Repository Context로 계획을 수립하며, 승인 참조와 Work Item 계약은 Workflow 기능에서 소유한다. Goal 문자열 기반 Fast Path는 생략하며, TaskDraft의 최종화에는 기존 ID 발급과 Constraints 병합을 사용한다. 이 경로는 Work Item의 실행 자격이나 선행 업무 완료를 판단하지 않는다. 현재 Repository와 승인 Snapshot의 commit 차이에 대한 정책은 후속 과제다.
+
+**R5.3 이후:** Planning Coordination은 계획 가능한 업무와 대기 업무를 구분하고, 필요한 선행 산출물을 검증한 뒤 개별 Detailed Planning에 전달한다. 승인된 방향이나 원본 Constraints 안에서 계획할 수 없는 경우의 상위 판단 및 재승인 경로도 남아 있다. 읽기 전용 업무의 결과와 실행 방식은 Work Execution Contract에서 구체화한다. v0 `executeTask()`는 격리 worktree의 단일 Task 실행 기능으로 재사용할 대상이다.
 
 ## 4. Phase A → Phase B Handoff Contract
 

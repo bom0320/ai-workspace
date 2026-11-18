@@ -8,6 +8,7 @@ export function createPlannerContext(
 ): PlannerContext {
   return {
     goal: state.goal,
+    ...(state.detail && { detail: state.detail }),
     repository: {
       name: state.repository.repositoryName,
       fileTree: state.repository.fileTree,

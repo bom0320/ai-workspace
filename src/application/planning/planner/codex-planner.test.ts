@@ -48,6 +48,19 @@ beforeEach(() => {
 });
 
 describe("createCodexPlanner", () => {
+  it("sends the detailed direction, objective and deliverable to Codex", async () => {
+    const detail = {
+      direction: "Keep the existing input contract",
+      objective: "Improve error feedback",
+      deliverable: "Actionable error descriptions",
+    };
+    await createCodexPlanner()({ ...state, detail }, limits);
+    const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
+    expect(prompt).toContain("only the supplied detailed planning objective");
+    expect(JSON.parse(prompt.split("PlannerContext:\n")[1]).detail).toEqual(
+      detail
+    );
+  });
   it("prefers minimum-round completion without weakening inspection limits", async () => {
     await createCodexPlanner()(state, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;

@@ -4,11 +4,12 @@ import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
 import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningState } from "../model/state.js";
+import type { DetailedPlanningInput, PlanningState } from "../model/state.js";
 import type { InspectRequest, InspectedFile } from "./inspection.js";
 
 export type PlannerContext = {
   goal: GoalSpec;
+  detail?: DetailedPlanningInput;
   repository: {
     name: string;
     fileTree: string[];

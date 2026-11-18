@@ -5,7 +5,11 @@ import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
 import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningResult } from "../model/result.js";
-import type { PlanningState } from "../model/state.js";
+import {
+  detailedPlanningInputSchema,
+  type DetailedPlanningInput,
+  type PlanningState,
+} from "../model/state.js";
 import { createCodexPlanner } from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspection/inspect-repository.js";
 import { inspectInitialFiles } from "./inspection/inspect-initial-files.js";
@@ -19,6 +23,7 @@ export type PlanTaskOptions = {
   repositoryPath: string;
   limits: PlanningLimits;
   planner?: Planner;
+  detail?: DetailedPlanningInput;
 };
 
 export async function planTask({
@@ -26,18 +31,30 @@ export async function planTask({
   repositoryPath,
   limits,
   planner,
+  detail: requestedDetail,
 }: PlanTaskOptions): Promise<PlanningResult> {
+  const detail =
+    requestedDetail === undefined
+      ? undefined
+      : detailedPlanningInputSchema.parse(requestedDetail);
   const goalId = `goal-${randomUUID()}`;
   const taskId = `task-${randomUUID()}`;
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   const repository = inspectRepository(repositoryRoot);
   const initialState: PlanningState = {
     goal,
+    ...(detail && { detail }),
     repository,
-    inspectedFiles: inspectInitialFiles(repository, goal.objective, limits),
+    inspectedFiles: inspectInitialFiles(
+      repository,
+      detail ? `${detail.objective}\n${detail.deliverable}` : goal.objective,
+      limits
+    ),
   };
 
-  const fastPathDraft = createFastPathTaskDraft(initialState);
+  const fastPathDraft = detail
+    ? undefined
+    : createFastPathTaskDraft(initialState);
   if (fastPathDraft) {
     const task = buildTaskContract({
       draft: fastPathDraft,

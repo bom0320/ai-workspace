@@ -358,7 +358,7 @@ handoff를 연결한다. Task Approval 자체를 Planner가 수행하지 않는�
 | 사용 맥락 | 결정 범위 | 현재 상태 |
 | --- | --- | --- |
 | Standalone v1 | Human Goal과 Repository Context에서 구체적인 실행 작업을 계획 | 현재 Plan only / Plan & Execute. v4를 거치지 않는 독립 기능 유지 |
-| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | Planned. 현재 planTask()가 이 통합 입력이나 승인 방향 검증을 지원하는 것은 아님 |
+| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | R5.1 / R5.2에서 개별 Repository 변경 Work Item과 승인 기록을 입력으로 지원. Workflow 연결은 후속 범위 |
 
 IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 CEO의 Goal 해석을 나타내는
 **데이터 모델**이다. 현재 CEOStaffingDecision의 propose 분기에 포함된 StaffingDraft.intent로 생성되며
@@ -370,7 +370,7 @@ Phase B Work Decomposition은 Work Item의 목적·산출물·의존성을 정�
 
 ### CEO와 Planner의 handoff — Planned
 
-초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. 기존 v1의 독립 호출 경계를 유지하며 통합 입력 Schema와 API는 R5에서 결정한다.
+초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. R5.1 / R5.2는 기존 v1의 독립 호출을 보존하면서 개별 Work Item Planning 입력을 확장했다. 계획 가능 시점과 선행 결과 전달은 R5.3에서 다룬다.
 
 현재 runStaffing()은 CEO의 Draft를 검증·최종화해 StaffingProposal / Escalation / Failure를 반환할 뿐
 planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
@@ -383,7 +383,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 | --- | --- | --- |
 | CEO Agent — Autonomous Decision Maker | Phase A 판단·종합·제안, Phase B 업무 분해·배치·의존성·진행·실패 평가·재작업·재배치·Escalation·최종 보고 | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
 | Specialist / Worker | Phase A 독립 판단, Phase B 역할별 상세 설계·구현·QA·리뷰 산출물 | 현재 v2는 read-only Decision만 수행; 미래 업무 실행도 승인된 Context / Scope / Authority / Budget 안에서만 허용 |
-| Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 현재 v1 Goal → TaskDraft / TaskContract를 재사용하며 Approved Decision handoff는 미구현 |
+| Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 기존 Goal → TaskDraft / TaskContract를 재사용. Phase B Planning 기능이 승인 참조에서 개별 업무의 상세 계획 입력을 구성하며 Phase B Graph 연결은 후속 |
 | Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
 | LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |

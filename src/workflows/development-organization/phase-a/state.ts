@@ -17,6 +17,7 @@ import {
 } from "@/application/governance/index.js";
 import {
   staffingRunResultSchema,
+  staffingAssignmentConstraintsSchema,
   staffingProposalSchema,
 } from "@/application/staffing/index.js";
 import type {
@@ -76,6 +77,7 @@ const policyLookupSchema = z.discriminatedUnion("status", [
       status: z.literal("ready"),
       configuration: staffingSystemPolicySchema,
       version: z.number().int().positive(),
+      assignmentConstraints: staffingAssignmentConstraintsSchema.optional(),
     })
     .strict(),
   z.object({ status: z.literal("denied"), reason: z.string().min(1) }).strict(),

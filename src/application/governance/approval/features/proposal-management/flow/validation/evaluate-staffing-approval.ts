@@ -1,10 +1,6 @@
 import { requireCurrentSystemRecord } from "../../../system-policy/flow/validation/system-configuration.js";
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
-import {
-  readRecordedDelegationInput,
-  validateDelegationConfiguration,
-} from "../../../human-delegation/flow/validation/delegation-configuration.js";
-import { requireCurrentSystemPolicy } from "../../../system-policy/model/policy.js";
+import { readCurrentStaffingDelegation } from "../../../human-delegation/flow/validation/delegation-configuration.js";
 import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
 import { realpathSync } from "node:fs";
 import {
@@ -45,36 +41,14 @@ export function evaluateDelegationCoverage(
   repository: RepositoryGovernance,
   now: number
 ): "delegated" | "direct" {
-  const system = repository.systems.at(-1)!;
-  const delegation = repository.delegations.at(-1);
-  if (!delegation) return "direct";
-  if (
-    delegation.repositoryRoot !== system.configuration.repositoryRoot ||
-    delegation.systemPolicyVersion !== system.version
-  )
-    throw new Error(
-      "Delegation is inactive, expired or no longer matches System Policy."
-    );
-  if (
-    delegation.status !== "active" ||
-    Date.parse(delegation.expiresAt) <= now ||
-    Date.parse(delegation.approval.confirmedAt) > now
-  )
-    throw new Error(
-      "Delegation is inactive, expired or no longer matches System Policy."
-    );
-  const input = readRecordedDelegationInput(delegation);
-  validateDelegationConfiguration(
-    input,
-    requireCurrentSystemPolicy(system.configuration),
-    now
-  );
+  const input = readCurrentStaffingDelegation(repository, now);
+  if (!input) return "direct";
   const automaticContext = { allowedScopes: input.delegatedContextScopes };
   const withinDelegatedScope =
-    proposal.budget.maxAgentInvocations <= delegation.maxAgentInvocations &&
+    proposal.budget.maxAgentInvocations <= input.maxAgentInvocations &&
     proposal.assignments.every(
       (assignment) =>
-        delegation.allowedSpecialistIds.includes(assignment.specialistId) &&
+        input.allowedSpecialistIds.includes(assignment.specialistId) &&
         assignment.contextPaths.every((path) =>
           isContextPathAllowed(path, automaticContext)
         )

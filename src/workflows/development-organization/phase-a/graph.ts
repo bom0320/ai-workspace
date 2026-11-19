@@ -35,23 +35,25 @@ export type PhaseAGraphOptions = StaffingExecutionOptions &
   StaffingConfirmationOptions &
   DirectionConfirmationOptions & {
     executionTarget?: PhaseAExecutionTarget;
+    allowDirectStaffingApproval?: boolean;
     synthesis?: RunSynthesisOptions;
   };
 
 export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
-  const { executionTarget = "staffing-approval" } = options;
+  const {
+    executionTarget = "staffing-approval",
+    allowDirectStaffingApproval = false,
+  } = options;
 
   const humanGovernance = executionTarget === "human-direction-governance";
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph(phaseAState)
-    .addNode("load-system-policy", loadSystemPolicy)
+    .addNode("load-system-policy", (state) =>
+      loadSystemPolicy(state, !allowDirectStaffingApproval)
+    )
     .addNode("run-staffing", createRunStaffingNode(options))
     .addNode("evaluate-staffing-approval", evaluateStaffingApproval)
-    .addNode(
-      "confirm-staffing-approval",
-      createConfirmStaffingApprovalNode(options.confirmApproval)
-    )
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
     .addNode("execute-next-specialist", executeNextSpecialist)
     .addNode("compare-specialist-decisions", compareSpecialistDecisions)
@@ -82,19 +84,31 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         : END,
     ["evaluate-staffing-approval", END]
   );
-  graph.addConditionalEdges(
-    "evaluate-staffing-approval",
-    (state) =>
-      state.approvalResult?.status === "approval-required"
-        ? "confirm-staffing-approval"
-        : routeAfterStaffingApproval(state, executionTarget),
-    ["confirm-staffing-approval", "preflight-specialist-decisions", END]
-  );
-  graph.addConditionalEdges(
-    "confirm-staffing-approval",
-    (state) => routeAfterStaffingApproval(state, executionTarget),
-    ["preflight-specialist-decisions", END]
-  );
+  if (allowDirectStaffingApproval) {
+    const compatibilityGraph = graph.addNode(
+      "confirm-staffing-approval",
+      createConfirmStaffingApprovalNode(options.confirmApproval)
+    );
+    compatibilityGraph.addConditionalEdges(
+      "evaluate-staffing-approval",
+      (state) =>
+        state.approvalResult?.status === "approval-required"
+          ? "confirm-staffing-approval"
+          : routeAfterStaffingApproval(state, executionTarget),
+      ["confirm-staffing-approval", "preflight-specialist-decisions", END]
+    );
+    compatibilityGraph.addConditionalEdges(
+      "confirm-staffing-approval",
+      (state) => routeAfterStaffingApproval(state, executionTarget),
+      ["preflight-specialist-decisions", END]
+    );
+  } else {
+    graph.addConditionalEdges(
+      "evaluate-staffing-approval",
+      (state) => routeAfterStaffingApproval(state, executionTarget),
+      ["preflight-specialist-decisions", END]
+    );
+  }
   graph.addConditionalEdges(
     "preflight-specialist-decisions",
     (state) =>

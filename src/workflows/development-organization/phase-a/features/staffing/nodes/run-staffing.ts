@@ -21,6 +21,9 @@ export function createRunStaffingNode(options: StaffingExecutionOptions = {}) {
     const staffingResult = await runStaffing({
       goal: state.goal,
       systemPolicy: state.policyLookup.configuration,
+      ...(state.policyLookup.assignmentConstraints && {
+        assignmentConstraints: state.policyLookup.assignmentConstraints,
+      }),
       maxRounds,
       timeoutMs,
       agent,

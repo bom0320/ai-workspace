@@ -108,10 +108,16 @@ function configure() {
     accept(configureStaffingSystemPolicy(system))
   );
 }
-function delegate(maxAgentInvocations = 2) {
+function delegate(
+  maxAgentInvocations = 2,
+  allowedSpecialistIds = ["frontend"],
+  delegatedContextScopes: StaffingSystemPolicy["contextAccessPolicy"]["allowedScopes"] = [
+    { kind: "file", path: "a.ts" },
+  ]
+) {
   const policy = {
-    allowedSpecialistIds: ["frontend"],
-    delegatedContextScopes: [{ kind: "file" as const, path: "a.ts" }],
+    allowedSpecialistIds,
+    delegatedContextScopes,
     maxAgentInvocations,
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
   };
@@ -626,7 +632,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     });
     draft.budget.maxAgentInvocations = budget;
     configure();
-    options.confirmApproval = (request) => accept(request);
+    delegate(
+      budget,
+      ["frontend", "ux"],
+      system.contextAccessPolicy.allowedScopes
+    );
   }
   it("keeps duplicate Specialist policy in Staffing and Governance, not batch preparation", async () => {
     prepareBatch();
@@ -756,7 +766,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (count === 2) prepareBatch();
     else {
       configure();
-      options.confirmApproval = (request) => accept(request);
+      delegate();
     }
     const command = runtime();
     const graph = createPhaseAGraph({
@@ -2079,7 +2089,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
   it("preserves Stage 5 proposal when trusted Review registration fails", async () => {
     configure();
-    options.confirmApproval = (request) => accept(request);
+    delegate();
     runtime();
     // A real policy change after Synthesis must prevent registration, while
     // preserving the valid Stage 5 result independently of Governance failure.
@@ -2317,7 +2327,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       if (count === 2) prepareBatch();
       else {
         configure();
-        options.confirmApproval = (request) => accept(request);
+        delegate();
       }
       const command = runtime();
       const state = await createPhaseAGraph({
@@ -2655,7 +2665,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     async (mode) => {
       if (mode === "single") {
         configure();
-        options.confirmApproval = (request) => accept(request);
+        delegate();
       } else {
         prepareBatch();
         vi.spyOn(
@@ -2732,6 +2742,124 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 });
 
 describe("Phase A Graph → real Staffing and Governance Approval", () => {
+  it("projects delegated assignment constraints while keeping System Policy discovery", async () => {
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "src", "a.ts"), "export const a = 1;\n");
+    writeFileSync(join(root, "b.ts"), "export const b = 2;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add discovery context");
+    system.contextAccessPolicy.allowedScopes.push(
+      { kind: "directory", path: "src" },
+      { kind: "file", path: "b.ts" }
+    );
+    system.availableSpecialists.push({
+      ...system.availableSpecialists[0],
+      id: "ux",
+    });
+    draft.assignments[0].contextPaths = ["src/a.ts"];
+    draft.budget.maxAgentInvocations = 1;
+    configure();
+    const scopes = [{ kind: "directory" as const, path: "src" }];
+    delegate(1, ["frontend"], scopes);
+    const agent = vi
+      .fn<NonNullable<typeof options.agent>>()
+      .mockResolvedValueOnce({
+        type: "inspect",
+        paths: ["b.ts"],
+        reason: "Understand adjacent context",
+      })
+      .mockResolvedValueOnce({ type: "propose", draft });
+    const confirmApproval = vi.fn();
+    const state = await createPhaseAGraph({
+      ...options,
+      agent,
+      confirmApproval,
+    }).invoke({
+      goal: options.goal,
+      repositoryPath: root,
+    });
+    expect(agent).toHaveBeenCalledTimes(2);
+    for (const [context] of agent.mock.calls) {
+      expect(context.assignmentConstraints).toEqual({
+        allowedSpecialistIds: ["frontend"],
+        delegatedContextScopes: scopes,
+        maxAgentInvocations: 1,
+      });
+      expect(context.availableSpecialists.map(({ id }) => id)).toEqual([
+        "frontend",
+      ]);
+      expect(context.repository.fileTree).toContain("b.ts");
+    }
+    expect(agent.mock.calls[1][0].inspectedFiles).toContainEqual({
+      path: "b.ts",
+      content: "export const b = 2;\n",
+    });
+    expect(state.approvalResult).toMatchObject({
+      status: "approved",
+      approval: { source: { type: "human-delegation" } },
+    });
+    expect(confirmApproval).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "missing",
+    "specialist",
+    "context",
+    "budget",
+    "expired",
+    "policy-version",
+    "snapshot",
+  ] as const)(
+    "blocks default Specialist execution for %s Staffing authority",
+    async (kind) => {
+      writeFileSync(join(root, "b.ts"), "export const b = 2;\n");
+      git("add", ".");
+      git("commit", "--quiet", "-m", "Add alternative context");
+      system.contextAccessPolicy.allowedScopes.push({
+        kind: "file",
+        path: "b.ts",
+      });
+      system.availableSpecialists.push({
+        ...system.availableSpecialists[0],
+        id: "ux",
+      });
+      configure();
+      if (kind !== "missing") delegate(kind === "budget" ? 1 : 2);
+      if (kind === "specialist") draft.assignments[0].specialistId = "ux";
+      if (kind === "context") draft.assignments[0].contextPaths = ["b.ts"];
+      if (kind === "expired")
+        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 2 * 86_400_000);
+      if (kind === "policy-version") configure();
+      const agent: NonNullable<typeof options.agent> = async () => {
+        if (kind === "snapshot") writeFileSync(join(root, "b.ts"), "Drift\n");
+        return { type: "propose", draft };
+      };
+      const confirmApproval = vi.fn(accept);
+      const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
+      const state = await createPhaseAGraph({
+        ...options,
+        agent,
+        confirmApproval,
+        executionTarget: "specialist-decisions",
+      }).invoke({ goal: options.goal, repositoryPath: root });
+      if (kind === "snapshot")
+        expect(state.staffingResult).toMatchObject({
+          status: "failed",
+          failure: "snapshot-drift",
+        });
+      else
+        expect(state.approvalResult?.status).toBe(
+          kind === "expired" || kind === "policy-version"
+            ? "denied"
+            : "approval-required"
+        );
+      expect(confirmApproval).not.toHaveBeenCalled();
+      expect(state.specialistDecisionsResult).toBeUndefined();
+      expect(issuanceCount()).toBe(0);
+      expect(authorize).not.toHaveBeenCalled();
+    }
+  );
+
   it.each(["delegated", "direct"] as const)(
     "preserves %s Approval semantics without a Human callback",
     async (mode) => {
@@ -2800,9 +2928,11 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
   const confirmApproval = vi.fn((request: Parameters<typeof accept>[0]) =>
     accept(request)
   );
-  const state = await createPhaseAGraph({ ...options, confirmApproval }).invoke(
-    { goal: options.goal, repositoryPath: root }
-  );
+  const state = await createPhaseAGraph({
+    ...options,
+    confirmApproval,
+    allowDirectStaffingApproval: true,
+  }).invoke({ goal: options.goal, repositoryPath: root });
   expect(state.approvalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
     "approvalResult",

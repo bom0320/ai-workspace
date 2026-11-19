@@ -136,7 +136,6 @@ describe("Phase A Staffing Approval execution", () => {
       "__end__",
       "__start__",
       "compare-specialist-decisions",
-      "confirm-staffing-approval",
       "evaluate-staffing-approval",
       "execute-next-specialist",
       "finalize-direction-review",
@@ -154,11 +153,8 @@ describe("Phase A Staffing Approval execution", () => {
         ["load-system-policy", "__end__"],
         ["run-staffing", "evaluate-staffing-approval"],
         ["run-staffing", "__end__"],
-        ["evaluate-staffing-approval", "confirm-staffing-approval"],
         ["evaluate-staffing-approval", "__end__"],
         ["evaluate-staffing-approval", "preflight-specialist-decisions"],
-        ["confirm-staffing-approval", "preflight-specialist-decisions"],
-        ["confirm-staffing-approval", "__end__"],
         ["preflight-specialist-decisions", "execute-next-specialist"],
         ["execute-next-specialist", "execute-next-specialist"],
         ["execute-next-specialist", "compare-specialist-decisions"],
@@ -267,7 +263,8 @@ describe("Phase A Staffing Approval execution", () => {
       approvalResult: required,
     });
     expect(getStaffingSystemPolicy).toHaveBeenCalledExactlyOnceWith(
-      "/repository"
+      "/repository",
+      true
     );
     expect(runStaffing).toHaveBeenCalledExactlyOnceWith({
       goal,
@@ -301,6 +298,7 @@ describe("Phase A Staffing Approval execution", () => {
       const updates: Array<Record<string, Partial<PhaseAState>>> = [];
       const stream = await createPhaseAGraph({
         executionTarget: "specialist-decisions",
+        allowDirectStaffingApproval: mode === "confirmed",
         confirmApproval: () => ({ token: "receipt" }),
       }).stream(
         { goal, repositoryPath: "/repository" },
@@ -533,7 +531,10 @@ describe("Phase A Staffing Approval execution", () => {
           return null;
         }
       );
-      const result = await createPhaseAGraph({ confirmApproval }).invoke({
+      const result = await createPhaseAGraph({
+        confirmApproval,
+        allowDirectStaffingApproval: true,
+      }).invoke({
         goal,
         repositoryPath: "/repository",
       });
@@ -720,6 +721,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       );
     const state = await createPhaseAGraph({
       ...specialistOptions,
+      allowDirectStaffingApproval: status === "rejected",
       confirmApproval: status === "rejected" ? () => null : undefined,
     }).invoke(specialistInput);
     if (status === "failed" || status === "escalated") {

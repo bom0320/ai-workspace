@@ -21,7 +21,7 @@ import {
 
 export type RunStaffingOptions = Pick<
   StaffingLoopOptions,
-  "goal" | "maxRounds" | "timeoutMs" | "agent"
+  "goal" | "maxRounds" | "timeoutMs" | "agent" | "assignmentConstraints"
 > & {
   systemPolicy: StaffingSystemPolicy;
 };
@@ -179,6 +179,7 @@ export function prepareProposalInput(options: RunStaffingOptions) {
     repositoryPath: systemPolicy.repositoryRoot,
     availableSpecialists: systemPolicy.availableSpecialists,
     contextAccessPolicy: systemPolicy.contextAccessPolicy,
+    assignmentConstraints: captured.assignmentConstraints,
     limits: systemPolicy.limits,
     maxRounds: captured.maxRounds,
     timeoutMs: captured.timeoutMs,

@@ -95,9 +95,9 @@ Stage별 업무 목적·입력·성공 결과·후속 진행 조건은
 
 ```text
 Human Goal / Constraints
+→ Load System Policy and delegated assignment constraints
 → CEO Intent / Staffing / Context / Budget Proposal
-→ Harness Validation
-→ Human Staffing Approval → Scope issuance
+→ Harness Staffing Authorization → Scope issuance when delegated
 → Specialist Authorization / Reservation / Claim
 → Independent Decisions (v2)
 → Decision Comparison (v3)
@@ -116,7 +116,9 @@ Staffing Approval은 분석 조직·Context·호출 예산에 대한 승인이�
 해결 방향에 대한 승인이다. 두 승인은 서로 다르며 Staffing Scope만으로 해결 방향이 승인됐다고 보지 않는다.
 Override도 변경 대상의 검증과 필요한 승인을 충족해야 하며, CEO의 제안은 승인이나 권한이 아니다.
 
-**현재:** Phase A Graph가 정책 조회 → Staffing → Approval 평가 → 필요한 Human 확인·최종화를 실행한다.
+**현재:** Phase A Graph의 기본 경로는 정책 조회 → CEO Staffing → 사전 위임 기반 Staffing Authorization을 실행한다. 유효한 위임이 없거나 제안이 위임 범위를 벗어나면 `approval-required`에서 종료한다. 만료·철회·정책 버전 불일치는 `denied`로 종료한다. 명시적인 `runStaffingApproval()` CLI 진입점은 기존 직접 확인 분기를 사용한다.
+
+CEO의 Repository 탐색에는 System Policy를 사용하고, Specialist 배정에는 별도의 위임 제약을 전달한다. 위임의 Specialist ID, File / Directory Context Scope, 호출 예산은 계획용 정보다. Governance는 Scope 발급 시 최신 정책과 위임, Proposal 및 Snapshot을 다시 검증한다.
 `executionTarget: "specialist-decisions"`에서 승인된 결과에만 다음 일반 Node / Edge를 연결한다.
 
 ```text

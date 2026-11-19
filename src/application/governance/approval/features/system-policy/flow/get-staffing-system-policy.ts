@@ -5,31 +5,44 @@ import {
 import { governanceDigest } from "@/services/governance-records/index.js";
 
 import { type StaffingSystemPolicy } from "../model/policy.js";
+import type { StaffingAssignmentConstraints } from "@/application/staffing/index.js";
+import type { RepositoryGovernance } from "../../../../model/ledger.js";
+import { readCurrentStaffingDelegation } from "../../human-delegation/flow/validation/delegation-configuration.js";
 import {
   validateSystemConfiguration,
   requireCurrentSystemRecord,
 } from "./validation/system-configuration.js";
 
 export type StaffingSystemPolicyResult =
-  | { status: "ready"; configuration: StaffingSystemPolicy; version: number }
+  | {
+      status: "ready";
+      configuration: StaffingSystemPolicy;
+      version: number;
+      assignmentConstraints?: StaffingAssignmentConstraints;
+    }
   | { status: "denied"; reason: string };
 
 // Return a detached configuration under a short authenticated read transaction.
 // The caller must not keep the ledger locked while an Agent or Human responds.
 export function getStaffingSystemPolicy(
-  repositoryPath: string
+  repositoryPath: string,
+  includeDelegationConstraints = false
 ): StaffingSystemPolicyResult {
   try {
     const root = resolveGovernanceRepository(repositoryPath);
     return withGovernanceLedger((ledger) => {
-      const system =
-        ledger.repositories[governanceDigest(root)]?.systems.at(-1);
+      const entry = ledger.repositories[governanceDigest(root)];
+      const system = entry?.systems.at(-1);
       if (!system) throw new Error("Missing System Policy.");
       const configuration = requireCurrentSystemRecord(system, root);
+      const assignmentConstraints = includeDelegationConstraints
+        ? readAssignmentConstraints(entry)
+        : undefined;
       return {
         status: "ready",
         configuration: validateSystemConfiguration(configuration),
         version: system.version,
+        ...(assignmentConstraints && { assignmentConstraints }),
       };
     });
   } catch {
@@ -38,5 +51,27 @@ export function getStaffingSystemPolicy(
       reason:
         "System Policy unavailable: configure a current Human-approved policy for this Repository and check trusted records. Legacy policies require explicit Human reapproval.",
     };
+  }
+}
+
+function readAssignmentConstraints(
+  entry: RepositoryGovernance
+): StaffingAssignmentConstraints | undefined {
+  try {
+    const delegation = readCurrentStaffingDelegation(entry, Date.now());
+    if (!delegation) return;
+    const {
+      allowedSpecialistIds,
+      delegatedContextScopes,
+      maxAgentInvocations,
+    } = delegation;
+    return {
+      allowedSpecialistIds,
+      delegatedContextScopes,
+      maxAgentInvocations,
+    };
+  } catch {
+    // The System Policy remains usable for discovery; approval rechecks delegation.
+    return undefined;
   }
 }

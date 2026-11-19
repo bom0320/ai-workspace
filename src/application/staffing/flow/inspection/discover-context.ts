@@ -17,6 +17,8 @@ import type { StaffingContextState } from "../../model/state.js";
 import { ceoStaffingDecisionSchema } from "../../protocol/ceo.js";
 import {
   staffingContextSchema,
+  staffingAssignmentConstraintsSchema,
+  type StaffingAssignmentConstraints,
   staffingInspectionLimitsSchema,
   type StaffingContext,
   type StaffingInspectionLimits,
@@ -42,6 +44,7 @@ export type DiscoverStaffingContextOptions = {
   limits: StaffingInspectionLimits;
   // Harness-owned access ceiling; required even when access is explicitly empty.
   contextAccessPolicy: ContextAccessPolicy;
+  assignmentConstraints?: StaffingAssignmentConstraints;
 };
 
 function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
@@ -76,6 +79,9 @@ export function discoverStaffingContext(
   try {
     const { goal, limits, specialists, contextAccessPolicy } =
       validateDiscoveryInput(options);
+    const constraints = staffingAssignmentConstraintsSchema
+      .optional()
+      .parse(options.assignmentConstraints);
     const snapshot = captureRepositorySnapshot(options.repositoryPath);
     assertRepositoryMatchesSnapshot(snapshot);
     const files = listRepositoryFilesAtCommit(
@@ -92,11 +98,17 @@ export function discoverStaffingContext(
         packageScripts: {},
       },
       inspectedFiles: [],
-      availableSpecialists: specialists.map(({ id, role, objective }) => ({
-        id,
-        role,
-        objective,
-      })),
+      availableSpecialists: specialists
+        .filter(
+          ({ id }) =>
+            !constraints || constraints.allowedSpecialistIds.includes(id)
+        )
+        .map(({ id, role, objective }) => ({
+          id,
+          role,
+          objective,
+        })),
+      ...(constraints && { assignmentConstraints: constraints }),
       limits,
       remainingInspectionBudget: limits.maxTotalFiles,
     };

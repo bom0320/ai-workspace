@@ -15,7 +15,7 @@ type ApprovalRequest = Extract<
 
 export type StaffingApprovalWorkflowOptions = Omit<
   RunStaffingOptions,
-  "systemPolicy"
+  "systemPolicy" | "assignmentConstraints"
 > &
   StaffingConfirmationOptions & {
     repositoryPath: string;
@@ -41,6 +41,7 @@ export async function runStaffingApproval(
   const state = await createPhaseAGraph({
     ...options,
     executionTarget: "staffing-approval",
+    allowDirectStaffingApproval: true,
   }).invoke({
     goal: options.goal,
     repositoryPath: options.repositoryPath,

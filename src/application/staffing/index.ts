@@ -16,6 +16,8 @@ export {
 } from "./protocol/ceo.js";
 export {
   staffingContextSchema,
+  staffingAssignmentConstraintsSchema,
+  type StaffingAssignmentConstraints,
   staffingInspectionLimitsSchema,
   specialistCandidateSchema,
   type StaffingContext,

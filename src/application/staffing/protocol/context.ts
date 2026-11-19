@@ -3,10 +3,21 @@ import { z } from "zod";
 import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
+import { pathScopeSchema } from "@/contracts/repository/context-access-policy.js";
 
 import { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
 export { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
 const nonnegativeInteger = z.number().int().nonnegative();
+export const staffingAssignmentConstraintsSchema = z
+  .object({
+    allowedSpecialistIds: z.array(z.string().min(1)).min(1),
+    delegatedContextScopes: z.array(pathScopeSchema),
+    maxAgentInvocations: z.number().int().positive(),
+  })
+  .strict();
+export type StaffingAssignmentConstraints = z.infer<
+  typeof staffingAssignmentConstraintsSchema
+>;
 
 // Candidates are a projection of Harness registration, not CEO-defined authority.
 export const specialistCandidateSchema = specialistDefinitionSchema.pick({
@@ -30,6 +41,7 @@ export const staffingContextSchema = z
       .strict(),
     inspectedFiles: z.array(inspectedFileSchema.strict()),
     availableSpecialists: z.array(specialistCandidateSchema),
+    assignmentConstraints: staffingAssignmentConstraintsSchema.optional(),
     limits: staffingInspectionLimitsSchema,
     remainingInspectionBudget: nonnegativeInteger,
   })

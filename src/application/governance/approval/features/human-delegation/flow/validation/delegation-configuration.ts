@@ -7,7 +7,11 @@ import {
   type HumanDelegationPolicyInput,
   type RecordedHumanDelegationPolicy,
 } from "../../model/policy.js";
-import type { StaffingSystemPolicy } from "../../../system-policy/model/policy.js";
+import {
+  requireCurrentSystemPolicy,
+  type StaffingSystemPolicy,
+} from "../../../system-policy/model/policy.js";
+import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 
 // A delegation may narrow the configured system boundaries, never expand them.
 export function validateDelegationConfiguration(
@@ -66,4 +70,36 @@ function readHistoricalContextScopes(
       allowedScopes: paths.map((path) => ({ kind: "file", path })),
     }
   ).allowedScopes;
+}
+
+export function readCurrentStaffingDelegation(
+  repository: RepositoryGovernance,
+  now: number
+) {
+  const delegation = repository.delegations.at(-1);
+  if (!delegation) return undefined;
+  const system = repository.systems.at(-1);
+  if (
+    !system ||
+    delegation.repositoryRoot !== system.configuration.repositoryRoot ||
+    delegation.systemPolicyVersion !== system.version
+  )
+    throw new Error(
+      "Delegation is inactive, expired or no longer matches System Policy."
+    );
+  if (
+    delegation.status !== "active" ||
+    Date.parse(delegation.expiresAt) <= now ||
+    Date.parse(delegation.approval.confirmedAt) > now
+  )
+    throw new Error(
+      "Delegation is inactive, expired or no longer matches System Policy."
+    );
+  const input = readRecordedDelegationInput(delegation);
+  validateDelegationConfiguration(
+    input,
+    requireCurrentSystemPolicy(system.configuration),
+    now
+  );
+  return input;
 }

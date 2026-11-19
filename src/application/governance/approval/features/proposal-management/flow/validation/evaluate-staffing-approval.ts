@@ -46,6 +46,10 @@ export function evaluateDelegationCoverage(
   const automaticContext = { allowedScopes: input.delegatedContextScopes };
   const withinDelegatedScope =
     proposal.budget.maxAgentInvocations <= input.maxAgentInvocations &&
+    (proposal.refinement ||
+      (proposal.budget.maxTotalAnalysisInvocations ??
+        proposal.budget.maxAgentInvocations) <=
+        (input.maxTotalAnalysisInvocations ?? input.maxAgentInvocations)) &&
     proposal.assignments.every(
       (assignment) =>
         input.allowedSpecialistIds.includes(assignment.specialistId) &&

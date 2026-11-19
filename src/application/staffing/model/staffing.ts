@@ -37,7 +37,10 @@ export const staffingProposalSchema = z
     intent: intentAnalysisSchema,
     assignments: z.array(staffingAssignmentSchema).min(1),
     budget: z
-      .object({ maxAgentInvocations: z.number().int().positive() })
+      .object({
+        maxAgentInvocations: z.number().int().positive(),
+        maxTotalAnalysisInvocations: z.number().int().positive().optional(),
+      })
       .strict(),
     refinement: z
       .object({

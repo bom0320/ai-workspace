@@ -13,6 +13,7 @@ export const staffingAssignmentConstraintsSchema = z
     allowedSpecialistIds: z.array(z.string().min(1)).min(1),
     delegatedContextScopes: z.array(pathScopeSchema),
     maxAgentInvocations: z.number().int().positive(),
+    maxTotalAnalysisInvocations: z.number().int().positive().optional(),
   })
   .strict();
 export type StaffingAssignmentConstraints = z.infer<
@@ -42,6 +43,7 @@ export const staffingContextSchema = z
     inspectedFiles: z.array(inspectedFileSchema.strict()),
     availableSpecialists: z.array(specialistCandidateSchema),
     assignmentConstraints: staffingAssignmentConstraintsSchema.optional(),
+    maxTotalAnalysisInvocations: z.number().int().positive().optional(),
     limits: staffingInspectionLimitsSchema,
     remainingInspectionBudget: nonnegativeInteger,
   })

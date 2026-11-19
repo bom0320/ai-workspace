@@ -45,6 +45,7 @@ export type DiscoverStaffingContextOptions = {
   // Harness-owned access ceiling; required even when access is explicitly empty.
   contextAccessPolicy: ContextAccessPolicy;
   assignmentConstraints?: StaffingAssignmentConstraints;
+  maxTotalAnalysisInvocations?: number;
 };
 
 function validateDiscoveryInput(options: DiscoverStaffingContextOptions) {
@@ -109,6 +110,12 @@ export function discoverStaffingContext(
           objective,
         })),
       ...(constraints && { assignmentConstraints: constraints }),
+      ...(options.maxTotalAnalysisInvocations !== undefined && {
+        maxTotalAnalysisInvocations:
+          staffingContextSchema.shape.maxTotalAnalysisInvocations.parse(
+            options.maxTotalAnalysisInvocations
+          ),
+      }),
       limits,
       remainingInspectionBudget: limits.maxTotalFiles,
     };

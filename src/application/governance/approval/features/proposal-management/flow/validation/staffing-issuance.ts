@@ -1,5 +1,6 @@
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
+import { hasBoundAnalysisLimits } from "../../../../../records/analysis/analysis-budget.js";
 import type {
   GovernanceLedger,
   RepositoryGovernance,
@@ -122,6 +123,10 @@ export function validateStoredIssuanceRecord(
 ): void {
   assertApprovalBinding(issuance, entry);
   assertScopeContents(issuance);
+  if (!hasBoundAnalysisLimits(issuance, entry))
+    throw new StaffingIssuanceValidationError(
+      "Analysis limits do not match the approved Proposal or System Policy."
+    );
   const { approval } = issuance;
   if (approval.source.type === "direct-human") {
     if (
@@ -149,6 +154,21 @@ export function validateStoredIssuanceRecord(
   )
     throw new StaffingIssuanceValidationError(
       "Delegated approval does not match its historical source."
+    );
+  const { proposal } = issuance;
+  const delegatedTotal =
+    "maxTotalAnalysisInvocations" in delegation
+      ? delegation.maxTotalAnalysisInvocations
+      : undefined;
+  const requestedTotal = proposal.budget.maxTotalAnalysisInvocations;
+  if (
+    !proposal.refinement &&
+    (requestedTotal !== undefined || delegatedTotal !== undefined) &&
+    (requestedTotal ?? proposal.budget.maxAgentInvocations) >
+      (delegatedTotal ?? delegation.maxAgentInvocations)
+  )
+    throw new StaffingIssuanceValidationError(
+      "Total analysis budget exceeds the historical delegation."
     );
 }
 

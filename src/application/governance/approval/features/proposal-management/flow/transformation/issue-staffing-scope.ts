@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { StaffingProposal } from "@/application/staffing/index.js";
+import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   approvalRecordSchema,
@@ -10,7 +11,8 @@ import { approvedOperatingScopeSchema } from "../../../../../model/authority.js"
 export function issueStaffingScope(
   proposal: StaffingProposal,
   systemVersion: number,
-  source: ApprovalRecord["source"]
+  source: ApprovalRecord["source"],
+  analysis?: StaffingSystemPolicy["analysis"]
 ) {
   const approval = approvalRecordSchema.parse({
     id: `approval-${randomUUID()}`,
@@ -37,6 +39,10 @@ export function issueStaffingScope(
       })
     ),
     budget: proposal.budget,
+    ...(!proposal.refinement &&
+      analysis && {
+        analysis: { maxRefinementRounds: analysis.maxRefinementRounds },
+      }),
   });
   return { proposal, approval, scope };
 }

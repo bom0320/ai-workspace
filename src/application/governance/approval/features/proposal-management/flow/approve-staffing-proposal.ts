@@ -20,6 +20,7 @@ import {
 } from "./validation/staffing-issuance.js";
 import { evaluateStaffingApproval } from "./validation/evaluate-staffing-approval.js";
 import { issueStaffingScope } from "./transformation/issue-staffing-scope.js";
+import { requireCurrentSystemPolicy } from "../../system-policy/model/policy.js";
 import {
   assertRefinementAvailable,
   verifyAnalysisSources,
@@ -87,6 +88,7 @@ function approveProposal(
           governanceDigest(initial.scope.snapshot) !==
             governanceDigest(proposal.snapshot) ||
           proposal.budget.maxAgentInvocations !== proposal.assignments.length ||
+          proposal.budget.maxTotalAnalysisInvocations !== undefined ||
           linkage.basisDigest !== governanceDigest(refinement.context) ||
           linkage.assessmentDigest !== governanceDigest(refinement.assessment)
         )
@@ -165,7 +167,8 @@ function approveProposal(
               delegationPolicyId: delegation!.id,
               delegationPolicyVersion: delegation!.version,
               delegationApprovalId: delegation!.approval.id,
-            }
+            },
+        requireCurrentSystemPolicy(system.configuration).analysis
       );
 
       // 7. Verify Snapshot and Policy Before Persistence

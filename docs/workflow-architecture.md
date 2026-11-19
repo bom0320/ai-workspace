@@ -124,7 +124,9 @@ CEO의 Repository 탐색에는 System Policy를 사용하고, Specialist 배정�
 
 Synthesis 대상은 Comparison 완료 또는 단일 Decision의 정상 생략 뒤에 Assessment를 실행한다. Assessment의 출처 참조가 유효하고 결과가 충분할 때 Synthesis로 진행한다. 추가 분석 요청은 현재 대표 Decision과 연결된 Assignment만 재사용하거나, 변경분 Proposal을 같은 Staffing 승인 절차에 제출한다. 기존 Scope는 불변이다. 한 배치의 변경이 여러 Scope를 필요로 하면 선택된 변경만 담은 새 Scope 하나로 평가한다.
 
-최초 Scope의 호출 예산은 연결된 모든 후속 Scope에도 적용하는 누적 상한이다. 최대 두 번의 Refinement와 동일 변경 중복 금지를 Ledger에서 검증한다. 개별 호출은 기존 Authorization, Reservation, Claim을 거친다. 완료된 배치의 성공 결과만 Specialist별 대표 Decision을 갱신한다. Direction Review는 최종 분석의 성공한 Claim 출처를 Scope별로 확인하고, Human Revision은 같은 분석과 출처를 재사용한다.
+각 Scope의 `budget.maxAgentInvocations`는 해당 Scope의 예약 상한이다. 최초 Proposal의 `budget.maxTotalAnalysisInvocations`는 최초·후속 Scope의 누적 예약 상한으로 원본 승인에 바인딩한다. System Policy의 `analysis.maxTotalAnalysisInvocations` 안에서만 요청할 수 있으며, 자동 승인은 Human Delegation의 `maxTotalAnalysisInvocations` 상한도 충족해야 한다. 새 필드가 없는 최초 Proposal은 기존 호출 예산을 누적 상한으로 사용한다. 별도 전체 예산이 없는 위임에는 기존 호출 상한을 적용한다. 후속 Scope 발급은 최초 승인 한도를 늘리거나 초기화하지 않는다.
+
+최초 Scope의 반복 상한은 승인 당시 System Policy의 `analysis.maxRefinementRounds`로 확정한다. 필드가 없는 기록은 기존 2회를 유지한다. Ledger는 누적 예약과 반복 상한을 따로 검증한다. 실패하거나 Claim되지 않은 호출도 예약 예산을 사용한다. 개별 호출은 기존 Authorization, Reservation, Claim을 거친다. 완료된 배치의 성공 결과만 Specialist별 대표 Decision을 갱신한다. Direction Review는 최종 분석의 성공한 Claim 출처를 Scope별로 확인하고, Human Revision은 같은 분석과 출처를 재사용한다.
 `executionTarget: "specialist-decisions"`에서 승인된 결과에만 다음 일반 Node / Edge를 연결한다.
 
 ```text

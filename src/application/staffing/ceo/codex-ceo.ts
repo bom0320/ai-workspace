@@ -64,6 +64,12 @@ export async function runCodexCEO(
     "intent: problem, desiredOutcome, considerations[], uncertainties[] (the arrays may be empty).",
     "Each assignment: specialistId, objective, contextPaths (at least one file), rationale. Use only justified Context paths from the supplied fileTree.",
     "budget: maxAgentInvocations must be a positive integer proposing future Specialist activity; this is separate from inspection budget and CEO call limits.",
+    ...(input.maxTotalAnalysisInvocations === undefined
+      ? []
+      : [
+          "The draft may request budget.maxTotalAnalysisInvocations for initial analysis and refinements combined. It must be at least budget.maxAgentInvocations and within the supplied System Policy ceiling.",
+          "For automatic Staffing, stay within assignmentConstraints.maxTotalAnalysisInvocations when supplied, or within assignmentConstraints.maxAgentInvocations otherwise.",
+        ]),
     "The Harness checks registration, Context access and System Policy budgets before Proposal finalization. These mechanical checks do not prove semantic compliance with all Human Constraints or assignment suitability. For direct Staffing Approval, the Human reviews the full original instructions. Do not generate or modify Harness System Policy.",
     'Inspect format: {"type":"inspect","paths":["src/example.ts"],"reason":"Required evidence"}',
     'Escalate format: {"type":"escalate","reason":"Ambiguous Goal","questions":["Which outcome is required?"]}',

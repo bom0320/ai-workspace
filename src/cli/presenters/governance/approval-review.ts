@@ -28,13 +28,18 @@ export function formatGovernanceReview(request: ApprovalRequest): string {
       "Assignments:",
       assignments,
       `Invocation Budget: ${proposal.budget.maxAgentInvocations}`,
+      ...(proposal.budget.maxTotalAnalysisInvocations === undefined
+        ? []
+        : [
+            `Total Analysis Invocation Budget: ${proposal.budget.maxTotalAnalysisInvocations}`,
+          ]),
       "This approves staffing only, not solution direction, Tasks or execution. To change staffing, reject and create a new validated Proposal.",
     ].join("\n");
   }
   const lines = [
     request.reason,
     JSON.stringify(request.subject, null, 2),
-    "Phase A read-only analysis only. Invocation budgets are per Proposal/Scope limits, not cumulative usage reservations. No natural-language compliance or execution authority is implied.",
+    "Phase A read-only analysis only. Scope limits apply per Scope, and total analysis limits apply across the initial Scope and its refinements. No natural-language compliance or execution authority is implied.",
   ];
   if (request.kind === "delegation" && request.subject !== null)
     lines.push(

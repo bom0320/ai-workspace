@@ -64,11 +64,15 @@ function readAssignmentConstraints(
       allowedSpecialistIds,
       delegatedContextScopes,
       maxAgentInvocations,
+      maxTotalAnalysisInvocations,
     } = delegation;
     return {
       allowedSpecialistIds,
       delegatedContextScopes,
       maxAgentInvocations,
+      ...(maxTotalAnalysisInvocations !== undefined && {
+        maxTotalAnalysisInvocations,
+      }),
     };
   } catch {
     // The System Policy remains usable for discovery; approval rechecks delegation.

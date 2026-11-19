@@ -34,8 +34,13 @@ export const approvedOperatingScopeSchema = z
     budget: z
       .object({
         maxAgentInvocations: positiveInteger,
+        maxTotalAnalysisInvocations: positiveInteger.optional(),
       })
       .strict(),
+    analysis: z
+      .object({ maxRefinementRounds: z.number().int().nonnegative() })
+      .strict()
+      .optional(),
   })
   .strict();
 

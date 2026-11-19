@@ -13,6 +13,7 @@ export const humanDelegationPolicyInputSchema = z
     allowedSpecialistIds: z.array(text).min(1),
     delegatedContextScopes: z.array(pathScopeSchema),
     maxAgentInvocations: z.number().int().positive(),
+    maxTotalAnalysisInvocations: z.number().int().positive().optional(),
     expiresAt: date,
   })
   .strict();

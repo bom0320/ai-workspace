@@ -36,6 +36,13 @@ export const staffingSystemPolicySchema = z
     contextAccessPolicy: contextAccessPolicySchema,
     limits: staffingInspectionLimitsSchema,
     maxAgentInvocations: z.number().int().positive(),
+    analysis: z
+      .object({
+        maxTotalAnalysisInvocations: z.number().int().positive(),
+        maxRefinementRounds: nonnegativeInteger,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type StaffingSystemPolicy = z.infer<typeof staffingSystemPolicySchema>;

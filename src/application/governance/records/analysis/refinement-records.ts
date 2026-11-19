@@ -4,13 +4,12 @@ import type {
   InvokeSpecialistRequest,
 } from "../../model/authority.js";
 import type { RepositoryGovernance } from "../../model/ledger.js";
-import {
-  MAX_ANALYSIS_REFINEMENTS,
-  type AnalysisRefinement,
-} from "../../model/analysis-refinement.js";
+import type { AnalysisRefinement } from "../../model/analysis-refinement.js";
 import {
   requireAnalysisRoot,
   remainingAnalysisBudget,
+  approvedAnalysisLimits,
+  hasBoundAnalysisLimits,
 } from "./analysis-budget.js";
 
 export function requireRefinementRequest(
@@ -76,7 +75,9 @@ export function hasValidAnalysisRefinements(
       )
         return false;
     }
-    for (const { proposal, scope } of entry.issuances) {
+    for (const issuance of entry.issuances) {
+      if (!hasBoundAnalysisLimits(issuance, entry)) return false;
+      const { proposal, scope } = issuance;
       const linkage = proposal.refinement;
       if (
         linkage &&
@@ -119,7 +120,8 @@ export function hasValidAnalysisRefinements(
     return [...roots].every(
       (rootScopeId) =>
         rounds.filter((round) => round.rootScopeId === rootScopeId).length <=
-          MAX_ANALYSIS_REFINEMENTS &&
+          approvedAnalysisLimits(requireAnalysisRoot(entry, rootScopeId).scope)
+            .maxRefinementRounds &&
         remainingAnalysisBudget(entry, rootScopeId) >= 0
     );
   } catch {

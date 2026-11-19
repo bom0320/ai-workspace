@@ -126,12 +126,16 @@ function delegate(
   allowedSpecialistIds = ["frontend"],
   delegatedContextScopes: StaffingSystemPolicy["contextAccessPolicy"]["allowedScopes"] = [
     { kind: "file", path: "a.ts" },
-  ]
+  ],
+  maxTotalAnalysisInvocations?: number
 ) {
   const policy = {
     allowedSpecialistIds,
     delegatedContextScopes,
     maxAgentInvocations,
+    ...(maxTotalAnalysisInvocations !== undefined && {
+      maxTotalAnalysisInvocations,
+    }),
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
   };
   expect(
@@ -623,7 +627,7 @@ describe("Reserved Invocation → existing v2 Decision integration", () => {
 });
 
 describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () => {
-  function prepareBatch(budget = 2) {
+  function prepareBatch(budget = 2, totalDelegated?: number) {
     writeFileSync(join(root, "b.ts"), "export const b = 2;\n");
     git("add", ".");
     git("commit", "--quiet", "-m", "second Context");
@@ -648,9 +652,144 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     delegate(
       budget,
       ["frontend", "ux"],
-      system.contextAccessPolicy.allowedScopes
+      system.contextAccessPolicy.allowedScopes,
+      totalDelegated
     );
   }
+  it.each(["total", "rounds"] as const)(
+    "enforces the separate Analysis Budget and blocks the next round at the %s limit",
+    async (limit) => {
+      const total = limit === "total" ? 5 : 6;
+      const rounds = limit === "rounds" ? 3 : 4;
+      system.analysis = {
+        maxTotalAnalysisInvocations: total,
+        maxRefinementRounds: rounds,
+      };
+      draft.budget.maxTotalAnalysisInvocations = total;
+      prepareBatch(2, total);
+      runtime();
+      let assessmentCalls = 0;
+      const graph = createPhaseAGraph({
+        ...options,
+        executionTarget: "ceo-synthesis",
+        assessmentAgent: async ({ limits }) => {
+          if (assessmentCalls === 0) {
+            const initial = withGovernanceRecords((raw) => {
+              const ledger =
+                raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+              return Object.values(ledger.repositories)[0].issuances[0].scope;
+            });
+            expect(limits.remainingInvocations).toBe(total - 2);
+            expect(limits.remainingRefinements).toBe(rounds);
+            const assignment = initial.assignments[0];
+            // Both initial calls are reserved. Extra total budget does not expand the initial Scope.
+            expect(
+              governance.authorizeSpecialistInvocation({
+                scopeId: initial.id,
+                scopeVersion: initial.version,
+                assignmentId: assignment.assignmentId,
+                requestedContextPaths: assignment.contextPaths,
+              }).status
+            ).toBe("denied");
+          }
+          return {
+            status: "refinement-required",
+            reason: "Investigate remaining evidence",
+            sources: [{ kind: "recommendation", specialistId: "frontend" }],
+            changes: [
+              {
+                kind: "re-evaluation",
+                specialistId: "frontend",
+                objective: `Refine ${++assessmentCalls}`,
+                reason: "Clarify evidence",
+              },
+            ],
+          };
+        },
+      });
+      const state = await graph.invoke({
+        goal: options.goal,
+        repositoryPath: root,
+      });
+      expect(assessmentCalls).toBe(4);
+      expect(state.approvalResult).toMatchObject({
+        status: "approved",
+        scope: {
+          budget: {
+            maxAgentInvocations: 2,
+            maxTotalAnalysisInvocations: total,
+          },
+          analysis: { maxRefinementRounds: rounds },
+        },
+      });
+      expect(state.analysisRefinement?.status).toBe("denied");
+      expect(reservations()).toHaveLength(5);
+      expect(reservations().every(({ claimedAt }) => claimedAt)).toBe(true);
+      expect(issuanceCount()).toBe(4);
+      const scope =
+        state.approvalResult?.status === "approved"
+          ? state.approvalResult.scope
+          : undefined;
+      system.analysis = {
+        maxTotalAnalysisInvocations: 9,
+        maxRefinementRounds: 9,
+      };
+      configure();
+      expect(governance.getApprovedStaffingScope(scope!.id).status).toBe(
+        "denied"
+      );
+      expect(scope?.budget.maxTotalAnalysisInvocations).toBe(total);
+      expect(scope?.analysis?.maxRefinementRounds).toBe(rounds);
+    }
+  );
+
+  it.each(["delegated", "direct", "policy"] as const)(
+    "applies %s approval to an explicit total Analysis Budget",
+    async (mode) => {
+      system.analysis = {
+        maxTotalAnalysisInvocations: mode === "policy" ? 4 : 5,
+        maxRefinementRounds: 3,
+      };
+      configure();
+      delegate(
+        2,
+        ["frontend"],
+        system.contextAccessPolicy.allowedScopes,
+        mode === "delegated" ? 5 : 3
+      );
+      draft.budget.maxTotalAnalysisInvocations = 5;
+      const result = await runStaffingApproval(options);
+      if (mode === "policy") {
+        expect(result).toMatchObject({
+          status: "failed",
+          failure: "policy-validation",
+        });
+        expect(issuanceCount()).toBe(0);
+        return;
+      }
+      if (mode === "direct" && result.status !== "approval-required")
+        throw new Error(JSON.stringify(result));
+      const approved =
+        result.status === "approval-required"
+          ? governance.approveStaffingProposal(
+              result.request.subject,
+              accept(result.request)
+            )
+          : result;
+      expect(approved).toMatchObject({
+        status: "approved",
+        approval: {
+          source: {
+            type: mode === "direct" ? "direct-human" : "human-delegation",
+          },
+        },
+        scope: {
+          budget: { maxAgentInvocations: 2, maxTotalAnalysisInvocations: 5 },
+          analysis: { maxRefinementRounds: 3 },
+        },
+      });
+    }
+  );
   it("keeps duplicate Specialist policy in Staffing and Governance, not batch preparation", async () => {
     prepareBatch();
     const result = await staffingApplication.runStaffing({

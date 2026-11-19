@@ -39,6 +39,13 @@ export function validateDelegationConfiguration(
     throw new Error("Delegation Context must stay inside System Policy.");
   if (policy.maxAgentInvocations > system.maxAgentInvocations)
     throw new Error("Delegation budget exceeds System Policy.");
+  if (
+    policy.maxTotalAnalysisInvocations !== undefined &&
+    policy.maxTotalAnalysisInvocations >
+      (system.analysis?.maxTotalAnalysisInvocations ??
+        policy.maxAgentInvocations)
+  )
+    throw new Error("Delegation total analysis budget exceeds System Policy.");
 }
 
 // Normalize only an evaluation projection; never rewrite the signed record.
@@ -53,6 +60,9 @@ export function readRecordedDelegationInput(
     allowedSpecialistIds: record.allowedSpecialistIds,
     delegatedContextScopes: scopes,
     maxAgentInvocations: record.maxAgentInvocations,
+    ...("maxTotalAnalysisInvocations" in record && {
+      maxTotalAnalysisInvocations: record.maxTotalAnalysisInvocations,
+    }),
     expiresAt: record.expiresAt,
   });
 }

@@ -57,6 +57,15 @@ export function validateProposal(
     throw new ProposalPolicyError(
       "Proposed invocation budget exceeds Harness policy."
     );
+  const initial = draft.budget.maxAgentInvocations;
+  const total = draft.budget.maxTotalAnalysisInvocations ?? initial;
+  if (
+    total < initial ||
+    total > (systemPolicy.analysis?.maxTotalAnalysisInvocations ?? initial)
+  )
+    throw new ProposalPolicyError(
+      "Proposed total analysis budget exceeds Harness policy or is below the Scope budget."
+    );
   const ids = draft.assignments.map((assignment) => assignment.specialistId);
   // Phase A has one analysis assignment per Specialist. Repeated delegation
   // requires a future explicit model, not ambiguous duplicate assignments.
@@ -180,6 +189,8 @@ export function prepareProposalInput(options: RunStaffingOptions) {
     availableSpecialists: systemPolicy.availableSpecialists,
     contextAccessPolicy: systemPolicy.contextAccessPolicy,
     assignmentConstraints: captured.assignmentConstraints,
+    maxTotalAnalysisInvocations:
+      systemPolicy.analysis?.maxTotalAnalysisInvocations,
     limits: systemPolicy.limits,
     maxRounds: captured.maxRounds,
     timeoutMs: captured.timeoutMs,

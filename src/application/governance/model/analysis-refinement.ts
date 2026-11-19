@@ -13,4 +13,3 @@ export const analysisRefinementSchema = z
   })
   .strict();
 export type AnalysisRefinement = z.infer<typeof analysisRefinementSchema>;
-export const MAX_ANALYSIS_REFINEMENTS = 2;

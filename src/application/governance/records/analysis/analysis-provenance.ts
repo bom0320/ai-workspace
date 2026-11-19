@@ -9,11 +9,11 @@ import {
   validateStoredIssuance,
   validateStoredIssuanceRecord,
 } from "../../approval/features/proposal-management/flow/validation/staffing-issuance.js";
-import { MAX_ANALYSIS_REFINEMENTS } from "../../model/analysis-refinement.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import {
   requireAnalysisRoot,
   remainingAnalysisBudget,
+  approvedAnalysisLimits,
 } from "./analysis-budget.js";
 
 export function verifyAnalysisSources(
@@ -114,7 +114,9 @@ export function assertCurrentAnalysis(
     return {
       remainingInvocations: remainingAnalysisBudget(entries[0], rootScopeId),
       remainingRefinements:
-        MAX_ANALYSIS_REFINEMENTS -
+        approvedAnalysisLimits(
+          requireAnalysisRoot(entries[0], rootScopeId).scope
+        ).maxRefinementRounds -
         (entries[0].analysisRefinements ?? []).filter(
           (round) => round.rootScopeId === rootScopeId
         ).length,
@@ -134,7 +136,7 @@ export function assertRefinementAvailable(
     (value) => value.rootScopeId === rootScopeId
   );
   if (
-    rounds.length >= MAX_ANALYSIS_REFINEMENTS ||
+    rounds.length >= approvedAnalysisLimits(root.scope).maxRefinementRounds ||
     rounds.some((value) => value.changeDigest === changeDigest) ||
     calls > remainingAnalysisBudget(entry, rootScopeId)
   )

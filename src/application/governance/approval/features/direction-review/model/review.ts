@@ -6,6 +6,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { humanConfirmationEvidenceSchema } from "../../../shared/model/confirmation.js";
 import { directionActionSchema } from "./action.js";
+import { executionDelegationProposalSchema } from "../../execution-delegation/model/proposal.js";
 
 const text = z.string().trim().min(1);
 // Read-only compatibility for ledgers written before Context-at-review storage.
@@ -36,6 +37,7 @@ export const directionReviewSchema = z
     context: synthesisContextSchema.omit({ revision: true }).optional(),
     analysisInvocationIds: z.array(text).min(1).optional(),
     proposal: synthesisProposalSchema,
+    executionDelegationProposal: executionDelegationProposalSchema.optional(),
     revision: z.number().int().min(0).max(2),
     previousReviewId: text.optional(),
     binding: text,

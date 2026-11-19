@@ -5,13 +5,23 @@ import {
   type RunSynthesisOptions,
   type SynthesisContext,
 } from "@/application/synthesis/index.js";
-import { getDirectionReview } from "@/application/governance/index.js";
+import {
+  getDirectionReview,
+  proposeExecutionDelegation,
+  type ExecutionDelegationProposalAgent,
+} from "@/application/governance/index.js";
 import type { PhaseAState } from "../../../state.js";
 import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 
 export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
-  { directionReview: reviewEnabled = false }: { directionReview?: boolean } = {}
+  {
+    directionReview: reviewEnabled = false,
+    executionDelegationProposalAgent,
+  }: {
+    directionReview?: boolean;
+    executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
+  } = {}
 ) {
   return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
     // 1. Require Completed Decisions and a Successful Comparison Stage
@@ -80,12 +90,22 @@ export function createRunCEOSynthesisNode(
       if (synthesisResult.status === "proposed") {
         if (state.approvalResult?.status !== "approved")
           throw new Error("Approved Scope is unavailable.");
+        const { revision: _revision, ...analysis } = context;
+        const executionDelegationProposal = await proposeExecutionDelegation(
+          state.approvalResult.scope.snapshot.repositoryRoot,
+          analysis,
+          synthesisResult.proposal,
+          executionDelegationProposalAgent
+        );
         directionReview = registerDirectionReview(
           state.approvalResult.scope.id,
           context,
           synthesisResult.proposal,
           previousReviewId,
-          state.analysisRepresentatives?.map(({ invocationId }) => invocationId)
+          state.analysisRepresentatives?.map(
+            ({ invocationId }) => invocationId
+          ),
+          executionDelegationProposal
         );
       }
       return {

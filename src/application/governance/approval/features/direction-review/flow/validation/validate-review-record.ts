@@ -1,6 +1,9 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
 import type { RepositoryGovernance } from "../../../../../model/ledger.js";
-import type { SynthesisContext } from "@/application/synthesis/index.js";
+import {
+  validateAnalysisReferences,
+  type SynthesisContext,
+} from "@/application/synthesis/index.js";
 import type { DirectionReview } from "../../model/review.js";
 
 // Explicit rule rejection; storage and unexpected errors are not this type.
@@ -54,6 +57,20 @@ export function assertReviewRecord(
     throw new DirectionReviewValidationError(
       "Direction Review binding is invalid."
     );
+  const delegationProposal = review.executionDelegationProposal;
+  if (delegationProposal) {
+    try {
+      if (
+        delegationProposal.synthesisDigest !== governanceDigest(review.proposal)
+      )
+        throw new Error("Delegation proposal refers to a different Synthesis.");
+      validateAnalysisReferences(context, delegationProposal.sources);
+    } catch {
+      throw new DirectionReviewValidationError(
+        "Execution Delegation proposal provenance is invalid."
+      );
+    }
+  }
   if (review.revision > 0) {
     const parent = entry.directionReviews?.find(
       (value) => value.id === review.previousReviewId

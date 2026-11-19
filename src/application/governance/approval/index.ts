@@ -54,6 +54,14 @@ export {
   type ExecutionSystemPolicy,
 } from "./features/system-policy/model/execution-system-policy.js";
 export { getExecutionDelegation } from "./features/execution-delegation/flow/get-execution-delegation.js";
+export {
+  proposeExecutionDelegation,
+  type ExecutionDelegationProposalAgent,
+} from "./features/execution-delegation/flow/propose-execution-delegation.js";
+export {
+  executionDelegationProposalSchema,
+  type ExecutionDelegationProposal,
+} from "./features/execution-delegation/model/proposal.js";
 export { approveExecutionDelegation } from "./features/execution-delegation/flow/approve-execution-delegation.js";
 export {
   executionDelegationSchema,

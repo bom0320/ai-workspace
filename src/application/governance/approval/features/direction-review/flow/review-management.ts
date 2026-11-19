@@ -8,6 +8,7 @@ import {
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import type { DirectionReview } from "../model/review.js";
+import { validateExecutionDelegationProposal } from "../../execution-delegation/flow/propose-execution-delegation.js";
 import { verifyAnalysisSources } from "../../../../records/analysis/analysis-provenance.js";
 import {
   currentScopeSource,
@@ -29,7 +30,8 @@ export function registerDirectionReview(
   input: SynthesisContext,
   proposed: SynthesisProposal,
   previousReviewId?: string,
-  invocationIds?: string[]
+  invocationIds?: string[],
+  suggestedDelegation?: DirectionReview["executionDelegationProposal"]
 ): DirectionReview {
   // 1. Parse the Synthesis Context and Proposal
   const { revision, ...context } = synthesisContextSchema.parse(input);
@@ -75,12 +77,21 @@ export function registerDirectionReview(
     );
 
     // 5. Create and Persist the Bound Review
+    const executionDelegationProposal =
+      suggestedDelegation &&
+      validateExecutionDelegationProposal(
+        suggestedDelegation,
+        context,
+        proposal,
+        entry
+      );
     const subject = {
       id: randomUUID(),
       scopeId,
       scopeVersion: scope.version,
       analysisDigest: governanceDigest(context),
       proposal,
+      ...(executionDelegationProposal && { executionDelegationProposal }),
       ...(!previousReviewId ? { context } : {}),
       ...(analysisInvocationIds && { analysisInvocationIds }),
       revision: revisionRound,

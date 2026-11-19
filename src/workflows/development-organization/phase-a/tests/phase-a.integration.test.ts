@@ -913,7 +913,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
   async function pendingDirection(
     count = 2,
-    confirmDirection?: import("../graph.js").PhaseAGraphOptions["confirmDirection"]
+    confirmDirection?: import("../graph.js").PhaseAGraphOptions["confirmDirection"],
+    executionDelegationProposalAgent?: governance.ExecutionDelegationProposalAgent
   ) {
     if (count === 2) prepareBatch();
     else {
@@ -925,6 +926,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...options,
       executionTarget: "human-direction-governance",
       confirmDirection,
+      executionDelegationProposalAgent,
     });
     const config = { configurable: { thread_id: "direction-test" } };
     const pending = await graph.invoke(
@@ -1222,6 +1224,158 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toEqual({ status: "configured", version: request.version });
     return request.version;
   }
+
+  const delegationDraft = {
+    readScopes: [{ kind: "file", path: "README.md" }],
+    writeScopes: [{ kind: "file", path: "README.md" }],
+    shellCommands: ["git diff --check"],
+    budget: { maxExecutions: 2, maxTimeoutMs: 20_000 },
+    durationMs: 30 * 60_000,
+    rationale:
+      "The direction changes documentation within the anticipated scope.",
+    sources: [{ kind: "recommendation", specialistId: "frontend" }],
+  };
+
+  it.each([
+    "exact",
+    "narrower",
+    "direction-only",
+    "over-policy",
+    "failure",
+    "invalid-confirmation",
+  ] as const)(
+    "reviews a CEO Execution Delegation proposal with %s outcome",
+    async (mode) => {
+      const version = configureExecutionPolicy();
+      const agent = vi.fn<governance.ExecutionDelegationProposalAgent>(
+        async () => {
+          if (mode === "failure") throw new Error("Test failure");
+          if (mode === "over-policy")
+            return {
+              ...delegationDraft,
+              budget: { ...delegationDraft.budget, maxExecutions: 3 },
+            };
+          return delegationDraft;
+        }
+      );
+      const confirm = vi.fn(
+        (request: governance.DirectionConfirmationRequest) => {
+          if (mode !== "invalid-confirmation") return confirmDirection(request);
+          const { executionDelegation: _grant, ...directionOnly } =
+            request.action as Extract<
+              governance.DirectionAction,
+              { action: "approve" }
+            >;
+          return confirmDirection(
+            governance.prepareDirectionConfirmation(directionOnly)
+          );
+        }
+      );
+      const { graph, config, pending } = await pendingDirection(
+        1,
+        confirm,
+        agent
+      );
+      const review = pending.directionReview!;
+      expect(agent).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          synthesis: review.proposal,
+          policy: executionPolicy,
+        })
+      );
+      const advisory = review.executionDelegationProposal;
+      if (mode === "failure" || mode === "over-policy")
+        expect(advisory).toBeUndefined();
+      else
+        expect(advisory).toMatchObject({
+          ...delegationDraft,
+          policyVersion: version,
+          synthesisDigest: governanceDigest(review.proposal),
+        });
+
+      const action = {
+        action: "approve",
+        reviewId: review.id,
+        binding: review.binding,
+      };
+      const grant =
+        mode === "exact" ||
+        mode === "narrower" ||
+        mode === "invalid-confirmation"
+          ? {
+              readScopes: delegationDraft.readScopes,
+              writeScopes: delegationDraft.writeScopes,
+              shellCommands:
+                mode === "narrower" ? [] : delegationDraft.shellCommands,
+              budget:
+                mode === "narrower"
+                  ? { maxExecutions: 1, maxTimeoutMs: 10_000 }
+                  : delegationDraft.budget,
+              policyVersion: version,
+              expiresAt: new Date(
+                Date.now() + delegationDraft.durationMs
+              ).toISOString(),
+            }
+          : undefined;
+      const final = await graph.invoke(
+        new Command({
+          resume: { ...action, ...(grant && { executionDelegation: grant }) },
+        }),
+        config
+      );
+      if (mode === "invalid-confirmation") {
+        expect(final.directionGovernanceResult?.status).toBe("denied");
+        expect(
+          governance.getDirectionReview(review.id).review.resolution
+        ).toBeUndefined();
+        return;
+      }
+      const result = final.directionGovernanceResult;
+      if (result?.status !== "approved")
+        throw new Error(JSON.stringify(result));
+      expect(result.executionDelegation?.grant).toEqual(grant);
+      expect(governance.getExecutionDelegation(result.decision.id)).toEqual(
+        result.executionDelegation
+      );
+      expect(
+        governance.getApprovedDecision(result.decision.id).review
+          .executionDelegationProposal
+      ).toEqual(advisory);
+    }
+  );
+
+  it("replaces the CEO Execution Delegation proposal on Human revision without reusing the previous suggestion", async () => {
+    configureExecutionPolicy();
+    const agent = vi
+      .fn<governance.ExecutionDelegationProposalAgent>()
+      .mockResolvedValueOnce(delegationDraft)
+      .mockResolvedValueOnce(null);
+    const { graph, config, pending } = await pendingDirection(
+      1,
+      confirmDirection,
+      agent
+    );
+    const review = pending.directionReview!;
+    expect(review.executionDelegationProposal).toBeDefined();
+    const revised = await graph.invoke(
+      new Command({
+        resume: {
+          action: "request-revision",
+          reviewId: review.id,
+          binding: review.binding,
+          feedback: "Clarify assumptions",
+        },
+      }),
+      config
+    );
+    expect(agent).toHaveBeenCalledTimes(2);
+    expect(revised.directionReview?.previousReviewId).toBe(review.id);
+    expect(
+      revised.directionReview?.executionDelegationProposal
+    ).toBeUndefined();
+    expect(revised.directionGovernanceResult).toBeUndefined();
+    expect(reservations()).toHaveLength(1);
+  });
 
   function delegatedAction(
     review: governance.DirectionReview,

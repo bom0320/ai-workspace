@@ -5,6 +5,7 @@ import {
 } from "./features/governance/nodes/direction-review/finalize-direction-review.js";
 import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
 import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
+import type { ExecutionDelegationProposalAgent } from "@/application/governance/index.js";
 import { END, START, StateGraph, MemorySaver } from "@langchain/langgraph";
 import { phaseAState } from "./state.js";
 import {
@@ -41,6 +42,7 @@ export type PhaseAGraphOptions = StaffingExecutionOptions &
     executionTarget?: PhaseAExecutionTarget;
     allowDirectStaffingApproval?: boolean;
     synthesis?: RunSynthesisOptions;
+    executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
     assessmentAgent?: AssessmentAgent;
   };
 
@@ -74,6 +76,8 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       "run-ceo-synthesis",
       createRunCEOSynthesisNode(options.synthesis, {
         directionReview: humanGovernance,
+        executionDelegationProposalAgent:
+          options.executionDelegationProposalAgent,
       })
     )
     .addNode("human-direction-review", humanDirectionReview)

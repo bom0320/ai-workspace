@@ -238,6 +238,8 @@ Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승
 
 Phase A의 `approve` Action에 실행 위임을 포함하면 승인 바인딩이 정책 버전과 정확한 위임 범위·만료 시점을 포함한다. 확인 콜백은 이 Action을 인간에게 보여 주고 같은 바인딩의 Receipt를 받아야 한다. Governance는 확정 직전에 현재 정책을 다시 확인하고 Direction Resolution, `ApprovedDecision`, `ExecutionDelegation`을 한 번에 저장한다. 방향 단독 승인은 기존 형태를 유지한다.
 
+Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증된 분석을 바탕으로 CEO가 예상 실행 상한을 별도로 제안한다. 제안은 읽기·쓰기 PathScope, Shell 명령, 횟수·시간 예산, 유효기간, 근거와 분석 출처를 포함하며 Synthesis digest와 정책 버전에 연결된다. 정책이 없거나 제안이 유효하지 않으면 Review는 방향만 표시한다. 제안은 검토 자료로 저장되며, 인간이 선택하거나 수정한 실제 Grant는 만료 시각을 포함한 별도 `executionDelegation` Action으로 제출하고 확인한다. 방향 수정 후에는 새 Synthesis에 대해 다시 제안한다.
+
 방향 단독 승인 후 필요한 경우 `approveExecutionDelegation({ approvedDecisionId, repositoryPath, grant })`로 별도 위임 확인 요청을 준비한다. 새 Receipt를 함께 전달하면 기존 Decision·Repository Snapshot·실행 정책과 정확한 위임 내용에 바인딩된 사후 발급 기록만 저장한다. 같은 Decision에는 위임 하나만 발급하며, 만료나 철회 후 재위임은 별도 정책 결정으로 남긴다.
 
 `getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다.

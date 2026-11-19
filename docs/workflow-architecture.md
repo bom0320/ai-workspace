@@ -224,15 +224,17 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승인한다. Direction Approval에서 인간은 선택적으로 별도의 `ExecutionDelegation`에도 동의할 수 있다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 
-**Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임의 범위는 각각 정확한 Repository 상대 읽기·쓰기 경로, 명시된 검증 명령, 실행 횟수 및 시간 상한이다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 정책은 위임 유효기간에도 상한을 둔다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
+**Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임은 읽기·쓰기 각각에 File / Directory Scope를 지정하며, 명시된 검증 명령과 실행 횟수·시간 상한을 포함한다. R4의 PathScope 구조와 경로 경계 기반 포함 규칙을 사용한다. 기존 `readPaths`·`writePaths` 기록은 저장 형태를 보존하며 정확한 File Scope로 해석한다. Directory 권한에는 명시적 승인이 필요하다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
 
 Phase A의 `approve` Action에 실행 위임을 포함하면 승인 바인딩이 정책 버전과 정확한 위임 범위·만료 시점을 포함한다. 확인 콜백은 이 Action을 인간에게 보여 주고 같은 바인딩의 Receipt를 받아야 한다. Governance는 확정 직전에 현재 정책을 다시 확인하고 Direction Resolution, `ApprovedDecision`, `ExecutionDelegation`을 한 번에 저장한다. 방향 단독 승인은 기존 형태를 유지한다.
 
+방향 단독 승인 후 필요한 경우 `approveExecutionDelegation({ approvedDecisionId, repositoryPath, grant })`로 별도 위임 확인 요청을 준비한다. 새 Receipt를 함께 전달하면 기존 Decision·Repository Snapshot·실행 정책과 정확한 위임 내용에 바인딩된 사후 발급 기록만 저장한다. 같은 Decision에는 위임 하나만 발급하며, 만료나 철회 후 재위임은 별도 정책 결정으로 남긴다.
+
 `getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다.
 
-**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node만 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
+**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node만 위임 여부와 관계없이 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
 
-`authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 초기 범위는 승인 commit의 추적된 일반 파일과 선행 업무가 없는 Work Item이다. Verification 명령은 요청된 명시적 Shell 명령과 정확히 일치해야 한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다.
+`authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원하며 Verification 명령은 요청된 명시적 Shell 명령과 정확히 일치해야 한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다.
 
 Step 10.2-3은 Worker 시작 직전에 `claimAuthorizedExecution(execution)`을 호출한다. Claim은 한 Ledger 트랜잭션에서 발급 바인딩, 현재 정책·위임·만료, Repository 기준과 미사용 예약을 다시 검증해 한 번만 소비한다. 후속 실행은 Claim에서 반환한 기준 commit으로 격리된 Workspace를 구성하고 읽기·쓰기·정확한 argv·시간 제한을 그 환경에서 강제해야 한다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 

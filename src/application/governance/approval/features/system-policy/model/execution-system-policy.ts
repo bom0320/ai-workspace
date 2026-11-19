@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  pathScopeSchema,
+  type PathScope,
+} from "@/contracts/repository/context-access-policy.js";
+import {
+  isContextScopeContained,
   isInternalInspectionComponent,
   isUnambiguousRepositoryPath,
 } from "@/services/repository-inspection/index.js";
@@ -34,10 +39,55 @@ export const executionBoundsSchema = z
   })
   .strict();
 
-export const executionSystemPolicySchema = executionBoundsSchema.extend({
+const scopeList = z
+  .array(
+    pathScopeSchema.refine(({ path }) => exactPath.safeParse(path).success)
+  )
+  .refine((scopes) =>
+    unique(scopes.map(({ kind, path }) => `${kind}:${path}`))
+  );
+
+export const scopedExecutionBoundsSchema = executionBoundsSchema
+  .omit({
+    readPaths: true,
+    writePaths: true,
+  })
+  .extend({ readScopes: scopeList, writeScopes: scopeList });
+
+const duration = {
   maxDelegationDurationMs: positive,
-});
+};
+export const executionSystemPolicySchema = z.union([
+  executionBoundsSchema.extend(duration),
+  scopedExecutionBoundsSchema.extend(duration),
+]);
 export type ExecutionSystemPolicy = z.infer<typeof executionSystemPolicySchema>;
+
+export function executionScopes(
+  bounds:
+    | z.infer<typeof executionBoundsSchema>
+    | z.infer<typeof scopedExecutionBoundsSchema>
+): { readScopes: PathScope[]; writeScopes: PathScope[] } {
+  if ("readScopes" in bounds) return bounds;
+  return {
+    readScopes: bounds.readPaths.map((path) => ({ kind: "file", path })),
+    writeScopes: bounds.writePaths.map((path) => ({ kind: "file", path })),
+  };
+}
+
+export function isExecutionScopeContained(
+  requested: ReturnType<typeof executionScopes>,
+  allowed: ReturnType<typeof executionScopes>
+): boolean {
+  return (
+    requested.readScopes.every((scope) =>
+      isContextScopeContained(scope, { allowedScopes: allowed.readScopes })
+    ) &&
+    requested.writeScopes.every((scope) =>
+      isContextScopeContained(scope, { allowedScopes: allowed.writeScopes })
+    )
+  );
+}
 
 export const recordedExecutionPolicySchema = z
   .object({

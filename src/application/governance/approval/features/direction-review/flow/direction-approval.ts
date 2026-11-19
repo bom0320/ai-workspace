@@ -19,7 +19,7 @@ import { resolveCurrentReview } from "./context/resolve-review-context.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";
 import {
   executionDelegationId,
-  isExecutionGrantWithinPolicy,
+  currentPolicyForExecutionGrant,
 } from "../../execution-delegation/validation/validate-execution-delegation-records.js";
 import type { ExecutionDelegation } from "../../execution-delegation/model/execution-delegation.js";
 
@@ -29,13 +29,7 @@ function assertExecutionDelegationAllowed(
   now: number
 ): void {
   if (action.action !== "approve" || !action.executionDelegation) return;
-  const grant = action.executionDelegation;
-  const current = entry.executionPolicies?.at(-1);
-  if (
-    !current?.policy ||
-    current.version !== grant.policyVersion ||
-    !isExecutionGrantWithinPolicy(grant, current.policy, now)
-  )
+  if (!currentPolicyForExecutionGrant(entry, action.executionDelegation, now))
     throw new DirectionReviewValidationError(
       "Execution Delegation exceeds the current approved policy."
     );

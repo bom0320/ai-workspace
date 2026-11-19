@@ -14,9 +14,11 @@ import {
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -824,10 +826,15 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   async function plannedExecutions(
     withDelegation = true,
     maxExecutions = 1,
-    verification = ["git diff --check"]
+    verification = ["git diff --check"],
+    target = "README.md"
   ) {
-    writeFileSync(join(root, "README.md"), "Original content\n");
-    git("add", "README.md");
+    mkdirSync(join(root, "docs"), { recursive: true });
+    mkdirSync(join(root, "docs-extra"), { recursive: true });
+    writeFileSync(join(root, target), "Original content\n");
+    writeFileSync(join(root, "docs-extra", "other.md"), "Outside scope\n");
+    symlinkSync("../a.ts", join(root, "docs", "link.ts"));
+    git("add", target, "docs/link.ts", "docs-extra/other.md");
     git("commit", "--quiet", "-m", "Add execution target");
     const { pending } = await pendingDirection(1);
     const review = pending.directionReview!;
@@ -854,8 +861,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       throw new Error(JSON.stringify(approved));
     const workItems = ["first", "second", "third"].map((id) => ({
       id,
-      objective: `Revise ${id} wording in README.md`,
-      deliverable: "Revised README.md",
+      objective: `Revise ${id} wording in ${target}`,
+      deliverable: `Revised ${target}`,
       dependsOn: [],
     }));
     const graph = createPhaseBGraph({
@@ -869,7 +876,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           task: {
             objective: detail!.objective,
             targetRepository: goal.targetRepository,
-            allowedPaths: ["README.md"],
+            allowedPaths: [target],
             forbiddenPaths: [],
             constraints: [],
             acceptanceCriteria: ["Revise wording"],
@@ -886,22 +893,209 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ({ workItemId, result, executionSourceId }) => {
         if (result.status !== "completed")
           throw new Error(JSON.stringify(result));
-        if (withDelegation) expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
-        else expect(executionSourceId).toBeUndefined();
+        expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
         return {
           approvedDecisionId: approved.decision.id,
-          executionSourceId: executionSourceId ?? "0".repeat(64),
+          executionSourceId: executionSourceId!,
           repositoryPath: root,
           workItem: workItems.find(({ id }) => id === workItemId)!,
           task: result.task,
-          readPaths: ["README.md"],
-          writePaths: ["README.md"],
+          readPaths: [target],
+          writePaths: [target],
           shellCommands: ["git diff --check"],
           timeoutMs: 5_000,
         };
       }
     );
   }
+
+  function postDelegationInput(
+    request: { approvedDecisionId: string },
+    policy: governance.ExecutionSystemPolicy,
+    grantBounds: governance.ExecutionSystemPolicy = policy
+  ) {
+    const policyVersion = configureExecutionPolicy(policy);
+    const { shellCommands, budget } = grantBounds;
+    const scopes =
+      "readScopes" in grantBounds
+        ? {
+            readScopes: grantBounds.readScopes,
+            writeScopes: grantBounds.writeScopes,
+          }
+        : {
+            readPaths: grantBounds.readPaths,
+            writePaths: grantBounds.writePaths,
+          };
+    return {
+      approvedDecisionId: request.approvedDecisionId,
+      repositoryPath: root,
+      grant: {
+        ...scopes,
+        shellCommands,
+        budget,
+        policyVersion,
+        expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    };
+  }
+
+  function confirmPostDelegation(input: unknown) {
+    const prompt = governance.approveExecutionDelegation(input);
+    if (prompt.status !== "confirmation-required")
+      throw new Error(JSON.stringify(prompt));
+    return confirmHumanAction(prompt.binding, JSON.stringify(prompt))!;
+  }
+
+  const scopedPolicy = {
+    readScopes: [{ kind: "directory" as const, path: "docs" }],
+    writeScopes: [{ kind: "directory" as const, path: "docs" }],
+    shellCommands: executionPolicy.shellCommands,
+    budget: executionPolicy.budget,
+    maxDelegationDurationMs: executionPolicy.maxDelegationDurationMs,
+  };
+
+  it("authorizes an existing Direction-only plan after separate Human approval of a directory grant", async () => {
+    const [request] = await plannedExecutions(
+      false,
+      1,
+      ["git diff --check"],
+      "docs/README.md"
+    );
+    const before = governance.getApprovedDecision(request.approvedDecisionId);
+    expect(
+      governance.getExecutionDelegation(request.approvedDecisionId)
+    ).toBeUndefined();
+    expect(governance.authorizeExecution(request).status).toBe(
+      "approval-required"
+    );
+    const input = postDelegationInput(request, scopedPolicy);
+    const receipt = confirmPostDelegation(input);
+    const result = governance.approveExecutionDelegation(input, receipt);
+    expect(result).toMatchObject({
+      status: "approved",
+      executionDelegation: {
+        approvedDecisionId: before.decision.id,
+        approvalSource: "post-direction",
+        grant: input.grant,
+      },
+    });
+    expect(governance.getApprovedDecision(request.approvedDecisionId)).toEqual(
+      before
+    );
+    expect(governance.approveExecutionDelegation(input, receipt).status).toBe(
+      "denied"
+    );
+    expect(governance.approveExecutionDelegation(input).status).toBe("denied");
+    expect(
+      governance.authorizeExecution({
+        ...request,
+        readPaths: ["docs-extra/other.md"],
+      }).status
+    ).toBe("denied");
+    expect(
+      governance.authorizeExecution({ ...request, readPaths: ["docs/link.ts"] })
+        .status
+    ).toBe("denied");
+    const allowed = governance.authorizeExecution(request);
+    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
+    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+      "claimed"
+    );
+  });
+
+  it("denies post-direction grants with invalid scope, input, or confirmation and leaves failed writes atomic", async () => {
+    const [request] = await plannedExecutions(false);
+    const input = postDelegationInput(request, executionPolicy);
+    const scope = (path: string) => ({ kind: "directory", path });
+    for (const path of [
+      "docs",
+      "../docs",
+      "/docs",
+      ".git",
+      "docs//nested",
+      "docs/node_modules",
+    ]) {
+      expect(
+        governance.approveExecutionDelegation({
+          ...input,
+          grant: {
+            shellCommands: input.grant.shellCommands,
+            budget: input.grant.budget,
+            policyVersion: input.grant.policyVersion,
+            expiresAt: input.grant.expiresAt,
+            readScopes: [],
+            writeScopes: [scope(path)],
+          },
+        }).status
+      ).toBe("denied");
+    }
+    expect(
+      governance.approveExecutionDelegation({
+        ...input,
+        approvedDecisionId: "wrong",
+      }).status
+    ).toBe("denied");
+    expect(
+      governance.approveExecutionDelegation({ ...input, repositoryPath: home })
+        .status
+    ).toBe("denied");
+    const receipt = confirmPostDelegation(input);
+    const changed = {
+      ...input,
+      grant: {
+        ...input.grant,
+        budget: { ...input.grant.budget, maxExecutions: 1 },
+      },
+    };
+    expect(governance.approveExecutionDelegation(changed, receipt).status).toBe(
+      "denied"
+    );
+    expect(governance.approveExecutionDelegation(input, receipt).status).toBe(
+      "denied"
+    );
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
+      throw new Error("Test disk failure");
+    });
+    expect(
+      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
+        .status
+    ).toBe("denied");
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(
+      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
+        .status
+    ).toBe("approved");
+    expect(governance.authorizeExecution(request).status).toBe("allowed");
+    withGovernanceRecords((raw, persist) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      Object.values(
+        ledger.repositories
+      )[0].executionDelegations![0].confirmationBinding = "tampered";
+      persist(ledger);
+    });
+    expect(governance.authorizeExecution(request).status).toBe("denied");
+  });
+
+  it("denies a planned write when an approved directory grant contains only read scope", async () => {
+    const [request] = await plannedExecutions(
+      false,
+      1,
+      ["git diff --check"],
+      "docs/README.md"
+    );
+    const input = postDelegationInput(request, scopedPolicy, {
+      ...scopedPolicy,
+      writeScopes: [],
+    });
+    expect(
+      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
+        .status
+    ).toBe("approved");
+    expect(governance.authorizeExecution(request).status).toBe("denied");
+  });
 
   it("reserves a Phase B execution once per Work Item and consumes its permit only once", async () => {
     const [first, second, third] = await plannedExecutions(true, 2);
@@ -1019,46 +1213,68 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
   });
 
-  it("confirms Direction and its exact Execution Delegation together through Phase A", async () => {
-    const confirm = vi.fn(confirmDirection);
-    const { graph, config, pending, command } = await pendingDirection(
-      1,
-      confirm
-    );
-    const action = delegatedAction(
-      pending.directionReview!,
-      configureExecutionPolicy()
-    );
-    const calls = command.mock.calls.length;
-    const state = await graph.invoke(new Command({ resume: action }), config);
-    const result = state.directionGovernanceResult;
-    if (result?.status !== "approved") throw new Error(JSON.stringify(result));
-    expect(confirm).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ action })
-    );
-    const restored = governance.getApprovedDecision(result.decision.id);
-    expect(result.executionDelegation).toMatchObject({
-      approvedDecisionId: result.decision.id,
-      repositoryRoot: root,
-      approvalRecordId: result.decision.approvalRecordId,
-      approval: restored.review.resolution?.confirmation,
-      grant: action.executionDelegation,
-      status: "active",
-    });
-    expect(governance.getExecutionDelegation(result.decision.id)).toEqual(
-      result.executionDelegation
-    );
-    expect(command).toHaveBeenCalledTimes(calls);
-    configureExecutionPolicy();
-    expect(governance.getExecutionDelegation(result.decision.id)?.status).toBe(
-      "superseded"
-    );
-    configureExecutionPolicy(null);
-    configureExecutionPolicy();
-    expect(governance.getExecutionDelegation(result.decision.id)?.status).toBe(
-      "revoked"
-    );
-  });
+  it.each(["legacy", "scoped"] as const)(
+    "confirms Direction and its %s Execution Delegation together through Phase A",
+    async (format) => {
+      const confirm = vi.fn(confirmDirection);
+      const { graph, config, pending, command } = await pendingDirection(
+        1,
+        confirm
+      );
+      const legacyAction = delegatedAction(
+        pending.directionReview!,
+        configureExecutionPolicy(
+          format === "legacy" ? executionPolicy : scopedPolicy
+        )
+      );
+      const { policyVersion, expiresAt, shellCommands, budget } =
+        legacyAction.executionDelegation;
+      const action =
+        format === "legacy"
+          ? legacyAction
+          : {
+              ...legacyAction,
+              executionDelegation: {
+                policyVersion,
+                expiresAt,
+                shellCommands,
+                budget,
+                readScopes: scopedPolicy.readScopes,
+                writeScopes: scopedPolicy.writeScopes,
+              },
+            };
+      const calls = command.mock.calls.length;
+      const state = await graph.invoke(new Command({ resume: action }), config);
+      const result = state.directionGovernanceResult;
+      if (result?.status !== "approved")
+        throw new Error(JSON.stringify(result));
+      expect(confirm).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ action })
+      );
+      const restored = governance.getApprovedDecision(result.decision.id);
+      expect(result.executionDelegation).toMatchObject({
+        approvedDecisionId: result.decision.id,
+        repositoryRoot: root,
+        approvalRecordId: result.decision.approvalRecordId,
+        approval: restored.review.resolution?.confirmation,
+        grant: action.executionDelegation,
+        status: "active",
+      });
+      expect(governance.getExecutionDelegation(result.decision.id)).toEqual(
+        result.executionDelegation
+      );
+      expect(command).toHaveBeenCalledTimes(calls);
+      configureExecutionPolicy();
+      expect(
+        governance.getExecutionDelegation(result.decision.id)?.status
+      ).toBe("superseded");
+      configureExecutionPolicy(null);
+      configureExecutionPolicy();
+      expect(
+        governance.getExecutionDelegation(result.decision.id)?.status
+      ).toBe("revoked");
+    }
+  );
 
   it("requires independent Human approval for policy configuration and rejects altered policy receipts", async () => {
     const { pending } = await pendingDirection(1);
@@ -1170,7 +1386,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
         const entry = Object.values(ledger.repositories)[0];
         const records = entry.executionDelegations!;
-        if (tamper === "grant") records[0].grant.writePaths = [];
+        if (tamper === "grant" && "writePaths" in records[0].grant)
+          records[0].grant.writePaths = [];
         if (tamper === "source")
           records[0].approvalRecordId = "other-resolution";
         if (tamper === "staffing receipt")

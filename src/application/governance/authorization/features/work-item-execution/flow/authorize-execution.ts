@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { lstatSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -7,7 +9,11 @@ import {
   executionDelegationId,
   isExecutionGrantWithinPolicy,
 } from "../../../../approval/features/execution-delegation/validation/validate-execution-delegation-records.js";
-import { executionBoundsSchema } from "../../../../approval/features/system-policy/model/execution-system-policy.js";
+import {
+  executionBoundsSchema,
+  executionScopes,
+  isExecutionScopeContained,
+} from "../../../../approval/features/system-policy/model/execution-system-policy.js";
 import type { GovernanceLedger } from "../../../../model/ledger.js";
 import {
   resolveGovernanceRepository,
@@ -102,8 +108,10 @@ function evaluateExecution(
     policyVersion: policy.version,
   };
   if (
-    !readPaths.every((path) => delegation.grant.readPaths.includes(path)) ||
-    !writePaths.every((path) => delegation.grant.writePaths.includes(path)) ||
+    !isExecutionScopeContained(
+      executionScopes(requestedGrant),
+      executionScopes(delegation.grant)
+    ) ||
     !shellCommands.every((command) =>
       delegation.grant.shellCommands.includes(command)
     ) ||
@@ -122,7 +130,16 @@ function evaluateExecution(
       .filter(({ mode }) => mode === "100644" || mode === "100755")
       .map(({ path }) => path)
   );
-  if (![...readPaths, ...writePaths].every((path) => files.has(path)))
+  if (
+    ![...new Set([...readPaths, ...writePaths])].every((path) => {
+      if (!files.has(path)) return false;
+      const absolutePath = join(repositoryPath, path);
+      return (
+        lstatSync(absolutePath).isFile() &&
+        realpathSync(absolutePath) === absolutePath
+      );
+    })
+  )
     throw new Error("Execution scope must identify tracked regular files.");
   if (Date.now() + timeoutMs > Date.parse(delegation.grant.expiresAt))
     throw new Error(

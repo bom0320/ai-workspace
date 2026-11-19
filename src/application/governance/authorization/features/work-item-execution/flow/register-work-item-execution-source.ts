@@ -31,12 +31,6 @@ export function registerExecutionDecomposition(proposal: Proposal): void {
         ledger,
         proposal.approvedDecisionId
       );
-      if (
-        !entry.executionDelegations?.some(
-          ({ approvedDecisionId }) => approvedDecisionId === decision.id
-        )
-      )
-        return;
       const subject = decompositionSubject(
         proposal,
         governanceDigest(decision)

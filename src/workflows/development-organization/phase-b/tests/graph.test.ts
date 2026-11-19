@@ -9,6 +9,13 @@ import { createPhaseBGraph, type PhaseBGraphOptions } from "../index.js";
 vi.mock("@/application/governance/index.js", () => ({
   getApprovedDecision: vi.fn(),
 }));
+vi.mock(
+  "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
+  () => ({
+    registerExecutionDecomposition: vi.fn(),
+    beginWorkItemExecutionSource: vi.fn(),
+  })
+);
 vi.mock("../features/planning/execution/execute-work-item-planning.js", () => ({
   executeWorkItemPlanning: vi.fn(),
 }));

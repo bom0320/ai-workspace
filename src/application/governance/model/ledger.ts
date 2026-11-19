@@ -15,6 +15,12 @@ import { executionDelegationSchema } from "../approval/features/execution-delega
 import { hasValidExecutionDelegationRecords } from "../approval/features/execution-delegation/validation/validate-execution-delegation-records.js";
 import { recordedExecutionPolicySchema } from "../approval/features/system-policy/model/execution-system-policy.js";
 import { hasValidExecutionPolicyRecords } from "../approval/features/system-policy/flow/validation/execution-policy-configuration.js";
+import {
+  executionDecompositionSchema,
+  workItemExecutionSourceSchema,
+  executionReservationSchema,
+} from "../authorization/features/work-item-execution/model/execution.js";
+import { hasValidExecutionReservations } from "../authorization/features/work-item-execution/flow/validate-execution-reservations.js";
 const text = z.string().min(1);
 
 export const governanceLedgerSchema = z
@@ -40,6 +46,13 @@ export const governanceLedgerSchema = z
           approvedDecisions: z.array(approvedDecisionSchema).optional(),
           executionPolicies: z.array(recordedExecutionPolicySchema).optional(),
           executionDelegations: z.array(executionDelegationSchema).optional(),
+          executionDecompositions: z
+            .array(executionDecompositionSchema)
+            .optional(),
+          workItemExecutionSources: z
+            .array(workItemExecutionSourceSchema)
+            .optional(),
+          executionReservations: z.array(executionReservationSchema).optional(),
           reservations: z.array(invocationReservationSchema).optional(),
           issuances: z.array(
             z
@@ -57,6 +70,7 @@ export const governanceLedgerSchema = z
   .strict()
   .superRefine((ledger, context) => {
     const ids = new Set<string>();
+    const executionIds = new Set<string>();
     const delegationIds = new Set<string>();
     const executionApprovalIds = new Set<string>();
     const staffingConfirmationIds = new Set<string>();
@@ -77,6 +91,11 @@ export const governanceLedgerSchema = z
       }
     }
     for (const [key, entry] of Object.entries(ledger.repositories)) {
+      if (!hasValidExecutionReservations(entry, key, executionIds))
+        context.addIssue({
+          code: "custom",
+          message: "Invalid execution provenance or reservation.",
+        });
       if (
         !hasValidExecutionPolicyRecords(
           key,

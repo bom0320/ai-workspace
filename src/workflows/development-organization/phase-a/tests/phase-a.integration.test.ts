@@ -3,6 +3,7 @@ import * as filesystem from "node:fs";
 import { Command } from "@langchain/langgraph";
 import * as staffingApplication from "@/application/staffing/index.js";
 import * as phaseAGraph from "../graph.js";
+import { createPhaseBGraph } from "../../phase-b/index.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
@@ -819,6 +820,204 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       },
     };
   }
+
+  async function plannedExecutions(
+    withDelegation = true,
+    maxExecutions = 1,
+    verification = ["git diff --check"]
+  ) {
+    writeFileSync(join(root, "README.md"), "Original content\n");
+    git("add", "README.md");
+    git("commit", "--quiet", "-m", "Add execution target");
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const delegation =
+      withDelegation && delegatedAction(review, configureExecutionPolicy());
+    const action = delegation
+      ? {
+          ...delegation,
+          executionDelegation: {
+            ...delegation.executionDelegation,
+            budget: { ...delegation.executionDelegation.budget, maxExecutions },
+          },
+        }
+      : {
+          reviewId: review.id,
+          binding: review.binding,
+          action: "approve" as const,
+        };
+    const receipt = confirmDirection(
+      governance.prepareDirectionConfirmation(action)
+    )!;
+    const approved = governance.finalizeDirectionReview(action, receipt);
+    if (approved.status !== "approved")
+      throw new Error(JSON.stringify(approved));
+    const workItems = ["first", "second", "third"].map((id) => ({
+      id,
+      objective: `Revise ${id} wording in README.md`,
+      deliverable: "Revised README.md",
+      dependsOn: [],
+    }));
+    const graph = createPhaseBGraph({
+      agent: async () => ({ type: "propose", workItems }),
+      planning: {
+        repositoryPath: root,
+        limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
+        selectWorkItemIds: (items) => items.map(({ id }) => id),
+        planner: async ({ goal, detail }) => ({
+          type: "complete",
+          task: {
+            objective: detail!.objective,
+            targetRepository: goal.targetRepository,
+            allowedPaths: ["README.md"],
+            forbiddenPaths: [],
+            constraints: [],
+            acceptanceCriteria: ["Revise wording"],
+            verification,
+          },
+        }),
+      },
+    });
+    const state = await graph.invoke({
+      approvedDecisionId: approved.decision.id,
+    });
+    expect(state.planningResults).toHaveLength(3);
+    return state.planningResults!.map(
+      ({ workItemId, result, executionSourceId }) => {
+        if (result.status !== "completed")
+          throw new Error(JSON.stringify(result));
+        if (withDelegation) expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
+        else expect(executionSourceId).toBeUndefined();
+        return {
+          approvedDecisionId: approved.decision.id,
+          executionSourceId: executionSourceId ?? "0".repeat(64),
+          repositoryPath: root,
+          workItem: workItems.find(({ id }) => id === workItemId)!,
+          task: result.task,
+          readPaths: ["README.md"],
+          writePaths: ["README.md"],
+          shellCommands: ["git diff --check"],
+          timeoutMs: 5_000,
+        };
+      }
+    );
+  }
+
+  it("reserves a Phase B execution once per Work Item and consumes its permit only once", async () => {
+    const [first, second, third] = await plannedExecutions(true, 2);
+    const allowed = governance.authorizeExecution(first);
+    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
+    expect(allowed.execution.request).toEqual(first);
+    expect(
+      governance.authorizeExecution({ ...first, timeoutMs: 4_000 }).status
+    ).toBe("denied");
+    expect(governance.authorizeExecution(second).status).toBe("allowed");
+    expect(governance.authorizeExecution(third).status).toBe("denied");
+    const altered = structuredClone(allowed.execution);
+    altered.request.task.objective = "Altered task";
+    expect(governance.claimAuthorizedExecution(altered).status).toBe("denied");
+    expect(
+      governance.claimAuthorizedExecution({
+        ...allowed.execution,
+        id: "forged",
+      }).status
+    ).toBe("denied");
+    expect(governance.claimAuthorizedExecution(allowed.execution)).toEqual({
+      status: "claimed",
+      execution: allowed.execution,
+    });
+    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+      "denied"
+    );
+    expect(governance.authorizeExecution(third).status).toBe("denied");
+  });
+
+  it("requires a delegation for a valid Direction-only plan", async () => {
+    const [request] = await plannedExecutions(false);
+    expect(governance.authorizeExecution(request).status).toBe(
+      "approval-required"
+    );
+  });
+
+  it("denies a recorded plan whose verification requires an arbitrary shell command", async () => {
+    const [request] = await plannedExecutions(true, 1, ["pnpm test"]);
+    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(
+      governance.authorizeExecution({
+        ...request,
+        shellCommands: ["pnpm test"],
+      }).status
+    ).toBe("denied");
+  });
+
+  it("denies unbound Work Items, TaskContracts, unsafe scopes, and unsupported shell capabilities", async () => {
+    const [request, second] = await plannedExecutions();
+    const attempts = [
+      { ...request, executionSourceId: second.executionSourceId },
+      { ...request, workItem: { ...request.workItem, deliverable: "Changed" } },
+      { ...request, task: { ...request.task, id: "unbound" } },
+      { ...request, task: { ...request.task, verification: ["pnpm test"] } },
+      { ...request, repositoryPath: home },
+      { ...request, readPaths: ["a.ts"] },
+      { ...request, writePaths: ["a.ts"] },
+      { ...request, shellCommands: ["pnpm test"] },
+      { ...request, shellCommands: [] },
+      { ...request, timeoutMs: 20_000 },
+    ];
+    for (const attempt of attempts)
+      expect(governance.authorizeExecution(attempt).status).toBe("denied");
+    expect(governance.authorizeExecution(request).status).toBe("allowed");
+  });
+
+  it.each(["expired", "revoked", "superseded", "dirty", "head"] as const)(
+    "rechecks %s execution authority at Claim",
+    async (change) => {
+      const [request, second] = await plannedExecutions();
+      const allowed = governance.authorizeExecution(request);
+      if (allowed.status !== "allowed")
+        throw new Error(JSON.stringify(allowed));
+      if (change === "expired")
+        vi.spyOn(Date, "now").mockReturnValue(
+          Date.parse(allowed.execution.expiresAt)
+        );
+      if (change === "revoked") configureExecutionPolicy(null);
+      if (change === "superseded") configureExecutionPolicy();
+      if (change === "dirty" || change === "head")
+        writeFileSync(join(root, "README.md"), "Drift");
+      if (change === "head") {
+        git("add", "README.md");
+        git("commit", "--quiet", "-m", "drift");
+      }
+      expect(
+        governance.claimAuthorizedExecution(allowed.execution).status
+      ).toBe("denied");
+      expect(governance.authorizeExecution(second).status).toBe("denied");
+    }
+  );
+
+  it("does not publish an execution permit or consume a claim when Ledger replacement fails", async () => {
+    const [request] = await plannedExecutions();
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    const rename = vi.spyOn(filesystem, "renameSync");
+    const fail = () => {
+      throw new Error("Test disk failure");
+    };
+    rename.mockImplementationOnce(fail);
+    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(readFileSync(path, "utf8")).toBe(before);
+    const allowed = governance.authorizeExecution(request);
+    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
+    const reserved = readFileSync(path, "utf8");
+    rename.mockImplementationOnce(fail);
+    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+      "denied"
+    );
+    expect(readFileSync(path, "utf8")).toBe(reserved);
+    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+      "claimed"
+    );
+  });
 
   it("confirms Direction and its exact Execution Delegation together through Phase A", async () => {
     const confirm = vi.fn(confirmDirection);

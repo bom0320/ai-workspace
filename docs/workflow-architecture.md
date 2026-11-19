@@ -228,7 +228,13 @@ Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승
 
 Phase A의 `approve` Action에 실행 위임을 포함하면 승인 바인딩이 정책 버전과 정확한 위임 범위·만료 시점을 포함한다. 확인 콜백은 이 Action을 인간에게 보여 주고 같은 바인딩의 Receipt를 받아야 한다. Governance는 확정 직전에 현재 정책을 다시 확인하고 Direction Resolution, `ApprovedDecision`, `ExecutionDelegation`을 한 번에 저장한다. 방향 단독 승인은 기존 형태를 유지한다.
 
-`getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다. Work Item별 Execution Authorization은 실제 Repository 상태, Task 범위, 현재 정책·만료, 잔여 예산을 사용 시점에 검증하는 후속 단계다.
+`getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다.
+
+**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node만 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
+
+`authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 초기 범위는 승인 commit의 추적된 일반 파일과 선행 업무가 없는 Work Item이다. Verification 명령은 요청된 명시적 Shell 명령과 정확히 일치해야 한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다.
+
+Step 10.2-3은 Worker 시작 직전에 `claimAuthorizedExecution(execution)`을 호출한다. Claim은 한 Ledger 트랜잭션에서 발급 바인딩, 현재 정책·위임·만료, Repository 기준과 미사용 예약을 다시 검증해 한 번만 소비한다. 후속 실행은 Claim에서 반환한 기준 commit으로 격리된 Workspace를 구성하고 읽기·쓰기·정확한 argv·시간 제한을 그 환경에서 강제해야 한다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
 ## 5. Graph State & Output Ownership
 
@@ -300,7 +306,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `approvedDecisionId`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 공개 입력은 Work Decomposition 입력 Schema에서 가져온 승인 ID만 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `approvedDecisionId`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 선택적으로 Ledger의 계획 출처를 가리키는 `executionSourceId`를 포함한다. 공개 입력은 Work Decomposition 입력 Schema에서 가져온 승인 ID만 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 

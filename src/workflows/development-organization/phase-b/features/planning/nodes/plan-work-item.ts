@@ -1,5 +1,6 @@
 import { executeWorkItemPlanning } from "../execution/execute-work-item-planning.js";
 import type { PhaseBState } from "../../../state.js";
+import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 
 export function createPlanWorkItemNode(
   options?: Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB">
@@ -16,17 +17,28 @@ export function createPlanWorkItemNode(
     }
 
     const { repositoryPath, limits, planner } = options;
+    const recordSource = beginWorkItemExecutionSource(
+      proposal,
+      workItem,
+      repositoryPath
+    );
     const result = await executeWorkItemPlanning({
       repositoryPath,
       limits,
       planner,
       phaseB: { approvedDecisionId: proposal.approvedDecisionId, workItem },
     });
+    const executionSourceId =
+      result.status === "completed" ? recordSource?.(result.task) : undefined;
     return {
       pendingPlanningIds,
       planningResults: [
         ...(state.planningResults ?? []),
-        { workItemId: workItem.id, result },
+        {
+          workItemId: workItem.id,
+          result,
+          ...(executionSourceId && { executionSourceId }),
+        },
       ],
     };
   };

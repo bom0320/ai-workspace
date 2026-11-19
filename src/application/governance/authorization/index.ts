@@ -9,3 +9,15 @@ export {
   type InvocationReservation,
 } from "./features/specialist-invocation/model/reservation.js";
 export { claimAuthorizedInvocation } from "./features/specialist-invocation/flow/claim-authorized-invocation.js";
+export {
+  authorizeExecution,
+  claimAuthorizedExecution,
+} from "./features/work-item-execution/flow/authorize-execution.js";
+export {
+  executionRequestSchema,
+  authorizedExecutionSchema,
+  executionAuthorizationVerdictSchema,
+  type ExecutionRequest,
+  type AuthorizedExecution,
+  type ExecutionAuthorizationVerdict,
+} from "./features/work-item-execution/model/execution.js";

@@ -11,6 +11,10 @@ import { recordedSystemPolicySchema } from "../approval/features/system-policy/m
 import { recordedHumanDelegationPolicySchema } from "../approval/features/human-delegation/model/policy.js";
 import { approvalRecordSchema } from "../approval/features/proposal-management/model/approval.js";
 import { humanConfirmationEvidenceSchema as confirmation } from "../approval/shared/model/confirmation.js";
+import { executionDelegationSchema } from "../approval/features/execution-delegation/model/execution-delegation.js";
+import { hasValidExecutionDelegationRecords } from "../approval/features/execution-delegation/validation/validate-execution-delegation-records.js";
+import { recordedExecutionPolicySchema } from "../approval/features/system-policy/model/execution-system-policy.js";
+import { hasValidExecutionPolicyRecords } from "../approval/features/system-policy/flow/validation/execution-policy-configuration.js";
 const text = z.string().min(1);
 
 export const governanceLedgerSchema = z
@@ -34,6 +38,8 @@ export const governanceLedgerSchema = z
           directionAnalyses: z.array(directionAnalysisSchema).optional(),
           directionReviews: z.array(directionReviewSchema).optional(),
           approvedDecisions: z.array(approvedDecisionSchema).optional(),
+          executionPolicies: z.array(recordedExecutionPolicySchema).optional(),
+          executionDelegations: z.array(executionDelegationSchema).optional(),
           reservations: z.array(invocationReservationSchema).optional(),
           issuances: z.array(
             z
@@ -51,7 +57,48 @@ export const governanceLedgerSchema = z
   .strict()
   .superRefine((ledger, context) => {
     const ids = new Set<string>();
+    const delegationIds = new Set<string>();
+    const executionApprovalIds = new Set<string>();
+    const staffingConfirmationIds = new Set<string>();
+    const directionConfirmationCounts = new Map<string, number>();
     for (const entry of Object.values(ledger.repositories)) {
+      for (const { approval } of [...entry.systems, ...entry.delegations])
+        staffingConfirmationIds.add(approval.id);
+      for (const { approval } of entry.issuances)
+        if (approval.source.type === "direct-human")
+          staffingConfirmationIds.add(approval.source.confirmation.id);
+      for (const { resolution } of entry.directionReviews ?? []) {
+        if (!resolution) continue;
+        const id = resolution.confirmation.id;
+        directionConfirmationCounts.set(
+          id,
+          (directionConfirmationCounts.get(id) ?? 0) + 1
+        );
+      }
+    }
+    for (const [key, entry] of Object.entries(ledger.repositories)) {
+      if (
+        !hasValidExecutionPolicyRecords(
+          key,
+          entry,
+          executionApprovalIds,
+          staffingConfirmationIds,
+          directionConfirmationCounts
+        ) ||
+        !hasValidExecutionDelegationRecords(
+          key,
+          entry,
+          delegationIds,
+          executionApprovalIds,
+          staffingConfirmationIds,
+          directionConfirmationCounts
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          message:
+            "Invalid Execution Delegation or Execution System Policy record.",
+        });
       const counts = new Map<string, number>();
       for (const reservation of entry.reservations ?? []) {
         const issuance = entry.issuances.find(

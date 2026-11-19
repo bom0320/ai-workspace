@@ -3,6 +3,7 @@ import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { synthesisContextSchema } from "@/application/synthesis/index.js";
 import { directionActionSchema } from "./action.js";
 import { directionReviewSchema } from "./review.js";
+import { executionDelegationSchema } from "../../execution-delegation/model/execution-delegation.js";
 
 const text = z.string().trim().min(1);
 export const approvedDecisionSchema = z
@@ -17,7 +18,11 @@ export type ApprovedDecision = z.infer<typeof approvedDecisionSchema>;
 
 export const directionGovernanceResultSchema = z.discriminatedUnion("status", [
   z
-    .object({ status: z.literal("approved"), decision: approvedDecisionSchema })
+    .object({
+      status: z.literal("approved"),
+      decision: approvedDecisionSchema,
+      executionDelegation: executionDelegationSchema.optional(),
+    })
     .strict(),
   z.object({ status: z.literal("rejected"), reviewId: text }).strict(),
   z

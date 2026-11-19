@@ -777,6 +777,215 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   const confirmDirection = (request: governance.DirectionConfirmationRequest) =>
     confirmHumanAction(request.binding, JSON.stringify(request));
 
+  const executionPolicy: governance.ExecutionSystemPolicy = {
+    readPaths: ["README.md"],
+    writePaths: ["README.md"],
+    shellCommands: ["git diff --check"],
+    budget: { maxExecutions: 2, maxTimeoutMs: 30_000 },
+    maxDelegationDurationMs: 60 * 60_000,
+  };
+
+  function configureExecutionPolicy(
+    policy: governance.ExecutionSystemPolicy | null = executionPolicy
+  ) {
+    const request = governance.configureExecutionSystemPolicy(root, policy);
+    if (request.status !== "confirmation-required")
+      throw new Error("Missing policy confirmation request");
+    const receipt = confirmHumanAction(
+      request.binding,
+      JSON.stringify(request)
+    )!;
+    expect(
+      governance.configureExecutionSystemPolicy(root, policy, receipt)
+    ).toEqual({ status: "configured", version: request.version });
+    return request.version;
+  }
+
+  function delegatedAction(
+    review: governance.DirectionReview,
+    policyVersion: number
+  ) {
+    return {
+      reviewId: review.id,
+      binding: review.binding,
+      action: "approve" as const,
+      executionDelegation: {
+        readPaths: ["README.md"],
+        writePaths: ["README.md"],
+        shellCommands: ["git diff --check" as const],
+        budget: { maxExecutions: 1, maxTimeoutMs: 15_000 },
+        policyVersion,
+        expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    };
+  }
+
+  it("confirms Direction and its exact Execution Delegation together through Phase A", async () => {
+    const confirm = vi.fn(confirmDirection);
+    const { graph, config, pending, command } = await pendingDirection(
+      1,
+      confirm
+    );
+    const action = delegatedAction(
+      pending.directionReview!,
+      configureExecutionPolicy()
+    );
+    const calls = command.mock.calls.length;
+    const state = await graph.invoke(new Command({ resume: action }), config);
+    const result = state.directionGovernanceResult;
+    if (result?.status !== "approved") throw new Error(JSON.stringify(result));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ action })
+    );
+    const restored = governance.getApprovedDecision(result.decision.id);
+    expect(result.executionDelegation).toMatchObject({
+      approvedDecisionId: result.decision.id,
+      repositoryRoot: root,
+      approvalRecordId: result.decision.approvalRecordId,
+      approval: restored.review.resolution?.confirmation,
+      grant: action.executionDelegation,
+      status: "active",
+    });
+    expect(governance.getExecutionDelegation(result.decision.id)).toEqual(
+      result.executionDelegation
+    );
+    expect(command).toHaveBeenCalledTimes(calls);
+    configureExecutionPolicy();
+    expect(governance.getExecutionDelegation(result.decision.id)?.status).toBe(
+      "superseded"
+    );
+    configureExecutionPolicy(null);
+    configureExecutionPolicy();
+    expect(governance.getExecutionDelegation(result.decision.id)?.status).toBe(
+      "revoked"
+    );
+  });
+
+  it("requires independent Human approval for policy configuration and rejects altered policy receipts", async () => {
+    const { pending } = await pendingDirection(1);
+    const action = delegatedAction(pending.directionReview!, 1);
+    expect(governance.finalizeDirectionReview(action).status).toBe("denied");
+    const request = governance.configureExecutionSystemPolicy(
+      root,
+      executionPolicy
+    );
+    if (request.status !== "confirmation-required")
+      throw new Error("Missing policy confirmation request");
+    const receipt = confirmHumanAction(
+      request.binding,
+      JSON.stringify(request)
+    )!;
+    const changed = { ...executionPolicy, writePaths: ["other.md"] };
+    expect(
+      governance.configureExecutionSystemPolicy(root, changed, receipt).status
+    ).toBe("denied");
+    expect(
+      governance.configureExecutionSystemPolicy(root, executionPolicy, receipt)
+        .status
+    ).toBe("denied");
+    expect(governance.finalizeDirectionReview(action).status).toBe("denied");
+  });
+
+  it("refuses missing, mismatched and stale confirmations for an Execution Delegation", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const action = delegatedAction(review, configureExecutionPolicy());
+    expect(governance.finalizeDirectionReview(action).status).toBe(
+      "confirmation-required"
+    );
+    const request = governance.prepareDirectionConfirmation(action);
+    const receipt = confirmDirection(request)!;
+    const changed = {
+      ...action,
+      executionDelegation: { ...action.executionDelegation, writePaths: [] },
+    };
+    expect(governance.finalizeDirectionReview(changed, receipt).status).toBe(
+      "denied"
+    );
+    expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+      "denied"
+    );
+    const staleReceipt = confirmDirection(request)!;
+    configureExecutionPolicy();
+    expect(
+      governance.finalizeDirectionReview(action, staleReceipt).status
+    ).toBe("denied");
+    expect(
+      governance.getDirectionReview(review.id).review.resolution
+    ).toBeUndefined();
+  });
+
+  it("enforces the approved execution policy ceiling and never upgrades a Direction-only approval", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const version = configureExecutionPolicy({
+      ...executionPolicy,
+      writePaths: [],
+      shellCommands: [],
+    });
+    const action = delegatedAction(review, version);
+    expect(() => governance.prepareDirectionConfirmation(action)).toThrow(
+      "policy"
+    );
+    expect(governance.finalizeDirectionReview(action).status).toBe("denied");
+    const approve = {
+      reviewId: review.id,
+      binding: review.binding,
+      action: "approve",
+    };
+    const receipt = confirmDirection(
+      governance.prepareDirectionConfirmation(approve)
+    )!;
+    const result = governance.finalizeDirectionReview(approve, receipt);
+    if (result.status !== "approved") throw new Error(JSON.stringify(result));
+    const nextAction = delegatedAction(review, configureExecutionPolicy());
+    expect(governance.finalizeDirectionReview(nextAction, receipt).status).toBe(
+      "denied"
+    );
+    expect(
+      governance.getExecutionDelegation(result.decision.id)
+    ).toBeUndefined();
+  });
+
+  it.each([
+    "grant",
+    "source",
+    "staffing receipt",
+    "duplicate",
+    "missing",
+  ] as const)(
+    "rejects a signed Ledger containing an invalid Execution Delegation %s",
+    async (tamper) => {
+      const { pending } = await pendingDirection(1);
+      const action = delegatedAction(
+        pending.directionReview!,
+        configureExecutionPolicy()
+      );
+      const receipt = confirmDirection(
+        governance.prepareDirectionConfirmation(action)
+      )!;
+      const result = governance.finalizeDirectionReview(action, receipt);
+      if (result.status !== "approved") throw new Error(JSON.stringify(result));
+      withGovernanceRecords((raw, persist) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        const entry = Object.values(ledger.repositories)[0];
+        const records = entry.executionDelegations!;
+        if (tamper === "grant") records[0].grant.writePaths = [];
+        if (tamper === "source")
+          records[0].approvalRecordId = "other-resolution";
+        if (tamper === "staffing receipt")
+          entry.executionPolicies![0].approval = entry.systems[0].approval;
+        if (tamper === "duplicate") records.push(structuredClone(records[0]));
+        if (tamper === "missing") records.pop();
+        persist(ledger);
+      });
+      expect(() =>
+        governance.getExecutionDelegation(result.decision.id)
+      ).toThrow("Invalid Execution Delegation");
+    }
+  );
+
   it.each([1, 2])(
     "issues a trusted ApprovedDecision after interrupt/resume for %i Specialists, without replay",
     async (count) => {
@@ -810,6 +1019,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       );
       expect(restored.context.goal).toEqual(options.goal);
       expect(restored.review.resolution?.action.action).toBe("approve");
+      expect(
+        state.directionGovernanceResult.executionDelegation
+      ).toBeUndefined();
       expect(state.directionGovernanceResult.decision).not.toHaveProperty(
         "proposal"
       );
@@ -996,36 +1208,41 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toBeUndefined();
   });
 
-  it("returns failed on atomic replacement failure without persisting partial approval", async () => {
-    const { pending } = await pendingDirection(1);
-    const review = pending.directionReview!;
-    const action = {
-      reviewId: review.id,
-      binding: review.binding,
-      action: "approve" as const,
-    };
-    const receipt = confirmDirection(
-      governance.prepareDirectionConfirmation(action)
-    )!;
-    const path = join(home, ".ai-workspace-governance", "records.json");
-    const before = readFileSync(path, "utf8");
-    const rename = vi
-      .spyOn(filesystem, "renameSync")
-      .mockImplementationOnce(() => {
-        throw Object.assign(new Error("Test disk failure"), { code: "EIO" });
-      });
-    expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
-      "failed"
-    );
-    expect(rename).toHaveBeenCalledTimes(1);
-    expect(readFileSync(path, "utf8")).toBe(before);
-    expect(
-      governance.getDirectionReview(review.id).review.resolution
-    ).toBeUndefined();
-    expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
-      "denied"
-    );
-  });
+  it.each([false, true])(
+    "returns failed on atomic replacement failure with execution delegation %s",
+    async (delegate) => {
+      const { pending } = await pendingDirection(1);
+      const review = pending.directionReview!;
+      const action = delegate
+        ? delegatedAction(review, configureExecutionPolicy())
+        : {
+            reviewId: review.id,
+            binding: review.binding,
+            action: "approve" as const,
+          };
+      const receipt = confirmDirection(
+        governance.prepareDirectionConfirmation(action)
+      )!;
+      const path = join(home, ".ai-workspace-governance", "records.json");
+      const before = readFileSync(path, "utf8");
+      const rename = vi
+        .spyOn(filesystem, "renameSync")
+        .mockImplementationOnce(() => {
+          throw Object.assign(new Error("Test disk failure"), { code: "EIO" });
+        });
+      expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+        "failed"
+      );
+      expect(rename).toHaveBeenCalledTimes(1);
+      expect(readFileSync(path, "utf8")).toBe(before);
+      expect(
+        governance.getDirectionReview(review.id).review.resolution
+      ).toBeUndefined();
+      expect(governance.finalizeDirectionReview(action, receipt).status).toBe(
+        "denied"
+      );
+    }
+  );
 
   it.each(["signature", "schema", "access"] as const)(
     "returns failed for Ledger %s errors and burns the supplied receipt",

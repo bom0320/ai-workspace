@@ -222,7 +222,13 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 초기 설계는 승인 출처와 현재 Repository 기준을 Handoff의 검증 항목으로 함께 두었다. Step 7.2에서 기록 복원이 구현되면서 Governance의 검증을 그대로 사용하고, 변할 수 있는 Repository와 실행 조건은 해당 정보를 실제로 사용하는 Application 경계에서 확인하기로 했다. 별도 Handoff Validation 계층·Node·Governance API는 추가하지 않는다. Snapshot에서 후속 실행 기준으로 전환하는 방식, 허용할 drift, 재검토·재승인 조건은 후속 설계 과제다.
 
-Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승인한다. Repository 변경에는 업무별 Task Approval과 Execution Authorization을 적용하고, 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다. 승인 기록의 복원 자체에는 Task 승인이나 Repository 수정 권한이 수반되지 않는다.
+Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승인한다. Direction Approval에서 인간은 선택적으로 별도의 `ExecutionDelegation`에도 동의할 수 있다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
+
+**Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임의 범위는 각각 정확한 Repository 상대 읽기·쓰기 경로, 명시된 검증 명령, 실행 횟수 및 시간 상한이다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 정책은 위임 유효기간에도 상한을 둔다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
+
+Phase A의 `approve` Action에 실행 위임을 포함하면 승인 바인딩이 정책 버전과 정확한 위임 범위·만료 시점을 포함한다. 확인 콜백은 이 Action을 인간에게 보여 주고 같은 바인딩의 Receipt를 받아야 한다. Governance는 확정 직전에 현재 정책을 다시 확인하고 Direction Resolution, `ApprovedDecision`, `ExecutionDelegation`을 한 번에 저장한다. 방향 단독 승인은 기존 형태를 유지한다.
+
+`getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다. Work Item별 Execution Authorization은 실제 Repository 상태, Task 범위, 현재 정책·만료, 잔여 예산을 사용 시점에 검증하는 후속 단계다.
 
 ## 5. Graph State & Output Ownership
 

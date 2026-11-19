@@ -16,6 +16,30 @@ import type {
   DirectionGovernanceResult,
 } from "../model/result.js";
 import { resolveCurrentReview } from "./context/resolve-review-context.js";
+import type { RepositoryGovernance } from "../../../../model/ledger.js";
+import {
+  executionDelegationId,
+  isExecutionGrantWithinPolicy,
+} from "../../execution-delegation/validation/validate-execution-delegation-records.js";
+import type { ExecutionDelegation } from "../../execution-delegation/model/execution-delegation.js";
+
+function assertExecutionDelegationAllowed(
+  entry: RepositoryGovernance,
+  action: DirectionAction,
+  now: number
+): void {
+  if (action.action !== "approve" || !action.executionDelegation) return;
+  const grant = action.executionDelegation;
+  const current = entry.executionPolicies?.at(-1);
+  if (
+    !current?.policy ||
+    current.version !== grant.policyVersion ||
+    !isExecutionGrantWithinPolicy(grant, current.policy, now)
+  )
+    throw new DirectionReviewValidationError(
+      "Execution Delegation exceeds the current approved policy."
+    );
+}
 
 function assertPendingAction(
   review: DirectionReview,
@@ -42,11 +66,12 @@ export function prepareDirectionConfirmation(
 ): DirectionConfirmationRequest {
   const action = directionActionSchema.parse(input);
   return withGovernanceLedger((ledger) => {
-    const { review, context, snapshot } = resolveCurrentReview(
+    const { entry, review, context, snapshot } = resolveCurrentReview(
       ledger,
       action.reviewId
     );
     assertPendingAction(review, action);
+    assertExecutionDelegationAllowed(entry, action, Date.now());
     return structuredClone({
       action,
       review,
@@ -70,8 +95,12 @@ export function finalizeDirectionReview(
     const action = parsed.data;
     return withGovernanceLedger((ledger, save): DirectionGovernanceResult => {
       // 2. Revalidate the Current Review and Exact Action Binding
-      const { entry, review } = resolveCurrentReview(ledger, action.reviewId);
+      const { entry, review, snapshot } = resolveCurrentReview(
+        ledger,
+        action.reviewId
+      );
       assertPendingAction(review, action);
+      assertExecutionDelegationAllowed(entry, action, Date.now());
       const binding = confirmationBinding(review, action);
 
       // 3. Consume the One-use Human Confirmation
@@ -86,12 +115,14 @@ export function finalizeDirectionReview(
       }
 
       // 4. Record the Resolution and Construct the Action Result
+      const resolvedAt = new Date();
+      assertExecutionDelegationAllowed(entry, action, resolvedAt.getTime());
       review.resolution = {
         id: randomUUID(),
         action,
         confirmationBinding: binding,
         confirmation,
-        resolvedAt: new Date().toISOString(),
+        resolvedAt: resolvedAt.toISOString(),
       };
       let result: DirectionGovernanceResult;
       switch (action.action) {
@@ -104,6 +135,21 @@ export function finalizeDirectionReview(
           };
           (entry.approvedDecisions ??= []).push(decision);
           result = { status: "approved", decision };
+          if (action.executionDelegation) {
+            const executionDelegation: ExecutionDelegation = {
+              id: executionDelegationId(decision.id),
+              approvedDecisionId: decision.id,
+              repositoryRoot: snapshot.repositoryRoot,
+              grant: action.executionDelegation,
+              status: "active",
+              approvalRecordId: decision.approvalRecordId,
+              confirmationBinding: binding,
+              approval: confirmation,
+              issuedAt: review.resolution.resolvedAt,
+            };
+            (entry.executionDelegations ??= []).push(executionDelegation);
+            result = { ...result, executionDelegation };
+          }
           break;
         }
         case "reject":

@@ -14,9 +14,9 @@ import { validateInvocationFreshness } from "./validation/validate-invocation-fr
 import { reserveInvocation } from "./reservation/reserve-invocation.js";
 import {
   remainingAnalysisBudget,
-  requireRefinementRequest,
   requireAnalysisRoot,
-} from "./validation/validate-analysis-refinement.js";
+} from "../../../../records/analysis/analysis-budget.js";
+import { requireRefinementRequest } from "../../../../records/analysis/refinement-records.js";
 import { validateStoredIssuance } from "../../../../approval/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 

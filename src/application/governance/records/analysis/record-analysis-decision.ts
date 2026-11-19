@@ -3,8 +3,8 @@ import {
   type AgentDecision,
 } from "@/application/decision/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
-import type { AuthorizedSpecialistInvocation } from "../../../../model/authority.js";
+import { withGovernanceLedger } from "../governance-transaction.js";
+import type { AuthorizedSpecialistInvocation } from "../../model/authority.js";
 
 // Called only by the trusted workflow after v2 successfully returns.
 export function recordAnalysisDecision(

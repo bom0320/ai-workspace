@@ -23,12 +23,13 @@ import { issueStaffingScope } from "./transformation/issue-staffing-scope.js";
 import {
   assertRefinementAvailable,
   verifyAnalysisSources,
-} from "../../../../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
+} from "../../../../records/analysis/analysis-provenance.js";
+import { projectRefinementRequests } from "../../../../records/analysis/refinement-records.js";
 import type {
   AssessmentInput,
   AssessmentResult,
 } from "@/application/analysis-assessment/index.js";
-import { analysisRefinementSchema } from "../../../../authorization/features/specialist-invocation/model/analysis-refinement.js";
+import { analysisRefinementSchema } from "../../../../model/analysis-refinement.js";
 
 export function approveStaffingProposal(
   input: unknown,
@@ -185,14 +186,7 @@ function approveProposal(
         (entry.analysisRefinements ??= []).push(
           analysisRefinementSchema.parse({
             ...linkage,
-            requests: scope.assignments.map(
-              ({ assignmentId, contextPaths }) => ({
-                scopeId: scope.id,
-                scopeVersion: scope.version,
-                assignmentId,
-                requestedContextPaths: contextPaths,
-              })
-            ),
+            requests: projectRefinementRequests(scope),
           })
         );
       }

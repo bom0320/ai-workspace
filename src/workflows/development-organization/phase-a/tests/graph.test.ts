@@ -66,13 +66,13 @@ vi.mock("@/application/staffing/index.js", async (original) => ({
 }));
 
 vi.mock(
-  "@/application/governance/authorization/features/specialist-invocation/flow/record-analysis-decision.js",
+  "@/application/governance/records/analysis/record-analysis-decision.js",
   () => ({
     recordAnalysisDecision: vi.fn(),
   })
 );
 vi.mock(
-  "@/application/governance/authorization/features/specialist-invocation/flow/prepare-analysis-refinement.js",
+  "@/application/governance/records/analysis/analysis-provenance.js",
   async (original) => ({
     ...(await original<Record<string, unknown>>()),
     assertCurrentAnalysis: () => ({

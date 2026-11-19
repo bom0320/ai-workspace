@@ -23,10 +23,8 @@ import { executeNextSpecialist } from "./features/decision/nodes/execute-next-sp
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
 import type { AssessmentAgent } from "@/application/analysis-assessment/index.js";
 import { createAssessAnalysisNode } from "./features/analysis/nodes/assess-analysis.js";
-import {
-  createConfirmRefinementNode,
-  prepareRefinementNode,
-} from "./features/analysis/nodes/prepare-refinement.js";
+import { createConfirmRefinementNode } from "./features/analysis/nodes/confirm-refinement.js";
+import { prepareRefinementNode } from "./features/analysis/nodes/prepare-refinement.js";
 
 import {
   routeAfterStaffingApproval,

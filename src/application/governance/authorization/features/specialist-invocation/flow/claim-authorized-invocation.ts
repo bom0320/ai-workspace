@@ -1,8 +1,6 @@
 import { validateInvocationContext } from "./validation/validate-invocation-freshness.js";
-import {
-  requireAnalysisRoot,
-  requireRefinementRequest,
-} from "./validation/validate-analysis-refinement.js";
+import { requireAnalysisRoot } from "../../../../records/analysis/analysis-budget.js";
+import { requireRefinementRequest } from "../../../../records/analysis/refinement-records.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { validateStoredIssuance } from "../../../../approval/index.js";
 import {

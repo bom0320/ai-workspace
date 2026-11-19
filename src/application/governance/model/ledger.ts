@@ -4,8 +4,8 @@ import {
   directionReviewSchema,
 } from "../approval/features/direction-review/model/review.js";
 import { invocationReservationSchema } from "../authorization/features/specialist-invocation/model/reservation.js";
-import { analysisRefinementSchema } from "../authorization/features/specialist-invocation/model/analysis-refinement.js";
-import { hasValidAnalysisRefinements } from "../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
+import { analysisRefinementSchema } from "./analysis-refinement.js";
+import { hasValidAnalysisRefinements } from "../records/analysis/refinement-records.js";
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import { approvedOperatingScopeSchema } from "./authority.js";

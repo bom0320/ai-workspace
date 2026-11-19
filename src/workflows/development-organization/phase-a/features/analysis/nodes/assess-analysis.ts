@@ -3,7 +3,7 @@ import {
   type AssessmentAgent,
 } from "@/application/analysis-assessment/index.js";
 import type { PhaseAState } from "../../../state.js";
-import { assertCurrentAnalysis } from "@/application/governance/authorization/features/specialist-invocation/flow/prepare-analysis-refinement.js";
+import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 
 export function assessmentBasis(state: PhaseAState) {
   const {

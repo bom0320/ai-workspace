@@ -8,7 +8,7 @@ import {
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import type { DirectionReview } from "../model/review.js";
-import { verifyAnalysisSources } from "../../../../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
+import { verifyAnalysisSources } from "../../../../records/analysis/analysis-provenance.js";
 import {
   currentScopeSource,
   resolveCurrentReview,

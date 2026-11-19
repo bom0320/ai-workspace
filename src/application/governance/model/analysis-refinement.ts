@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { invokeSpecialistRequestSchema } from "../../../../model/authority.js";
+import { invokeSpecialistRequestSchema } from "./authority.js";
 
 const text = z.string().min(1);
 export const analysisRefinementSchema = z

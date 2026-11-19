@@ -7,7 +7,7 @@ import {
   InvocationClaimError,
 } from "../execution/authorized-specialist-decision.js";
 import type { PhaseAState } from "../../../state.js";
-import { recordAnalysisDecision } from "@/application/governance/authorization/features/specialist-invocation/flow/record-analysis-decision.js";
+import { recordAnalysisDecision } from "@/application/governance/records/analysis/record-analysis-decision.js";
 
 export async function executeNextSpecialist(
   state: PhaseAState,

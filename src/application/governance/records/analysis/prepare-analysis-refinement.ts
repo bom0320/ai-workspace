@@ -3,12 +3,12 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   normalizeRefinementChanges,
   buildRefinementProposal,
-} from "@/application/analysis-refinement/index.js";
+} from "@/application/analysis/index.js";
 import type { StaffingProposal } from "@/application/staffing/index.js";
 import type {
   AssessmentInput,
   AssessmentResult,
-} from "@/application/analysis-assessment/index.js";
+} from "@/application/analysis/index.js";
 import { requireCurrentSystemRecord } from "../../approval/features/system-policy/flow/validation/system-configuration.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import { requireAnalysisRoot } from "./analysis-budget.js";

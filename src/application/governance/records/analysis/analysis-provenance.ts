@@ -3,7 +3,7 @@ import type { SynthesisContext } from "@/application/synthesis/index.js";
 import type {
   AssessmentInput,
   AssessmentLimits,
-} from "@/application/analysis-assessment/index.js";
+} from "@/application/analysis/index.js";
 import type { RepositoryGovernance } from "../../model/ledger.js";
 import {
   validateStoredIssuance,

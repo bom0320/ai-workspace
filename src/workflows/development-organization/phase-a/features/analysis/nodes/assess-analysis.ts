@@ -1,7 +1,7 @@
 import {
   assessAnalysis,
   type AssessmentAgent,
-} from "@/application/analysis-assessment/index.js";
+} from "@/application/analysis/index.js";
 import type { PhaseAState } from "../../../state.js";
 import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 

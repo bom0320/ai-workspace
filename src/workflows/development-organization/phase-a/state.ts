@@ -9,7 +9,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
-import { assessmentResultSchema } from "@/application/analysis-assessment/index.js";
+import { assessmentResultSchema } from "@/application/analysis/index.js";
 import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
 import {
   approvalRecordSchema,

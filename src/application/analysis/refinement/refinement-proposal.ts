@@ -10,7 +10,7 @@ import {
   type IntentAnalysis,
   type StaffingAssignment,
 } from "@/application/staffing/index.js";
-import type { AssessmentResult } from "@/application/analysis-assessment/index.js";
+import type { AssessmentResult } from "../assessment/model/assessment.js";
 
 type AssignmentChange = Omit<StaffingAssignment, "assignmentId">;
 

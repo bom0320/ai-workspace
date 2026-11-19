@@ -28,7 +28,7 @@ import { projectRefinementRequests } from "../../../../records/analysis/refineme
 import type {
   AssessmentInput,
   AssessmentResult,
-} from "@/application/analysis-assessment/index.js";
+} from "@/application/analysis/index.js";
 import { analysisRefinementSchema } from "../../../../model/analysis-refinement.js";
 
 export function approveStaffingProposal(

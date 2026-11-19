@@ -21,7 +21,7 @@ import {
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
-import type { AssessmentAgent } from "@/application/analysis-assessment/index.js";
+import type { AssessmentAgent } from "@/application/analysis/index.js";
 import { createAssessAnalysisNode } from "./features/analysis/nodes/assess-analysis.js";
 import { createConfirmRefinementNode } from "./features/analysis/nodes/confirm-refinement.js";
 import { prepareRefinementNode } from "./features/analysis/nodes/prepare-refinement.js";

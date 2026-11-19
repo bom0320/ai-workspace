@@ -15,6 +15,8 @@ export const invocationReservationSchema = z
     invocationDigest: digest,
     reservedAt: z.iso.datetime(),
     claimedAt: z.iso.datetime().optional(),
+    analysisRefinementId: text.optional(),
+    decisionDigest: digest.optional(),
   })
   .strict()
   .refine(

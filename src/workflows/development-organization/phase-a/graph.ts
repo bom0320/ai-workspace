@@ -21,6 +21,12 @@ import {
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
+import type { AssessmentAgent } from "@/application/analysis-assessment/index.js";
+import { createAssessAnalysisNode } from "./features/analysis/nodes/assess-analysis.js";
+import {
+  createConfirmRefinementNode,
+  prepareRefinementNode,
+} from "./features/analysis/nodes/prepare-refinement.js";
 
 import {
   routeAfterStaffingApproval,
@@ -37,6 +43,7 @@ export type PhaseAGraphOptions = StaffingExecutionOptions &
     executionTarget?: PhaseAExecutionTarget;
     allowDirectStaffingApproval?: boolean;
     synthesis?: RunSynthesisOptions;
+    assessmentAgent?: AssessmentAgent;
   };
 
 export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
@@ -46,6 +53,7 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   } = options;
 
   const humanGovernance = executionTarget === "human-direction-governance";
+  const trackAnalysis = humanGovernance || executionTarget === "ceo-synthesis";
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph(phaseAState)
@@ -55,8 +63,15 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     .addNode("run-staffing", createRunStaffingNode(options))
     .addNode("evaluate-staffing-approval", evaluateStaffingApproval)
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
-    .addNode("execute-next-specialist", executeNextSpecialist)
+    .addNode("execute-next-specialist", (state) =>
+      executeNextSpecialist(state, trackAnalysis)
+    )
     .addNode("compare-specialist-decisions", compareSpecialistDecisions)
+    .addNode(
+      "assess-analysis",
+      createAssessAnalysisNode(options.assessmentAgent)
+    )
+    .addNode("prepare-refinement", prepareRefinementNode)
     .addNode(
       "run-ceo-synthesis",
       createRunCEOSynthesisNode(options.synthesis, {
@@ -85,9 +100,32 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     ["evaluate-staffing-approval", END]
   );
   if (allowDirectStaffingApproval) {
-    const compatibilityGraph = graph.addNode(
-      "confirm-staffing-approval",
-      createConfirmStaffingApprovalNode(options.confirmApproval)
+    const compatibilityGraph = graph
+      .addNode(
+        "confirm-staffing-approval",
+        createConfirmStaffingApprovalNode(options.confirmApproval)
+      )
+      .addNode(
+        "confirm-refinement",
+        createConfirmRefinementNode(options.confirmApproval)
+      );
+    compatibilityGraph.addConditionalEdges(
+      "prepare-refinement",
+      (state) =>
+        state.analysisRefinement?.status === "approval-required"
+          ? "confirm-refinement"
+          : state.analysisRefinement?.status === "ready"
+            ? "execute-next-specialist"
+            : END,
+      ["confirm-refinement", "execute-next-specialist", END]
+    );
+    compatibilityGraph.addConditionalEdges(
+      "confirm-refinement",
+      (state) =>
+        state.analysisRefinement?.status === "ready"
+          ? "execute-next-specialist"
+          : END,
+      ["execute-next-specialist", END]
     );
     compatibilityGraph.addConditionalEdges(
       "evaluate-staffing-approval",
@@ -103,6 +141,14 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       ["preflight-specialist-decisions", END]
     );
   } else {
+    graph.addConditionalEdges(
+      "prepare-refinement",
+      (state) =>
+        state.analysisRefinement?.status === "ready"
+          ? "execute-next-specialist"
+          : END,
+      ["execute-next-specialist", END]
+    );
     graph.addConditionalEdges(
       "evaluate-staffing-approval",
       (state) => routeAfterStaffingApproval(state, executionTarget),
@@ -127,7 +173,17 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   graph.addConditionalEdges(
     "compare-specialist-decisions",
     (state) => routeAfterComparison(state, executionTarget),
-    ["run-ceo-synthesis", END]
+    ["assess-analysis", END]
+  );
+  graph.addConditionalEdges(
+    "assess-analysis",
+    (state) =>
+      state.analysisAssessment?.status === "sufficient"
+        ? "run-ceo-synthesis"
+        : state.analysisAssessment?.status === "refinement-required"
+          ? "prepare-refinement"
+          : END,
+    ["run-ceo-synthesis", "prepare-refinement", END]
   );
   graph.addConditionalEdges(
     "run-ceo-synthesis",

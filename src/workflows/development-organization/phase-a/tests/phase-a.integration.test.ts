@@ -8,7 +8,7 @@ import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import {
-  createPhaseAGraph,
+  createPhaseAGraph as createGraph,
   runAuthorizedSpecialistDecision,
 } from "../index.js";
 import { execFileSync } from "node:child_process";
@@ -45,6 +45,19 @@ import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
 } from "../entrypoints/run-staffing-approval.js";
+
+function createPhaseAGraph(options: Parameters<typeof createGraph>[0] = {}) {
+  return createGraph({
+    assessmentAgent: async ({ decisions }) => ({
+      status: "sufficient",
+      reason: "Verified analysis supports this direction.",
+      sources: [
+        { kind: "recommendation", specialistId: decisions[0].specialistId },
+      ],
+    }),
+    ...options,
+  });
+}
 
 // Real receipts, signed storage and Git; only controlling-terminal I/O is fake.
 const terminal = vi.hoisted(() => ({ home: "", line: "", offset: 0 }));
@@ -787,6 +800,263 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toBe(true);
     return { graph, config, pending, command };
   }
+
+  it.each(["round-limit", "policy", "invalid-source", "blocked"] as const)(
+    "terminates Analysis Assessment on %s without promoting unsupported results",
+    async (mode) => {
+      system.maxAgentInvocations = 4;
+      draft.budget.maxAgentInvocations = 4;
+      configure();
+      delegate(4);
+      const command = runtime();
+      let round = 0;
+      const graph = createPhaseAGraph({
+        ...options,
+        executionTarget: "ceo-synthesis",
+        assessmentAgent: async () => ({
+          status: mode === "blocked" ? "blocked" : "refinement-required",
+          reason: "More evidence",
+          sources: [
+            {
+              kind: "recommendation",
+              specialistId: mode === "invalid-source" ? "unknown" : "frontend",
+            },
+          ],
+          ...(mode === "blocked"
+            ? {}
+            : {
+                changes: [
+                  mode === "policy"
+                    ? {
+                        kind: "context-extension",
+                        specialistId: "frontend",
+                        context: [{ kind: "directory", path: "forbidden" }],
+                        reason: "Context gap",
+                      }
+                    : {
+                        kind: "re-evaluation",
+                        specialistId: "frontend",
+                        objective: `Review aspect ${++round}`,
+                        reason: "Context gap",
+                      },
+                ],
+              }),
+        }),
+      });
+      const state = await graph.invoke({
+        goal: options.goal,
+        repositoryPath: root,
+      });
+      expect(state.synthesisResult).toBeUndefined();
+      if (mode === "invalid-source" || mode === "blocked")
+        expect(state.analysisAssessment?.status).toBe("blocked");
+      else expect(state.analysisRefinement?.status).toBe("denied");
+      expect(command).toHaveBeenCalledTimes(mode === "round-limit" ? 3 : 1);
+      expect(reservations()).toHaveLength(mode === "round-limit" ? 3 : 1);
+      expect(issuanceCount()).toBe(mode === "round-limit" ? 3 : 1);
+      if (mode === "round-limit") {
+        const round = withGovernanceRecords((raw) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          return Object.values(ledger.repositories)[0].analysisRefinements![0];
+        });
+        expect(
+          governance.authorizeSpecialistInvocation(
+            round.requests[0],
+            undefined,
+            round.id
+          ).status
+        ).toBe("denied");
+      }
+    }
+  );
+
+  it.each([
+    "reuse",
+    "extension",
+    "addition",
+    "human",
+    "pending",
+    "budget",
+    "partial",
+  ] as const)("runs governed Analysis Refinement for %s", async (mode) => {
+    mkdirSync(join(root, "docs"));
+    writeFileSync(join(root, "docs", "note.txt"), "Additional context\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add analysis context");
+    system.availableSpecialists.push({
+      ...system.availableSpecialists[0],
+      id: "ux",
+    });
+    system.contextAccessPolicy.allowedScopes.push({
+      kind: "directory",
+      path: "docs",
+    });
+    const maxInvocations = mode === "budget" ? 1 : mode === "partial" ? 3 : 2;
+    system.maxAgentInvocations = Math.max(
+      system.maxAgentInvocations,
+      maxInvocations
+    );
+    draft.budget.maxAgentInvocations = maxInvocations;
+    configure();
+    if (mode === "human" || mode === "pending") delegate();
+    else
+      delegate(
+        Math.max(2, maxInvocations),
+        ["frontend", "ux"],
+        system.contextAccessPolicy.allowedScopes
+      );
+    const command = runtime();
+    if (mode === "partial") {
+      const simulate = command.getMockImplementation()!;
+      command.mockImplementation(async (...args) => {
+        const prompt = args[1].at(-1)!;
+        if (
+          prompt.includes("SpecialistContext:\n") &&
+          prompt.includes("Assess UX risks")
+        )
+          throw new Error("Specialist unavailable");
+        return simulate(...args);
+      });
+    }
+    const context = [{ kind: "directory", path: "docs" }];
+    const change =
+      mode === "extension"
+        ? {
+            kind: "context-extension",
+            specialistId: "frontend",
+            context,
+            reason: "Check missing repository evidence",
+          }
+        : mode === "addition" ||
+            mode === "human" ||
+            mode === "pending" ||
+            mode === "partial"
+          ? {
+              kind: "specialist-addition",
+              specialistId: "ux",
+              context,
+              objective: "Assess UX risks",
+              reason: "Need a second perspective",
+            }
+          : {
+              kind: "re-evaluation",
+              specialistId: "frontend",
+              reason: "Review the evidence again",
+            };
+    const sources = [{ kind: "recommendation", specialistId: "frontend" }];
+    const assessmentAgent = vi
+      .fn<
+        NonNullable<
+          NonNullable<Parameters<typeof createGraph>[0]>["assessmentAgent"]
+        >
+      >(async () => ({
+        status: "sufficient",
+        reason: "Sufficient evidence",
+        sources,
+      }))
+      .mockResolvedValueOnce({
+        status: "refinement-required",
+        reason: "Analysis gap",
+        sources,
+        changes:
+          mode === "partial"
+            ? [
+                {
+                  kind: "re-evaluation",
+                  specialistId: "frontend",
+                  objective: "Review a new aspect",
+                  reason: "Check coverage",
+                },
+                change,
+              ]
+            : [change],
+      });
+    const confirmApproval = vi.fn(accept);
+    const graph = createPhaseAGraph({
+      ...options,
+      assessmentAgent,
+      confirmApproval,
+      allowDirectStaffingApproval: mode === "human",
+      executionTarget: "human-direction-governance",
+      confirmDirection: (request) =>
+        confirmHumanAction(request.binding, JSON.stringify(request)),
+    });
+    const config = { configurable: { thread_id: "refinement" } };
+    const state = await graph.invoke(
+      { goal: options.goal, repositoryPath: root },
+      config
+    );
+    if (mode === "partial") {
+      const records = reservations();
+      expect(records).toHaveLength(3);
+      expect(records[1].decisionDigest).toBeDefined();
+      expect(records[2].claimedAt).toBeDefined();
+      expect(records[2].decisionDigest).toBeUndefined();
+      expect(state.specialistDecisionsResult?.status).toBe("failed");
+      expect(
+        state.analysisRepresentatives?.map(({ invocationId }) => invocationId)
+      ).toEqual([records[0].invocationId]);
+      expect(assessmentAgent).toHaveBeenCalledTimes(1);
+      expect(state.synthesisResult).toBeUndefined();
+      return;
+    }
+    if (mode === "pending" || mode === "budget") {
+      expect(state.analysisRefinement?.status).toBe(
+        mode === "budget" ? "denied" : "approval-required"
+      );
+      expect(confirmApproval).not.toHaveBeenCalled();
+      expect(state.synthesisResult).toBeUndefined();
+      expect(reservations()).toHaveLength(1);
+      return;
+    }
+    expect(confirmApproval).toHaveBeenCalledTimes(mode === "human" ? 1 : 0);
+    expect(assessmentAgent).toHaveBeenCalledTimes(2);
+    expect(options.agent).toHaveBeenCalledTimes(1);
+    const records = reservations();
+    expect(records).toHaveLength(2);
+    expect(
+      records.every(
+        ({ claimedAt, decisionDigest }) => claimedAt && decisionDigest
+      )
+    ).toBe(true);
+    expect(records[1].scopeId === records[0].scopeId).toBe(mode === "reuse");
+    expect(issuanceCount()).toBe(mode === "reuse" ? 1 : 2);
+    const review = state.directionReview!;
+    expect(review).toBeDefined();
+    expect(review.analysisInvocationIds).toEqual(
+      mode === "addition" || mode === "human"
+        ? records.map(({ invocationId }) => invocationId)
+        : [records[1].invocationId]
+    );
+    const final = await graph.invoke(
+      new Command({
+        resume: {
+          action: "approve",
+          reviewId: review.id,
+          binding: review.binding,
+        },
+      }),
+      config
+    );
+    expect(final.directionGovernanceResult?.status).toBe("approved");
+    if (
+      mode === "addition" &&
+      final.directionGovernanceResult?.status === "approved"
+    ) {
+      const id = final.directionGovernanceResult.decision.id;
+      withGovernanceRecords((raw, persist) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        Object.values(ledger.repositories)[0].reservations![1].decisionDigest =
+          "0".repeat(64);
+        persist(ledger);
+      });
+      expect(() => governance.getApprovedDecision(id)).toThrow(
+        "successful claimed Assignment"
+      );
+    }
+  });
   const confirmDirection = (request: governance.DirectionConfirmationRequest) =>
     confirmHumanAction(request.binding, JSON.stringify(request));
 
@@ -2935,6 +3205,10 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
   }).invoke({ goal: options.goal, repositoryPath: root });
   expect(state.approvalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
+    "analysisAssessment",
+    "analysisBatchInvocationIds",
+    "analysisRefinement",
+    "analysisRepresentatives",
     "approvalResult",
     "collectedDecisions",
     "currentSpecialistIndex",

@@ -4,6 +4,8 @@ import {
   directionReviewSchema,
 } from "../approval/features/direction-review/model/review.js";
 import { invocationReservationSchema } from "../authorization/features/specialist-invocation/model/reservation.js";
+import { analysisRefinementSchema } from "../authorization/features/specialist-invocation/model/analysis-refinement.js";
+import { hasValidAnalysisRefinements } from "../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
 import { z } from "zod";
 import { staffingProposalSchema } from "@/application/staffing/index.js";
 import { approvedOperatingScopeSchema } from "./authority.js";
@@ -54,6 +56,7 @@ export const governanceLedgerSchema = z
             .optional(),
           executionReservations: z.array(executionReservationSchema).optional(),
           reservations: z.array(invocationReservationSchema).optional(),
+          analysisRefinements: z.array(analysisRefinementSchema).optional(),
           issuances: z.array(
             z
               .object({
@@ -91,6 +94,11 @@ export const governanceLedgerSchema = z
       }
     }
     for (const [key, entry] of Object.entries(ledger.repositories)) {
+      if (!hasValidAnalysisRefinements(entry))
+        context.addIssue({
+          code: "custom",
+          message: "Invalid Analysis Refinement or cumulative budget.",
+        });
       if (!hasValidExecutionReservations(entry, key, executionIds))
         context.addIssue({
           code: "custom",

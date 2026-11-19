@@ -8,6 +8,7 @@ import {
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import type { DirectionReview } from "../model/review.js";
+import { verifyAnalysisSources } from "../../../../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
 import {
   currentScopeSource,
   resolveCurrentReview,
@@ -27,7 +28,8 @@ export function registerDirectionReview(
   scopeId: string,
   input: SynthesisContext,
   proposed: SynthesisProposal,
-  previousReviewId?: string
+  previousReviewId?: string,
+  invocationIds?: string[]
 ): DirectionReview {
   // 1. Parse the Synthesis Context and Proposal
   const { revision, ...context } = synthesisContextSchema.parse(input);
@@ -38,7 +40,6 @@ export function registerDirectionReview(
       entry,
       issuance: { scope },
     } = currentScopeSource(ledger, scopeId);
-    assertAnalysisScope(context, scope);
 
     // 3. Validate the Revision Against Its Stored Human Request
     // Current eligibility for this Scope was checked in this transaction;
@@ -46,6 +47,18 @@ export function registerDirectionReview(
     const previousReview = previousReviewId
       ? resolveReviewRecord(ledger, previousReviewId).review
       : undefined;
+    const analysisInvocationIds = previousReview
+      ? previousReview.analysisInvocationIds
+      : invocationIds;
+    if (analysisInvocationIds)
+      verifyAnalysisSources(
+        entry,
+        scopeId,
+        context,
+        analysisInvocationIds,
+        true
+      );
+    else assertAnalysisScope(context, scope);
     const revisionRound = validateRevisionRequest({
       scopeId,
       context,
@@ -69,6 +82,7 @@ export function registerDirectionReview(
       analysisDigest: governanceDigest(context),
       proposal,
       ...(!previousReviewId ? { context } : {}),
+      ...(analysisInvocationIds && { analysisInvocationIds }),
       revision: revisionRound,
       ...(previousReviewId ? { previousReviewId } : {}),
     };

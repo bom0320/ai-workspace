@@ -7,6 +7,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { getDirectionReview } from "@/application/governance/index.js";
 import type { PhaseAState } from "../../../state.js";
+import { assertCurrentAnalysis } from "@/application/governance/authorization/features/specialist-invocation/flow/prepare-analysis-refinement.js";
 
 export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
@@ -46,6 +47,16 @@ export function createRunCEOSynthesisNode(
             decisions: decisions.decisions,
             comparison,
           };
+      if (
+        !previousReviewId &&
+        state.analysisRepresentatives &&
+        state.approvalResult?.status === "approved"
+      )
+        assertCurrentAnalysis(
+          state.approvalResult.scope.id,
+          context,
+          state.analysisRepresentatives.map(({ invocationId }) => invocationId)
+        );
     } catch {
       return {
         directionReview: undefined,
@@ -73,7 +84,8 @@ export function createRunCEOSynthesisNode(
           state.approvalResult.scope.id,
           context,
           synthesisResult.proposal,
-          previousReviewId
+          previousReviewId,
+          state.analysisRepresentatives?.map(({ invocationId }) => invocationId)
         );
       }
       return {

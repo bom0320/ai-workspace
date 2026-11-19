@@ -7,9 +7,11 @@ import {
   InvocationClaimError,
 } from "../execution/authorized-specialist-decision.js";
 import type { PhaseAState } from "../../../state.js";
+import { recordAnalysisDecision } from "@/application/governance/authorization/features/specialist-invocation/flow/record-analysis-decision.js";
 
 export async function executeNextSpecialist(
-  state: PhaseAState
+  state: PhaseAState,
+  trackAnalysis = false
 ): Promise<Partial<PhaseAState>> {
   // 1. Require Consistent Prepared Progress Before Reserving Budget
   const requests = state.preparedSpecialistRequests;
@@ -43,7 +45,11 @@ export async function executeNextSpecialist(
   // in Graph State or retry a Reservation/Claim as part of this Node.
   let invocation: AuthorizedSpecialistInvocation;
   try {
-    const verdict = authorizeSpecialistInvocation(request);
+    const round = state.analysisRefinement;
+    const verdict =
+      round?.status === "ready"
+        ? authorizeSpecialistInvocation(request, undefined, round.id)
+        : authorizeSpecialistInvocation(request);
     if (verdict.status !== "allowed") throw new Error(verdict.reason);
     invocation = verdict.invocation;
   } catch (error) {
@@ -66,9 +72,14 @@ export async function executeNextSpecialist(
   // Failed batches expose no partial success and must not consume later budgets.
   try {
     const decision = await runAuthorizedSpecialistDecision(invocation);
+    if (trackAnalysis) recordAnalysisDecision(invocation, decision);
     // 4. Record Progress or Complete Stage 3 With the Last Successful Execution
     const decisions = [...collected, decision];
     const nextIndex = index + 1;
+    const invocationIds = [
+      ...(state.analysisBatchInvocationIds ?? []),
+      invocation.invocationId,
+    ];
     if (
       decisions.length === 0 ||
       decisions.length !== nextIndex ||
@@ -79,6 +90,7 @@ export async function executeNextSpecialist(
       return {
         collectedDecisions: decisions,
         currentSpecialistIndex: nextIndex,
+        ...(trackAnalysis && { analysisBatchInvocationIds: invocationIds }),
       };
 
     if (decisions.length !== requests.length)
@@ -87,10 +99,47 @@ export async function executeNextSpecialist(
       );
     // Completion remains observable before Comparison without a separate Node.
     // It does not approve a direction or complete Phase A.
+    const representatives = new Map(
+      state.analysisRepresentatives?.map((item) => [
+        item.decision.specialistId,
+        item,
+      ])
+    );
+    if (trackAnalysis) {
+      for (const [position, value] of decisions.entries()) {
+        const assignment = state.synthesisAssignments?.[position];
+        if (
+          !assignment ||
+          assignment.specialistId !== value.specialistId ||
+          !invocationIds[position]
+        )
+          throw new Error(
+            "Analysis result does not match the prepared Assignment."
+          );
+        representatives.set(value.specialistId, {
+          decision: value,
+          assignment,
+          invocationId: invocationIds[position],
+        });
+      }
+    }
+    const analysisRepresentatives = [...representatives.values()];
     return {
       collectedDecisions: decisions,
       currentSpecialistIndex: nextIndex,
-      specialistDecisionsResult: { status: "completed", decisions },
+      ...(trackAnalysis && {
+        analysisRepresentatives,
+        analysisBatchInvocationIds: [],
+        synthesisAssignments: analysisRepresentatives.map(
+          ({ assignment }) => assignment
+        ),
+      }),
+      specialistDecisionsResult: {
+        status: "completed",
+        decisions: trackAnalysis
+          ? analysisRepresentatives.map((item) => item.decision)
+          : decisions,
+      },
     };
   } catch (error) {
     return {

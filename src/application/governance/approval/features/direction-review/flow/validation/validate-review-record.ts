@@ -64,7 +64,11 @@ export function assertReviewRecord(
       parent.revision + 1 !== review.revision ||
       parent.analysisDigest !== review.analysisDigest ||
       parent.scopeId !== review.scopeId ||
-      parent.scopeVersion !== review.scopeVersion
+      parent.scopeVersion !== review.scopeVersion ||
+      !sameContent(
+        parent.analysisInvocationIds ?? [],
+        review.analysisInvocationIds ?? []
+      )
     )
       throw new DirectionReviewValidationError(
         "Revision provenance is invalid."

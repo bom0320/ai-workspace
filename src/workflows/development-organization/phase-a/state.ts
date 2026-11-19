@@ -9,6 +9,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
+import { assessmentResultSchema } from "@/application/analysis-assessment/index.js";
 import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
 import {
   approvalRecordSchema,
@@ -114,6 +115,32 @@ export const phaseAState = new StateSchema({
   preparedSpecialistRequests: z.array(invokeSpecialistRequestSchema).optional(),
   currentSpecialistIndex: z.number().int().nonnegative().optional(),
   collectedDecisions: z.array(agentDecisionSchema).optional(),
+  analysisRepresentatives: z
+    .array(
+      z
+        .object({
+          invocationId: z.string(),
+          decision: agentDecisionSchema,
+          assignment: synthesisContextSchema.shape.assignments.element,
+        })
+        .strict()
+    )
+    .optional(),
+  analysisBatchInvocationIds: z.array(z.string()).optional(),
+  analysisAssessment: assessmentResultSchema.optional(),
+  analysisRefinement: z
+    .union([
+      z.object({ status: z.literal("ready"), id: z.string() }).strict(),
+      z
+        .object({
+          status: z.literal("approval-required"),
+          proposal: staffingProposalSchema,
+          request: staffingApprovalEvaluationSchema,
+        })
+        .strict(),
+      z.object({ status: z.literal("denied"), reason: z.string() }).strict(),
+    ])
+    .optional(),
   // Preflight's trusted comparison inputs are data, never execution authority.
   specialistComparisonContext: z
     .object({

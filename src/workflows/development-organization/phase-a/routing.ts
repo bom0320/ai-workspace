@@ -44,7 +44,7 @@ export function routeAfterComparison(
     (state.decisionComparisonResult?.status === "completed" ||
       (state.decisionComparisonResult?.status === "skipped" &&
         state.specialistDecisionsResult.decisions.length === 1))
-    ? "run-ceo-synthesis"
+    ? "assess-analysis"
     : END;
 }
 

@@ -4,6 +4,7 @@ import type {
 } from "../../../../../model/ledger.js";
 import type { SynthesisContext } from "@/application/synthesis/index.js";
 import type { DirectionReview } from "../../model/review.js";
+import { verifyAnalysisSources } from "../../../../../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
 import {
   validateStoredIssuance,
   validateStoredIssuanceRecord,
@@ -137,7 +138,15 @@ function resolveReview(
     );
   validateIssuance(issuance, entry);
   const context = reviewContext(entry, scope, review);
-  assertAnalysisScope(context, scope);
+  if (review.analysisInvocationIds)
+    verifyAnalysisSources(
+      entry,
+      scope.id,
+      context,
+      review.analysisInvocationIds,
+      validateIssuance === validateStoredIssuance
+    );
+  else assertAnalysisScope(context, scope);
   assertReviewRecord(review, entry, scope, context);
   return { entry, review, context, snapshot: scope.snapshot };
 }

@@ -1,4 +1,8 @@
 import { validateInvocationContext } from "./validation/validate-invocation-freshness.js";
+import {
+  requireAnalysisRoot,
+  requireRefinementRequest,
+} from "./validation/validate-analysis-refinement.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { validateStoredIssuance } from "../../../../approval/index.js";
 import {
@@ -57,6 +61,23 @@ export function claimAuthorizedInvocation(
         throw new Error("Reservation Scope does not match.");
       resolveGovernanceRepository(issuance.scope.snapshot.repositoryRoot);
       const files = validateStoredIssuance(issuance, entry);
+      const linkage = issuance.proposal.refinement;
+      if (linkage && !reservation.analysisRefinementId)
+        throw new Error("Missing refinement binding.");
+      if (reservation.analysisRefinementId) {
+        const rootScopeId = linkage?.rootScopeId ?? issuance.scope.id;
+        requireRefinementRequest(
+          entry,
+          rootScopeId,
+          reservation.analysisRefinementId,
+          request
+        );
+        if (linkage)
+          validateStoredIssuance(
+            requireAnalysisRoot(entry, rootScopeId),
+            entry
+          );
+      }
       validateInvocationContext(
         invocation,
         request.requestedContextPaths,

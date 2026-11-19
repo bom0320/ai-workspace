@@ -18,7 +18,7 @@ import {
   type StaffingProposal,
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
-import { createPhaseAGraph } from "../graph.js";
+import { createPhaseAGraph as createGraph } from "../graph.js";
 import { executeNextSpecialist } from "../features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "../features/comparison/nodes/compare-specialist-decisions.js";
 import {
@@ -65,6 +65,35 @@ vi.mock("@/application/staffing/index.js", async (original) => ({
   runStaffing: vi.fn(),
 }));
 
+vi.mock(
+  "@/application/governance/authorization/features/specialist-invocation/flow/record-analysis-decision.js",
+  () => ({
+    recordAnalysisDecision: vi.fn(),
+  })
+);
+vi.mock(
+  "@/application/governance/authorization/features/specialist-invocation/flow/prepare-analysis-refinement.js",
+  async (original) => ({
+    ...(await original<Record<string, unknown>>()),
+    assertCurrentAnalysis: () => ({
+      remainingInvocations: 1,
+      remainingRefinements: 2,
+    }),
+  })
+);
+
+function createPhaseAGraph(options: Parameters<typeof createGraph>[0] = {}) {
+  return createGraph({
+    assessmentAgent: async ({ decisions }) => ({
+      status: "sufficient",
+      reason: "Verified analysis supports this direction.",
+      sources: [
+        { kind: "recommendation", specialistId: decisions[0].specialistId },
+      ],
+    }),
+    ...options,
+  });
+}
 const goal = {
   objective: "Review UI",
   targetRepository: "repository",
@@ -135,6 +164,7 @@ describe("Phase A Staffing Approval execution", () => {
     expect(Object.keys(graph.nodes).sort()).toEqual([
       "__end__",
       "__start__",
+      "assess-analysis",
       "compare-specialist-decisions",
       "evaluate-staffing-approval",
       "execute-next-specialist",
@@ -142,6 +172,7 @@ describe("Phase A Staffing Approval execution", () => {
       "human-direction-review",
       "load-system-policy",
       "preflight-specialist-decisions",
+      "prepare-refinement",
       "run-ceo-synthesis",
       "run-staffing",
     ]);
@@ -174,6 +205,10 @@ describe("Phase A Staffing Approval execution", () => {
       "repositoryPath",
     ]);
     expect(Object.keys(phaseAState.fields).sort()).toEqual([
+      "analysisAssessment",
+      "analysisBatchInvocationIds",
+      "analysisRefinement",
+      "analysisRepresentatives",
       "approvalResult",
       "collectedDecisions",
       "currentSpecialistIndex",

@@ -10,7 +10,8 @@ import type { AuthorizationContext } from "../context/resolve-authorization-cont
 export function reserveInvocation(
   { entry, issuance: { scope }, assignment }: AuthorizationContext,
   request: InvokeSpecialistRequest,
-  invocation: AuthorizedSpecialistInvocation
+  invocation: AuthorizedSpecialistInvocation,
+  analysisRefinementId?: string
 ): void {
   const reservation = invocationReservationSchema.parse({
     invocationId: invocation.invocationId,
@@ -20,6 +21,7 @@ export function reserveInvocation(
     requestDigest: governanceDigest(request),
     invocationDigest: governanceDigest(invocation),
     reservedAt: new Date(Date.now()).toISOString(),
+    ...(analysisRefinementId && { analysisRefinementId }),
   });
   (entry.reservations ??= []).push(reservation);
 }

@@ -40,3 +40,4 @@ export {
   type StaffingRunResult,
 } from "./model/result.js";
 export { validateStaffingProposal } from "./flow/validation/validate-staffing-proposal.js";
+export { buildStaffingProposal } from "./flow/transformation/build-staffing-proposal.js";

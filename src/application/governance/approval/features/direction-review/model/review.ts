@@ -34,6 +34,7 @@ export const directionReviewSchema = z
     analysisDigest: text,
     // Only the initial Review stores the analysis; revisions reference their parent.
     context: synthesisContextSchema.omit({ revision: true }).optional(),
+    analysisInvocationIds: z.array(text).min(1).optional(),
     proposal: synthesisProposalSchema,
     revision: z.number().int().min(0).max(2),
     previousReviewId: text.optional(),

@@ -39,6 +39,16 @@ export const staffingProposalSchema = z
     budget: z
       .object({ maxAgentInvocations: z.number().int().positive() })
       .strict(),
+    refinement: z
+      .object({
+        id: nonEmptyString,
+        rootScopeId: nonEmptyString,
+        basisDigest: nonEmptyString,
+        assessmentDigest: nonEmptyString,
+        changeDigest: nonEmptyString,
+      })
+      .strict()
+      .optional(),
     rationale: nonEmptyString,
   })
   .strict();

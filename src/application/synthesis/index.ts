@@ -3,6 +3,7 @@ export {
   type RunSynthesisOptions,
 } from "./flow/run-synthesis.js";
 export { synthesisContextSchema } from "./protocol/context.js";
+export { validateAnalysisReferences } from "./flow/validation/validate-output.js";
 export {
   synthesisProposalSchema,
   sourceReferenceSchema,

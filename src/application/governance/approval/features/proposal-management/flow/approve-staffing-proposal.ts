@@ -20,15 +20,48 @@ import {
 } from "./validation/staffing-issuance.js";
 import { evaluateStaffingApproval } from "./validation/evaluate-staffing-approval.js";
 import { issueStaffingScope } from "./transformation/issue-staffing-scope.js";
+import {
+  assertRefinementAvailable,
+  verifyAnalysisSources,
+} from "../../../../authorization/features/specialist-invocation/flow/validation/validate-analysis-refinement.js";
+import type {
+  AssessmentInput,
+  AssessmentResult,
+} from "@/application/analysis-assessment/index.js";
+import { analysisRefinementSchema } from "../../../../authorization/features/specialist-invocation/model/analysis-refinement.js";
 
 export function approveStaffingProposal(
   input: unknown,
   receipt?: HumanConfirmation
 ): StaffingApprovalResult {
+  return approveProposal(input, receipt);
+}
+
+type RefinementBasis = {
+  context: AssessmentInput;
+  invocationIds: string[];
+  assessment: AssessmentResult;
+};
+
+export function approveRefinementProposal(
+  input: unknown,
+  basis: RefinementBasis,
+  receipt?: HumanConfirmation
+): StaffingApprovalResult {
+  return approveProposal(input, receipt, basis);
+}
+
+function approveProposal(
+  input: unknown,
+  receipt: HumanConfirmation | undefined,
+  refinement?: RefinementBasis
+): StaffingApprovalResult {
   try {
     // 1. Validate Proposal and Repository
 
     const proposal = staffingProposalSchema.parse(input);
+    if (Boolean(proposal.refinement) !== Boolean(refinement))
+      return deniedStaffingApproval();
     const root = resolveGovernanceRepository(proposal.snapshot.repositoryRoot);
 
     return withGovernanceLedger((ledger, save) => {
@@ -39,6 +72,32 @@ export function approveStaffingProposal(
       }
 
       assertProposalNotIssued(entry, proposal.id);
+      const linkage = proposal.refinement;
+      if (linkage && refinement) {
+        const initial = assertRefinementAvailable(
+          entry,
+          linkage.rootScopeId,
+          linkage.changeDigest,
+          proposal.assignments.length
+        );
+        if (
+          governanceDigest(initial.scope.goal) !==
+            governanceDigest(proposal.goal) ||
+          governanceDigest(initial.scope.snapshot) !==
+            governanceDigest(proposal.snapshot) ||
+          proposal.budget.maxAgentInvocations !== proposal.assignments.length ||
+          linkage.basisDigest !== governanceDigest(refinement.context) ||
+          linkage.assessmentDigest !== governanceDigest(refinement.assessment)
+        )
+          return deniedStaffingApproval();
+        verifyAnalysisSources(
+          entry,
+          linkage.rootScopeId,
+          refinement.context,
+          refinement.invocationIds,
+          true
+        );
+      }
 
       // 2. Evaluate Approval Policy
 
@@ -121,6 +180,22 @@ export function approveStaffingProposal(
       // 8. Persist Issuance
 
       entry.issuances.push(issuance);
+      if (linkage) {
+        const { scope } = issuance;
+        (entry.analysisRefinements ??= []).push(
+          analysisRefinementSchema.parse({
+            ...linkage,
+            requests: scope.assignments.map(
+              ({ assignmentId, contextPaths }) => ({
+                scopeId: scope.id,
+                scopeVersion: scope.version,
+                assignmentId,
+                requestedContextPaths: contextPaths,
+              })
+            ),
+          })
+        );
+      }
       save();
 
       return {

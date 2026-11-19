@@ -26,38 +26,43 @@ export function validateOutputReferences(
           ...action.proposal.unresolvedIssues.map((s) => s.sources),
           ...action.proposal.humanReviewItems.map((s) => s.sources),
         ];
-  for (const group of groups) {
-    const local = new Set<string>();
-    for (const source of group) {
-      if (local.has(key(source)))
-        throw new Error("Duplicate Synthesis SourceReference.");
-      local.add(key(source));
-      if (source.kind === "finding" || source.kind === "gap") {
-        if (
-          context.comparison.status !== "completed" ||
-          source.index >=
-            (source.kind === "finding"
-              ? context.comparison.comparison.findings
-              : context.comparison.comparison.gaps
-            ).length
-        )
-          throw new Error("Unknown Comparison SourceReference.");
-      } else if ("specialistId" in source) {
-        const { specialistId } = source;
-        const decision = context.decisions.find(
-          (d) => d.specialistId === specialistId
-        );
-        if (!decision) throw new Error("Unknown Specialist SourceReference.");
-        if (source.kind !== "recommendation") {
-          const items =
-            source.kind === "evidence"
-              ? decision.evidence
-              : source.kind === "risk"
-                ? decision.risks
-                : decision.uncertainty;
-          if (source.index >= items.length)
-            throw new Error("Decision SourceReference index is out of range.");
-        }
+  for (const group of groups) validateAnalysisReferences(context, group);
+}
+
+export function validateAnalysisReferences(
+  context: SynthesisContext,
+  group: SourceReference[]
+): void {
+  const local = new Set<string>();
+  for (const source of group) {
+    if (local.has(key(source)))
+      throw new Error("Duplicate Synthesis SourceReference.");
+    local.add(key(source));
+    if (source.kind === "finding" || source.kind === "gap") {
+      if (
+        context.comparison.status !== "completed" ||
+        source.index >=
+          (source.kind === "finding"
+            ? context.comparison.comparison.findings
+            : context.comparison.comparison.gaps
+          ).length
+      )
+        throw new Error("Unknown Comparison SourceReference.");
+    } else if ("specialistId" in source) {
+      const { specialistId } = source;
+      const decision = context.decisions.find(
+        (d) => d.specialistId === specialistId
+      );
+      if (!decision) throw new Error("Unknown Specialist SourceReference.");
+      if (source.kind !== "recommendation") {
+        const items =
+          source.kind === "evidence"
+            ? decision.evidence
+            : source.kind === "risk"
+              ? decision.risks
+              : decision.uncertainty;
+        if (source.index >= items.length)
+          throw new Error("Decision SourceReference index is out of range.");
       }
     }
   }

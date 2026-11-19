@@ -101,6 +101,8 @@ Human Goal / Constraints
 → Specialist Authorization / Reservation / Claim
 → Independent Decisions (v2)
 → Decision Comparison (v3)
+→ CEO Analysis Assessment (sufficient / refinement-required / blocked)
+  → 필요 시 승인 범위 검증 · 증분 Staffing · 선택적 Specialist 분석 → Comparison
 → CEO Synthesis: Recommendation / Rationale / Evidence / Trade-off / Unresolved Issues
 → Harness Validation
 → Human Direction Governance: Approve / Request Revision / Reject
@@ -119,6 +121,10 @@ Override도 변경 대상의 검증과 필요한 승인을 충족해야 하며, 
 **현재:** Phase A Graph의 기본 경로는 정책 조회 → CEO Staffing → 사전 위임 기반 Staffing Authorization을 실행한다. 유효한 위임이 없거나 제안이 위임 범위를 벗어나면 `approval-required`에서 종료한다. 만료·철회·정책 버전 불일치는 `denied`로 종료한다. 명시적인 `runStaffingApproval()` CLI 진입점은 기존 직접 확인 분기를 사용한다.
 
 CEO의 Repository 탐색에는 System Policy를 사용하고, Specialist 배정에는 별도의 위임 제약을 전달한다. 위임의 Specialist ID, File / Directory Context Scope, 호출 예산은 계획용 정보다. Governance는 Scope 발급 시 최신 정책과 위임, Proposal 및 Snapshot을 다시 검증한다.
+
+Synthesis 대상은 Comparison 완료 또는 단일 Decision의 정상 생략 뒤에 Assessment를 실행한다. Assessment의 출처 참조가 유효하고 결과가 충분할 때 Synthesis로 진행한다. 추가 분석 요청은 현재 대표 Decision과 연결된 Assignment만 재사용하거나, 변경분 Proposal을 같은 Staffing 승인 절차에 제출한다. 기존 Scope는 불변이다. 한 배치의 변경이 여러 Scope를 필요로 하면 선택된 변경만 담은 새 Scope 하나로 평가한다.
+
+최초 Scope의 호출 예산은 연결된 모든 후속 Scope에도 적용하는 누적 상한이다. 최대 두 번의 Refinement와 동일 변경 중복 금지를 Ledger에서 검증한다. 개별 호출은 기존 Authorization, Reservation, Claim을 거친다. 완료된 배치의 성공 결과만 Specialist별 대표 Decision을 갱신한다. Direction Review는 최종 분석의 성공한 Claim 출처를 Scope별로 확인하고, Human Revision은 같은 분석과 출처를 재사용한다.
 `executionTarget: "specialist-decisions"`에서 승인된 결과에만 다음 일반 Node / Edge를 연결한다.
 
 ```text

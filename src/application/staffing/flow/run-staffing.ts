@@ -64,7 +64,11 @@ export async function runStaffing(
     // assignment budget. No reconstructed inspection state is needed elsewhere.
     assertContextBudget({ ...state.context, inspectedFiles });
     assertRepositoryMatchesSnapshot(state.snapshot);
-    const proposal = buildStaffingProposal(draft, state);
+    const proposal = buildStaffingProposal(
+      draft,
+      state.context.goal,
+      state.snapshot
+    );
     assertRepositoryMatchesSnapshot(state.snapshot);
     return {
       status: "proposed",

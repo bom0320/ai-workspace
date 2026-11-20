@@ -5,7 +5,7 @@ import {
 import type { PhaseBState } from "../../../state.js";
 import { registerExecutionDecomposition } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { verifyExecutionHandoff } from "@/application/governance/index.js";
-import { phaseACompletedSchema } from "../../../../execution-handoff.js";
+import { phaseACompletedSchema } from "../../../../contracts/phase-handoff.js";
 
 export function createRunWorkDecompositionNode(
   options: RunWorkDecompositionOptions

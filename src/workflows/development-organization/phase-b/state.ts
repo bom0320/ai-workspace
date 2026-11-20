@@ -2,7 +2,7 @@ import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import type { PlanningResult } from "@/application/planning/index.js";
 import { workDecompositionResultSchema } from "@/application/work-decomposition/index.js";
-import { phaseACompletedSchema } from "../execution-handoff.js";
+import { phaseACompletedSchema } from "../contracts/phase-handoff.js";
 
 export const phaseBInput = new StateSchema({ handoff: phaseACompletedSchema });
 

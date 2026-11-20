@@ -54,6 +54,7 @@ export {
   type ExecutionSystemPolicy,
 } from "./features/system-policy/model/execution-system-policy.js";
 export { getExecutionDelegation } from "./features/execution-delegation/flow/get-execution-delegation.js";
+export { verifyExecutionHandoff } from "./features/execution-delegation/flow/verify-execution-handoff.js";
 export {
   proposeExecutionDelegation,
   type ExecutionDelegationProposalAgent,

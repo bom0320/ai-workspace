@@ -58,7 +58,7 @@ CLI는 사용자 입력, Human Confirmation, 결과 출력 계층이다. 현재 
 | --- | --- | --- |
 | Human 입력 | 원본 Goal / Constraints와 대상 Repository를 전달 | 기존 Domain 계약을 재사용하고 Agent가 제약을 임의 변경하지 않음 |
 | Phase A | 판단·승인 Workflow 실행과 결과 확인 | Staffing, 판단 근거 검증, 해결 방향 승인 의미는 해당 Application / Governance가 소유 |
-| Phase B 진입 | 최종 Human 방향 승인의 `ApprovedDecision`을 기존 Governance API로 복원한 뒤 업무 분해로 전달 | Governance는 승인 기록의 무결성을 검증하고 Planning / Execution은 실제 사용 시점의 적격성을 검증 |
+| Phase B 진입 | Phase A 완료의 `ApprovedDecision`과 `ExecutionDelegation`을 Ledger에서 검증한 뒤 업무 분해로 전달 | Governance는 승인 기록의 무결성을 검증하고 Planning / Execution은 실제 사용 시점의 적격성을 검증 |
 | Phase B | 상세 업무 실행·검증·진행 평가 결과를 수집 | 개별 업무의 승인·권한·Scope·Budget·Verification을 별도로 충족 |
 | 전체 종료 | 결과·미완료 사유·Human 판단 필요 여부를 구분해 반환 | 업무 완료 및 보고의 근거를 보존하고 실패를 성공으로 바꾸지 않음 |
 
@@ -159,7 +159,7 @@ Step 7.2에서 Human Direction Governance를 연결했다. 전체 Phase A Outcom
 [Phase B 개발 로드맵](roadmap.md#phase-b-개발-로드맵)을 따른다.
 
 ```text
-ApprovedDecision → Governance 조회 → CEO Work Decomposition
+Phase A Completed → Governance Handoff 검증 → CEO Work Decomposition
 → Planning Coordination → 계획 가능한 Work Item의 Detailed Planning
 → Work Execution Contract → 승인·권한 확인 → Specialist / Worker Execution
 → Verification & Review → CEO Progress Evaluation
@@ -194,7 +194,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 **현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID만 전달한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
 
-**현재 Graph 계약:** Graph 입력은 `approvedDecisionId`다. Work Decomposition Node가 Application을 한 번 호출해 `workDecompositionResult`를 기록한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
+**현재 Graph 계약:** Graph 입력은 `{ handoff: PhaseBHandoff }`다. Work Decomposition Node는 승인 쌍을 Ledger에서 다시 검증한 뒤 승인 방향과 위임 상한을 Application에 전달한다. 검증 실패 시 `handoffResult`에 거부를 기록하고 종료한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
 
 #### Work Item / Specialist Assignment / TaskContract
 
@@ -222,17 +222,11 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 ## 4. Phase A → Phase B Handoff Contract
 
-**설계 결정:** Phase A의 최종 Human Direction Approval에서 발급한 `ApprovedDecision`을 사용한다. Step 7.2에 구현된 Governance의 `getApprovedDecision(decision.id)`로 승인된 Review의 Proposal, 원본 Goal / Constraints, 승인 시점의 Snapshot, Decision / Comparison Context 및 Human 승인 근거를 복원한다. 승인 대기·거부·Escalation·실패 또는 기록 복원 실패 시 승인 방향에 근거한 업무 분해를 진행하지 않는다. [기존 승인 조회 구현](../src/application/governance/approval/features/direction-review/flow/approved-decision.ts)
+정상 Phase A의 `human-direction-governance` 대상은 현재 정책에 맞는 CEO 위임 제안과 한 번의 Human 동시 승인을 요구한다. 방향과 정확한 위임 범위를 승인하고 Ledger 검증을 통과하면 `phaseACompletion`에 `{ status: "completed", decision, executionDelegation }`을 기록한다. 인간은 정책 범위에서 제안을 수정할 수 있으며 실제 수정된 Grant가 확인 바인딩에 들어간다. Revision은 Synthesis와 위임 제안을 다시 생성한다. 제안 실패 시 분석과 Synthesis 결과는 보존한다.
 
-| 경계 | 검증 책임 |
-| --- | --- |
-| 승인 기록의 무결성 | Governance가 저장된 승인과 Review·Scope·분석 Context·Human 결정의 연결을 검증한다. Graph State의 승인 표시나 CEO 주장 자체에는 승인 효력이 없다. |
-| Planning 시점의 적격성 | Planning에 쓰는 Repository Context가 승인된 방향·원본 제약·선행 산출물과 일치하는지 실제 사용 시점에 확인한다. |
-| Execution 시점의 적격성 | 실제 Repository 기준 상태, 정책, 업무별 Scope·권한과 필요한 Human 승인을 실행 전에 검증한다. |
+Phase B는 같은 구조의 `PhaseBHandoff`를 받고 분해 전에 `verifyExecutionHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. 분해와 상세 계획에는 승인 방향과 위임 상한을 전달한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
 
-초기 설계는 승인 출처와 현재 Repository 기준을 Handoff의 검증 항목으로 함께 두었다. Step 7.2에서 기록 복원이 구현되면서 Governance의 검증을 그대로 사용하고, 변할 수 있는 Repository와 실행 조건은 해당 정보를 실제로 사용하는 Application 경계에서 확인하기로 했다. 별도 Handoff Validation 계층·Node·Governance API는 추가하지 않는다. Snapshot에서 후속 실행 기준으로 전환하는 방식, 허용할 drift, 재검토·재승인 조건은 후속 설계 과제다.
-
-Staffing Approval은 분석 Scope를, Direction Approval은 해결 방향을 승인한다. Direction Approval에서 인간은 선택적으로 별도의 `ExecutionDelegation`에도 동의할 수 있다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
+독립 `independent-direction-review` 대상과 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 
 **Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임은 읽기·쓰기 각각에 File / Directory Scope를 지정하며, 명시된 검증 명령과 실행 횟수·시간 상한을 포함한다. R4의 PathScope 구조와 경로 경계 기반 포함 규칙을 사용한다. 기존 `readPaths`·`writePaths` 기록은 저장 형태를 보존하며 정확한 File Scope로 해석한다. Directory 권한에는 명시적 승인이 필요하다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
 
@@ -244,7 +238,7 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 `getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다.
 
-**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node만 위임 여부와 관계없이 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
+**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node는 Handoff 검증 후 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
 
 `authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원하며 Verification 명령은 요청된 명시적 Shell 명령과 정확히 일치해야 한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다.
 
@@ -320,7 +314,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `approvedDecisionId`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 선택적으로 Ledger의 계획 출처를 가리키는 `executionSourceId`를 포함한다. 공개 입력은 Work Decomposition 입력 Schema에서 가져온 승인 ID만 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 선택적으로 Ledger의 계획 출처를 가리키는 `executionSourceId`를 포함한다. 공개 입력은 Phase A 완료 계약과 같은 구조의 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 
@@ -404,7 +398,7 @@ Stage 3 / 4 결과를 전체 Organization의 성공·실패 Schema로 확장하�
 Graph는 결과별 실행 분기를, Entry Point는 기존 API 표현을 맡는다. 직접 Graph 소비자는 Stage별 결과로
 이전해야 하지만 Staffing CLI의 반환·JSON 형식은 유지한다. 최종 Phase A Outcome은 여전히 미정이다.
 
-**Planned / Not Integrated:** 전체 Organization Graph, ApprovedDecision을 사용하는 자동 Phase 전환, Phase B Assignment 실행 조정,
+**Planned / Not Integrated:** 전체 Organization Graph, 자동 Phase 전환, Phase B Assignment 실행 조정,
 Executive Report와 영속 Checkpoint 기반 복구. 새로운 모델·API나 디렉터리를 이 목록만으로 만들지 않는다.
 
 테스트 근거는 [Phase A Graph 테스트](../src/workflows/development-organization/phase-a/tests/graph.test.ts),
@@ -521,7 +515,7 @@ Propose는 쟁점별 처리 위치를 검증하고 Escalation에는 전체 배�
 
 ### Step 7.2 — Human Direction Governance
 
-새 실행 대상 human-direction-governance만 아래 경로로 진행한다. 기존 세 실행 대상의 종료 지점은 유지한다.
+아래 흐름은 Step 7.2 당시 방향 검토를 설명한다. 현재 독립 검토는 `independent-direction-review`에서 제공하며 정상 완료 경로는 [Handoff Contract](#4-phase-a--phase-b-handoff-contract)를 따른다.
 
 ```text
 run-ceo-synthesis (proposed + 신뢰된 Review 등록)
@@ -566,7 +560,7 @@ interrupt Node는 부작용 없이 중단하고 Resume 시 처음부터 다시 �
 
 ```ts
 const graph = createPhaseAGraph({
-  executionTarget: "human-direction-governance",
+  executionTarget: "independent-direction-review",
   confirmDirection: (request) =>
     confirmHumanAction(request.binding, JSON.stringify(request)),
 });

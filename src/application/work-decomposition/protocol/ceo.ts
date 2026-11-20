@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ExecutionDelegationRequest } from "@/application/governance/index.js";
 import type {
   SynthesisContext,
   SynthesisProposal,
@@ -13,6 +14,7 @@ export type WorkDecompositionContext = Pick<
 > & {
   proposal: SynthesisProposal;
   snapshot: RepositorySnapshot;
+  executionCeiling?: ExecutionDelegationRequest;
   approvalSource: {
     approvedDecisionId: string;
     reviewId: string;

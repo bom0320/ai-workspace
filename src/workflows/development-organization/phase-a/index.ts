@@ -17,3 +17,4 @@ export type {
   SpecialistDecisionsWorkflowResult,
   DecisionComparisonStageResult,
 } from "./state.js";
+export type { PhaseACompleted } from "../execution-handoff.js";

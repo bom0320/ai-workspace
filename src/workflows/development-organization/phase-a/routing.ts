@@ -5,7 +5,8 @@ export type PhaseAExecutionTarget =
   | "staffing-approval"
   | "specialist-decisions"
   | "ceo-synthesis"
-  | "human-direction-governance";
+  | "human-direction-governance"
+  | "independent-direction-review";
 
 // Execution target selects an endpoint; State approval is not execution authority.
 export function routeAfterStaffingApproval(
@@ -14,7 +15,8 @@ export function routeAfterStaffingApproval(
 ) {
   return (executionTarget === "specialist-decisions" ||
     executionTarget === "ceo-synthesis" ||
-    executionTarget === "human-direction-governance") &&
+    executionTarget === "human-direction-governance" ||
+    executionTarget === "independent-direction-review") &&
     state.approvalResult?.status === "approved"
     ? "preflight-specialist-decisions"
     : END;
@@ -39,7 +41,8 @@ export function routeAfterComparison(
   executionTarget: PhaseAExecutionTarget
 ) {
   return (executionTarget === "ceo-synthesis" ||
-    executionTarget === "human-direction-governance") &&
+    executionTarget === "human-direction-governance" ||
+    executionTarget === "independent-direction-review") &&
     state.specialistDecisionsResult?.status === "completed" &&
     (state.decisionComparisonResult?.status === "completed" ||
       (state.decisionComparisonResult?.status === "skipped" &&
@@ -52,9 +55,12 @@ export function routeAfterSynthesis(
   state: PhaseAState,
   executionTarget: PhaseAExecutionTarget
 ) {
-  return executionTarget === "human-direction-governance" &&
+  return (executionTarget === "human-direction-governance" ||
+    executionTarget === "independent-direction-review") &&
     state.synthesisResult?.status === "proposed" &&
     state.directionReview &&
+    (executionTarget !== "human-direction-governance" ||
+      state.directionReview.executionDelegationProposal) &&
     !state.directionGovernanceResult
     ? "human-direction-review"
     : END;

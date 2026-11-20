@@ -52,7 +52,9 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     allowDirectStaffingApproval = false,
   } = options;
 
-  const humanGovernance = executionTarget === "human-direction-governance";
+  const requireHandoff = executionTarget === "human-direction-governance";
+  const humanGovernance =
+    requireHandoff || executionTarget === "independent-direction-review";
   const trackAnalysis = humanGovernance || executionTarget === "ceo-synthesis";
 
   // 1. Register Workflow Nodes
@@ -76,14 +78,20 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
       "run-ceo-synthesis",
       createRunCEOSynthesisNode(options.synthesis, {
         directionReview: humanGovernance,
+        requireHandoff,
         executionDelegationProposalAgent:
           options.executionDelegationProposalAgent,
       })
     )
-    .addNode("human-direction-review", humanDirectionReview)
+    .addNode("human-direction-review", (state) =>
+      humanDirectionReview(state, requireHandoff)
+    )
     .addNode(
       "finalize-direction-review",
-      createFinalizeDirectionReviewNode(options.confirmDirection)
+      createFinalizeDirectionReviewNode(
+        options.confirmDirection,
+        requireHandoff
+      )
     );
 
   // 2. Connect Execution Edges

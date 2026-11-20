@@ -9,6 +9,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
+import { phaseACompletionSchema } from "../execution-handoff.js";
 import { assessmentResultSchema } from "@/application/analysis/index.js";
 import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
 import {
@@ -153,6 +154,7 @@ export const phaseAState = new StateSchema({
   synthesisAssignments: synthesisContextSchema.shape.assignments.optional(),
   synthesisResult: synthesisResultSchema.optional(),
   directionReview: directionReviewSchema.optional(),
+  phaseACompletion: phaseACompletionSchema.optional(),
   directionAction: directionActionSchema.optional(),
   directionGovernanceResult: directionGovernanceResultSchema.optional(),
   policyLookup: policyLookupSchema.optional(),

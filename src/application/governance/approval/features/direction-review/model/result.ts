@@ -35,7 +35,13 @@ export const directionGovernanceResultSchema = z.discriminatedUnion("status", [
   z
     .object({ status: z.literal("confirmation-required"), reviewId: text })
     .strict(),
-  z.object({ status: z.literal("denied"), reason: text }).strict(),
+  z
+    .object({
+      status: z.literal("denied"),
+      reason: text,
+      reasonCode: z.literal("execution-policy").optional(),
+    })
+    .strict(),
   z.object({ status: z.literal("failed"), reason: text }).strict(),
 ]);
 export type DirectionGovernanceResult = z.infer<

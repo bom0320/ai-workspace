@@ -9,8 +9,14 @@ import type { executeWorkItemPlanning } from "./features/planning/execution/exec
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { phaseBInput, phaseBState, type PhaseBState } from "./state.js";
 
-export type PhaseBGraphOptions = RunWorkDecompositionOptions & {
-  planning?: Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB"> & {
+export type PhaseBGraphOptions = Omit<
+  RunWorkDecompositionOptions,
+  "executionCeiling"
+> & {
+  planning?: Omit<
+    Parameters<typeof executeWorkItemPlanning>[0],
+    "phaseB" | "executionCeiling"
+  > & {
     selectWorkItemIds: SelectWorkItemIds;
   };
 };
@@ -45,7 +51,9 @@ export function createPhaseBGraph({
   graph.addConditionalEdges(
     "run-work-decomposition",
     (state) =>
-      selectWorkItemIds && state.workDecompositionResult?.status === "proposed"
+      selectWorkItemIds &&
+      state.handoffResult?.status === "accepted" &&
+      state.workDecompositionResult?.status === "proposed"
         ? "select-planning-work-items"
         : END,
     ["select-planning-work-items", END]

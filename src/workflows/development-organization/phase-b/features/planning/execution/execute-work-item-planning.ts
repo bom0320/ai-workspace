@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { getApprovedDecision } from "@/application/governance/index.js";
+import type { ExecutionDelegationRequest } from "@/application/governance/index.js";
 import {
   planTask,
   type PlanTaskOptions,
@@ -23,8 +24,10 @@ export async function executeWorkItemPlanning({
   repositoryPath,
   limits,
   planner,
+  executionCeiling,
 }: Pick<PlanTaskOptions, "repositoryPath" | "limits" | "planner"> & {
   phaseB: PhaseBPlanningInput;
+  executionCeiling?: ExecutionDelegationRequest;
 }) {
   const { approvedDecisionId, workItem } =
     phaseBPlanningInputSchema.parse(phaseB);
@@ -44,6 +47,9 @@ export async function executeWorkItemPlanning({
       objective: workItem.objective,
       deliverable: workItem.deliverable,
       direction: review.proposal.direction.text,
+      ...(executionCeiling && {
+        executionCeiling: JSON.stringify(executionCeiling),
+      }),
     },
   });
 }

@@ -3,7 +3,16 @@ import * as filesystem from "node:fs";
 import { Command } from "@langchain/langgraph";
 import * as staffingApplication from "@/application/staffing/index.js";
 import * as phaseAGraph from "../graph.js";
-import { createPhaseBGraph } from "../../phase-b/index.js";
+import {
+  createPhaseBGraph,
+  type PhaseBGraphOptions,
+} from "../../phase-b/index.js";
+import { executeWorkItemPlanning } from "../../phase-b/features/planning/execution/execute-work-item-planning.js";
+import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
+import {
+  registerExecutionDecomposition,
+  beginWorkItemExecutionSource,
+} from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
@@ -914,7 +923,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   async function pendingDirection(
     count = 2,
     confirmDirection?: import("../graph.js").PhaseAGraphOptions["confirmDirection"],
-    executionDelegationProposalAgent?: governance.ExecutionDelegationProposalAgent
+    executionDelegationProposalAgent?: governance.ExecutionDelegationProposalAgent,
+    normalWorkflow = false
   ) {
     if (count === 2) prepareBatch();
     else {
@@ -924,7 +934,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const command = runtime();
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "human-direction-governance",
+      executionTarget: normalWorkflow
+        ? "human-direction-governance"
+        : "independent-direction-review",
       confirmDirection,
       executionDelegationProposalAgent,
     });
@@ -933,12 +945,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       { goal: options.goal, repositoryPath: root },
       config
     );
-    expect(pending.directionReview).toBeDefined();
+    if (!normalWorkflow) expect(pending.directionReview).toBeDefined();
     expect(
       (await graph.getState(config)).tasks.some(
         (task) => task.interrupts.length === 1
       )
-    ).toBe(true);
+    ).toBe(Boolean(pending.directionReview));
     return { graph, config, pending, command };
   }
 
@@ -1119,7 +1131,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assessmentAgent,
       confirmApproval,
       allowDirectStaffingApproval: mode === "human",
-      executionTarget: "human-direction-governance",
+      executionTarget: "independent-direction-review",
       confirmDirection: (request) =>
         confirmHumanAction(request.binding, JSON.stringify(request)),
     });
@@ -1235,6 +1247,136 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       "The direction changes documentation within the anticipated scope.",
     sources: [{ kind: "recommendation", specialistId: "frontend" }],
   };
+
+  it.each([
+    "missing-proposal",
+    "direction-only",
+    "invalid-confirmation",
+    "policy-changed",
+    "revision",
+  ] as const)("enforces normal Phase A completion for %s", async (mode) => {
+    const version = configureExecutionPolicy();
+    const confirm = vi.fn(
+      mode === "invalid-confirmation"
+        ? () => ({ token: "invalid" })
+        : (request: Parameters<typeof confirmDirection>[0]) => {
+            const receipt = confirmDirection(request);
+            if (mode === "policy-changed") configureExecutionPolicy();
+            return receipt;
+          }
+    );
+    const agent = vi.fn(async () =>
+      mode === "missing-proposal" ? null : delegationDraft
+    );
+    const { graph, config, pending } = await pendingDirection(
+      1,
+      confirm,
+      agent,
+      true
+    );
+    if (mode === "missing-proposal") {
+      expect(pending.synthesisResult?.status).toBe("proposed");
+      expect(pending.directionReview).toBeUndefined();
+      expect(pending.phaseACompletion?.status).toBe("blocked");
+      expect(confirm).not.toHaveBeenCalled();
+      return;
+    }
+    expect(pending.phaseACompletion?.status).toBe("incomplete");
+    let review = pending.directionReview!;
+    if (mode === "revision") {
+      const revised = await graph.invoke(
+        new Command({
+          resume: {
+            action: "request-revision",
+            reviewId: review.id,
+            binding: review.binding,
+            feedback: "Clarify execution scope",
+          },
+        }),
+        config
+      );
+      expect(revised.directionReview?.previousReviewId).toBe(review.id);
+      expect(
+        revised.directionReview?.executionDelegationProposal
+      ).toBeDefined();
+      expect(agent).toHaveBeenCalledTimes(2);
+      review = revised.directionReview!;
+    }
+    const final = await graph.invoke(
+      new Command({
+        resume:
+          mode === "direction-only"
+            ? {
+                action: "approve",
+                reviewId: review.id,
+                binding: review.binding,
+              }
+            : delegatedAction(review, version),
+      }),
+      config
+    );
+    expect(final.phaseACompletion?.status).toBe(
+      mode === "direction-only"
+        ? "incomplete"
+        : mode === "revision"
+          ? "completed"
+          : mode === "policy-changed"
+            ? "blocked"
+            : "denied"
+    );
+    if (mode === "direction-only") expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "expired",
+    "revoked",
+    "superseded",
+    "mismatched",
+    "missing",
+  ] as const)(
+    "rejects a %s Handoff before Phase B decomposition",
+    async (mode) => {
+      const version = configureExecutionPolicy();
+      const { graph, config, pending } = await pendingDirection(
+        1,
+        confirmDirection,
+        async () => delegationDraft,
+        true
+      );
+      const final = await graph.invoke(
+        new Command({
+          resume: delegatedAction(pending.directionReview!, version),
+        }),
+        config
+      );
+      const completed = final.phaseACompletion;
+      if (completed?.status !== "completed")
+        throw new Error(JSON.stringify(completed));
+      if (mode === "expired")
+        vi.spyOn(Date, "now").mockReturnValue(
+          Date.parse(completed.executionDelegation.grant.expiresAt)
+        );
+      if (mode === "revoked") configureExecutionPolicy(null);
+      if (mode === "superseded") configureExecutionPolicy();
+      const input = structuredClone(completed);
+      if (mode === "mismatched")
+        input.executionDelegation.approvedDecisionId = "another-decision";
+      const agent = vi.fn();
+      const phaseB = createPhaseBGraph({ agent });
+      if (mode === "missing") {
+        const { executionDelegation: _grant, ...incomplete } = input;
+        const result = await phaseB
+          .invoke({ handoff: incomplete as typeof input })
+          .catch(() => undefined);
+        if (result) expect(result.handoffResult?.status).toBe("denied");
+      } else {
+        const result = await phaseB.invoke({ handoff: input });
+        expect(result.handoffResult?.status).toBe("denied");
+        expect(result.workDecompositionResult).toBeUndefined();
+      }
+      expect(agent).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     "exact",
@@ -1409,77 +1551,123 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     symlinkSync("../a.ts", join(root, "docs", "link.ts"));
     git("add", target, "docs/link.ts", "docs-extra/other.md");
     git("commit", "--quiet", "-m", "Add execution target");
-    const { pending } = await pendingDirection(1);
+    const policyVersion = withDelegation
+      ? configureExecutionPolicy()
+      : undefined;
+    const {
+      pending,
+      graph: phaseA,
+      config,
+    } = await pendingDirection(
+      1,
+      confirmDirection,
+      withDelegation ? async () => delegationDraft : undefined,
+      withDelegation
+    );
     const review = pending.directionReview!;
-    const delegation =
-      withDelegation && delegatedAction(review, configureExecutionPolicy());
-    const action = delegation
-      ? {
-          ...delegation,
-          executionDelegation: {
-            ...delegation.executionDelegation,
-            budget: { ...delegation.executionDelegation.budget, maxExecutions },
-          },
-        }
-      : {
-          reviewId: review.id,
-          binding: review.binding,
-          action: "approve" as const,
-        };
-    const receipt = confirmDirection(
-      governance.prepareDirectionConfirmation(action)
-    )!;
-    const approved = governance.finalizeDirectionReview(action, receipt);
-    if (approved.status !== "approved")
-      throw new Error(JSON.stringify(approved));
+    const approved = await phaseA.invoke(
+      new Command({
+        resume:
+          policyVersion === undefined
+            ? {
+                reviewId: review.id,
+                binding: review.binding,
+                action: "approve",
+              }
+            : {
+                ...delegatedAction(review, policyVersion),
+                executionDelegation: {
+                  ...delegatedAction(review, policyVersion).executionDelegation,
+                  budget: { maxExecutions, maxTimeoutMs: 15_000 },
+                },
+              },
+      }),
+      config
+    );
+    if (approved.directionGovernanceResult?.status !== "approved")
+      throw new Error(JSON.stringify(approved.directionGovernanceResult));
+    const decision = approved.directionGovernanceResult.decision;
     const workItems = ["first", "second", "third"].map((id) => ({
       id,
       objective: `Revise ${id} wording in ${target}`,
       deliverable: `Revised ${target}`,
       dependsOn: [],
     }));
-    const graph = createPhaseBGraph({
-      agent: async () => ({ type: "propose", workItems }),
-      planning: {
-        repositoryPath: root,
-        limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
-        selectWorkItemIds: (items) => items.map(({ id }) => id),
-        planner: async ({ goal, detail }) => ({
-          type: "complete",
-          task: {
-            objective: detail!.objective,
-            targetRepository: goal.targetRepository,
-            allowedPaths: [target],
-            forbiddenPaths: [],
-            constraints: [],
-            acceptanceCriteria: ["Revise wording"],
-            verification,
-          },
-        }),
-      },
-    });
-    const state = await graph.invoke({
-      approvedDecisionId: approved.decision.id,
-    });
-    expect(state.planningResults).toHaveLength(3);
-    return state.planningResults!.map(
-      ({ workItemId, result, executionSourceId }) => {
-        if (result.status !== "completed")
-          throw new Error(JSON.stringify(result));
-        expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
-        return {
-          approvedDecisionId: approved.decision.id,
-          executionSourceId: executionSourceId!,
-          repositoryPath: root,
-          workItem: workItems.find(({ id }) => id === workItemId)!,
-          task: result.task,
-          readPaths: [target],
-          writePaths: [target],
-          shellCommands: ["git diff --check"],
-          timeoutMs: 5_000,
-        };
+    const agent = async () => ({ type: "propose", workItems });
+    const planning: NonNullable<PhaseBGraphOptions["planning"]> = {
+      repositoryPath: root,
+      limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
+      selectWorkItemIds: (items) => items.map(({ id }) => id),
+      planner: async ({ goal, detail }) => ({
+        type: "complete",
+        task: {
+          objective: detail!.objective,
+          targetRepository: goal.targetRepository,
+          allowedPaths: [target],
+          forbiddenPaths: [],
+          constraints: [],
+          acceptanceCriteria: ["Revise wording"],
+          verification,
+        },
+      }),
+    };
+
+    const handoff = approved.phaseACompletion;
+    let planningResults;
+    if (withDelegation) {
+      if (handoff?.status !== "completed")
+        throw new Error(JSON.stringify(handoff));
+      const state = await createPhaseBGraph({ agent, planning }).invoke({
+        handoff,
+      });
+      expect(state.handoffResult?.status).toBe("accepted");
+      planningResults = state.planningResults;
+    } else {
+      const decomposition = await runWorkDecomposition(
+        { approvedDecisionId: decision.id },
+        { agent }
+      );
+      if (decomposition.status !== "proposed")
+        throw new Error(JSON.stringify(decomposition));
+      registerExecutionDecomposition(decomposition);
+      planningResults = [];
+      for (const workItem of decomposition.workItems) {
+        const recordSource = beginWorkItemExecutionSource(
+          decomposition,
+          workItem,
+          root
+        );
+        const result = await executeWorkItemPlanning({
+          ...planning,
+          phaseB: { approvedDecisionId: decision.id, workItem },
+        });
+        planningResults.push({
+          workItemId: workItem.id,
+          result,
+          executionSourceId:
+            result.status === "completed"
+              ? recordSource?.(result.task)
+              : undefined,
+        });
       }
-    );
+    }
+    expect(planningResults).toHaveLength(3);
+    return planningResults!.map(({ workItemId, result, executionSourceId }) => {
+      if (result.status !== "completed")
+        throw new Error(JSON.stringify(result));
+      expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
+      return {
+        approvedDecisionId: decision.id,
+        executionSourceId: executionSourceId!,
+        repositoryPath: root,
+        workItem: workItems.find(({ id }) => id === workItemId)!,
+        task: result.task,
+        readPaths: [target],
+        writePaths: [target],
+        shellCommands: ["git diff --check"],
+        timeoutMs: 5_000,
+      };
+    });
   }
 
   function postDelegationInput(
@@ -1715,6 +1903,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         shellCommands: ["pnpm test"],
       }).status
     ).toBe("denied");
+  });
+
+  it("denies execution of a Phase B plan outside the Handoff write ceiling", async () => {
+    const [request] = await plannedExecutions(
+      true,
+      1,
+      ["git diff --check"],
+      "docs-extra/planned.md"
+    );
+    expect(governance.authorizeExecution(request).status).toBe("denied");
   });
 
   it("denies unbound Work Items, TaskContracts, unsafe scopes, and unsupported shell capabilities", async () => {
@@ -2090,7 +2288,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     runtime();
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "human-direction-governance",
+      executionTarget: "independent-direction-review",
       confirmDirection,
     });
     const config = { configurable: { thread_id: "delegation-history" } };
@@ -2667,7 +2865,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "human-direction-governance",
+      executionTarget: "independent-direction-review",
     });
     const state = await graph.invoke(
       { goal: options.goal, repositoryPath: root },
@@ -2683,7 +2881,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     runtime("comparison");
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "human-direction-governance",
+      executionTarget: "independent-direction-review",
     });
     const state = await graph.invoke(
       { goal: options.goal, repositoryPath: root },
@@ -2742,7 +2940,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       };
       const graph = createPhaseAGraph({
         ...options,
-        executionTarget: "human-direction-governance",
+        executionTarget: "independent-direction-review",
         confirmDirection: confirm,
         synthesis: {
           agent: async () =>
@@ -3510,6 +3708,7 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
     "directionGovernanceResult",
     "directionReview",
     "goal",
+    "phaseACompletion",
     "policyLookup",
     "preparedSpecialistRequests",
     "repositoryPath",

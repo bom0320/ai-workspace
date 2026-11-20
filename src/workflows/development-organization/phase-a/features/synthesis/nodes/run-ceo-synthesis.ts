@@ -17,9 +17,11 @@ export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
   {
     directionReview: reviewEnabled = false,
+    requireHandoff = false,
     executionDelegationProposalAgent,
   }: {
     directionReview?: boolean;
+    requireHandoff?: boolean;
     executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
   } = {}
 ) {
@@ -39,6 +41,12 @@ export function createRunCEOSynthesisNode(
           reason:
             "Synthesis requires completed Decisions and completed or legitimately skipped Comparison.",
         },
+        ...(requireHandoff && {
+          phaseACompletion: {
+            status: "blocked" as const,
+            reason: "Synthesis could not be prepared for joint Human approval.",
+          },
+        }),
       };
 
     // 2. Select Original Analysis or a Recorded Human Revision Request
@@ -75,6 +83,12 @@ export function createRunCEOSynthesisNode(
           status: "failed",
           reason: "Recorded Synthesis revision context could not be verified.",
         },
+        ...(requireHandoff && {
+          phaseACompletion: {
+            status: "blocked" as const,
+            reason: "Synthesis could not be prepared for joint Human approval.",
+          },
+        }),
       };
     }
 
@@ -97,6 +111,17 @@ export function createRunCEOSynthesisNode(
           synthesisResult.proposal,
           executionDelegationProposalAgent
         );
+        if (requireHandoff && !executionDelegationProposal)
+          return {
+            synthesisResult,
+            directionReview: undefined,
+            directionAction: undefined,
+            directionGovernanceResult: undefined,
+            phaseACompletion: {
+              status: "blocked",
+              reason: "A valid Execution Delegation proposal is required.",
+            },
+          };
         directionReview = registerDirectionReview(
           state.approvalResult.scope.id,
           context,
@@ -113,6 +138,17 @@ export function createRunCEOSynthesisNode(
         directionReview,
         directionAction: undefined,
         directionGovernanceResult: undefined,
+        ...(requireHandoff && {
+          phaseACompletion: directionReview?.executionDelegationProposal
+            ? {
+                status: "incomplete" as const,
+                reason: "Joint Human approval is pending.",
+              }
+            : {
+                status: "blocked" as const,
+                reason: "A current Execution Delegation proposal is required.",
+              },
+        }),
       };
     } catch {
       return {
@@ -124,6 +160,12 @@ export function createRunCEOSynthesisNode(
           reason:
             "Validated Synthesis could not be registered for Human review.",
         },
+        ...(requireHandoff && {
+          phaseACompletion: {
+            status: "blocked" as const,
+            reason: "Synthesis could not be prepared for joint Human approval.",
+          },
+        }),
       };
     }
   };

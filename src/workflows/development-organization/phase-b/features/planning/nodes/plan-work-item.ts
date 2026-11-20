@@ -26,6 +26,9 @@ export function createPlanWorkItemNode(
       repositoryPath,
       limits,
       planner,
+      ...(state.handoffResult?.status === "accepted" && {
+        executionCeiling: state.handoffResult.handoff.executionDelegation.grant,
+      }),
       phaseB: { approvedDecisionId: proposal.approvedDecisionId, workItem },
     });
     const executionSourceId =

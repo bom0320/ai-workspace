@@ -23,6 +23,8 @@ import {
 } from "../../execution-delegation/validation/validate-execution-delegation-records.js";
 import type { ExecutionDelegation } from "../../execution-delegation/model/execution-delegation.js";
 
+class ExecutionDelegationPolicyError extends DirectionReviewValidationError {}
+
 function assertExecutionDelegationAllowed(
   entry: RepositoryGovernance,
   action: DirectionAction,
@@ -30,7 +32,7 @@ function assertExecutionDelegationAllowed(
 ): void {
   if (action.action !== "approve" || !action.executionDelegation) return;
   if (!currentPolicyForExecutionGrant(entry, action.executionDelegation, now))
-    throw new DirectionReviewValidationError(
+    throw new ExecutionDelegationPolicyError(
       "Execution Delegation exceeds the current approved policy."
     );
 }
@@ -163,6 +165,12 @@ export function finalizeDirectionReview(
       return result;
     });
   } catch (error) {
+    if (error instanceof ExecutionDelegationPolicyError)
+      return {
+        status: "denied",
+        reason: error.message,
+        reasonCode: "execution-policy",
+      };
     if (
       error instanceof DirectionReviewValidationError ||
       error instanceof StaffingIssuanceValidationError ||

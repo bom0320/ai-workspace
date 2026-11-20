@@ -217,6 +217,7 @@ describe("Phase A Staffing Approval execution", () => {
       "directionGovernanceResult",
       "directionReview",
       "goal",
+      "phaseACompletion",
       "policyLookup",
       "preparedSpecialistRequests",
       "repositoryPath",

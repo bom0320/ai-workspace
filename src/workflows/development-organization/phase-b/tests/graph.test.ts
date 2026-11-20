@@ -1,13 +1,27 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { PlanningResult } from "@/application/planning/index.js";
-import { getApprovedDecision } from "@/application/governance/index.js";
+import {
+  getApprovedDecision,
+  verifyExecutionHandoff,
+} from "@/application/governance/index.js";
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import { executeWorkItemPlanning } from "../features/planning/execution/execute-work-item-planning.js";
-import { createPhaseBGraph, type PhaseBGraphOptions } from "../index.js";
+import {
+  createPhaseBGraph,
+  type PhaseBGraphOptions,
+  type PhaseBHandoff,
+} from "../index.js";
 
-vi.mock("@/application/governance/index.js", () => ({
+vi.mock("@/application/governance/index.js", async () => ({
+  approvedDecisionSchema: (
+    await import("@/application/governance/approval/features/direction-review/model/result.js")
+  ).approvedDecisionSchema,
+  executionDelegationSchema: (
+    await import("@/application/governance/approval/features/execution-delegation/model/execution-delegation.js")
+  ).executionDelegationSchema,
   getApprovedDecision: vi.fn(),
+  verifyExecutionHandoff: vi.fn(),
 }));
 vi.mock(
   "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
@@ -33,14 +47,14 @@ vi.mock("@/application/work-decomposition/index.js", async (importOriginal) => {
   };
 });
 
-const input = { approvedDecisionId: "approved-1" };
+const decompositionInput = { approvedDecisionId: "approved-1" };
 const direction = {
   text: "Improve task entry feedback",
   sources: [{ kind: "recommendation" as const, specialistId: "ux" }],
 };
 const approval: ReturnType<typeof getApprovedDecision> = {
   decision: {
-    id: input.approvedDecisionId,
+    id: decompositionInput.approvedDecisionId,
     reviewId: "review-1",
     reviewBinding: "binding-1",
     approvalRecordId: "receipt-1",
@@ -96,6 +110,35 @@ const approval: ReturnType<typeof getApprovedDecision> = {
   },
   snapshot: { repositoryRoot: "/example/repo", commitSha: "abc" },
 };
+const handoff: PhaseBHandoff = {
+  status: "completed",
+  decision: approval.decision,
+  executionDelegation: {
+    id: "delegation-1",
+    approvedDecisionId: approval.decision.id,
+    repositoryRoot: approval.snapshot.repositoryRoot,
+    grant: {
+      readPaths: ["task.ts"],
+      writePaths: ["task.ts"],
+      shellCommands: [],
+      budget: { maxExecutions: 1, maxTimeoutMs: 1000 },
+      expiresAt: "2030-01-01T00:00:00.000Z",
+      policyVersion: 1,
+    },
+    status: "active",
+    approvalRecordId: "receipt-1",
+    confirmationBinding: "confirmation",
+    approval: {
+      id: "receipt-1",
+      uid: 1,
+      confirmedAt: "2026-01-01T00:00:00.000Z",
+    },
+    issuedAt: "2026-01-01T00:00:00.000Z",
+  },
+};
+const input = { handoff };
+const accepted = { handoffResult: { status: "accepted", handoff } };
+
 const workItems = [
   {
     id: "feedback",
@@ -109,13 +152,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(executeWorkItemPlanning).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
+  vi.mocked(verifyExecutionHandoff).mockReturnValue({
+    decision: handoff.decision,
+    executionDelegation: handoff.executionDelegation,
+  });
 });
 
 async function invoke(options: PhaseBGraphOptions) {
   const result = await createPhaseBGraph(options).invoke(input);
-  expect(runWorkDecomposition).toHaveBeenCalledExactlyOnceWith(input, options);
+  expect(runWorkDecomposition).toHaveBeenCalledExactlyOnceWith(
+    decompositionInput,
+    { ...options, executionCeiling: handoff.executionDelegation.grant }
+  );
   expect(getApprovedDecision).toHaveBeenCalledExactlyOnceWith(
-    input.approvedDecisionId
+    decompositionInput.approvedDecisionId
   );
   return result;
 }
@@ -124,14 +174,18 @@ it("returns the proposed result from one Application call", async () => {
   const agent = vi.fn().mockResolvedValue({ type: "propose", workItems });
   expect(await invoke({ agent })).toEqual({
     ...input,
+    ...accepted,
     workDecompositionResult: {
       status: "proposed",
-      ...input,
+      ...decompositionInput,
       workItems,
     },
   });
   expect(agent).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({ goal: approval.context.goal })
+    expect.objectContaining({
+      goal: approval.context.goal,
+      executionCeiling: handoff.executionDelegation.grant,
+    })
   );
 });
 
@@ -144,6 +198,7 @@ it("preserves escalation and ends the graph", async () => {
   });
   expect(await invoke({ agent })).toEqual({
     ...input,
+    ...accepted,
     workDecompositionResult: {
       status: "escalated",
       reason: "Human judgment needed",
@@ -159,6 +214,7 @@ it("preserves invalid approval failure and ends before calling the agent", async
   const agent = vi.fn();
   expect(await invoke({ agent })).toEqual({
     ...input,
+    ...accepted,
     workDecompositionResult: {
       status: "failed",
       failure: "invalid-input",
@@ -172,6 +228,7 @@ it("preserves agent execution failure and ends without retry", async () => {
   const agent = vi.fn().mockRejectedValue(new Error("Agent unavailable"));
   expect(await invoke({ agent })).toEqual({
     ...input,
+    ...accepted,
     workDecompositionResult: {
       status: "failed",
       failure: "agent-execution",
@@ -190,7 +247,12 @@ it("passes timeout to the default Codex adapter without storing it in State", as
   });
   expect(await invoke({ timeoutMs: 3210 })).toEqual({
     ...input,
-    workDecompositionResult: { status: "proposed", ...input, workItems },
+    ...accepted,
+    workDecompositionResult: {
+      status: "proposed",
+      ...decompositionInput,
+      workItems,
+    },
   });
   expect(runCommand).toHaveBeenCalledExactlyOnceWith(
     "codex",
@@ -278,12 +340,13 @@ it.each([
         {
           ...planningOptions,
           planner,
-          phaseB: { ...input, workItem },
+          executionCeiling: handoff.executionDelegation.grant,
+          phaseB: { ...decompositionInput, workItem },
         },
       ])
     );
     expect(result.workDecompositionResult).toEqual({
-      ...input,
+      ...decompositionInput,
       status: "proposed",
       workItems: items,
     });

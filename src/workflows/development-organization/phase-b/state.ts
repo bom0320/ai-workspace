@@ -1,15 +1,24 @@
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import type { PlanningResult } from "@/application/planning/index.js";
-import {
-  workDecompositionInputSchema,
-  workDecompositionResultSchema,
-} from "@/application/work-decomposition/index.js";
+import { workDecompositionResultSchema } from "@/application/work-decomposition/index.js";
+import { phaseACompletedSchema } from "../execution-handoff.js";
 
-export const phaseBInput = new StateSchema(workDecompositionInputSchema.shape);
+export const phaseBInput = new StateSchema({ handoff: phaseACompletedSchema });
 
 export const phaseBState = new StateSchema({
   ...phaseBInput.fields,
+  handoffResult: z
+    .discriminatedUnion("status", [
+      z
+        .object({
+          status: z.literal("accepted"),
+          handoff: phaseACompletedSchema,
+        })
+        .strict(),
+      z.object({ status: z.literal("denied"), reason: z.string() }).strict(),
+    ])
+    .optional(),
   workDecompositionResult: workDecompositionResultSchema.optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z

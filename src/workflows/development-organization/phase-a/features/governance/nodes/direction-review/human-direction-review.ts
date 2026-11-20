@@ -2,7 +2,10 @@ import { interrupt } from "@langchain/langgraph";
 import { directionActionSchema } from "@/application/governance/index.js";
 import type { PhaseAState } from "../../../../state.js";
 
-export function humanDirectionReview(state: PhaseAState): Partial<PhaseAState> {
+export function humanDirectionReview(
+  state: PhaseAState,
+  requireHandoff = false
+): Partial<PhaseAState> {
   // 1. Interrupt Without Side Effects; This Node Starts Again on Resume
   if (!state.directionReview)
     return {
@@ -24,6 +27,12 @@ export function humanDirectionReview(state: PhaseAState): Partial<PhaseAState> {
   )
     return {
       directionAction: undefined,
+      ...(requireHandoff && {
+        phaseACompletion: {
+          status: "denied" as const,
+          reason: "Invalid Human review action.",
+        },
+      }),
       directionGovernanceResult: {
         status: "denied",
         reason: "Invalid Direction Review action or binding.",

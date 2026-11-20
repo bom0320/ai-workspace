@@ -23,11 +23,12 @@ export type WorkDecompositionInput = z.infer<
 export type RunWorkDecompositionOptions = {
   agent?: CEOWorkDecompositionAgent;
   timeoutMs?: number;
+  executionCeiling?: WorkDecompositionContext["executionCeiling"];
 };
 
 export async function runWorkDecomposition(
   input: unknown,
-  { agent, timeoutMs }: RunWorkDecompositionOptions = {}
+  { agent, timeoutMs, executionCeiling }: RunWorkDecompositionOptions = {}
 ): Promise<WorkDecompositionResult> {
   const parsedInput = workDecompositionInputSchema.safeParse(input);
   if (!parsedInput.success) {
@@ -56,6 +57,7 @@ export async function runWorkDecomposition(
     decisions: context.decisions,
     comparison: context.comparison,
     snapshot,
+    ...(executionCeiling && { executionCeiling }),
     approvalSource: {
       approvedDecisionId: decision.id,
       reviewId: decision.reviewId,

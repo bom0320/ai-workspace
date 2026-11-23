@@ -1073,7 +1073,7 @@ flow root에는 가능한 한 public use-case entry를 둔다.
 use-case 종료가 여기에 속한다. 여러 Application을 조합하는 Phase A의 Assignment 반복·Stage 전환은
 LangGraph가 소유한다. 업무 Stage와 Node·Application의 구분은
 [Workflow 책임 경계](workflow-responsibility-boundaries.md#4-세-번째-경계--application과-workflow)를 따른다.
-현재 `planning-loop.ts`, `stages.ts`, `result-finalizer.ts`, `run-independent-decisions.ts`가 해당한다.
+현재 `planning-loop.ts`, `run-execution-pipeline.ts`, `finalize-execution-result.ts`, `run-independent-decisions.ts`가 해당한다.
 Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유한다.
 
 #### Flow Implementation Grouping
@@ -1391,7 +1391,7 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/features/specialist-invocation/flow/validation/evaluate-invocation.ts) | `authorizeSpecialistInvocation()`이 사용; 순수 API도 유지 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
 | Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `runIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
 | Comparison source 구성·Concern별 참조 | Comparison | `comparisonPayloadSchema` — `protocol/comparison.ts`; `compareDecisions()`, `validateComparisonReferences()` — `flow/validation/validate-references.ts` | Comparator Adapter, Decision CLI 조합 | 비교 입력·응답 수신 후 | Schema + Policy |
-| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeWorkItem()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
+| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `checkExecutionScope()` / `runApprovedVerification()` — `application/execution/flow/verification/` | `executeWorkItem()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
 | 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `runCodexSpecialist()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
 | Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 보존된 Review·Delivery 모듈 | Review·Apply·Commit·Push | Policy + Lifecycle |
 | 상위 실행 분기·실패/승인 대기 전달 | Phase A Graph | `createPhaseAGraph()` — `workflows/development-organization/phase-a/graph.ts`; `runStaffingApproval()`은 결과 변환 Adapter | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval → 선택적 Human 콜백·최종 승인 | Lifecycle 조정; 업무 검증은 Application 재사용 |
@@ -1564,7 +1564,7 @@ Worker 실패 시에는 변경 Evidence를 수집하며 Verification을 시작�
 | 필요한 재검증 | CEO Adapter Schema + Staffing Loop safeParse + Finalizer Draft Schema | Adapter 교체/주입 경계와 최종 발급 경계를 각각 보호한다. 단순히 default Adapter가 이미 파싱했다고 Loop 검증을 제거할 수 없다. |
 | 필요한 재검증 | Context raw-size preflight와 로딩 후 JSON size, CEO Context와 Assignment envelope | 전자는 로딩 전 batch 제한, 후자는 escaping/overhead 포함 실제 제한이다. Proposal envelope는 원본 Goal/Snapshot·설정·tree·assignment payload·선택 파일을 측정하고 CEO Context는 metadata/조사 파일을 측정한다. 같은 maxContextBytes를 써도 같은 데이터 검사가 아니다. |
 | 필요한 재검증 | Approval 요청 후 CLI 확인·재제출, 저장 Scope의 현재 정책/위임/파일 재검증 | 대기 중 상태가 달라진다. 신규 승인 방식 선택과 기존 승인 근거의 유효성은 다른 판단이다. direct Scope를 무관한 위임 만료 때문에 거부하도록 합치지 않는다. |
-| 필요한 재검증 | Worker 뒤와 Verification 뒤 `runScopeStage()` | 둘 사이에 명령이 파일을 바꾸거나 commit할 수 있다. 같은 Scope 규칙을 변경된 Evidence에 다시 적용하는 정상 구조다. |
+| 필요한 재검증 | Worker 뒤와 Verification 뒤 `checkExecutionScope()` | 둘 사이에 명령이 파일을 바꾸거나 commit할 수 있다. 같은 Scope 규칙을 변경된 Evidence에 다시 적용하는 정상 구조다. |
 | 공통화 완료 | System Schema와 `validateDiscoveryInput()`이 `contracts/specialist/definition.ts`의 `specialistDefinitionsSchema`를 재사용 | ID 고유성 구현은 공통 목록 Schema 한 곳에 둔다. 독립 Discovery의 입력 파싱은 유지한다. 목록 자체에는 최소 개수·Phase A Authority를 강제하지 않고 System Policy만 해당 제한을 추가한다. |
 | 제거 완료 / 별도 guard 유지 | `validateStaffingProposal()`의 System Schema parse 직후 Specialist Set 검사 제거 | 같은 설정의 고유성을 Schema가 이미 보장하므로 별도 검사는 불필요하다. Assignment ID 중복 검사는 다른 대상이므로 유지한다. `validateProposal()`의 선택된 Authority guard는 내부 typed 입력 전제를 바꾸지 않기 위해 유지했다. |
 | 서로 다른 규칙 | 등록 ID 고유성, Draft Specialist 중복 배치, 발급 Assignment ID 충돌, Invocation의 승인 Assignment ID 중복 | 서로 다른 식별 대상과 신뢰 경계다. 하나의 duplicate 검사로 합치지 않는다. v2 source ID·v3 finding별 source 중복도 별도 규칙이다. |

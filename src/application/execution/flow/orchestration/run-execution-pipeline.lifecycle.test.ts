@@ -17,7 +17,7 @@ import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
 
 import { runExecutionPipeline } from "./run-execution-pipeline.js";
 import type { AuthorizedExecution } from "@/application/governance/index.js";
-vi.mock("../worker/codex-worker.js", () => ({
+vi.mock("../../worker/codex-worker.js", () => ({
   runCodexWorker: vi.fn(async (_task, workspace: string) => {
     writeFileSync(
       join(workspace, "README.md"),

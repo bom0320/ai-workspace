@@ -1,8 +1,7 @@
 import { writeExecutionResult } from "@/services/artifacts/index.js";
 
 import type { ExecutionResult } from "../../model/result.js";
-import { addExecutionFailure } from "./stages.js";
-import type { ExecutionState } from "../../model/state.js";
+import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
 
 export function finalizeExecutionResult(
   state: ExecutionState,

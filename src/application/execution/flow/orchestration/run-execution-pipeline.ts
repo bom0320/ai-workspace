@@ -8,16 +8,15 @@ import {
   preserveExecutionChanges,
 } from "@/services/artifacts/index.js";
 
-import { finalizeExecutionResult } from "./orchestration/result-finalizer.js";
-import type { ExecutionResult } from "../model/result.js";
+import type { ExecutionResult } from "../../model/result.js";
+import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
 import {
-  addExecutionFailure,
+  checkExecutionScope,
   collectChangedPathsEvidence,
-  runScopeStage,
-  runVerificationStage,
-  runWorkerStage,
-} from "./orchestration/stages.js";
-import type { ExecutionState } from "../model/state.js";
+} from "../verification/check-execution-scope.js";
+import { runApprovedVerification } from "../verification/run-approved-verification.js";
+import { finalizeExecutionResult } from "./finalize-execution-result.js";
+import { runWorkerStage } from "./run-worker-stage.js";
 
 // Internal pipeline. Only the execution use case supplies an authorized execution.
 export async function runExecutionPipeline(
@@ -108,10 +107,10 @@ export async function runExecutionPipeline(
 
   if (!workerSucceeded) {
     collectChangedPathsEvidence(state, workspaceRoot, baseCommit);
-  } else if (runScopeStage(task, state, workspaceRoot, baseCommit)) {
-    await runVerificationStage(task, state, workspaceRoot, remaining);
+  } else if (checkExecutionScope(task, state, workspaceRoot, baseCommit)) {
+    await runApprovedVerification(task, state, workspaceRoot, remaining);
 
-    runScopeStage(task, state, workspaceRoot, baseCommit);
+    checkExecutionScope(task, state, workspaceRoot, baseCommit);
   }
 
   if (state.failures.length === 0) {

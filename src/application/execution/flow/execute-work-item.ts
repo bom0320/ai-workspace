@@ -4,7 +4,7 @@ import {
 } from "@/application/governance/index.js";
 import type { ExecutionOutcome } from "../model/result.js";
 import { checkGovernedWorkerRuntime } from "../worker/check-governed-worker-runtime.js";
-import { runExecutionPipeline } from "./run-execution-pipeline.js";
+import { runExecutionPipeline } from "./orchestration/run-execution-pipeline.js";
 
 export async function executeWorkItem(
   input: unknown

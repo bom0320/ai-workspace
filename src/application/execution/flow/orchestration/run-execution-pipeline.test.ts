@@ -19,10 +19,10 @@ import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { runCodexWorker } from "../worker/codex-worker.js";
+import { runCodexWorker } from "../../worker/codex-worker.js";
 import { runExecutionPipeline } from "./run-execution-pipeline.js";
 
-vi.mock("../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("../../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
 vi.mock("@/services/artifacts/index.js", () => ({
   createExecutionRun: vi.fn(),
   getExecutionBaseCommit: vi.fn(),
@@ -354,6 +354,25 @@ describe("runExecutionPipeline", () => {
       { stage: "verification", message: "Verification failed." },
     ]);
     expect(removeExecutionWorkspaceMock).not.toHaveBeenCalled();
+  });
+
+  it("records Verification timeout and rechecks Scope before preserving changes", async () => {
+    const timedOutCommand = { ...failedCommand, timedOut: true };
+    runVerificationMock.mockResolvedValue(timedOutCommand);
+
+    const result = await runPipeline(task);
+
+    expect(result.passed).toBe(false);
+    expect(result.evidence.verification).toEqual(
+      verificationEvidence(timedOutCommand)
+    );
+    expect(result.failures).toEqual([
+      { stage: "verification", message: "Verification failed." },
+    ]);
+    expect(checkScopeMock).toHaveBeenCalledTimes(2);
+    expect(checkScopeMock.mock.invocationCallOrder[1]).toBeLessThan(
+      preserveExecutionChangesMock.mock.invocationCallOrder[0]
+    );
   });
 
   it("preserves prior Evidence and scope when Verification throws", async () => {

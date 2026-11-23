@@ -248,7 +248,9 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 `AI_WORKSPACE_GOVERNED_OPENAI_API_KEY`를 명시적으로 설정하면 승인된 읽기 파일의 Snapshot 내용과 작업 지시가 OpenAI Responses API로 전송된다. 모델 도구를 제공하지 않으며, 반환된 교체 텍스트는 승인된 쓰기·읽기 경로의 교집합에 해당하는 파일 번호로만 적용한다. 이 경로는 기존 UTF-8 파일 수정만 지원한다. 외부 Git 드라이버·훅·조건부 설정은 거부하며, 승인 Commit에 고정된 Worktree에는 외부 의존성을 연결하지 않는다. Harness는 허가된 `git diff --check`만 고정 argv로 실행한다. 초기 작업 공간 준비·모델 호출·교체·검증은 공통 시간 한도 및 위임 만료 시각을 사용하며, 실패 후 Evidence와 Artifact 보존은 Repository 외부의 임시 디렉터리에서 별도로 수행한다. 설정이 없거나 지원하지 않는 권한 조합은 예약 없이 차단한다.
 
-v0/v1 직접 실행과 Phase B는 Worktree·Scope 검사·Evidence·Artifact 처리를 공유한다. 직접 실행은 Codex CLI의 `workspace-write` Worker를 사용하며, Phase B는 도구 없는 Patch Runtime을 사용한다. macOS의 Codex CLI 0.169.1에서 파일 한 개만 허용한 Sandbox 프로필로 검증한 결과, 지정 파일 읽기·쓰기는 성공하고 미승인 파일·외부 심볼릭 링크·상대 경로 읽기와 로컬 네트워크 연결은 차단됐다. 같은 프로필에서 Harness의 명령 허용 목록에 없는 프로세스는 실행됐다. Codex로 전환하려면 실제 Worker의 모든 명령 실행 경로에 승인된 실행 파일과 argv를 강제하는 경계, 그리고 그 경계를 사용하는 통합 테스트가 필요하다.
+v0/v1 직접 실행과 Phase B는 Worktree·Scope 검사·Evidence·Artifact 처리를 공유한다. 직접 실행은 Codex CLI의 `workspace-write` Worker를 사용하며, Phase B는 도구 없는 Patch Runtime을 사용한다. macOS의 Codex CLI 0.169.1에서 파일 한 개만 허용한 Sandbox 프로필로 검증한 결과, 지정 파일 읽기·쓰기는 성공하고 미승인 파일·외부 심볼릭 링크·상대 경로 읽기와 로컬 네트워크 연결은 차단됐다. 같은 프로필에서 Harness의 명령 허용 목록에 없는 프로세스는 실행됐다. 현재 위임의 런타임 경계를 그대로 적용하는 전환에는 파일 범위와 Worker 도구 권한을 실제 Codex 실행에서 검증할 수 있는 경계가 필요하다.
+
+`ExecutionDelegation.grant.shellCommands`는 Harness가 수행하는 Verification의 승인 상한이다. 현재 Human Confirmation은 정확한 Read/Write Scope와 이 명령 목록을 바인딩하며, Codex의 일반 개발 명령이나 Worktree 전체 읽기·쓰기를 별도로 승인하는 필드는 없다. Worktree 격리와 사후 Scope 검사로 Codex를 사용하려면, Worker 도구의 파일·명령·네트워크 권한을 Verification 권한과 나누고 새 보장 수준을 명시적으로 승인해야 한다. 기존 위임을 이 의미로 재해석하지 않는다. 사후 Scope 검사는 변경을 탐지하며, 파일 읽기, 일시적인 쓰기 또는 외부 부작용을 방지하거나 되돌리지 않는다.
 
 ## 5. Graph State & Output Ownership
 

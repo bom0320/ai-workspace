@@ -1760,11 +1760,31 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   }
 
   it.each([
-    { readPaths: ["README.md"], expected: "blocked" },
-    { readPaths: ["docs-extra/other.md"], expected: "denied" },
+    {
+      name: "no model transport",
+      readPaths: ["README.md"],
+      expected: "blocked",
+    },
+    {
+      name: "unapproved read",
+      readPaths: ["docs-extra/other.md"],
+      expected: "denied",
+    },
+    {
+      name: "write without read",
+      readPaths: [],
+      expected: "blocked",
+      apiKey: "test-key",
+    },
   ])(
-    "ends governed execution as $expected without launching or reserving",
-    async ({ readPaths, expected }) => {
+    "ends governed execution for $name as $expected without launching or reserving",
+    async ({ readPaths, expected, apiKey }) => {
+      vi.stubEnv("AI_WORKSPACE_GOVERNED_OPENAI_API_KEY", apiKey);
+      const modelRequest = vi
+        .spyOn(globalThis, "fetch")
+        .mockRejectedValue(
+          new Error("A blocked request must not reach the model.")
+        );
       const {
         executionPreparationResult,
         planningResults,
@@ -1772,7 +1792,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         workItems,
       } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
         execution: { workItemId: "first", readPaths, timeoutMs: 5_000 },
-      });
+      }).finally(() => vi.unstubAllEnvs());
+      expect(modelRequest).not.toHaveBeenCalled();
       expect(executionPreparationResult?.status).toBe(expected);
       if (expected === "blocked")
         expect(executionPreparationResult?.reason).toMatch(

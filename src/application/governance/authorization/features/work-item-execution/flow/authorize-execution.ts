@@ -25,7 +25,7 @@ import {
   type ExecutionAuthorizationVerdict,
   type ExecutionRequest,
 } from "../model/execution.js";
-import { validateTaskExecutionContract } from "./validate-task-execution-contract.js";
+import { validateTaskExecutionContract } from "./validation/validate-task-execution-contract.js";
 
 function evaluateExecution(
   ledger: GovernanceLedger,

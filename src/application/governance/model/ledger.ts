@@ -22,7 +22,7 @@ import {
   workItemExecutionSourceSchema,
   executionReservationSchema,
 } from "../authorization/features/work-item-execution/model/execution.js";
-import { hasValidExecutionReservations } from "../authorization/features/work-item-execution/flow/validate-execution-reservations.js";
+import { hasValidExecutionReservations } from "../authorization/features/work-item-execution/flow/validation/validate-execution-reservations.js";
 const text = z.string().min(1);
 
 export const governanceLedgerSchema = z

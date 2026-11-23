@@ -3,7 +3,7 @@ import {
   executionBoundsSchema,
   executionScopes,
   isExecutionScopeContained,
-} from "../../../../approval/features/system-policy/model/execution-system-policy.js";
+} from "../../../../../approval/features/system-policy/model/execution-system-policy.js";
 
 type TaskExecutionFields = Pick<
   TaskContract,

@@ -1,5 +1,5 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
-import type { RepositoryGovernance } from "../../../../model/ledger.js";
+import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 
 export function hasValidExecutionReservations(
   entry: RepositoryGovernance,

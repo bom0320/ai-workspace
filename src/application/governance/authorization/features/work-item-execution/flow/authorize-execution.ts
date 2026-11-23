@@ -10,7 +10,6 @@ import {
   isExecutionGrantWithinPolicy,
 } from "../../../../approval/features/execution-delegation/validation/validate-execution-delegation-records.js";
 import {
-  executionBoundsSchema,
   executionScopes,
   isExecutionScopeContained,
 } from "../../../../approval/features/system-policy/model/execution-system-policy.js";
@@ -26,6 +25,7 @@ import {
   type ExecutionAuthorizationVerdict,
   type ExecutionRequest,
 } from "../model/execution.js";
+import { validateTaskExecutionContract } from "./validate-task-execution-contract.js";
 
 function evaluateExecution(
   ledger: GovernanceLedger,
@@ -75,29 +75,17 @@ function evaluateExecution(
   )
     throw new Error("Unverified Work Item, dependencies or TaskContract.");
 
-  const { readPaths, writePaths, shellCommands, timeoutMs, task } = request;
-  const allowedPaths = executionBoundsSchema.shape.writePaths.parse(
-    task.allowedPaths
-  );
-  const forbiddenPaths = executionBoundsSchema.shape.writePaths.parse(
-    task.forbiddenPaths
+  const { readPaths, timeoutMs, task } = request;
+  const { writePaths, shellCommands } = validateTaskExecutionContract(
+    task,
+    delegation.grant
   );
   if (
-    !writePaths.length ||
-    allowedPaths.length !== writePaths.length ||
-    !allowedPaths.every(
-      (path) => writePaths.includes(path) && !forbiddenPaths.includes(path)
-    ) ||
-    task.verification.length !== shellCommands.length ||
-    new Set(task.verification).size !== shellCommands.length ||
-    !shellCommands.every((command) => task.verification.includes(command)) ||
     !(context.goal.constraints ?? []).every((constraint) =>
       task.constraints.includes(constraint)
     )
   )
-    throw new Error(
-      "Task scope, constraints or verification exceed the request."
-    );
+    throw new Error("Task must preserve the approved Goal constraints.");
 
   const requestedGrant = {
     readPaths,
@@ -109,11 +97,11 @@ function evaluateExecution(
   };
   if (
     !isExecutionScopeContained(
-      executionScopes(requestedGrant),
+      {
+        readScopes: executionScopes(requestedGrant).readScopes,
+        writeScopes: [],
+      },
       executionScopes(delegation.grant)
-    ) ||
-    !shellCommands.every((command) =>
-      delegation.grant.shellCommands.includes(command)
     ) ||
     timeoutMs > delegation.grant.budget.maxTimeoutMs ||
     !isExecutionGrantWithinPolicy(
@@ -229,6 +217,8 @@ export function claimAuthorizedExecution(
   | { status: "claimed"; execution: AuthorizedExecution }
   | { status: "denied"; reason: string } {
   try {
+    // Legacy permits contain extra request fields. Reject them as issued instead
+    // of translating either digest or releasing their durable reservation.
     const execution = authorizedExecutionSchema.parse(input);
     return withGovernanceLedger((ledger, save) => {
       const evaluated = evaluateExecution(ledger, execution.request);

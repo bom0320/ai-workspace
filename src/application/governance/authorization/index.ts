@@ -21,3 +21,4 @@ export {
   type AuthorizedExecution,
   type ExecutionAuthorizationVerdict,
 } from "./features/work-item-execution/model/execution.js";
+export { validateTaskExecutionContract } from "./features/work-item-execution/flow/validate-task-execution-contract.js";

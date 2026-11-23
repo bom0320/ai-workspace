@@ -8,7 +8,7 @@ const text = z.string().min(1);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 
 export const executionRequestSchema = executionBoundsSchema
-  .omit({ budget: true })
+  .pick({ readPaths: true })
   .extend({
     approvedDecisionId: text,
     executionSourceId: digest,

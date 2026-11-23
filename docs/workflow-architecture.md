@@ -240,7 +240,7 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 **Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node는 Handoff 검증 후 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
 
-`authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원하며 Verification 명령은 요청된 명시적 Shell 명령과 정확히 일치해야 한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다.
+`authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원한다. 쓰기 경로와 Verification 명령은 각각 `task.allowedPaths`와 `task.verification`에서 가져오며, 위임과 정책 양쪽의 상한을 적용한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다. 이전 요청 형식으로 발급한 Permit은 Claim에서 거부한다. 저장된 예약과 Digest를 그대로 보존하며 예산과 중복 예약 제한에도 계속 반영한다.
 
 Step 10.2-3은 Worker 시작 직전에 `claimAuthorizedExecution(execution)`을 호출한다. Claim은 한 Ledger 트랜잭션에서 발급 바인딩, 현재 정책·위임·만료, Repository 기준과 미사용 예약을 다시 검증해 한 번만 소비한다. 후속 실행은 Claim에서 반환한 기준 commit으로 격리된 Workspace를 구성하고 읽기·쓰기·정확한 argv·시간 제한을 그 환경에서 강제해야 한다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 

@@ -1663,8 +1663,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         workItem: workItems.find(({ id }) => id === workItemId)!,
         task: result.task,
         readPaths: [target],
-        writePaths: [target],
-        shellCommands: ["git diff --check"],
         timeoutMs: 5_000,
       };
     });
@@ -1887,6 +1885,42 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(governance.authorizeExecution(third).status).toBe("denied");
   });
 
+  it("preserves legacy reservations without accepting old or translated permits", async () => {
+    const [request, second, third] = await plannedExecutions(true, 2);
+    const allowed = governance.authorizeExecution(request);
+    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
+    const legacy = {
+      ...allowed.execution,
+      request: {
+        ...allowed.execution.request,
+        writePaths: request.task.allowedPaths,
+        shellCommands: request.task.verification,
+      },
+    };
+    withGovernanceRecords((raw, persist) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const reservation = Object.values(ledger.repositories)
+        .flatMap((entry) => entry.executionReservations ?? [])
+        .find(({ id }) => id === legacy.id)!;
+      reservation.requestDigest = governanceDigest(legacy.request);
+      reservation.executionDigest = governanceDigest(legacy);
+      persist(raw);
+    });
+
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    expect(governance.authorizeExecution(legacy.request).status).toBe("denied");
+    expect(governance.claimAuthorizedExecution(legacy).status).toBe("denied");
+    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+      "denied"
+    );
+    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(governance.authorizeExecution(second).status).toBe("allowed");
+    expect(governance.authorizeExecution(third).status).toBe("denied");
+  });
+
   it("requires a delegation for a valid Direction-only plan", async () => {
     const [request] = await plannedExecutions(false);
     expect(governance.authorizeExecution(request).status).toBe(
@@ -1897,12 +1931,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it("denies a recorded plan whose verification requires an arbitrary shell command", async () => {
     const [request] = await plannedExecutions(true, 1, ["pnpm test"]);
     expect(governance.authorizeExecution(request).status).toBe("denied");
-    expect(
-      governance.authorizeExecution({
-        ...request,
-        shellCommands: ["pnpm test"],
-      }).status
-    ).toBe("denied");
   });
 
   it("denies execution of a Phase B plan outside the Handoff write ceiling", async () => {
@@ -1924,9 +1952,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       { ...request, task: { ...request.task, verification: ["pnpm test"] } },
       { ...request, repositoryPath: home },
       { ...request, readPaths: ["a.ts"] },
-      { ...request, writePaths: ["a.ts"] },
-      { ...request, shellCommands: ["pnpm test"] },
-      { ...request, shellCommands: [] },
+      { ...request, task: { ...request.task, allowedPaths: ["a.ts"] } },
       { ...request, timeoutMs: 20_000 },
     ];
     for (const attempt of attempts)

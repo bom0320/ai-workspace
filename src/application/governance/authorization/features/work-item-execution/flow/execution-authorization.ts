@@ -259,17 +259,16 @@ export function authorizeExecution(
   return "execution" in result ? { status: "allowed", ...result } : result;
 }
 
-// The durable claim is written before returning the permit. It may be consumed
-// even if the caller exits before a Worker process starts.
-export function authorizeAndClaimExecution(
+// Immediate execution consumes the reservation before returning authority.
+// That record survives even if the caller exits before starting the Worker.
+export function authorizeExecutionForRun(
   input: unknown
-): { status: "claimed"; execution: AuthorizedExecution } | ExecutionDenial {
+): { status: "authorized"; execution: AuthorizedExecution } | ExecutionDenial {
   const result = reserveExecution(input, true);
-  return "execution" in result ? { status: "claimed", ...result } : result;
+  return "execution" in result ? { status: "authorized", ...result } : result;
 }
 
-// Step 10.2-3 must call this immediately before starting the Worker and use
-// only the returned request/snapshot. An unclaimed decision cannot start work.
+// Compatibility path for a permit issued earlier by authorizeExecution().
 export function claimAuthorizedExecution(
   input: unknown
 ):

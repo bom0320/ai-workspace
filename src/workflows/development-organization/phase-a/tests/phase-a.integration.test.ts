@@ -2010,15 +2010,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(governance.authorizeExecution(third).status).toBe("denied");
   });
 
-  it("atomically claims an execution and shares the budget with unused permits", async () => {
+  it("atomically authorizes execution for a run and shares the budget with unused permits", async () => {
     const [first, second, third] = await plannedExecutions(true, 2);
     const prior = governance.authorizeExecution(first);
     if (prior.status !== "allowed") throw new Error(JSON.stringify(prior));
-    expect(governance.authorizeAndClaimExecution(first).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
 
     const rename = vi.spyOn(filesystem, "renameSync");
-    const claimed = governance.authorizeAndClaimExecution(second);
-    if (claimed.status !== "claimed") throw new Error(JSON.stringify(claimed));
+    const authorized = governance.authorizeExecutionForRun(second);
+    if (authorized.status !== "authorized")
+      throw new Error(JSON.stringify(authorized));
     expect(rename).toHaveBeenCalledOnce();
     withGovernanceRecords((raw) => {
       const ledger =
@@ -2030,19 +2031,21 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(
         records.find(({ id }) => id === prior.execution.id)?.claimedAt
       ).toBeUndefined();
-      const record = records.find(({ id }) => id === claimed.execution.id)!;
+      const record = records.find(({ id }) => id === authorized.execution.id)!;
       expect(record.claimedAt).toBe(record.reservedAt);
       expect(record.claimedAt).toBeDefined();
       expect(record.requestDigest).toBe(
-        governanceDigest(claimed.execution.request)
+        governanceDigest(authorized.execution.request)
       );
-      expect(record.executionDigest).toBe(governanceDigest(claimed.execution));
+      expect(record.executionDigest).toBe(
+        governanceDigest(authorized.execution)
+      );
     });
-    expect(governance.authorizeAndClaimExecution(second).status).toBe("denied");
-    expect(governance.claimAuthorizedExecution(claimed.execution).status).toBe(
-      "denied"
-    );
-    expect(governance.authorizeAndClaimExecution(third).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
+    expect(
+      governance.claimAuthorizedExecution(authorized.execution).status
+    ).toBe("denied");
+    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
     expect(governance.claimAuthorizedExecution(prior.execution).status).toBe(
       "claimed"
     );
@@ -2089,7 +2092,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(governance.authorizeExecution(request).status).toBe(
       "approval-required"
     );
-    expect(governance.authorizeAndClaimExecution(request).status).toBe(
+    expect(governance.authorizeExecutionForRun(request).status).toBe(
       "approval-required"
     );
   });
@@ -2255,9 +2258,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         governance.claimAuthorizedExecution(allowed.execution).status
       ).toBe("denied");
       expect(governance.authorizeExecution(second).status).toBe("denied");
-      expect(governance.authorizeAndClaimExecution(second).status).toBe(
-        "denied"
-      );
+      expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
     }
   );
 
@@ -2273,9 +2274,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(governance.authorizeExecution(request).status).toBe("denied");
     expect(readFileSync(path, "utf8")).toBe(before);
     rename.mockImplementationOnce(fail);
-    expect(governance.authorizeAndClaimExecution(request).status).toBe(
-      "denied"
-    );
+    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
     expect(readFileSync(path, "utf8")).toBe(before);
     const allowed = governance.authorizeExecution(request);
     if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));

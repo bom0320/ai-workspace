@@ -242,9 +242,9 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 `authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원한다. 쓰기 경로와 Verification 명령은 각각 `task.allowedPaths`와 `task.verification`에서 가져오며, 위임과 정책 양쪽의 상한을 적용한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다. 이전 요청 형식으로 발급한 Permit은 Claim에서 거부한다. 저장된 예약과 Digest를 그대로 보존하며 예산과 중복 예약 제한에도 계속 반영한다.
 
-Step 10.2-3은 Worker 시작 직전에 `claimAuthorizedExecution(execution)`을 호출한다. Claim은 한 Ledger 트랜잭션에서 발급 바인딩, 현재 정책·위임·만료, Repository 기준과 미사용 예약을 다시 검증해 한 번만 소비한다. 후속 실행은 Claim에서 반환한 기준 commit으로 격리된 Workspace를 구성하고 읽기·쓰기·정확한 argv·시간 제한을 그 환경에서 강제해야 한다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
+기존 분리 API로 예약을 생성했다면 `claimAuthorizedExecution(execution)`이 발급 바인딩, 현재 권한과 미사용 예약을 재검증해 한 번만 소비한다. 이 경로는 기존 Permit과의 호환성을 위해 유지한다.
 
-즉시 실행용 `authorizeAndClaimExecution(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `claimed`를 반환한다. 기존 분리 API와 같은 예산 및 중복 예약 규칙을 사용한다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 Claim은 소비된 상태로 남는다.
+즉시 실행용 `authorizeExecutionForRun(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `authorized`와 검증된 실행 입력을 반환한다. 성공 상태는 실행 권한의 사용 확정을 뜻한다. 검증된 Runtime이 확보되면 Worker 시작 직전에 이 API를 호출하고, 반환된 기준 commit과 권한 범위를 사용한다. 기존 분리 API와 같은 예산 및 중복 예약 규칙을 사용한다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
 **현재 Step 4 실행 경계:** Phase B의 `planning.execution` 옵션은 실행할 Work Item ID와 읽기 경로, 시간 제한을 명시한다. 계획 또는 출처 등록 실패 시 실행 준비 노드로 진입하지 않는다. 실행 준비 판정은 `executionPreparationResult`에 기록한다. Governance가 실행 요청과 예약 가능 여부를 읽기 전용으로 검증한다. 현재 Codex `workspace-write`와 Shell 기반 검증은 승인된 경로 및 명령만 허용하는 실행 환경이 아니므로 적격 요청도 `blocked`로 종료한다. 이 경로는 Reservation이나 Claim을 생성하지 않는다. 전체 commit ID를 지정한 Worktree 생성은 실제 기준 commit을 검증하고 외부 의존성을 연결하지 않는다. 이 Worktree 기능만으로 Worker 격리가 성립하지 않는다.
 

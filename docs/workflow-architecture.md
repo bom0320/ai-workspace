@@ -201,7 +201,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 | 개념 | 책임 |
 | --- | --- |
 | Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. 구현된 Schema는 제안 내부 ID, objective, deliverable, dependsOn과 선택적 rationale·suggestedRoles를 정의한다. rationale은 업무를 독립 실행 단위로 분리한 근거이며, 작성 시 비어 있지 않아야 한다. 복수 업무 제안에서 CEO는 각 업무의 책임·산출물·검증 경계를 근거로 분리 이유를 설명한다. 선행 관계는 dependsOn에 기록한다. |
-| Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 등록·선정과 배치 계약은 Planned이며, 기존 Phase A `StaffingAssignment`는 분석 배치 계약으로 유지한다. |
+| Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 계획 준비는 Phase A에서 승인된 Specialist 출처를 재사용하며, 기존 `StaffingAssignment`는 Phase A 분석 배치 계약이다. |
 | `TaskContract` | Repository 변경의 수정 가능·금지 범위, Constraints, Acceptance Criteria, Verification을 구체화하는 기존 v1/v0 계약. 필요한 Human Task Approval과 Execution의 입력이다. |
 
 CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계약 생성은 개별 Planning의 책임이며 실행 권한은 Governance 경계에서 확인한다. 읽기 전용 분석·설계·검토는 업무에 맞는 Context와 권한 계약을 사용한다. Repository 변경은 `TaskContract`와 필요한 Human Task Approval을 거친다. 테스트 명령처럼 Shell을 사용하는 업무는 변경 여부와 관계없이 별도의 실행 권한 검증이 필요하다.
@@ -237,6 +237,20 @@ Worktree 경로에 적용한다. Read-only는 승인된 Git blob만
 제한하고 Codex read-only sandbox와 도구 비활성화 설정을 유지한다. 변경 업무는 기존 Codex Worktree,
 Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참조 범위를 확인한다. 실행 준비 실패와
 실행 결과는 각각 Work Item ID로 기록한다. 하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
+
+**Step 5.2.1 Assignment Plan 준비.** Phase B는 `assignmentPlanning`으로 Agent와 Work Item 선택을
+명시한 경우에 준비 경로를 사용한다. 기존 `planning`과 동시에 선택할 수 없다. Work Decomposition을 등록하고
+선택을 마친 뒤 별도 노드가 Assignment Planning Application을 호출한다. Agent는 선택된 Work Item과
+최종 승인 Review의 Staffing Issuance에서 복원한 Specialist ID·역할·기본 Objective를 받는다.
+
+읽기 전용 업무에는 Specialist를 배치할 수 있다. 수정 업무에는 Specialist와 승인된
+`codex-worktree` Worker를 함께 배치할 수 있다. Assignment 의존성은 같은 Work Item 안으로 제한하고
+Work Item 간 선행 관계는 기존 `WorkItem.dependsOn`을 사용한다. 미지정 유형은 기존 단일 실행 경로를 유지한다.
+저장된 Plan Digest와 호환되도록 새 Assignment의 식별자는 `id`에 유지한다.
+
+Governance는 등록·조회에서 승인 출처, 등록된 Decomposition, Snapshot과 Executor를 독립적으로 검증한다.
+Plan ID는 기존처럼 Decomposition·Staffing Binding, Snapshot, Assignment 목록의 Digest다. 준비 경로는
+Plan을 기록하고 종료한다. Assignment별 권한·예약·결과 Handoff와 실제 CEO Adapter는 후속 범위다.
 
 ## 4. Phase A → Phase B Handoff Contract
 

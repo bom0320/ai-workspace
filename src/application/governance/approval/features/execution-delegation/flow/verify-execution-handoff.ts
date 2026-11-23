@@ -23,7 +23,7 @@ export function resolveExecutionHandoff(
   ledger: GovernanceLedger,
   input: ExecutionHandoffApproval
 ) {
-  const { entry, decision, review, context, snapshot } =
+  const { entry, decision, review, context, snapshot, analysisSources } =
     resolveApprovedDecision(ledger, input.decision.id);
   const delegation = entry.executionDelegations?.find(
     ({ id }) => id === executionDelegationId(decision.id)
@@ -51,6 +51,7 @@ export function resolveExecutionHandoff(
     );
   return {
     entry,
+    analysisSources,
     decision,
     context,
     snapshot,

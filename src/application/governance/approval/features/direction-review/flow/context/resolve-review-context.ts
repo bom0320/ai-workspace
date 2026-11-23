@@ -138,17 +138,18 @@ function resolveReview(
     );
   validateIssuance(issuance, entry);
   const context = reviewContext(entry, scope, review);
-  if (review.analysisInvocationIds)
-    verifyAnalysisSources(
-      entry,
-      scope.id,
-      context,
-      review.analysisInvocationIds,
-      validateIssuance === validateStoredIssuance
-    );
-  else assertAnalysisScope(context, scope);
+  const analysisSources = review.analysisInvocationIds
+    ? verifyAnalysisSources(
+        entry,
+        scope.id,
+        context,
+        review.analysisInvocationIds,
+        validateIssuance === validateStoredIssuance
+      )
+    : scope.assignments.map((assignment) => ({ scope, assignment }));
+  if (!review.analysisInvocationIds) assertAnalysisScope(context, scope);
   assertReviewRecord(review, entry, scope, context);
-  return { entry, review, context, snapshot: scope.snapshot };
+  return { entry, review, context, snapshot: scope.snapshot, analysisSources };
 }
 
 // History checks have no live Repository I/O. Mutating and pending-review paths

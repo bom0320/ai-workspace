@@ -1,3 +1,4 @@
+import { findRegisteredDecomposition } from "../../../../records/execution-decomposition.js";
 import type {
   WorkDecompositionResult,
   WorkItem,
@@ -17,57 +18,24 @@ import { validateTaskExecutionContract } from "./validation/validate-task-execut
 
 type Proposal = Extract<WorkDecompositionResult, { status: "proposed" }>;
 
-function decompositionSubject(proposal: Proposal, approvalBinding: string) {
-  return {
-    approvedDecisionId: proposal.approvedDecisionId,
-    approvalBinding,
-    workItems: proposal.workItems,
-  };
-}
-
 function matchWorkItem(
   entry: RepositoryGovernance,
   proposal: Proposal,
   workItem: WorkItem,
   approvalBinding: string
 ) {
-  const binding = governanceDigest(
-    decompositionSubject(proposal, approvalBinding)
-  );
-  const decomposition = entry.executionDecompositions?.find(
-    (record) => record.binding === binding
+  const decomposition = findRegisteredDecomposition(
+    entry,
+    proposal,
+    approvalBinding
   );
   const item = decomposition?.workItems.find(({ id }) => id === workItem.id);
-  if (item && governanceDigest(item) === governanceDigest(workItem))
-    return { binding, item };
-}
-
-// Internal Phase B writers. A planning-only run may complete without a
-// recorded execution source; authorization never falls back to graph output.
-export function registerExecutionDecomposition(proposal: Proposal): void {
-  try {
-    withGovernanceLedger((ledger, save) => {
-      const { entry, decision } = resolveApprovedDecision(
-        ledger,
-        proposal.approvedDecisionId
-      );
-      const subject = decompositionSubject(
-        proposal,
-        governanceDigest(decision)
-      );
-      const binding = governanceDigest(subject);
-      if (
-        entry.executionDecompositions?.some(
-          (record) => record.binding === binding
-        )
-      )
-        return;
-      (entry.executionDecompositions ??= []).push({ ...subject, binding });
-      save();
-    });
-  } catch {
-    // Unavailable provenance leaves the output eligible for planning only.
-  }
+  if (
+    decomposition &&
+    item &&
+    governanceDigest(item) === governanceDigest(workItem)
+  )
+    return { binding: decomposition.binding, item };
 }
 
 export function beginWorkItemExecutionSource(

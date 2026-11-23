@@ -10,11 +10,9 @@ import {
 } from "../../phase-b/index.js";
 import { executeWorkItemPlanning } from "../../phase-b/features/planning/execution/execute-work-item-planning.js";
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
-import {
-  registerExecutionDecomposition,
-  beginWorkItemExecutionSource,
-} from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
+import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
+import { registerExecutionDecomposition } from "@/application/governance/records/execution-decomposition.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import {
@@ -1580,13 +1578,19 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       codexMode = false,
       readOnly = false,
       beforePhaseB,
+      assignmentAgent,
+      specialistCount = 1,
     }: {
       beforePlannerResult?: () => void;
       fastPath?: boolean;
       directoryScope?: boolean;
       codexMode?: boolean;
       readOnly?: boolean;
+      specialistCount?: number;
       beforePhaseB?: () => void;
+      assignmentAgent?: NonNullable<
+        PhaseBGraphOptions["assignmentPlanning"]
+      >["agent"];
       execution?: NonNullable<PhaseBGraphOptions["planning"]>["execution"];
     } = {}
   ) {
@@ -1611,7 +1615,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       graph: phaseA,
       config,
     } = await pendingDirection(
-      1,
+      specialistCount,
       confirmDirection,
       withDelegation
         ? async () =>
@@ -1663,7 +1667,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const decision = approved.directionGovernanceResult.decision;
     const workItems = ["first", "second", "third"].map((id) => ({
       id,
-      ...(readOnly && { workType: "read-only" as const }),
+      ...(readOnly
+        ? { workType: "read-only" as const }
+        : assignmentAgent
+          ? { workType: "repository-modification" as const }
+          : {}),
       objective: fastPath
         ? `Fix typos in ${target}`
         : `Revise ${id} wording in ${target}`,
@@ -1703,11 +1711,22 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     let executionPreparationResult;
     let workerExecutionResult;
     let readOnlyExecutionResult;
+    let assignmentPlanResult;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
       beforePhaseB?.();
-      const state = await createPhaseBGraph({ agent, planning }).invoke({
+      const state = await createPhaseBGraph({
+        agent,
+        ...(assignmentAgent
+          ? {
+              assignmentPlanning: {
+                agent: assignmentAgent,
+                selectWorkItemIds: () => ["first"],
+              },
+            }
+          : { planning }),
+      }).invoke({
         handoff,
       });
       expect(state.handoffResult?.status).toBe("accepted");
@@ -1715,6 +1734,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       executionPreparationResult = state.executionPreparationResult;
       workerExecutionResult = state.workerExecutionResult;
       readOnlyExecutionResult = state.readOnlyExecutionResult;
+      assignmentPlanResult = state.assignmentPlanResult;
     } else {
       const decomposition = await runWorkDecomposition(
         { approvedDecisionId: decision.id },
@@ -1747,6 +1767,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }
     return {
       planningResults,
+      assignmentPlanResult,
+      handoff,
       decision,
       workItems,
       executionPreparationResult,
@@ -1754,6 +1776,183 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       readOnlyExecutionResult,
     };
   }
+
+  it("prepares a provenance-bound Assignment Plan without starting execution", async () => {
+    const assignmentAgent = vi.fn<
+      NonNullable<
+        NonNullable<PhaseBGraphOptions["assignmentPlanning"]>["agent"]
+      >
+    >(async ({ specialists }) =>
+      specialists.map(({ id }, index) => ({
+        id: `assignment-${index}`,
+        workItemId: "first",
+        executor: { kind: "specialist", specialistId: id },
+        objective: "Assess the existing wording",
+        deliverable: "Evidence-linked findings",
+        dependsOn: [],
+      }))
+    );
+    const {
+      handoff,
+      assignmentPlanResult,
+      planningResults,
+      decision,
+      workItems,
+    } = await planExecutionItems(true, 1, [], "README.md", {
+      readOnly: true,
+      assignmentAgent,
+    });
+    expect(handoff?.status).toBe("completed");
+    if (
+      handoff?.status !== "completed" ||
+      assignmentPlanResult?.status !== "prepared"
+    )
+      throw new Error(JSON.stringify(assignmentPlanResult));
+    const { plan } = assignmentPlanResult;
+    expect(planningResults).toEqual([]);
+    const persisted = governance.getPreparedAssignmentPlan(handoff, plan.id);
+    expect(persisted.plan).toEqual(plan);
+    expect(persisted.specialistSources[0]).toMatchObject({
+      definition: {
+        id: expect.any(String),
+        role: expect.any(String),
+        objective: expect.any(String),
+        authority: { repositoryAccess: "read", shellExecution: false },
+      },
+      assignmentId: expect.any(String),
+      approvalRecordId: expect.any(String),
+    });
+    expect(
+      withGovernanceRecords((raw) =>
+        Object.values(
+          (
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+          ).repositories
+        ).flatMap(({ executionReservations }) => executionReservations ?? [])
+      )
+    ).toEqual([]);
+
+    const proposal = {
+      status: "proposed" as const,
+      approvedDecisionId: decision.id,
+      workItems,
+    };
+    const [assignment] = plan.assignments;
+    const rejects = [
+      [
+        {
+          ...assignment,
+          executor: { kind: "specialist", specialistId: "not-registered" },
+        },
+      ],
+      [{ ...assignment, executor: { kind: "specialist", specialistId: "ux" } }],
+      [{ ...assignment, workItemId: "unbound" }],
+      [{ ...assignment, role: "Forged role" }],
+      [{ ...assignment, readPaths: ["outside.txt"] }],
+      [{ ...assignment, id: "" }],
+      [assignment, assignment],
+      [{ ...assignment, dependsOn: ["missing"] }],
+      [{ ...assignment, dependsOn: [assignment.id] }],
+      [
+        { ...assignment, dependsOn: ["other"] },
+        { ...assignment, id: "other", dependsOn: [assignment.id] },
+      ],
+      [{ ...assignment, executor: { kind: "worker", mode: "codex-worktree" } }],
+    ];
+    for (const candidate of rejects)
+      expect(() =>
+        governance.registerAssignmentPlan(handoff, proposal, candidate)
+      ).toThrow();
+    expect(() =>
+      governance.registerAssignmentPlan(
+        handoff,
+        {
+          ...proposal,
+          workItems: workItems.map((item) => ({
+            ...item,
+            objective: "Forged",
+          })),
+        },
+        plan.assignments
+      )
+    ).toThrow(governance.AssignmentRegistrationError);
+    const ledgerPath = join(home, ".ai-workspace-governance", "records.json");
+    const original = readFileSync(ledgerPath, "utf8");
+    withGovernanceRecords((raw, save) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const entry = Object.values(ledger.repositories).find(
+        (item) => item.assignmentPlans?.length
+      )!;
+      entry.assignmentPlans![0].assignments[0].objective = "Tampered";
+      save(ledger);
+    });
+    expect(() =>
+      governance.getPreparedAssignmentPlan(handoff, plan.id)
+    ).toThrow("Invalid Assignment Plan binding");
+    writeFileSync(ledgerPath, original);
+    writeFileSync(join(root, "README.md"), "Snapshot drift");
+    expect(() =>
+      governance.getPreparedAssignmentPlan(handoff, plan.id)
+    ).toThrow();
+    expect(() =>
+      governance.registerAssignmentPlan(handoff, proposal, plan.assignments)
+    ).toThrow();
+  });
+
+  it("prepares multiple approved Specialists and a Worker on one modification Work Item", async () => {
+    const assignmentAgent: NonNullable<
+      PhaseBGraphOptions["assignmentPlanning"]
+    >["agent"] = async ({ specialists, workItems, workerMode }) => {
+      expect(specialists).toHaveLength(2);
+      expect(workItems.map(({ id }) => id)).toEqual(["first"]);
+      expect(workerMode).toBe("codex-worktree");
+      const assignments = specialists.map(({ id }) => ({
+        id,
+        workItemId: "first",
+        executor: { kind: "specialist", specialistId: id },
+        objective: "Review existing behavior",
+        deliverable: "Findings",
+        dependsOn: [],
+      }));
+      return [
+        ...assignments,
+        {
+          id: "implement",
+          workItemId: "first",
+          executor: { kind: "worker", mode: workerMode },
+          objective: "Implement approved direction",
+          deliverable: "Patch",
+          dependsOn: assignments.map(({ id }) => id),
+        },
+      ];
+    };
+    const {
+      handoff,
+      assignmentPlanResult,
+      workerExecutionResult,
+      planningResults,
+    } = await planExecutionItems(true, 1, [], "README.md", {
+      assignmentAgent,
+      specialistCount: 2,
+      codexMode: true,
+    });
+    if (
+      handoff?.status !== "completed" ||
+      assignmentPlanResult?.status !== "prepared"
+    )
+      throw new Error(JSON.stringify(assignmentPlanResult));
+    const prepared = governance.getPreparedAssignmentPlan(
+      handoff,
+      assignmentPlanResult.plan.id
+    );
+    expect(
+      prepared.plan.assignments.map(({ executor }) => executor.kind)
+    ).toEqual(["specialist", "specialist", "worker"]);
+    expect(prepared.specialistSources).toHaveLength(2);
+    expect(workerExecutionResult).toBeUndefined();
+    expect(planningResults).toEqual([]);
+  });
 
   async function plannedExecutions(
     ...args: Parameters<typeof planExecutionItems>

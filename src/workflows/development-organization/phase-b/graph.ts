@@ -1,5 +1,7 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
+import type { AssignmentPlanAgent } from "@/application/assignment-planning/index.js";
+import { createPrepareAssignmentsNode } from "./features/assignment/nodes/prepare-assignments.js";
 import { createPlanWorkItemNode } from "./features/planning/nodes/plan-work-item.js";
 import {
   createSelectPlanningWorkItemsNode,
@@ -18,6 +20,10 @@ export type PhaseBGraphOptions = Omit<
   RunWorkDecompositionOptions,
   "executionCeiling"
 > & {
+  assignmentPlanning?: {
+    agent: AssignmentPlanAgent;
+    selectWorkItemIds: SelectWorkItemIds;
+  };
   planning?: Omit<
     Parameters<typeof executeWorkItemPlanning>[0],
     "phaseB" | "executionCeiling"
@@ -29,9 +35,13 @@ export type PhaseBGraphOptions = Omit<
 
 export function createPhaseBGraph({
   planning,
+  assignmentPlanning,
   ...decompositionOptions
 }: PhaseBGraphOptions = {}) {
-  const selectWorkItemIds = planning?.selectWorkItemIds;
+  if (assignmentPlanning && planning)
+    throw new Error("Choose Assignment Preparation or Detailed Planning.");
+  const selectWorkItemIds =
+    assignmentPlanning?.selectWorkItemIds ?? planning?.selectWorkItemIds;
   const execution = planning?.execution;
 
   // 1. Register Workflow Nodes
@@ -43,6 +53,10 @@ export function createPhaseBGraph({
     .addNode(
       "select-planning-work-items",
       createSelectPlanningWorkItemsNode(selectWorkItemIds)
+    )
+    .addNode(
+      "prepare-assignments",
+      createPrepareAssignmentsNode(assignmentPlanning?.agent)
     )
     .addNode("plan-work-item", createPlanWorkItemNode(planning))
     .addNode(
@@ -64,8 +78,13 @@ export function createPhaseBGraph({
   );
   graph.addConditionalEdges(
     "select-planning-work-items",
-    (state) => (state.pendingPlanningIds?.length ? "plan-work-item" : END),
-    ["plan-work-item", END]
+    (state) =>
+      state.pendingPlanningIds?.length
+        ? assignmentPlanning
+          ? "prepare-assignments"
+          : "plan-work-item"
+        : END,
+    ["prepare-assignments", "plan-work-item", END]
   );
   graph.addConditionalEdges(
     "plan-work-item",
@@ -84,6 +103,7 @@ export function createPhaseBGraph({
     },
     ["plan-work-item", "execute-work-item", END]
   );
+  graph.addEdge("prepare-assignments", END);
   graph.addEdge("execute-work-item", END);
 
   // 3. Compile Graph

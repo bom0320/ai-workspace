@@ -24,6 +24,7 @@ export function resolveApprovedDecision(ledger: GovernanceLedger, id: string) {
   const { entry, decision } = matches[0];
   const {
     entry: reviewEntry,
+    analysisSources,
     review,
     context,
     snapshot,
@@ -35,5 +36,5 @@ export function resolveApprovedDecision(ledger: GovernanceLedger, id: string) {
     review.binding !== decision.reviewBinding
   )
     throw new Error("ApprovedDecision has no matching Human approval.");
-  return { entry, decision, review, context, snapshot };
+  return { entry, decision, review, context, snapshot, analysisSources };
 }

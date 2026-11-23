@@ -1,3 +1,6 @@
+import { assignmentPlanSchema } from "./assignment-plan.js";
+import { governanceDigest } from "@/services/governance-records/index.js";
+import { validateAssignmentProposal } from "@/contracts/phase-b-assignment.js";
 import { approvedDecisionSchema } from "../approval/features/direction-review/model/result.js";
 import {
   directionAnalysisSchema,
@@ -51,6 +54,7 @@ export const governanceLedgerSchema = z
           executionDecompositions: z
             .array(executionDecompositionSchema)
             .optional(),
+          assignmentPlans: z.array(assignmentPlanSchema).optional(),
           workItemExecutionSources: z
             .array(workItemExecutionSourceSchema)
             .optional(),
@@ -99,6 +103,24 @@ export const governanceLedgerSchema = z
           code: "custom",
           message: "Invalid Analysis Refinement or cumulative budget.",
         });
+      const planIds = new Set<string>();
+      for (const { id, ...plan } of entry.assignmentPlans ?? []) {
+        const decomposition = entry.executionDecompositions?.find(
+          ({ binding }) => binding === plan.decompositionBinding
+        );
+        if (
+          planIds.has(id) ||
+          governanceDigest(plan) !== id ||
+          governanceDigest(plan.snapshot.repositoryRoot) !== key ||
+          !decomposition ||
+          validateAssignmentProposal(plan.assignments, decomposition.workItems)
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Invalid Assignment Plan binding.",
+          });
+        planIds.add(id);
+      }
       if (!hasValidExecutionReservations(entry, key, executionIds))
         context.addIssue({
           code: "custom",

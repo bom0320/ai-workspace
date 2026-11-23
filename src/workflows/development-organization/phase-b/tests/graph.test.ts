@@ -30,10 +30,12 @@ vi.mock("@/application/governance/index.js", async () => ({
   getApprovedDecision: vi.fn(),
   verifyExecutionHandoff: vi.fn(),
 }));
+vi.mock("@/application/governance/records/execution-decomposition.js", () => ({
+  registerExecutionDecomposition: vi.fn(),
+}));
 vi.mock(
   "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
   () => ({
-    registerExecutionDecomposition: vi.fn(),
     beginValidatedWorkItemExecutionSource: vi.fn(),
   })
 );
@@ -583,4 +585,16 @@ it("takes the selection and prior results only from the current Graph run", asyn
     },
   ]);
   expect(second).toEqual(first);
+});
+
+it("requires an explicit choice between Assignment Preparation and Detailed Planning", () => {
+  expect(() =>
+    createPhaseBGraph({
+      assignmentPlanning: {
+        agent: async () => [],
+        selectWorkItemIds: () => [],
+      },
+      planning: { ...planningOptions, selectWorkItemIds: () => [] },
+    })
+  ).toThrow("Choose Assignment Preparation or Detailed Planning.");
 });

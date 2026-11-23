@@ -1,7 +1,7 @@
+import { executeWorkItem } from "@/application/execution/index.js";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { PlanningResult } from "@/application/planning/index.js";
 import {
-  checkExecutionEligibility,
   getApprovedDecision,
   verifyExecutionHandoff,
 } from "@/application/governance/index.js";
@@ -16,7 +16,7 @@ import {
 } from "../index.js";
 
 vi.mock("@/application/execution/index.js", () => ({
-  executeGovernedTask: vi
+  executeWorkItem: vi
     .fn()
     .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
 }));
@@ -28,7 +28,6 @@ vi.mock("@/application/governance/index.js", async () => ({
     await import("@/application/governance/approval/features/execution-delegation/model/execution-delegation.js")
   ).executionDelegationSchema,
   getApprovedDecision: vi.fn(),
-  checkExecutionEligibility: vi.fn(),
   verifyExecutionHandoff: vi.fn(),
 }));
 vi.mock(
@@ -441,7 +440,7 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
     },
     { workItemId: client.id, result: failed },
   ]);
-  expect(checkExecutionEligibility).not.toHaveBeenCalled();
+  expect(executeWorkItem).not.toHaveBeenCalled();
   expect(result.executionPreparationResult).toBeUndefined();
 });
 
@@ -480,7 +479,7 @@ it("keeps earlier sources and stops at the first blocked completed plan", async 
       executionBlockedReason: "Unverified source.",
     },
   ]);
-  expect(checkExecutionEligibility).not.toHaveBeenCalled();
+  expect(executeWorkItem).not.toHaveBeenCalled();
   expect(result.executionPreparationResult).toBeUndefined();
 });
 
@@ -495,9 +494,6 @@ it.each([
     vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
       completedPlan(phaseB.workItem.id)
     );
-    vi.mocked(checkExecutionEligibility).mockReturnValue({
-      status: "eligible",
-    });
     const result = await createPhaseBGraph({
       agent: async () => ({ type: "propose", workItems: items }),
       planning: {
@@ -515,13 +511,13 @@ it.each([
       status: "blocked",
     });
     if (eligible)
-      expect(checkExecutionEligibility).toHaveBeenCalledExactlyOnceWith(
+      expect(executeWorkItem).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           workItem: docs,
           executionSourceId: "source-docs",
         })
       );
-    else expect(checkExecutionEligibility).not.toHaveBeenCalled();
+    else expect(executeWorkItem).not.toHaveBeenCalled();
   }
 );
 

@@ -1,17 +1,12 @@
 import type { TaskContract } from "@/contracts/task.js";
 import { checkScope } from "@/services/scope/index.js";
-import {
-  runVerification,
-  type VerificationResult,
-} from "@/services/verification/index.js";
+import type { VerificationResult } from "@/services/verification/index.js";
+import { runCommand } from "@/infrastructure/process/index.js";
 import { collectChangedPaths } from "@/services/evidence/index.js";
 
 import { runCodexWorker } from "../../worker/codex-worker.js";
 import type { ExecutionFailureStage } from "../../model/result.js";
-import type {
-  ExecutionState,
-  TaskExecutionOptions,
-} from "../../model/state.js";
+import type { ExecutionState } from "../../model/state.js";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -50,18 +45,15 @@ export async function runWorkerStage(
   task: TaskContract,
   state: ExecutionState,
   workspaceRoot: string,
-  options: TaskExecutionOptions,
-  governedRemaining?: () => number
+  remaining: () => number
 ): Promise<boolean> {
   const startedAt = performance.now();
   try {
     state.evidence.workerOutput = await runCodexWorker(
       task,
       workspaceRoot,
-      governedRemaining ? governedRemaining() : options.workerTimeoutMs,
-      state.telemetry,
-      options.workerContext,
-      ...(governedRemaining ? ([true] as const) : ([] as const))
+      remaining(),
+      state.telemetry
     );
 
     return true;
@@ -114,18 +106,37 @@ export async function runVerificationStage(
   task: TaskContract,
   state: ExecutionState,
   workspaceRoot: string,
-  options: TaskExecutionOptions,
-  verify?: (workspace: string) => Promise<VerificationResult>
+  remaining: () => number
 ): Promise<void> {
   const startedAt = performance.now();
   try {
-    state.evidence.verification = verify
-      ? await verify(workspaceRoot)
-      : await runVerification(
-          task.verification,
-          workspaceRoot,
-          options.verificationTimeoutMs
-        );
+    const commands: VerificationResult["commands"] = [];
+    for (const command of task.verification) {
+      if (command !== "git diff --check")
+        throw new Error("Unknown verification command.");
+      const output = await runCommand(
+        "git",
+        ["diff", "--check", "--no-ext-diff", "--no-textconv"],
+        {
+          cwd: workspaceRoot,
+          timeoutMs: remaining(),
+          shell: false,
+        }
+      );
+      commands.push({
+        command,
+        passed: output.exitCode === 0 && !output.timedOut && !output.error,
+        exitCode: output.exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
+        timedOut: output.timedOut,
+      });
+    }
+    remaining();
+    state.evidence.verification = {
+      commands,
+      passed: commands.every((command) => command.passed),
+    };
   } catch (error) {
     addExecutionFailure(state, "verification", error);
     return;

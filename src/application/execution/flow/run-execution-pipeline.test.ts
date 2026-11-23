@@ -13,10 +13,14 @@ import {
   removeExecutionWorkspace,
 } from "@/infrastructure/git/index.js";
 import { checkScope } from "@/services/scope/index.js";
-import { runVerification } from "@/services/verification/index.js";
+import { runCommand } from "@/infrastructure/process/index.js";
+import type { AuthorizedExecution } from "@/application/governance/index.js";
+import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
 import { runCodexWorker } from "../worker/codex-worker.js";
-import { executeTask } from "./execute-task.js";
+import { runExecutionPipeline } from "./run-execution-pipeline.js";
 
 vi.mock("../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
 vi.mock("@/services/artifacts/index.js", () => ({
@@ -32,8 +36,8 @@ vi.mock("@/infrastructure/git/index.js", () => ({
   createExecutionWorkspace: vi.fn(),
   removeExecutionWorkspace: vi.fn(),
 }));
-vi.mock("@/services/verification/index.js", () => ({
-  runVerification: vi.fn(),
+vi.mock("@/infrastructure/process/index.js", () => ({
+  runCommand: vi.fn(),
 }));
 vi.mock("@/services/scope/index.js", () => ({
   checkScope: vi.fn(),
@@ -48,7 +52,7 @@ const task: TaskContract = {
   forbiddenPaths: ["docs/architecture.md"],
   constraints: ["Keep the change scoped"],
   acceptanceCriteria: ["The feature works"],
-  verification: ["pnpm test"],
+  verification: ["git diff --check"],
 };
 
 const createExecutionWorkspaceMock = vi.mocked(createExecutionWorkspace);
@@ -60,36 +64,54 @@ const writeExecutionResultMock = vi.mocked(writeExecutionResult);
 const runCodexWorkerMock = vi.mocked(runCodexWorker);
 const collectChangedPathsMock = vi.mocked(collectChangedPaths);
 const checkScopeMock = vi.mocked(checkScope);
-const runVerificationMock = vi.mocked(runVerification);
+const runVerificationMock = vi.mocked(runCommand);
+const successfulCommand = {
+  exitCode: 0,
+  stdout: "",
+  stderr: "",
+  timedOut: false,
+};
+const failedCommand = {
+  ...successfulCommand,
+  exitCode: 1,
+  stderr: "diff check failed",
+};
+const verificationEvidence = (output: typeof successfulCommand) => ({
+  passed: output.exitCode === 0,
+  commands: [
+    { command: "git diff --check", passed: output.exitCode === 0, ...output },
+  ],
+});
+let temporaryRoot: string;
+
+function runPipeline(task: TaskContract, timeoutMs = 5_000) {
+  const execution = {
+    request: { task, timeoutMs },
+    snapshot: {
+      repositoryRoot: "/repositories/example",
+      commitSha: "base-commit-sha",
+    },
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  } as AuthorizedExecution;
+  return runExecutionPipeline(execution, temporaryRoot);
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
+  temporaryRoot = mkdtempSync(join(tmpdir(), "execution-test-"));
   createExecutionRunMock.mockReturnValue("/runs/run-001");
   createExecutionWorkspaceMock.mockReturnValue("/tmp/execution-workspace");
   getExecutionBaseCommitMock.mockReturnValue("base-commit-sha");
   runCodexWorkerMock.mockResolvedValue("Codex final output");
   collectChangedPathsMock.mockReturnValue(["src/example.ts"]);
   checkScopeMock.mockReturnValue({ passed: true, violations: [] });
-  runVerificationMock.mockResolvedValue({ passed: true, commands: [] });
+  runVerificationMock.mockResolvedValue(successfulCommand);
 });
 
-describe("executeTask", async () => {
-  it("passes warm-start context separately to Worker", async () => {
-    const workerContext = {
-      inspectedFiles: [{ path: "src/example.ts", content: "Existing content" }],
-    };
-    await executeTask(task, "/repositories/example", { workerContext });
-    expect(runCodexWorkerMock).toHaveBeenCalledWith(
-      task,
-      "/tmp/execution-workspace",
-      undefined,
-      expect.any(Object),
-      workerContext
-    );
-    expect(task).not.toHaveProperty("inspectedFiles");
-  });
+describe("runExecutionPipeline", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    rmSync(temporaryRoot, { recursive: true, force: true });
   });
 
   it("records monotonic stage timing separately from evidence and persists the same telemetry", async () => {
@@ -105,7 +127,7 @@ describe("executeTask", async () => {
     });
     getExecutionBaseCommitMock.mockImplementation(() => {
       clock += 7;
-      return "base";
+      return "base-commit-sha";
     });
     runCodexWorkerMock.mockImplementation(async () => {
       clock += 3;
@@ -113,7 +135,7 @@ describe("executeTask", async () => {
     });
     runVerificationMock.mockImplementation(async () => {
       clock += 4;
-      return { passed: true, commands: [] };
+      return successfulCommand;
     });
     preserveExecutionChangesMock.mockImplementation(() => {
       clock += 6;
@@ -121,7 +143,7 @@ describe("executeTask", async () => {
     removeExecutionWorkspaceMock.mockImplementation(() => {
       clock += 5;
     });
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
     expect(result.telemetry).toEqual({
       workspaceDurationMs: 2,
       workerDurationMs: 3,
@@ -137,7 +159,7 @@ describe("executeTask", async () => {
 
   it("records attempted worker timing on failure and omits skipped verification", async () => {
     runCodexWorkerMock.mockRejectedValue(new Error("worker failed"));
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
     expect(result.telemetry!.workerDurationMs).toBeGreaterThanOrEqual(0);
     expect(result.telemetry!.cleanupDurationMs).toBeUndefined();
     expect(result.telemetry!.verificationDurationMs).toBeUndefined();
@@ -145,7 +167,7 @@ describe("executeTask", async () => {
       expect(duration).toBeGreaterThanOrEqual(0);
   });
   it("returns complete evidence and scope after a successful ordered execution", async () => {
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result).toEqual({
       workspace: { path: "/tmp/execution-workspace" },
@@ -154,7 +176,7 @@ describe("executeTask", async () => {
       evidence: {
         workerOutput: "Codex final output",
         changedPaths: ["src/example.ts"],
-        verification: { passed: true, commands: [] },
+        verification: verificationEvidence(successfulCommand),
       },
       scope: { passed: true, violations: [] },
       failures: [],
@@ -202,7 +224,7 @@ describe("executeTask", async () => {
       throw new Error("worktree creation failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result).toEqual({
       telemetry: expect.any(Object),
@@ -221,7 +243,7 @@ describe("executeTask", async () => {
       throw new Error("worker failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.failures).toEqual([
       { stage: "worker", message: "worker failed" },
@@ -244,16 +266,13 @@ describe("executeTask", async () => {
     );
     collectChangedPathsMock.mockReturnValue(["partial-change.txt"]);
 
-    const result = await executeTask(task, "/repositories/example", {
-      workerTimeoutMs: 25,
-    });
+    const result = await runPipeline(task, 1_000);
 
     expect(runCodexWorkerMock).toHaveBeenCalledWith(
       task,
       "/tmp/execution-workspace",
-      25,
-      expect.any(Object),
-      undefined
+      expect.any(Number),
+      expect.any(Object)
     );
     expect(result.evidence.changedPaths).toEqual(["partial-change.txt"]);
     expect(result.failures).toEqual([
@@ -272,7 +291,7 @@ describe("executeTask", async () => {
       throw new Error("evidence failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.failures).toEqual([
       { stage: "worker", message: "worker failed" },
@@ -286,7 +305,7 @@ describe("executeTask", async () => {
       throw new Error("Git status failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.evidence).toEqual({ workerOutput: "Codex final output" });
     expect(result.failures).toEqual([
@@ -304,7 +323,7 @@ describe("executeTask", async () => {
     });
     collectChangedPathsMock.mockReturnValue(["README.md"]);
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.evidence).toEqual({
       workerOutput: "Codex final output",
@@ -322,24 +341,14 @@ describe("executeTask", async () => {
   });
 
   it("preserves failed Verification as Evidence", async () => {
-    const verification = {
-      passed: false,
-      commands: [
-        {
-          command: "pnpm test",
-          passed: false,
-          exitCode: 1,
-          stdout: "",
-          stderr: "tests failed",
-        },
-      ],
-    };
-    runVerificationMock.mockResolvedValue(verification);
+    runVerificationMock.mockResolvedValue(failedCommand);
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.passed).toBe(false);
-    expect(result.evidence.verification).toBe(verification);
+    expect(result.evidence.verification).toEqual(
+      verificationEvidence(failedCommand)
+    );
     expect(result.scope).toEqual({ passed: true, violations: [] });
     expect(result.failures).toEqual([
       { stage: "verification", message: "Verification failed." },
@@ -352,7 +361,7 @@ describe("executeTask", async () => {
       throw new Error("verification runner failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.passed).toBe(false);
     expect(result.evidence).toEqual({
@@ -367,11 +376,12 @@ describe("executeTask", async () => {
   });
 
   it("keeps failed Verification and its workspace available for review", async () => {
-    const verification = { passed: false, commands: [] };
-    runVerificationMock.mockResolvedValue(verification);
-    const result = await executeTask(task, "/repositories/example");
+    runVerificationMock.mockResolvedValue(failedCommand);
+    const result = await runPipeline(task);
     expect(result.passed).toBe(false);
-    expect(result.evidence.verification).toBe(verification);
+    expect(result.evidence.verification).toEqual(
+      verificationEvidence(failedCommand)
+    );
     expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
     expect(result.failures).toEqual([
       { stage: "verification", message: "Verification failed." },
@@ -383,7 +393,7 @@ describe("executeTask", async () => {
     removeExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("removal failed");
     });
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
     expect(result.passed).toBe(true);
     expect(result.workspace).toEqual({ path: "/tmp/execution-workspace" });
     expect(result.evidence.workerOutput).toBe("Codex final output");
@@ -400,7 +410,7 @@ describe("executeTask", async () => {
     removeExecutionWorkspaceMock.mockImplementation(() => {
       throw new Error("cleanup failed");
     });
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
     expect(result.failures).toEqual([
       { stage: "worker", message: "worker failed" },
     ]);
@@ -416,7 +426,7 @@ describe("executeTask", async () => {
       .mockReturnValueOnce({ passed: true, violations: [] })
       .mockReturnValueOnce({ passed: false, violations: ["README.md"] });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.passed).toBe(false);
     expect(result.evidence.changedPaths).toEqual([
@@ -440,23 +450,8 @@ describe("executeTask", async () => {
     collectChangedPathsMock
       .mockReturnValueOnce(["src/example.ts"])
       .mockReturnValueOnce(["src/example.ts", "verification-output.txt"]);
-    runVerificationMock.mockResolvedValue({
-      passed: false,
-      commands: [
-        {
-          command: "pnpm test",
-          passed: false,
-          exitCode: 1,
-          stdout: "",
-          stderr: "tests failed",
-        },
-      ],
-    });
-
-    const result = await executeTask(
-      taskWithVerificationOutput,
-      "/repositories/example"
-    );
+    runVerificationMock.mockResolvedValue(failedCommand);
+    const result = await runPipeline(taskWithVerificationOutput);
 
     expect(result.evidence.changedPaths).toEqual([
       "src/example.ts",
@@ -472,7 +467,7 @@ describe("executeTask", async () => {
       throw new Error("patch storage failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual([
@@ -491,7 +486,7 @@ describe("executeTask", async () => {
       throw new Error("result storage failed");
     });
 
-    const result = await executeTask(task, "/repositories/example");
+    const result = await runPipeline(task);
 
     expect(result.passed).toBe(false);
     expect(result.failures).toEqual([

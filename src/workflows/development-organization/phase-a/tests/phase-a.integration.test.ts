@@ -1855,7 +1855,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "executes the explicitly approved Codex Worktree mode and handles %s",
     async (mode) => {
       const {
-        workerExecutionResult: result,
+        workerExecutionResult,
         executionPreparationResult,
         planningResults,
         decision,
@@ -1904,6 +1904,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         },
       });
       expect(executionPreparationResult).toBeUndefined();
+      expect(workerExecutionResult?.workItemId).toBe("first");
+      const result = workerExecutionResult?.result;
       expect(result?.passed, JSON.stringify(result?.failures)).toBe(
         mode === "success"
       );

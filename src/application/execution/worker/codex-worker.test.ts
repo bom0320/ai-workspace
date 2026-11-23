@@ -27,47 +27,6 @@ beforeEach(() => {
 });
 
 describe("runCodexWorker", () => {
-  it("uses supplied context as reference while preserving verification ownership", async () => {
-    runCommandMock.mockResolvedValue({
-      stdout: "done",
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
-    });
-    const files = [{ path: "README.md", content: "Known project description" }];
-    await runCodexWorker(task, "/tmp/workspace", 1000, undefined, {
-      inspectedFiles: files,
-    });
-    const prompt = runCommandMock.mock.calls[0][1][3];
-    expect(prompt).toContain(JSON.stringify(files));
-    for (const rule of [
-      "Use the supplied planning context before re-reading",
-      "Do not re-read files already included",
-      "current workspace state must be confirmed",
-      "not explicitly listed",
-      "workspace remains the source of truth",
-      "The Harness will execute",
-      "Do not run the listed verification commands yourself",
-    ])
-      expect(prompt).toContain(rule);
-  });
-
-  it("omits oversized context", async () => {
-    runCommandMock.mockResolvedValue({
-      stdout: "done",
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
-    });
-    await runCodexWorker(task, "/tmp/workspace", 1000, undefined, {
-      inspectedFiles: [
-        { path: "large.txt", content: "x".repeat(64 * 1024 + 1) },
-      ],
-    });
-    expect(runCommandMock.mock.calls[0][1][3]).not.toContain(
-      "Repository context already inspected"
-    );
-  });
   it("records setup, actual process timing and output processing without changing stdout", async () => {
     const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
 
@@ -129,10 +88,14 @@ describe("runCodexWorker", () => {
     expect(runCommandMock).toHaveBeenCalledOnce();
 
     const [command, args, options] = runCommandMock.mock.calls[0];
-    const prompt = args[3];
+    const prompt = args.at(-1);
 
     expect(command).toBe("codex");
     expect(args.slice(0, 3)).toEqual(["exec", "--sandbox", "workspace-write"]);
+
+    expect(args).toContain('approval_policy="never"');
+    expect(args).toContain("--ignore-user-config");
+    expect(args.join(" ")).toContain("network_access=false");
 
     expect(options).toEqual({
       cwd: "/tmp/execution-workspace",
@@ -169,7 +132,7 @@ describe("runCodexWorker", () => {
     });
 
     await expect(
-      runCodexWorker(task, "/tmp/execution-workspace")
+      runCodexWorker(task, "/tmp/execution-workspace", 1_000)
     ).rejects.toThrow(
       "Failed to run Codex worker: Codex authentication failed"
     );

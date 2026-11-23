@@ -103,9 +103,9 @@ async function runScenario(
           }, 20_000);
           child.stdout.on("data", (chunk) => {
             stdout += chunk.toString();
-            if (step === 0 && stdout.includes("4. Execute existing task")) {
+            if (step === 0 && stdout.includes("2. Decision")) {
               step = 1;
-              child.stdin.write("3\n");
+              child.stdin.write("2\n");
             }
             if (step === 1 && stdout.includes("Repository:\n>")) {
               step = 2;

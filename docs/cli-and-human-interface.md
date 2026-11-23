@@ -8,12 +8,12 @@
 
 > CLI is an operator/debug interface for the Harness, not the core product value.
 
-CLI는 workflow 선택, Goal / 명시적 Context 입력, TaskContract / Decision / Comparison 표시, Approval, Review, Apply / Commit / Push,
-Cleanup decision, telemetry / result 출력을 담당한다. Harness를 사람이 관찰하고 통제하는
+현재 CLI는 workflow 선택, Goal / 명시적 Context 입력, TaskContract / Decision / Comparison 표시와
+Staffing·Governance 상호작용을 담당한다. Harness를 사람이 관찰하고 통제하는
 operator/debug adapter이자 Human decision surface다. 전체 AI 조직의 orchestration과
 Planning / Execution / Governance의 core logic은 application / Harness와 Workflow Runtime의 책임이며
 CLI는 해당 책임을 소유하는 상위 계층이 아니다.
-현재 Human gate와 후속 stage 연결은 CLI가 담당하고, 계약·실행·Git 안전 검사는 각 모듈에 남긴다.
+Worker 실행은 Phase B API가 조정한다. Review, Delivery, Cleanup CLI 모듈은 후속 연결을 위해 보존한다.
 
 ```text
 pnpm dev → src/cli/cli.ts → application use-case 호출
@@ -32,9 +32,6 @@ Fancy TUI나 Web UI 자체가 현재 프로젝트의 핵심 가치는 아니다.
 # 인자 없음: workflow 선택 메뉴
 pnpm dev
 
-# selector 없이 direct Plan & Execute
-pnpm dev . "README.md의 소개 문구를 더 명확하게 수정해줘"
-
 # Planning only
 pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 
@@ -43,88 +40,28 @@ pnpm decision . "Evaluate the current decision architecture" \
   src/application/decision/flow/run-decision.ts \
   src/contracts/specialist/authority.ts
 
-# 기존 TaskContract JSON Execution
-pnpm dev execute tasks/example.json .
 ```
 
 ### Interactive entry
 
-Selector는 `args.length === 0`일 때만 표시된다. 명시적 command와 direct Goal 인자는 메뉴를 거치지 않는다.
+인자가 없으면 `1. Plan only`와 `2. Decision`을 표시한다. 유효한 선택 전 EOF는 오류와
+종료 코드 1이다. Plan only는 Repository와 Goal로 TaskContract를 생성해 표시한다.
+Decision은 Repository, Decision Goal, Context Files로 독립 판단과 비교를 실행한다.
 
-```text
-AI Workspace
-
-Select workflow:
-
-1. Plan & Execute
-2. Plan only
-3. Decision
-4. Execute existing task
-
->
-```
-
-숫자 1–4를 받으며 다른 입력은 `Please enter 1, 2, 3, or 4.`를 출력하고 재시도한다.
-유효한 선택 전 EOF는 오류와 exit 1이다. 선택별 입력과 실행은 다음과 같다.
-
-| 선택 | 입력 | 실행 / Human 접점 |
-| --- | --- | --- |
-| Plan & Execute | Repository → Goal | Planning → TaskContract → Task Approval → Execution → Review / Delivery / Cleanup |
-| Plan only | Repository → Goal | Planning과 TaskContract 표시 후 종료. Approval / Execution 없음 |
-| Decision | Repository → Decision Goal → Context Files | 독립 Decision → Structured Comparison → 두 결과 표시. Action governance gate 없음 |
-| Execute existing task | Task path → Repository | 기존 JSON loader와 Execution → Review / Delivery / Cleanup. Planning / Task Approval 없음 |
-
-Plan 두 경로는 같은 `askGoal()`을 사용하고 title은 selector만 출력한다. Interactive 입력은 trim하며
-빈 Repository / Goal / Task path를 다시 묻는다. 필요한 값이 끝나기 전 EOF는 해당 prompt의 명확한 오류다.
-명시적 argument의 빈 Repository / objective도 거부하지만 입력 값을 interactive하게 다시 묻지는 않는다.
-
-Goal 기반 흐름은 Planning 실패나 Task Reject 시 Execution을 시작하지 않는다.
-PlanningResult.task는 파일 저장·재로딩 없이 메모리에서 Execution에 전달한다.
-`execute`는 task path / repository path 순서로 기존 TaskContract JSON을 읽으며 새 format은 없다.
+이전 `execute` 명령과 위치 인자 기반 Plan & Execute는 종료 코드 1로 거부된다.
+실제 Worker 실행은 Phase B의 승인된 Work Item을 받는 `executeWorkItem()`에서 제공한다.
 
 ## 3. 현재 Human Interaction Flow
 
-### Goal-based Action Governance
+### Phase B 실행과 변경 검토
 
-```text
-Goal
-→ Planning
-→ TaskContract 표시
-→ Approve / Reject
-→ Execution in isolated worktree
-→ Scope / Verification / Evidence preservation
-→ Review 자동 출력
-→ Continue / Abort
-→ Apply / Skip
-→ Commit / Skip → Commit message
-→ Push / Skip
-→ Delete / Keep
-```
-
-이 도식은 성공 경로다. 각 단계의 Skip·실패·승인은 다음 단계 실행 조건과 구분한다.
-
-| Human gate | 진행 조건 / 선택의 의미 |
-| --- | --- |
-| Task Approval | Approve만 Worker 실행 허가. Reject·다른 입력·EOF는 실행하지 않음 |
-| Review | 항상 workspace·changed paths·diff·patch 위치·존재하는 Worker Result 표시. Continue만 Delivery 진행 허가 |
-| Apply | Review Continue 및 Execution·Verification 성공, patch 보존 확인 후 표시. Apply만 원본 반영 |
-| Commit | Apply 성공 후 표시. Commit 선택 시 메시지 입력·검증. Skip은 working tree 변경 유지 |
-| Push | Commit 성공 후 표시. Push 선택 시 기존 upstream에만 전달. Skip·실패는 local commit 유지 |
-| Cleanup | Review Abort·Delivery Skip/실패 후에도 별도 결정. Delete는 workspace만 제거, Keep·다른 입력·EOF는 유지 |
-
-승인 입력은 공백·대소문자를 정리한 지정 단어만 인정한다. Commit message는 자동 보정하지
-않으며 허용된 Conventional Commit 형태를 충족해야 한다. 자세한 Delivery 안전 조건과
-메시지 예시는 [README](../README.md#review와-post-execution-delivery)를 따른다.
-
-이 문서와 CLI의 `Review`는 Change Review를 뜻한다. “Review할지”를 묻는 선택 단계가 아니다. Execution 종료 후 workspace가 살아 있는
-상태에서 diff를 자동 출력하고, 확인 완료 여부만 Continue / Abort로 받는다. Diff 출력은 64KiB,
-Worker output은 16KiB로 제한한다. 전체 변경은 표시된 workspace나 patch artifact에서 확인한다.
-Review에 필요한 workspace / base commit이 없거나 diff 조회에 실패하면 Delivery를 차단한다.
-실패한 Execution도 사용 가능한 workspace를 Review할 수 있지만 원본 적용은 허용하지 않는다.
-
-Review Abort, Apply·Commit·Push Skip/실패, Cleanup Keep/실패는 이미 성공한 Execution을
-실패로 바꾸지 않는다. Cleanup 실패 시 경로를 출력하고 artifact는 삭제하지 않는다.
-현재 result.json은 Execution snapshot이며 후속 Human 결정 이력 저장소는 아니다.
+Phase B는 승인된 Work Item을 실행한 뒤 Scope, Verification, Evidence와 Workspace를 결과로 반환한다.
+Review, Delivery, Cleanup 모듈은 독립적으로 보존되며 Phase B에서 자동 호출되지 않는다.
+Review의 Continue, Apply, Commit, Push 및 Cleanup 선택은 별도 Human 결정이다.
+원본 반영은 유효한 변경 결과와 별도의 Apply 승인을 요구한다. Review는 diff 출력을 64KiB, Worker
+출력을 16KiB로 제한하며, Workspace나 기준 Commit을 확인할 수 없으면 Delivery를 차단한다.
+Cleanup은 Worktree만 삭제하며 실행 Artifact는 보존한다.
+Review 및 Delivery 모듈의 안전 조건은 [README](../README.md#review와-post-execution-delivery)를 따른다.
 
 ### Decision flow
 
@@ -218,8 +155,6 @@ src/cli/
 │  │  └─ plan.ts
 │  ├─ decision/
 │  │  └─ decision.ts
-│  ├─ execute/
-│  │  └─ execute.ts
 │  ├─ delivery/
 │  │  ├─ delivery.ts
 │  │  ├─ apply.ts
@@ -234,8 +169,6 @@ src/cli/
 │  │  └─ ask-decision.ts
 │  ├─ planning/
 │  │  └─ ask-goal.ts
-│  ├─ execution/
-│  │  └─ ask-execution.ts
 │  ├─ cleanup/
 │  │  └─ cleanup.ts
 │  ├─ delivery/
@@ -244,7 +177,6 @@ src/cli/
 │  ├─ review/
 │  │  └─ review.ts
 │  └─ workflow/
-│     ├─ approve-task.ts
 │     └─ select-workflow.ts
 └─ presenters/
    ├─ decision/
@@ -255,19 +187,16 @@ src/cli/
    └─ timing.ts
 ```
 
-- `cli.ts`: interactive selector와 explicit plan / decision / execute / direct Goal routing.
-  Planning / Decision은 입력 기반 helper를 interactive / explicit 경로가 재사용하며 string[]로
-  재직렬화하지 않는다. Execute 선택은 기존 runExecutionCli의 task / repository 인자로 연결한다.
+- `cli.ts`: interactive selector와 plan / decision / governance / staffing 명령을 연결한다.
 - `commands/plan/plan.ts`: GoalSpec 생성·검증, `planTask()` 호출, PlanningResult 반환.
 - `commands/decision/decision.ts`: `runDecision()` → `compareDecisions()`를 CLI command layer에서
   조합하고 Comparison을 포함한 DecisionCommandResult를 반환한다. Snapshot / Goal / 파일 loading /
   Specialist 구성과 각 application의 validation은 중복하지 않는다.
-- `commands/execute/execute.ts`: `executeTask()` 호출과 결과 출력, Review → Delivery → Cleanup 연결.
 - `commands/review/`: 변경 presentation과 Review completion gate.
 - `commands/delivery/`: Apply 성공 후 Commit, Commit 성공 후 Push의 승인·결과 연결.
 - `commands/cleanup/`: Delete / Keep 결정에 따라 infrastructure의 worktree 제거 호출.
 - `prompts/<feature>/`: 해당 CLI feature가 소유하는 입력·상호작용. Delivery는 Apply / Commit / Push를 포함한다.
-- `prompts/workflow/`: workflow 선택과 Plan → Execute 사이 Human Task Approval. 승인 입력은 실행 로직을 소유하지 않는다.
+- `prompts/workflow/`: Planning only와 Decision의 interactive 선택.
 - `presenters/`: TaskContract, 개별 Decision / Comparison과 timing을 보여주며 입력·승인 판단을 하지 않는다.
 
 현재 Review와 Execution 결과 presentation 일부는 해당 command에 있다. 모든 출력을
@@ -276,17 +205,8 @@ Git command는 CLI에 직접 넣지 않고 `infrastructure/git` API를 사용한
 
 ## 5. 관찰할 결과와 Timing
 
-아래 stage timing은 Action flow 기준이다. Decision은 위의 Decision Duration만 표시하며 별도 tracing
-backend나 전체 telemetry framework 통합은 없다. Interactive input 대기 시간은 Decision Duration 밖이다.
-
-CLI는 Worker 완료, Scope / Verification 결과, changed paths, run artifact 경로를 출력한다.
-Timing에는 Planning, Approval Wait, Workspace, Worker와 내부 setup / Codex process /
-output processing, Verification, 실행한 Cleanup, Total이 포함될 수 있다.
-수행되지 않은 단계의 값은 생략될 수 있다.
-
-Approval Wait는 Human interaction이며 system latency와 구분한다. Goal 기반 Total은 입력 완료
-이후 Review / Delivery / Cleanup의 대기도 포함한다. 개별 Human gate의 시간을 모두 따로
-측정하는 것은 아니다. Execution snapshot telemetry와 CLI의 end-to-end timing은 범위가 다르다.
+CLI는 Planning과 Decision의 결과 및 소요 시간을 표시한다. Phase B 실행의 단계별 telemetry와
+Evidence는 `ExecutionResult`에 기록한다.
 
 ## 6. 인터페이스 경계
 
@@ -295,7 +215,7 @@ CLI → Application
 Application → CLI를 모름
 ```
 
-`planTask()` / `executeTask()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
+`planTask()` / `executeWorkItem()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
 UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한다. 향후 Web UI / API adapter는
 같은 application logic을 사용할 수 있지만 현재 구현된 인터페이스는 아니다.
 Human 권한을 새 interface가 우회하지 않아야 한다.
@@ -303,11 +223,8 @@ Human 권한을 새 interface가 우회하지 않아야 한다.
 Revise, re-plan, 복잡한 approval policy, fancy TUI는 현재 제공하지 않는다.
 v4의 Phase A(해결 방향 판단·승인) / Phase B(상세 설계·실행)는
 [Target Architecture](architecture.md#5-target-responsibility-model)의 목표 흐름이다. Human Staffing Approval,
-해결 방향의 Approve / Override / Reject, 개별 Task Approval과 Change Review / Delivery는 각각 별도 접점이
-필요하다. Staffing Approval은 전문가 배치·분석 범위, Governance Approval은 해결 방향, Task Approval은
-구체적인 TaskContract, Change Review / Delivery는 실행 결과·변경 반영을 대상으로 한다. 어느 승인도
-다른 단계의 포괄 실행 권한이 아니다. 현재 Plan & Execute의 TaskContract 표시 → Approve / Reject는
-Standalone v1의 접점이며 v4의 앞선 승인 단계를 수행한 것으로 간주하지 않는다.
+해결 방향 승인·위임, Work Item Authorization, Change Review와 Delivery는 서로 다른 접점이다.
+Staffing Approval은 분석 역할·범위에, ExecutionDelegation은 실행 권한 상한에 적용된다.
 다중 직원의 진행·재작업·재배치·Escalation을 관찰할 인터페이스도 후속 설계 대상이다.
 현재 CLI의 governance 명령은 아래 정책·위임·Staffing 승인을 제공하며, CEO Staffing은 별도 staffing 명령으로 실행한다. 해결 방향의 Human Governance 명령은 없다. 기존 Decision 명령은 독립 판단과 비교까지만 수행한다. 전체 조직 인터페이스 형태와 구현 순서는
 [Roadmap](roadmap.md)에 두며 새로운 명령·화면을 현재 기능으로 확정하지 않는다.
@@ -401,5 +318,5 @@ CLI staffing은 기존 runStaffingApproval() API를 통해 현재 createPhaseAGr
 별도 Staffing Setup Graph는 제거했으며 Entry Point는 개별 policyLookup / staffingResult / approvalResult를 기존 반환 계약으로 변환한다.
 Step 3에서 Entry Point가 executionTarget: staffing-approval을 명시하도록 고정했다. Graph의 기본값도 승인까지만 실행하며, specialist-decisions를 명시한 API 호출만 승인 후 분석을 수행한다. 실행 대상은 Governance 우회 옵션이 아니다.
 별도 Graph 명령은 추가하지 않았다. Decision은 API의 실행 대상으로 연결했으며 CEO Synthesis·Direction Governance·Interrupt·Resume·Checkpoint는 없다.
-Task Approval의 stdin Approve/Reject와 Staffing Approval의 `/dev/tty` receipt는 기존대로 구분한다.
+Staffing Approval은 `/dev/tty` receipt를 사용한다.
 API 실패 계약과 신뢰 경계는 [Architecture](architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.

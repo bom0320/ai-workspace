@@ -40,3 +40,11 @@ export type ExecutionResult = {
   workspace?: { path: string };
   retainedWorkspace?: string;
 };
+
+export type ExecutionOutcome =
+  | { status: "executed"; workItemId: string; result: ExecutionResult }
+  | {
+      status: "blocked" | "approval-required" | "denied";
+      workItemId?: string;
+      reason: string;
+    };

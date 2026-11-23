@@ -1,5 +1,4 @@
-import { executeGovernedTask } from "@/application/execution/index.js";
-import { checkExecutionEligibility } from "@/application/governance/index.js";
+import { executeWorkItem } from "@/application/execution/index.js";
 import type { PhaseBState } from "../../../state.js";
 
 export type PhaseBExecutionOptions = {
@@ -8,7 +7,7 @@ export type PhaseBExecutionOptions = {
   timeoutMs: number;
 };
 
-export function createPrepareExecutionNode(
+export function createExecuteWorkItemNode(
   repositoryPath: string | undefined,
   options: PhaseBExecutionOptions | undefined
 ) {
@@ -52,13 +51,20 @@ export function createPrepareExecutionNode(
       readPaths,
       timeoutMs,
     };
-    const verdict = checkExecutionEligibility(request);
-    if (verdict.status !== "eligible")
-      return { executionPreparationResult: { workItemId, ...verdict } };
-
-    const outcome = await executeGovernedTask(request);
+    const outcome = await executeWorkItem(request);
     return outcome.status === "executed"
-      ? { workerExecutionResult: outcome.result }
-      : { executionPreparationResult: { workItemId, ...outcome } };
+      ? {
+          workerExecutionResult: {
+            workItemId: outcome.workItemId,
+            result: outcome.result,
+          },
+        }
+      : {
+          executionPreparationResult: {
+            status: outcome.status,
+            workItemId,
+            reason: outcome.reason,
+          },
+        };
   };
 }

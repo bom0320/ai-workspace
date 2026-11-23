@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planTask, type PlanningState } from "@/application/planning/index.js";
-import { executeTask } from "@/application/execution/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 
-import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
+import { selectWorkflow } from "./prompts/workflow/index.js";
 import { askGoal } from "./prompts/planning/index.js";
 import { runGovernanceCli } from "./commands/governance/index.js";
 import { runCli } from "./cli.js";
 import { runStaffingCli } from "./commands/staffing/index.js";
 import { askDecision } from "./prompts/decision/index.js";
-import { askExecution } from "./prompts/execution/index.js";
-import { runExecutionCli } from "./commands/execute/index.js";
 import { runDecisionCommand } from "./commands/decision/index.js";
 import {
   presentDecisions,
@@ -24,12 +21,10 @@ vi.mock("./commands/governance/index.js", () => ({
   runGovernanceCli: vi.fn(),
 }));
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
-vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 vi.mock("@/infrastructure/git/index.js", () => ({
   resolveRepositoryRoot: vi.fn(),
 }));
 vi.mock("./prompts/workflow/index.js", () => ({
-  approveTask: vi.fn(),
   selectWorkflow: vi.fn(),
 }));
 vi.mock("./prompts/planning/index.js", () => ({ askGoal: vi.fn() }));
@@ -42,14 +37,6 @@ vi.mock("./presenters/decision/index.js", () => ({
 }));
 
 vi.mock("./prompts/decision/index.js", () => ({ askDecision: vi.fn() }));
-vi.mock("./prompts/execution/index.js", () => ({ askExecution: vi.fn() }));
-vi.mock("./commands/execute/index.js", async () => ({
-  ...(await vi.importActual<typeof import("./commands/execute/index.js")>(
-    "./commands/execute/index.js"
-  )),
-  runExecutionCli: vi.fn(),
-}));
-
 const task: TaskContract = {
   id: "task-human",
   goalId: "goal-human",
@@ -74,8 +61,7 @@ const state: PlanningState = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(selectWorkflow).mockResolvedValue("plan-execute");
-  vi.mocked(runExecutionCli).mockResolvedValue(0);
+  vi.mocked(selectWorkflow).mockResolvedValue("plan");
   vi.mocked(runDecisionCommand).mockResolvedValue({
     goal: state.goal,
     snapshot: { repositoryRoot: "/repositories/example", commitSha: "abc123" },
@@ -89,11 +75,6 @@ beforeEach(() => {
     task,
     state,
     rounds: 2,
-  });
-  vi.mocked(executeTask).mockResolvedValue({
-    passed: true,
-    evidence: {},
-    failures: [],
   });
   vi.mocked(resolveRepositoryRoot).mockReturnValue(
     state.repository.repositoryRoot
@@ -109,7 +90,6 @@ it("routes explicit staffing independently of the v0-v3 selector", async () => {
   expect(runStaffingCli).toHaveBeenCalledWith(["/repo", "goal.json"]);
   expect(selectWorkflow).not.toHaveBeenCalled();
   expect(planTask).not.toHaveBeenCalled();
-  expect(executeTask).not.toHaveBeenCalled();
 });
 
 describe("CLI approval boundary", () => {
@@ -118,8 +98,6 @@ describe("CLI approval boundary", () => {
     expect(await runCli(["governance", "approve", "proposal.json"])).toBe(0);
     expect(runGovernanceCli).toHaveBeenCalledWith(["approve", "proposal.json"]);
     expect(planTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-    expect(approveTask).not.toHaveBeenCalled();
     expect(selectWorkflow).not.toHaveBeenCalled();
   });
   it("routes decision independently of Planning, Approval and Execution", async () => {
@@ -157,8 +135,6 @@ describe("CLI approval boundary", () => {
       expect.stringMatching(/^Decision Duration: \d+\.\ds$/)
     );
     expect(planTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-    expect(approveTask).not.toHaveBeenCalled();
     expect(askGoal).not.toHaveBeenCalled();
   });
 
@@ -174,7 +150,6 @@ describe("CLI approval boundary", () => {
       expect(presentDecisions).not.toHaveBeenCalled();
       expect(presentComparison).not.toHaveBeenCalled();
       expect(planTask).not.toHaveBeenCalled();
-      expect(executeTask).not.toHaveBeenCalled();
     }
   );
 
@@ -192,129 +167,8 @@ describe("CLI approval boundary", () => {
       "Error: Repository path is required."
     );
   });
-  it("passes only inspected files matching allowed paths into Execution", async () => {
-    const inspectedFiles = [
-      { path: "README.md", content: "Existing introduction" },
-      { path: "package.json", content: "{}" },
-    ];
-    vi.mocked(planTask).mockResolvedValue({
-      status: "completed",
-      task,
-      state: { ...state, inspectedFiles },
-      rounds: 1,
-    });
-    vi.mocked(approveTask).mockResolvedValue(true);
-    expect(await runCli([".", "Clarify README"])).toBe(0);
-    expect(executeTask).toHaveBeenCalledWith(
-      task,
-      state.repository.repositoryRoot,
-      {
-        workerContext: { inspectedFiles: [inspectedFiles[0]] },
-      }
-    );
-    expect(task).not.toHaveProperty("inspectedFiles");
-  });
-  it("shows planning, Human wait, execution stages and end-to-end total", async () => {
-    vi.mocked(approveTask).mockResolvedValue(true);
-    vi.mocked(executeTask).mockResolvedValue({
-      passed: true,
-      evidence: {},
-      failures: [],
-      telemetry: {
-        workspaceDurationMs: 800,
-        workerDurationMs: 42700,
-        verificationDurationMs: 11300,
-        cleanupDurationMs: 400,
-        totalDurationMs: 55200,
-      },
-    });
-    expect(await runCli([".", "Clarify README"])).toBe(0);
-    expect(console.log).toHaveBeenCalledWith("Worker: 42.7s");
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringMatching(/^Approval Wait: \d+\.\ds$/)
-    );
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringMatching(/^Total: \d+\.\ds$/)
-    );
-  });
-  it("asks for Goal input when arguments are absent", async () => {
-    vi.mocked(askGoal).mockResolvedValue({
-      repositoryPath: ".",
-      objective: "Interactive goal",
-    });
-    vi.mocked(approveTask).mockResolvedValue(true);
-    expect(await runCli([])).toBe(0);
-    expect(askGoal).toHaveBeenCalledOnce();
-    expect(selectWorkflow).toHaveBeenCalledOnce();
-    expect(runDecisionCommand).not.toHaveBeenCalled();
-    expect(runExecutionCli).not.toHaveBeenCalled();
-    expect(planTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        goal: expect.objectContaining({ objective: "Interactive goal" }),
-      })
-    );
-    expect(vi.mocked(executeTask).mock.calls[0][0]).toBe(task);
-  });
-
-  it("does not plan or execute when interactive input ends early", async () => {
-    vi.mocked(askGoal).mockRejectedValue(new Error("Input ended"));
-    expect(await runCli([])).toBe(1);
-    expect(planTask).not.toHaveBeenCalled();
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-  });
-  it("passes the generated task directly to execution only after approval resolves", async () => {
-    let approve!: (answer: boolean) => void;
-    vi.mocked(approveTask).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          approve = resolve;
-        })
-    );
-    const pending = runCli([".", "Clarify README"]);
-    await vi.waitFor(() => expect(approveTask).toHaveBeenCalledWith());
-    expect(executeTask).not.toHaveBeenCalled();
-    expect(console.log).toHaveBeenCalledWith(`Task ID: ${task.id}`);
-    expect(console.log).toHaveBeenCalledWith(`\nObjective:\n${task.objective}`);
-    expect(askGoal).not.toHaveBeenCalled();
-    approve(true);
-    expect(await pending).toBe(0);
-    expect(executeTask).toHaveBeenCalledWith(
-      task,
-      state.repository.repositoryRoot,
-      { workerContext: { inspectedFiles: [] } }
-    );
-    expect(vi.mocked(executeTask).mock.calls[0][0]).toBe(task);
-  });
-
-  it("does not execute after rejection", async () => {
-    vi.mocked(approveTask).mockResolvedValue(false);
-    expect(await runCli([".", "Clarify README"])).toBe(1);
-    expect(executeTask).not.toHaveBeenCalled();
-  });
-
-  it("does not ask for approval or execute after planning failure", async () => {
-    vi.mocked(planTask).mockResolvedValue({
-      status: "failed",
-      state,
-      rounds: 4,
-      reason: "Round limit",
-    });
-    expect(await runCli([".", "Clarify README"])).toBe(1);
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-  });
-
-  it("propagates integration failure as a non-zero CLI result", async () => {
-    vi.mocked(planTask).mockRejectedValue(new Error("Planner failed"));
-    expect(await runCli([".", "Clarify README"])).toBe(1);
-    expect(executeTask).not.toHaveBeenCalled();
-  });
-
   it("keeps the plan-only command from asking approval or executing", async () => {
     expect(await runCli(["plan", ".", "Clarify README"])).toBe(0);
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
   });
 });
 
@@ -333,10 +187,7 @@ describe("interactive workflow routing", () => {
         goal: expect.objectContaining({ objective: "Plan the change" }),
       })
     );
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
     expect(runDecisionCommand).not.toHaveBeenCalled();
-    expect(runExecutionCli).not.toHaveBeenCalled();
   });
 
   it("routes Decision input directly to the shared Decision flow", async () => {
@@ -354,25 +205,6 @@ describe("interactive workflow routing", () => {
     expect(presentComparison).toHaveBeenCalledOnce();
     expect(askGoal).not.toHaveBeenCalled();
     expect(planTask).not.toHaveBeenCalled();
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-    expect(runExecutionCli).not.toHaveBeenCalled();
-  });
-
-  it("routes Execute existing task with the original task/repository argument order", async () => {
-    vi.mocked(selectWorkflow).mockResolvedValue("execute");
-    vi.mocked(askExecution).mockResolvedValue({
-      taskPath: "task.json",
-      repositoryPath: ".",
-    });
-    expect(await runCli([])).toBe(0);
-    expect(askExecution).toHaveBeenCalledOnce();
-    expect(runExecutionCli).toHaveBeenCalledWith(["task.json", "."]);
-    expect(askGoal).not.toHaveBeenCalled();
-    expect(planTask).not.toHaveBeenCalled();
-    expect(approveTask).not.toHaveBeenCalled();
-    expect(executeTask).not.toHaveBeenCalled();
-    expect(runDecisionCommand).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -385,7 +217,6 @@ describe("interactive workflow routing", () => {
     expect(selectWorkflow).not.toHaveBeenCalled();
     expect(askGoal).not.toHaveBeenCalled();
     expect(askDecision).not.toHaveBeenCalled();
-    expect(askExecution).not.toHaveBeenCalled();
   });
 
   it("reports selector EOF without entering another workflow", async () => {
@@ -397,7 +228,6 @@ describe("interactive workflow routing", () => {
     expect(askGoal).not.toHaveBeenCalled();
     expect(planTask).not.toHaveBeenCalled();
     expect(runDecisionCommand).not.toHaveBeenCalled();
-    expect(runExecutionCli).not.toHaveBeenCalled();
   });
 
   it("reports Decision input EOF without invoking the application", async () => {
@@ -407,4 +237,15 @@ describe("interactive workflow routing", () => {
     expect(runDecisionCommand).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith("Error: Decision input ended");
   });
+});
+it.each([
+  ["execute", "task.json", "."],
+  [".", "Old positional syntax"],
+])("rejects retired execution arguments %j", async (...args) => {
+  expect(await runCli(args)).toBe(1);
+  expect(console.error).toHaveBeenCalledWith(
+    expect.stringContaining("approved Phase B Work Item")
+  );
+  expect(planTask).not.toHaveBeenCalled();
+  expect(selectWorkflow).not.toHaveBeenCalled();
 });

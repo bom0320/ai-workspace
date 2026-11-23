@@ -25,10 +25,8 @@ afterEach(() => {
 
 describe("selectWorkflow", () => {
   it.each([
-    ["1", "plan-execute"],
-    ["2", "plan"],
-    ["3", "decision"],
-    ["4", "execute"],
+    ["1", "plan"],
+    ["2", "decision"],
   ] as const)("maps %s to %s", async (value, expected) => {
     const close = supplyLines([value]);
     expect(await selectWorkflow()).toBe(expected);
@@ -38,9 +36,9 @@ describe("selectWorkflow", () => {
     );
   });
   it("retries invalid input and trims a valid selection", async () => {
-    supplyLines(["", "other", "5", " 3 "]);
+    supplyLines(["", "3", "4", " 2 "]);
     expect(await selectWorkflow()).toBe("decision");
-    expect(console.error).toHaveBeenCalledWith("Please enter 1, 2, 3, or 4.");
+    expect(console.error).toHaveBeenCalledWith("Please enter 1 or 2.");
     expect(console.error).toHaveBeenCalledTimes(3);
   });
   it.each([{ values: [] }, { values: ["invalid"] }])(

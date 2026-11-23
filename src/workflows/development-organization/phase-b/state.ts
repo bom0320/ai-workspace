@@ -29,7 +29,10 @@ export const phaseBState = new StateSchema({
     })
     .strict()
     .optional(),
-  workerExecutionResult: z.custom<ExecutionResult>().optional(),
+  workerExecutionResult: z
+    .object({ workItemId: z.string(), result: z.custom<ExecutionResult>() })
+    .strict()
+    .optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z
     .array(

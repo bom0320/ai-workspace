@@ -1,11 +1,10 @@
 import { createInterface } from "node:readline";
 
-export type WorkflowSelection =
-  "plan-execute" | "plan" | "decision" | "execute";
+export type WorkflowSelection = "plan" | "decision";
 
 export async function selectWorkflow(): Promise<WorkflowSelection> {
   console.log(
-    "AI Workspace\n\nSelect workflow:\n\n1. Plan & Execute\n2. Plan only\n3. Decision\n4. Execute existing task\n"
+    "AI Workspace\n\nSelect workflow:\n\n1. Plan only\n2. Decision\n"
   );
   const reader = createInterface({
     input: process.stdin,
@@ -22,15 +21,11 @@ export async function selectWorkflow(): Promise<WorkflowSelection> {
         );
       switch (line.value.trim()) {
         case "1":
-          return "plan-execute";
-        case "2":
           return "plan";
-        case "3":
+        case "2":
           return "decision";
-        case "4":
-          return "execute";
         default:
-          console.error("Please enter 1, 2, 3, or 4.");
+          console.error("Please enter 1 or 2.");
       }
     }
   } finally {

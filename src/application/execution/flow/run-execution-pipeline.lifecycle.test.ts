@@ -15,7 +15,8 @@ import type { TaskContract } from "@/contracts/task.js";
 import { createExecutionRun } from "@/services/artifacts/index.js";
 import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
 
-import { executeTask } from "./execute-task.js";
+import { runExecutionPipeline } from "./run-execution-pipeline.js";
+import type { AuthorizedExecution } from "@/application/governance/index.js";
 vi.mock("../worker/codex-worker.js", () => ({
   runCodexWorker: vi.fn(async (_task, workspace: string) => {
     writeFileSync(
@@ -67,7 +68,15 @@ it("returns a live workspace with Worker changes and permanent artifacts until c
     acceptanceCriteria: ["Clear introduction"],
     verification: ["git diff --check"],
   };
-  const result = await executeTask(task, repository);
+  const commitSha = git("rev-parse", "HEAD").toString().trim();
+  const result = await runExecutionPipeline(
+    {
+      request: { task, timeoutMs: 10_000 },
+      snapshot: { repositoryRoot: repository, commitSha },
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    } as AuthorizedExecution,
+    artifacts
+  );
   workspace = result.workspace!.path;
   expect(result.passed).toBe(true);
   expect(existsSync(workspace)).toBe(true);

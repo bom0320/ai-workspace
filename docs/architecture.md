@@ -25,9 +25,9 @@ v4는 진행 중이다. Step 7.2의 해결 방향 Human Governance와 동일 프
 ```text
 CLI: workflow selection / explicit arguments / Human gates / presentation
   ├─ application/planning → TaskContract
-  ├─ application/execution → ExecutionResult → Review / Delivery / Cleanup
   ├─ application/decision → { goal, snapshot, decisions: AgentDecision[] }
   └─ application/comparison → ComparisonResult
+Phase B → application/execution → ExecutionOutcome
            ↓
 Contracts / application policies / Scope / Verification / Evidence / Artifacts
            ↓
@@ -40,8 +40,8 @@ Codex role implementations / Git and Process infrastructure → Target Repositor
 - Decision: clean RepositorySnapshot, commit의 explicit files, Frontend / UX 구성,
   순차 독립 실행, JSON schema / Evidence invariant 검증, 결과 반환.
 - Comparison: supplied AgentDecision[]의 Concern별 관계를 strict JSON으로 구조화하고 source reference 검증.
-- CLI: 인자 없는 workflow selector, 명시적 plan / decision / execute / staffing / governance, Task Approval과
-  Review / Apply / Commit / Push / Cleanup 및 결과 presentation.
+- CLI: 인자 없는 workflow selector, 명시적 plan / decision / staffing / governance 및 결과 표시.
+  Review / Delivery / Cleanup 모듈은 후속 Workflow 연결을 위해 유지한다.
 
 현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod / LangGraph.js와 필수 LangChain core다. Codex CLI는 외부 실행 도구이며
 package dependency가 아니다. 지원 Agent integration은 Codex CLI 하나이고 provider registry나 자체 범용 Agent runtime layer는 없다. Agent discussion / CEO 전체 조직 운영 / Coordinator / Human governance history /
@@ -61,26 +61,19 @@ LangGraph Phase A Graph는 정책 조회·Staffing·Approval·Human 확인과 �
 
 ## 3. Current End-to-End Flows
 
-### Goal-based Action Governance
+### Phase B Action Governance
 
 ```text
-Goal
-→ Repository overview / initial exact-match inspection
-→ Fast Path 또는 Codex Planner ↔ inspect / complete (Planning limits)
-→ Harness buildTaskContract() → TaskContract
-→ Human Task Approval
-→ Detached Git worktree → Codex Worker
+Phase A 완료 계약 → Work Decomposition → Detailed Planning
+→ TaskContract + Execution Source → executeWorkItem
+→ 승인된 Codex Worktree 모드 확인 및 Governance Authorization
+→ 승인 Snapshot 기반 Worktree → Codex Worker
 → Scope → Verification → Final Scope Check
-→ Evidence / Artifacts → ExecutionResult (workspace 유지)
-→ Human Review
-→ Apply / Commit / Push (각각 승인; Skip / 실패 시 후속 Delivery 중단)
-→ Workspace Delete / Keep
+→ Evidence / Artifacts → Phase B State
 ```
 
-Goal 기반 흐름은 Planning 실패·Task Reject 시 실행하지 않는다. PlanningResult.task를 메모리에서
-Execution으로 직접 전달한다. 명시적 JSON execute는 Planning / Task Approval을 거치지 않으며 이후
-Review / Delivery / Cleanup은 같다. 실패한 실행도 workspace가 있으면 검토할 수 있으나 Delivery는
-성공·Verification 통과·patch 보존과 별도 승인 조건을 충족해야 한다. Setup 실패 시 workspace가 없을 수 있다.
+독립 Planning CLI는 TaskContract를 표시한다. Phase B에서 실행 준비 실패와 Pipeline 실행 결과는
+선택된 Work Item ID에 연결된다. Worktree는 실행 후 보존되며 원본 반영은 별도의 Human 결정이다.
 
 ### Decision Governance
 
@@ -275,7 +268,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 | Phase A가 Staffing / Approval을 직접 조정하고 명시적 실행 대상에서 Specialist Decisions / Comparison, Synthesis 및 Human Direction Governance를 연결. Staffing CLI는 Phase A의 staffing-approval을 사용. Phase B Graph는 Work Decomposition과 선택적 Detailed Planning을 실행하며 Organization Graph는 미구현 |
+| Workflow Runtime | LangGraph.js 채택 | Phase A가 Staffing / Approval을 직접 조정하고 명시적 실행 대상에서 Specialist Decisions / Comparison, Synthesis 및 Human Direction Governance를 연결. Staffing CLI는 Phase A의 staffing-approval을 사용. Phase B Graph는 Work Decomposition, 선택적 Detailed Planning과 승인된 단일 Work Item 실행을 지원하며 Organization Graph는 미구현 |
 | Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
@@ -352,13 +345,13 @@ v4는 **What & Why / Governance**를 맡는다. CEO는 문제·불확실성의 �
 
 v1은 **Task Planning & Execution Contract**를 맡는다. Repository Context에서 개별 작업의 objective,
 수정 가능·금지 경로, Constraints, Acceptance Criteria와 Verification을 구체화하고 TaskDraft를 만든다.
-Harness의 buildTaskContract()가 계약을 최종화하고 CLI가 TaskContract 표시·Task Approval·Execution
-handoff를 연결한다. Task Approval 자체를 Planner가 수행하지 않는다.
+Harness의 buildTaskContract()가 계약을 최종화한다. CLI는 계획을 표시하며 Phase B는 Governance의
+Execution Source 등록과 실행 허가를 거쳐 계약을 Worker에 전달한다.
 
 | 사용 맥락 | 결정 범위 | 현재 상태 |
 | --- | --- | --- |
-| Standalone v1 | Human Goal과 Repository Context에서 구체적인 실행 작업을 계획 | 현재 Plan only / Plan & Execute. v4를 거치지 않는 독립 기능 유지 |
-| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | R5.1 / R5.2에서 개별 Repository 변경 Work Item과 승인 기록을 입력으로 지원. Workflow 연결은 후속 범위 |
+| Standalone v1 | Human Goal과 Repository Context에서 구체적인 실행 작업을 계획 | 현재 Plan only. 실행은 Phase B 승인 경로에서 수행 |
+| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | 개별 Repository 변경 Work Item을 계획하고 승인된 Execution Source를 등록 |
 
 IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 CEO의 Goal 해석을 나타내는
 **데이터 모델**이다. 현재 CEOStaffingDecision의 propose 분기에 포함된 StaffingDraft.intent로 생성되며
@@ -391,7 +384,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 
 ### 통합 시 지켜야 할 invariant
 
-- 기존 `planTask()` / `executeTask()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
+- 기존 `planTask()` / `executeWorkItem()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
   Decision 생성과 Comparison의 독립 capability 경계를 유지하고 각 application에 전체 조직 workflow를 숨겨 넣지 않는다.
 - LangGraph.js가 workflow state와 순서를 실행하더라도 Governance 전이의 허용 조건·의미는 Harness가 정의한다.
   Framework state / run / node가 core Domain Model에 불필요하게 누출되지 않도록 한다.
@@ -1156,7 +1149,7 @@ Codex Worker도 Execution의 Worker 역할 구현체이므로 Execution이 소�
 
 #### index.ts
 
-해당 use-case의 public boundary다. `planTask`, `executeTask`, `runDecision`과 각 결과 타입,
+해당 use-case의 public boundary다. `planTask`, `executeWorkItem`, `runDecision`과 각 결과 타입,
 필요한 하위 capability 등 외부에 필요한 API를 제공한다.
 내부 파일 위치가 바뀌어도 외부 사용자가 그 배치에 직접 의존하지 않도록 한다.
 Cross-module은 `@/*` alias와 대상 module의 `index.ts`, same-module 내부는 상대경로를 사용한다.
@@ -1345,8 +1338,8 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 - Architecture is responsibility-first. 기술·파일 수·구조적 대칭성보다 책임 소유권을 우선한다.
 - Agent는 교체 가능한 역할 구현체다. Harness의 가치와 특정 모델·CLI를 동일시하지 않는다.
 - Application은 UI를 모른다. CLI는 operator adapter이며 다른 UI로 바뀌어도 use-case 경계를 유지한다.
-- Planning과 Execution은 서로 직접 호출하지 않는다. 현재 연결과 Human gate는 CLI adapter에 있다.
-- Human Task Approval, Review, Apply, Commit, Push, Cleanup은 서로 다른 결정이다.
+- Planning과 Execution은 서로 직접 호출하지 않는다. Phase B Workflow가 계획과 실행을 연결한다.
+- Execution Authorization, Review, Apply, Commit, Push, Cleanup은 서로 다른 결정이다.
 - Apply는 Execution·Verification 성공과 patch 보존 확인 뒤에만 가능하다. Dirty repository를 차단하고
   pre-check를 수행한다. Commit은 changedPaths만 stage하고 Push는 기존 upstream에만 수행한다.
 - Workspace lifecycle과 Execution lifecycle을 분리한다. Artifact 보존은 workspace 삭제와 독립적이다.
@@ -1398,9 +1391,9 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/features/specialist-invocation/flow/validation/evaluate-invocation.ts) | `authorizeSpecialistInvocation()`이 사용; 순수 API도 유지 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
 | Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `runIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
 | Comparison source 구성·Concern별 참조 | Comparison | `comparisonPayloadSchema` — `protocol/comparison.ts`; `compareDecisions()`, `validateComparisonReferences()` — `flow/validation/validate-references.ts` | Comparator Adapter, Decision CLI 조합 | 비교 입력·응답 수신 후 | Schema + Policy |
-| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runVerification()` — `services/verification/verification-runner.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeTask()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
+| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `runScopeStage()` / `runVerificationStage()` — `application/execution/flow/orchestration/stages.ts` | `executeWorkItem()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
 | 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `runCodexSpecialist()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
-| Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `approveTask()`, `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 기존 Planning/Execution CLI | Task 승인·Apply·Commit·Push | Policy + Lifecycle |
+| Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 보존된 Review·Delivery 모듈 | Review·Apply·Commit·Push | Policy + Lifecycle |
 | 상위 실행 분기·실패/승인 대기 전달 | Phase A Graph | `createPhaseAGraph()` — `workflows/development-organization/phase-a/graph.ts`; `runStaffingApproval()`은 결과 변환 Adapter | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval → 선택적 Human 콜백·최종 승인 | Lifecycle 조정; 업무 검증은 Application 재사용 |
 
 Git blob reader는 NUL / invalid UTF-8를 거부하지만 접근 권한·regular mode·민감 경로를 자체 승인하지 않는다.
@@ -1541,33 +1534,25 @@ CLI 입력/goalSpecSchema → planTask: resolveRepositoryRoot → Working Tree m
   └─ runPlanningLoop: hasValidLimits → planner (기본 Adapter는 Process/JSON/plannerDecisionSchema)
       ├─ inspect: 요청 수·resolve 기준 중복·총 조사 수 → inspectFiles의 경로/내부 폴더/파일 검사
       └─ complete → buildTaskContract: Harness ID/targetRepository, 원본 Constraints와 Draft 제약 합집합
-        → taskContractSchema → Task 표시 → 실행을 선택한 CLI에서 Human Task Approval
+        → taskContractSchema → 독립 CLI 표시 또는 Phase B 출처 등록
 ```
 
 `planTask()`는 typed Goal 입력을 받으며 자체적으로 Goal Schema를 다시 파싱하지 않는다. 주입 Planner를
 Loop가 `plannerDecisionSchema`로 다시 파싱하는 구조도 아니다. 실제 Runtime Schema 적용 위치는 기본
 Codex Planner와 최종 TaskContract 경계다. 모든 내부 typed 함수를 동일한 unknown 입력 validator로 설명하지 않는다.
 
-**v0 Execution → Scope → Verification → Delivery — 현재**
+**Phase B Execution → Scope → Verification — 현재**
 
 ```text
-Task 로더의 taskContractSchema 또는 Planning Finalizer → executeTask
-  → Artifact/Worktree/base commit → runWorkerStage (Process failure/timeout)
-  → Worker 성공 시 runScopeStage: collectChangedPaths → checkScope
-    → 통과 시 runVerificationStage: 각 명령 exit/error/timeout
-    → Verification 후 runScopeStage로 변경 경로 재수집·재검사 (실패 결과/예외 후도 포함)
-  → 변경 보존 → finalizeExecutionResult (누적 실패로 passed 결정·보고 저장 실패 반영)
-  → CLI Review / Apply: 실행·Verification 성공·patch 존재·Human 확인
-    → applyPatch: Clean → git apply --check → apply
-    → Commit: Human 확인·메시지·changedPaths → stagePaths의 경로/기존 staged 검사 → commitChanges
-    → Push: Human 확인 → branch/HEAD/upstream/refspec/no-force 검사
+검증된 Work Item + Execution Source → executeWorkItem
+  → Runtime 확인 → authorizeExecutionForRun → 승인 Commit 기반 Worktree
+  → Codex Worker → Scope → Harness Verification → Scope 재검사
+  → 변경·Evidence 보존 → ExecutionResult → Phase B State
 ```
 
-Worker 실패 시에는 변경 Evidence를 수집하고 Verification은 시작하지 않는다. `executeTask()` 자체는
-TaskContract Schema를 다시 파싱하지 않으며 Scope는 실제 변경 경로의 Exact membership이다.
-Verification은 shell command를 실행하므로 파일을 바꿀 수 있다. 실행·전달·Human gate는 분리된 보장이다.
-v1/v0의 `approveTask()`는 stdin의 Approve/Reject/EOF를 처리하며 Governance의 `/dev/tty` binding Receipt와
-다른 계약이다. Presenter의 표시·Schema parse를 어느 쪽 Approval의 성공으로도 간주하지 않는다.
+Worker 실패 시에는 변경 Evidence를 수집하며 Verification을 시작하지 않는다. Scope 검사는 실제 변경
+경로를 비교한다. Harness Verification은 승인된 명령을 고정된 argv로 실행한다. Review·Delivery·Cleanup은
+재사용 가능한 별도 모듈이며 현재 Phase B 실행 후 자동 적용하지 않는다.
 
 ### 9.4 재사용·재검증과 중복 검토 후보
 

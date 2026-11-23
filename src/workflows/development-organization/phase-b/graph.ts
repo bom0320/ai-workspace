@@ -10,9 +10,9 @@ import { createRunWorkDecompositionNode } from "./features/work-decomposition/no
 import { phaseBInput, phaseBState } from "./state.js";
 
 import {
-  createPrepareExecutionNode,
+  createExecuteWorkItemNode,
   type PhaseBExecutionOptions,
-} from "./features/execution/nodes/prepare-execution.js";
+} from "./features/execution/nodes/execute-work-item.js";
 
 export type PhaseBGraphOptions = Omit<
   RunWorkDecompositionOptions,
@@ -46,8 +46,8 @@ export function createPhaseBGraph({
     )
     .addNode("plan-work-item", createPlanWorkItemNode(planning))
     .addNode(
-      "prepare-execution",
-      createPrepareExecutionNode(planning?.repositoryPath, execution)
+      "execute-work-item",
+      createExecuteWorkItemNode(planning?.repositoryPath, execution)
     );
 
   // 2. Connect Execution Edges
@@ -78,11 +78,11 @@ export function createPhaseBGraph({
       )
         return END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
-      return execution ? "prepare-execution" : END;
+      return execution ? "execute-work-item" : END;
     },
-    ["plan-work-item", "prepare-execution", END]
+    ["plan-work-item", "execute-work-item", END]
   );
-  graph.addEdge("prepare-execution", END);
+  graph.addEdge("execute-work-item", END);
 
   // 3. Compile Graph
   return graph

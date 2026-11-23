@@ -3,14 +3,12 @@ import { basename, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planTask, type PlanningState } from "@/application/planning/index.js";
-import { executeTask } from "@/application/execution/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 
 import { runPlanningCli } from "../../cli.js";
 import { runPlanCommand } from "./plan.js";
 
 vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
-vi.mock("@/application/execution/index.js", () => ({ executeTask: vi.fn() }));
 
 const task: TaskContract = {
   id: "task-001",
@@ -92,14 +90,13 @@ describe("Planning CLI", () => {
     });
   });
 
-  it("prints a completed task contract and never calls executeTask", async () => {
+  it("prints a completed task contract", async () => {
     expect(await runPlanningCli([".", "Clarify README"])).toBe(0);
     expect(console.log).toHaveBeenCalledWith("Planning: completed");
     expect(console.log).toHaveBeenCalledWith("Rounds: 2");
     expect(console.log).toHaveBeenCalledWith("\nTask Contract:");
     expect(console.log).toHaveBeenCalledWith(`Task ID: ${task.id}`);
     expect(console.log).toHaveBeenCalledWith(`\nObjective:\n${task.objective}`);
-    expect(executeTask).not.toHaveBeenCalled();
   });
 
   it("reports workflow failure with exit code 1", async () => {
@@ -115,7 +112,6 @@ describe("Planning CLI", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Reason: Planning round limit reached."
     );
-    expect(executeTask).not.toHaveBeenCalled();
   });
 
   it("reports unexpected errors without a stack trace and returns exit code 1", async () => {
@@ -124,6 +120,5 @@ describe("Planning CLI", () => {
     expect(console.error).toHaveBeenCalledWith(
       "Error: Planning failed: Codex planner timed out"
     );
-    expect(executeTask).not.toHaveBeenCalled();
   });
 });

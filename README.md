@@ -8,10 +8,10 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
 
 현재 다음 흐름이 구현되어 있다.
 
-- **v0 — Safe Execution**: TaskContract JSON을 isolated Git worktree에서 실행하고 Scope / Verification /
-  Evidence와 binary patch·결과를 보존한다. Human Review와 승인 기반 Apply / Commit / Push, Delete / Keep을 제공한다.
+- **v0 — Safe Execution**: isolated Git worktree, Scope, Verification, Evidence와 binary patch 보존 기반을 구현했다.
+  실행 기반은 Phase B에서 재사용하며 Review, Delivery, Cleanup 모듈은 별도로 유지한다.
 - **v1 — Goal-to-Task Planning**: 자연어 Goal을 repository inspection과 Adaptive Planning으로
-  TaskContract로 변환하고, Human Task Approval 뒤 단일 Codex Worker로 실행한다.
+  TaskContract로 변환한다. 독립 CLI는 계획을 표시하며 Worker 실행은 Phase B에서 수행한다.
 - **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
   Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
 - **v3 — Structured Decision Comparison**: 독립 AgentDecision을 Concern 단위로 비교해
@@ -33,7 +33,8 @@ CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffin
 Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
 동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
 CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
-CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B와 실제 전체 조직 E2E는 아직 없다.
+CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B는 승인된 Work Item
+하나의 상세 계획과 실행을 지원한다. 전체 조직 운영과 Delivery 연결은 후속 범위다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
@@ -84,32 +85,22 @@ AI Workspace
 
 Select workflow:
 
-1. Plan & Execute
-2. Plan only
-3. Decision
-4. Execute existing task
+1. Plan only
+2. Decision
 
 >
 ```
 
-Plan & Execute / Plan only는 Repository와 Goal을, Decision은 Repository / Decision Goal /
-Context Files를 입력받는다. Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
-Execute existing task는 Task path와 Repository를 입력받는다.
-인자를 직접 전달하면 selector를 거치지 않는다.
+Plan only는 Repository와 Goal을, Decision은 Repository / Decision Goal / Context Files를 입력받는다.
+Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
 
 ```sh
-pnpm dev . "README.md의 소개 문구를 더 명확하게 수정해줘"
 pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 ```
 
-기존 v0의 명시적 TaskContract JSON 실행은 `execute` command로 제공한다.
-
-```sh
-pnpm dev execute ./tasks/example.json /absolute/path/to/target-repository
-```
-
-Worker는 원본 Repository의 HEAD에서 만든 detached worktree에서 실행된다.
-원본 작업 디렉터리 반영은 실행 후 별도의 Apply 승인으로만 진행한다.
+Worker 실행은 Phase B에서 선택된 Work Item에 한해 제공된다. 독립 `execute` 명령과 위치 인자를
+사용한 Plan & Execute는 종료 코드 1과 함께 안내를 출력한다. Phase B는 승인된 Snapshot에서
+detached worktree를 만들고 원본 Repository에 변경사항을 자동으로 적용하지 않는다.
 
 ## v4 현재 진입점
 
@@ -236,28 +227,26 @@ Fast Path 측정의 Planning rounds와 Planner calls는 모두 0이다. Planning
 Planning LLM 호출과 Worker의 Codex process였으며, workspace 생성·cleanup 같은
 Harness 자체 비용은 작았다. Worker 시간 감소 전체를 Fast Path만의 효과로 보지는 않는다.
 
-`Approval Wait`는 Human interaction 시간이며 순수 자동 처리 시간과 구분한다.
-현재 CLI의 Total에는 Review·Delivery·Cleanup 결정 대기도 포함된다. 위 수치는 관찰된
-실행의 기록이며 모델·작업·verification command·사람의 응답 시간에 따라 달라진다.
-`0.0s`는 CLI 표시 정밀도에 따른 값이다.
+위 수치는 독립 CLI 실행을 제공하던 시점의 기록이다. `Approval Wait`는 Human interaction 시간이며
+당시 CLI의 Total에는 Review·Delivery·Cleanup 결정 대기도 포함됐다.
 
 ## Review와 Post-Execution Delivery
 
-Execution 종료 후에도 workspace는 유지된다. Review는 항상 실행되며 workspace path,
+Phase B 실행 종료 후에는 workspace가 유지된다. 기존 Review·Delivery·Cleanup 모듈은 보존되며,
+Phase B Graph의 자동 후속 단계로는 연결되어 있지 않다. Review 모듈은 workspace path,
 changed paths, 실제 diff, patch artifact 위치, 존재하는 Worker Result를 표시한다.
 `Continue / Abort`로 확인 완료 여부를 받고, Continue 및 Execution / Verification 성공과
 patch 보존이 확인된 경우에만 Delivery를 진행한다.
 
 | 단계 | Human 선택 | 현재 안전 조건 / 결과 |
 | --- | --- | --- |
-| Task Approval | Approve / Reject | Goal flow에서 Approve 전에는 Execution 없음 |
 | Review | Continue / Abort | Abort·Review 실패 시 Apply / Commit / Push 없음 |
 | Apply | Apply / Skip | Dirty 원본 차단. `git apply --check` 후 적용. Force / 3way / reset / stash 없음 |
 | Commit | Commit / Skip | 유효한 Conventional Commit 메시지 필요. changedPaths만 stage, 기존 staged 변경 차단 |
 | Push | Push / Skip | Detached HEAD 차단, delivery commit과 HEAD 일치 확인, 기존 remote upstream에만 일반 push |
 | Cleanup | Delete / Keep | Abort·Delivery 실패 후에도 별도 선택. Worktree만 Delete, artifacts는 유지 |
 
-Task Approval ≠ Change Review ≠ Apply Approval ≠ Commit Approval ≠ Push Approval ≠ Cleanup Decision.
+Execution Authorization, Change Review, Apply, Commit, Push 및 Cleanup은 별도 결정이다.
 Commit Skip은 working tree 변경을, Push Skip·실패는 local commit을 유지한다.
 Cleanup Keep·실패나 Delivery 결과가 이미 성공한 Execution의 `passed`를 바꾸지 않는다.
 상세 interaction과 실제 CLI 파일 책임은 [CLI / Human interface](docs/cli-and-human-interface.md)를 참조한다.
@@ -275,42 +264,14 @@ test: ...
 chore: ...
 ```
 
-### Goal-based Action Governance 흐름
+### Phase B 실행 흐름
 
 ```text
-Natural Language Goal
-↓
-Repository Inspection
-↓
-Adaptive Planning
-├─ Fast Path → TaskContract
-└─ Codex Planner → TaskContract
-↓
-Human Task Approval
-↓
-Isolated Git Worktree
-↓
-Codex Worker
-↓
-Scope + Verification
-↓
-Preserve Evidence
-↓
-Human Review
-├─ Abort → Delivery Skip
-└─ Continue
-     ↓
-   Apply / Skip
-     ↓ (applied인 경우만)
-   Commit / Skip
-     ↓ (committed인 경우만)
-   Push / Skip
-↓
-Delete / Keep Workspace
+Phase A Handoff → Work Decomposition → Planning → Execution Source
+→ executeWorkItem → Runtime 확인 → Governance Authorization
+→ 승인 Snapshot Worktree → Codex → Scope → Verification → Evidence
+→ Phase B State
 ```
-
-Task Approval을 Reject하면 Execution을 시작하지 않는다. Scope·Verification·artifact 보존이
-실패하면 Delivery는 진행하지 않으며, 생성된 workspace의 cleanup은 별도로 결정한다.
 
 ## TaskContract 예시
 
@@ -318,19 +279,13 @@ Task Approval을 Reject하면 Execution을 시작하지 않는다. Scope·Verifi
 {
   "id": "task-example-001",
   "goalId": "goal-example-001",
-  "objective": "Add a focused TaskContract validation test",
+  "objective": "Clarify the README introduction",
   "targetRepository": "ai-workspace",
-  "allowedPaths": [
-    "src/contracts/task.ts",
-    "src/contracts/task.test.ts"
-  ],
-  "forbiddenPaths": ["docs/architecture.md", "README.md"],
-  "constraints": ["Do not add dependencies"],
-  "acceptanceCriteria": ["The focused validation test passes"],
-  "verification": [
-    "pnpm typecheck",
-    "pnpm exec vitest run src/contracts/task.test.ts"
-  ]
+  "allowedPaths": ["README.md"],
+  "forbiddenPaths": ["docs/architecture.md"],
+  "constraints": ["Keep the existing section headings"],
+  "acceptanceCriteria": ["The introduction states what the Harness does"],
+  "verification": ["git diff --check"]
 }
 ```
 
@@ -338,16 +293,18 @@ Task Approval을 Reject하면 Execution을 시작하지 않는다. Scope·Verifi
 지원한다. glob, 정규식, directory prefix는 지원하지 않는다. 예를 들어 `src/`는
 `src/cli/cli.ts`를 허용하지 않는다.
 
+Phase B에서 독립 Verification으로 지원하는 명령은 승인된 `git diff --check`다.
 범위 검사는 파일 쓰기를 사전에 차단하는 기능이 아니다. Worker와 Verification 실행
 후 시작 commit 대비 실제 변경 경로를 수집해 위반을 탐지한다. 위반한 변경도 결과
 patch에는 남을 수 있으므로 사람이 반드시 검토해야 한다.
 
 ## Execution 실행 결과
 
-기본 결과 위치는 CLI를 실행한 디렉터리 아래다.
+결과 위치는 Phase B의 `workerExecutionResult.result.artifacts.directory`에서 확인한다.
+실행 산출물은 Repository 밖의 임시 루트 아래에 보존된다.
 
 ```text
-.ai-workspace/runs/run-*/
+ai-workspace-governed-runs-*/run-*/
 ├── task.json
 ├── base-commit.txt
 ├── changes.patch
@@ -360,7 +317,7 @@ patch에는 남을 수 있으므로 사람이 반드시 검토해야 한다.
 - `result.json`: Evidence, Scope, Verification, Execution 실패, telemetry, artifact 및
   `workspace.path`를 포함한 Execution 완료 시점의 결과
 
-CLI가 출력하는 `Run Artifacts` 경로에서 결과를 확인할 수 있다. Workspace는 실제 AI 작업용
+Workspace는 실제 AI 작업용
 Git worktree이며 Delete할 수 있다. Artifacts는 영구 실행 evidence로, workspace cleanup
 후에도 유지된다. `result.json`은 Execution 시점의 snapshot이며 이후 Review / Delivery /
 Cleanup 결과를 저장하는 파일은 아니다. 따라서 저장된 workspace 경로가 Delete 이후에도
@@ -378,7 +335,7 @@ git apply --binary /path/to/run/changes.patch
 git diff --check
 ```
 
-CLI Delivery를 Skip했거나 artifact를 나중에 적용할 때 사용할 수 있는 경로다.
+별도 Human 검토 후 artifact를 수동 적용할 때 사용할 수 있는 경로다.
 `git apply --check`는 현재 checkout에 patch를 적용할 수 있는지만 확인한다. 위 명령은
 사용자가 직접 실행하며, 적용 후 diff와 프로젝트 검증 명령을 확인하고 commit 여부를 결정한다.
 CLI에서도 명시적 Apply 승인 없이는 적용하지 않는다. patch는 Worker가 만든 commit의 최종 파일 상태를
@@ -386,30 +343,17 @@ CLI에서도 명시적 Apply 승인 없이는 적용하지 않는다. patch는 W
 
 ## Timeout
 
-- Codex Worker 기본 timeout: 15분
-- Codex Specialist 기본 timeout: 각 15분
-- Codex Comparator 기본 timeout: 15분 (현재 Decision CLI에는 두 runtime의 override 입력 없음)
-- 각 Verification command 기본 timeout: 5분
+- Phase B Worker와 Verification은 승인된 실행 timeout과 위임 만료 시점까지 남은 시간 중 짧은 값을 공유한다.
+- Codex Specialist 및 Comparator 기본 timeout은 각각 15분이다.
 
-아래 환경변수와 patch / cleanup 설명은 Execution에 한정한다. Specialist / Comparator 실패는 Decision command 전체를
-reject하며 임시 cwd를 제거하고, Decision patch나 artifact를 만들지 않는다.
-
-Execution CLI에서 millisecond 단위로 override하려면
-`AI_WORKSPACE_WORKER_TIMEOUT_MS`와 `AI_WORKSPACE_VERIFICATION_TIMEOUT_MS` 환경변수를
-사용한다. 테스트와 직접 API 사용에서도 짧은 timeout을 주입할 수 있다. timeout 시 일반
-실패와 구분되는 메시지를 기록하고, macOS/Linux에서는 독립 process group에 SIGTERM을
-보낸 뒤 종료되지 않은 하위 프로세스까지 SIGKILL한다. 종료 처리가 끝난 다음 변경을
-수집하고 patch를 보존한다. 생성된 worktree의 Delete / Keep은 CLI에서 별도로 결정한다. Windows에서는 하위 process
-tree 전체 종료가 동일하게 보장되지 않는다.
-
-## v0 / v1의 판단 범위와 제한
+## 실행의 판단 범위와 제한
 
 - `passed: true`는 Scope 검사와 구성된 Verification command가 통과했다는 뜻이다.
   자연어 objective와 acceptance criteria가 실제로 충족됐음을 보장하지 않는다.
 - ignored 파일, 빈 디렉터리, Worker commit history는 patch에 보존하지 않는다.
 - 실행 환경 준비, dependency 설치, `.env`와 secret 전달은 자동화하지 않는다.
 - retry, rollback, 승인 없는 patch 적용·commit·push, 자동 merge는 수행하지 않는다.
-- 자동 E2E 테스트는 PATH에 가짜 `codex` 실행 파일을 제공한다. 실제 Codex 인증, 모델 동작,
+- 자동 Phase B 실행 테스트는 Codex 프로세스 응답을 대체한다. 실제 Codex 인증, 모델 동작,
   네트워크, prompt 준수, 실제 프로젝트의 build 환경을 검증하는 테스트가 아니다.
 - 첫 실제 적용에서는 버려도 되는 branch와 Repository 복제본으로 Task scope, 검증 명령,
   timeout, patch 적용 가능성을 먼저 확인해야 한다.

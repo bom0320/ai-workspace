@@ -1,9 +1,8 @@
-export { executeTask, executeGovernedTask } from "./flow/execute-task.js";
-export type { WorkerContext } from "./model/worker-context.js";
-export type { ExecutionState, TaskExecutionOptions } from "./model/state.js";
+export { executeWorkItem } from "./flow/execute-work-item.js";
 export type {
   ExecutionFailure,
   ExecutionFailureStage,
   ExecutionResult,
+  ExecutionOutcome,
   ExecutionTelemetry,
 } from "./model/result.js";

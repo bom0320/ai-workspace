@@ -1,4 +1,4 @@
-import { normalize, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { RunDecisionInput } from "@/application/decision/index.js";
@@ -13,19 +13,10 @@ import {
   presentDecisions,
   presentComparison,
 } from "./presenters/decision/index.js";
-import {
-  runExecuteCommand,
-  runExecutionCli,
-} from "./commands/execute/index.js";
-import { approveTask, selectWorkflow } from "./prompts/workflow/index.js";
+import { selectWorkflow } from "./prompts/workflow/index.js";
 import { askGoal, type GoalInput } from "./prompts/planning/index.js";
 import { askDecision } from "./prompts/decision/index.js";
-import { askExecution } from "./prompts/execution/index.js";
 import { presentTaskContract } from "./presenters/planning/index.js";
-import {
-  presentTiming,
-  type HumanInteractionTiming,
-} from "./presenters/timing.js";
 
 function reportPlanning(result: PlanningResult): boolean {
   if (result.status === "failed") {
@@ -101,88 +92,23 @@ export async function runCli(args: string[]): Promise<number> {
   if (args[0] === "decision") return runDecisionCli(args.slice(1));
   if (args[0] === "plan") return runPlanningCli(args.slice(1));
   try {
-    if (args[0] === "execute") return await runExecutionCli(args.slice(1));
     if (args.length > 0) {
-      return await runPlanAndExecute({
-        repositoryPath: args[0] ?? "",
-        objective: args[1] ?? "",
-      });
+      console.error(
+        "Error: Standalone execution is unavailable. Execution requires an approved Phase B Work Item. Use the plan command for Planning only."
+      );
+      return 1;
     }
     const workflow = await selectWorkflow();
     switch (workflow) {
-      case "plan-execute":
-        return await runPlanAndExecute(await askGoal());
       case "plan":
         return await executePlanningInput(await askGoal());
       case "decision":
         return await executeDecisionInput(await askDecision());
-      case "execute": {
-        const input = await askExecution();
-        return await runExecutionCli([input.taskPath, input.repositoryPath]);
-      }
     }
   } catch (error) {
     console.error(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`
     );
-    return 1;
-  }
-}
-
-async function runPlanAndExecute(input: GoalInput): Promise<number> {
-  let startedAt: number | undefined;
-  const timing: HumanInteractionTiming = {};
-  try {
-    startedAt = performance.now();
-    console.log("Planning...");
-    const result = await runPlanCommand(input);
-    timing.planningDurationMs = performance.now() - startedAt;
-    const completed = reportPlanning(result);
-    console.log(
-      `Planning Duration: ${(timing.planningDurationMs / 1_000).toFixed(1)}s`
-    );
-    if (!completed || result.status !== "completed") {
-      presentTiming({
-        ...timing,
-        totalDurationMs: performance.now() - startedAt,
-      });
-      return 1;
-    }
-    const approvalStartedAt = performance.now();
-    presentTaskContract(result.task);
-    const approved = await approveTask();
-    timing.approvalWaitDurationMs = performance.now() - approvalStartedAt;
-    if (!approved) {
-      console.log("Task: rejected. Execution was not started.");
-      presentTiming({
-        ...timing,
-        totalDurationMs: performance.now() - startedAt,
-      });
-      return 1;
-    }
-    console.log("Execution...");
-    const allowedPaths = new Set(
-      result.task.allowedPaths.map((path) => normalize(path))
-    );
-    const workerContext = {
-      inspectedFiles: result.state.inspectedFiles.filter((file) =>
-        allowedPaths.has(normalize(file.path))
-      ),
-    };
-    return await runExecuteCommand(
-      result.task,
-      result.state.repository.repositoryRoot,
-      { ...timing, startedAt },
-      workerContext
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`Error: ${message}`);
-    if (startedAt !== undefined)
-      presentTiming({
-        ...timing,
-        totalDurationMs: performance.now() - startedAt,
-      });
     return 1;
   }
 }

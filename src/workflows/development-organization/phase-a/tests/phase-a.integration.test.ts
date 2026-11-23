@@ -1780,7 +1780,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       if (plan.result.status !== "completed")
         throw new Error("Expected a task.");
       expect(
-        governance.authorizeExecution({
+        governance.checkExecutionEligibility({
           approvedDecisionId: decision.id,
           executionSourceId: plan.executionSourceId,
           workItem: workItems[0],
@@ -1789,7 +1789,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           readPaths: ["README.md"],
           timeoutMs: 5_000,
         }).status
-      ).toBe("allowed");
+      ).toBe("eligible");
     }
   );
 
@@ -1849,7 +1849,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(
       governance.getExecutionDelegation(request.approvedDecisionId)
     ).toBeUndefined();
-    expect(governance.authorizeExecution(request).status).toBe(
+    expect(governance.checkExecutionEligibility(request).status).toBe(
       "approval-required"
     );
     const input = postDelegationInput(request, scopedPolicy);
@@ -1871,19 +1871,19 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
     expect(governance.approveExecutionDelegation(input).status).toBe("denied");
     expect(
-      governance.authorizeExecution({
+      governance.checkExecutionEligibility({
         ...request,
         readPaths: ["docs-extra/other.md"],
       }).status
     ).toBe("denied");
     expect(
-      governance.authorizeExecution({ ...request, readPaths: ["docs/link.ts"] })
-        .status
+      governance.checkExecutionEligibility({
+        ...request,
+        readPaths: ["docs/link.ts"],
+      }).status
     ).toBe("denied");
-    const allowed = governance.authorizeExecution(request);
-    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
-    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
-      "claimed"
+    expect(governance.authorizeExecutionForRun(request).status).toBe(
+      "authorized"
     );
   });
 
@@ -1951,7 +1951,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       governance.approveExecutionDelegation(input, confirmPostDelegation(input))
         .status
     ).toBe("approved");
-    expect(governance.authorizeExecution(request).status).toBe("allowed");
+    expect(governance.checkExecutionEligibility(request).status).toBe(
+      "eligible"
+    );
     withGovernanceRecords((raw, persist) => {
       const ledger =
         raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
@@ -1960,7 +1962,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       )[0].executionDelegations![0].confirmationBinding = "tampered";
       persist(ledger);
     });
-    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
   });
 
   it("denies a planned write when an approved directory grant contains only read scope", async () => {
@@ -1978,48 +1980,24 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       governance.approveExecutionDelegation(input, confirmPostDelegation(input))
         .status
     ).toBe("approved");
-    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
   });
 
-  it("reserves a Phase B execution once per Work Item and consumes its permit only once", async () => {
+  it("authorizes each Work Item once with a single atomic Ledger write", async () => {
     const [first, second, third] = await plannedExecutions(true, 2);
-    const allowed = governance.authorizeExecution(first);
-    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
-    expect(allowed.execution.request).toEqual(first);
-    expect(
-      governance.authorizeExecution({ ...first, timeoutMs: 4_000 }).status
-    ).toBe("denied");
-    expect(governance.authorizeExecution(second).status).toBe("allowed");
-    expect(governance.authorizeExecution(third).status).toBe("denied");
-    const altered = structuredClone(allowed.execution);
-    altered.request.task.objective = "Altered task";
-    expect(governance.claimAuthorizedExecution(altered).status).toBe("denied");
-    expect(
-      governance.claimAuthorizedExecution({
-        ...allowed.execution,
-        id: "forged",
-      }).status
-    ).toBe("denied");
-    expect(governance.claimAuthorizedExecution(allowed.execution)).toEqual({
-      status: "claimed",
-      execution: allowed.execution,
-    });
-    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
-      "denied"
-    );
-    expect(governance.authorizeExecution(third).status).toBe("denied");
-  });
-
-  it("atomically authorizes execution for a run and shares the budget with unused permits", async () => {
-    const [first, second, third] = await plannedExecutions(true, 2);
-    const prior = governance.authorizeExecution(first);
-    if (prior.status !== "allowed") throw new Error(JSON.stringify(prior));
-    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    expect(governance.checkExecutionEligibility(first).status).toBe("eligible");
+    expect(readFileSync(path, "utf8")).toBe(before);
 
     const rename = vi.spyOn(filesystem, "renameSync");
-    const authorized = governance.authorizeExecutionForRun(second);
+    const authorized = governance.authorizeExecutionForRun(first);
     if (authorized.status !== "authorized")
       throw new Error(JSON.stringify(authorized));
+    expect(
+      governance.executionAuthorizationVerdictSchema.parse(authorized)
+    ).toEqual(authorized);
+    expect(authorized.execution.request).toEqual(first);
     expect(rename).toHaveBeenCalledOnce();
     withGovernanceRecords((raw) => {
       const ledger =
@@ -2027,69 +2005,112 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       const records = Object.values(ledger.repositories).flatMap(
         (entry) => entry.executionReservations ?? []
       );
-      expect(records).toHaveLength(2);
-      expect(
-        records.find(({ id }) => id === prior.execution.id)?.claimedAt
-      ).toBeUndefined();
-      const record = records.find(({ id }) => id === authorized.execution.id)!;
-      expect(record.claimedAt).toBe(record.reservedAt);
-      expect(record.claimedAt).toBeDefined();
-      expect(record.requestDigest).toBe(
-        governanceDigest(authorized.execution.request)
-      );
-      expect(record.executionDigest).toBe(
-        governanceDigest(authorized.execution)
-      );
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({
+        id: authorized.execution.id,
+        requestDigest: governanceDigest(authorized.execution.request),
+        executionDigest: governanceDigest(authorized.execution),
+        claimedAt: records[0].reservedAt,
+      });
     });
-    expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
     expect(
-      governance.claimAuthorizedExecution(authorized.execution).status
+      governance.authorizeExecutionForRun({ ...first, timeoutMs: 4000 }).status
     ).toBe("denied");
-    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
-    expect(governance.claimAuthorizedExecution(prior.execution).status).toBe(
-      "claimed"
+    expect(
+      governance.authorizeExecutionForRun(authorized.execution).status
+    ).toBe("denied");
+    expect(governance.authorizeExecutionForRun(second).status).toBe(
+      "authorized"
     );
+    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
   });
 
-  it("preserves legacy reservations without accepting old or translated permits", async () => {
-    const [request, second, third] = await plannedExecutions(true, 2);
-    const allowed = governance.authorizeExecution(request);
-    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
-    const legacy = {
-      ...allowed.execution,
-      request: {
-        ...allowed.execution.request,
-        writePaths: request.task.allowedPaths,
-        shellCommands: request.task.verification,
-      },
+  it("preserves a legacy unused reservation and counts it against the budget", async () => {
+    const [first, second, third] = await plannedExecutions(true, 2);
+    const oldRequest = {
+      ...first,
+      writePaths: first.task.allowedPaths,
+      shellCommands: first.task.verification,
     };
     withGovernanceRecords((raw, persist) => {
       const ledger =
         raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      const reservation = Object.values(ledger.repositories)
-        .flatMap((entry) => entry.executionReservations ?? [])
-        .find(({ id }) => id === legacy.id)!;
-      reservation.requestDigest = governanceDigest(legacy.request);
-      reservation.executionDigest = governanceDigest(legacy);
-      persist(raw);
+      const entry = Object.values(ledger.repositories)[0];
+      const delegation = entry.executionDelegations![0];
+      const policy = entry.executionPolicies!.at(-1)!;
+      const snapshot = entry.workItemExecutionSources!.find(
+        ({ id }) => id === first.executionSourceId
+      )!.snapshot;
+      const oldPermit = {
+        id: "legacy-unused-permit",
+        request: oldRequest,
+        snapshot,
+        delegationId: delegation.id,
+        delegationBinding: governanceDigest(delegation),
+        policyVersion: policy.version,
+        policyBinding: policy.binding,
+        expiresAt: delegation.grant.expiresAt,
+      };
+      entry.executionReservations = [
+        {
+          id: oldPermit.id,
+          sourceId: first.executionSourceId,
+          delegationId: delegation.id,
+          requestDigest: governanceDigest(oldRequest),
+          executionDigest: governanceDigest(oldPermit),
+          reservedAt: delegation.issuedAt,
+        },
+      ];
+      persist(ledger);
     });
-
     const path = join(home, ".ai-workspace-governance", "records.json");
     const before = readFileSync(path, "utf8");
-    expect(governance.authorizeExecution(legacy.request).status).toBe("denied");
-    expect(governance.claimAuthorizedExecution(legacy).status).toBe("denied");
-    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
+    expect(governance.authorizeExecutionForRun(oldRequest).status).toBe(
       "denied"
     );
-    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
     expect(readFileSync(path, "utf8")).toBe(before);
-    expect(governance.authorizeExecution(second).status).toBe("allowed");
-    expect(governance.authorizeExecution(third).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(second).status).toBe(
+      "authorized"
+    );
+    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
+    withGovernanceRecords((raw) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const [legacy, current] = Object.values(ledger.repositories)[0]
+        .executionReservations!;
+      expect(legacy.id).toBe("legacy-unused-permit");
+      expect(legacy.claimedAt).toBeUndefined();
+      expect(current.claimedAt).toBeDefined();
+    });
+  });
+
+  it("fails closed on an invalid persisted execution reservation", async () => {
+    const [first, second] = await plannedExecutions(true, 2);
+    expect(governance.authorizeExecutionForRun(first).status).toBe(
+      "authorized"
+    );
+    expect(governance.checkExecutionEligibility(second).status).toBe(
+      "eligible"
+    );
+    withGovernanceRecords((raw, persist) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const [reservation] = Object.values(ledger.repositories)[0]
+        .executionReservations!;
+      reservation.sourceId = "0".repeat(64);
+      persist(ledger);
+    });
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
+    expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
+    expect(readFileSync(path, "utf8")).toBe(before);
   });
 
   it("requires a delegation for a valid Direction-only plan", async () => {
     const [request] = await plannedExecutions(false);
-    expect(governance.authorizeExecution(request).status).toBe(
+    expect(governance.checkExecutionEligibility(request).status).toBe(
       "approval-required"
     );
     expect(governance.authorizeExecutionForRun(request).status).toBe(
@@ -2189,8 +2210,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       "docs/README.md",
       { directoryScope: true }
     );
-    const allowed = governance.authorizeExecution(request);
-    expect(allowed.status).toBe("allowed");
+    expect(governance.checkExecutionEligibility(request).status).toBe(
+      "eligible"
+    );
   });
 
   it("registers a valid Fast Path task through the same Governance boundary", async () => {
@@ -2215,7 +2237,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       governance.approveExecutionDelegation(input, confirmPostDelegation(input))
         .status
     ).toBe("approved");
-    expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
   });
 
   it("denies unbound Work Items, TaskContracts, unsafe scopes, and unsupported shell capabilities", async () => {
@@ -2231,21 +2253,29 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       { ...request, timeoutMs: 20_000 },
     ];
     for (const attempt of attempts)
-      expect(governance.authorizeExecution(attempt).status).toBe("denied");
-    expect(governance.authorizeExecution(request).status).toBe("allowed");
+      expect(governance.authorizeExecutionForRun(attempt).status).toBe(
+        "denied"
+      );
+    expect(governance.checkExecutionEligibility(request).status).toBe(
+      "eligible"
+    );
   });
 
   it.each(["expired", "revoked", "superseded", "dirty", "head"] as const)(
-    "rechecks %s execution authority at Claim",
+    "rechecks %s execution authority before authorization for a run",
     async (change) => {
-      const [request, second] = await plannedExecutions();
-      const allowed = governance.authorizeExecution(request);
-      if (allowed.status !== "allowed")
-        throw new Error(JSON.stringify(allowed));
-      if (change === "expired")
+      const [request] = await plannedExecutions();
+      expect(governance.checkExecutionEligibility(request).status).toBe(
+        "eligible"
+      );
+      if (change === "expired") {
+        const delegation = governance.getExecutionDelegation(
+          request.approvedDecisionId
+        )!;
         vi.spyOn(Date, "now").mockReturnValue(
-          Date.parse(allowed.execution.expiresAt)
+          Date.parse(delegation.grant.expiresAt)
         );
+      }
       if (change === "revoked") configureExecutionPolicy(null);
       if (change === "superseded") configureExecutionPolicy();
       if (change === "dirty" || change === "head")
@@ -2254,38 +2284,26 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         git("add", "README.md");
         git("commit", "--quiet", "-m", "drift");
       }
-      expect(
-        governance.claimAuthorizedExecution(allowed.execution).status
-      ).toBe("denied");
-      expect(governance.authorizeExecution(second).status).toBe("denied");
-      expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
+      const path = join(home, ".ai-workspace-governance", "records.json");
+      const before = readFileSync(path, "utf8");
+      expect(governance.authorizeExecutionForRun(request).status).toBe(
+        "denied"
+      );
+      expect(readFileSync(path, "utf8")).toBe(before);
     }
   );
 
-  it("does not publish an execution permit or consume a claim when Ledger replacement fails", async () => {
+  it("publishes no execution authorization when Ledger replacement fails", async () => {
     const [request] = await plannedExecutions();
     const path = join(home, ".ai-workspace-governance", "records.json");
     const before = readFileSync(path, "utf8");
-    const rename = vi.spyOn(filesystem, "renameSync");
-    const fail = () => {
+    vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
       throw new Error("Test disk failure");
-    };
-    rename.mockImplementationOnce(fail);
-    expect(governance.authorizeExecution(request).status).toBe("denied");
-    expect(readFileSync(path, "utf8")).toBe(before);
-    rename.mockImplementationOnce(fail);
+    });
     expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
     expect(readFileSync(path, "utf8")).toBe(before);
-    const allowed = governance.authorizeExecution(request);
-    if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));
-    const reserved = readFileSync(path, "utf8");
-    rename.mockImplementationOnce(fail);
-    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
-      "denied"
-    );
-    expect(readFileSync(path, "utf8")).toBe(reserved);
-    expect(governance.claimAuthorizedExecution(allowed.execution).status).toBe(
-      "claimed"
+    expect(governance.authorizeExecutionForRun(request).status).toBe(
+      "authorized"
     );
   });
 

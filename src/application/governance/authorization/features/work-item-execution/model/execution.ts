@@ -38,7 +38,7 @@ export const executionAuthorizationVerdictSchema = z.discriminatedUnion(
   [
     z
       .object({
-        status: z.literal("allowed"),
+        status: z.literal("authorized"),
         execution: authorizedExecutionSchema,
       })
       .strict(),

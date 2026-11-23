@@ -19,9 +19,7 @@ import {
   withGovernanceLedger,
 } from "../../../../records/governance-transaction.js";
 import {
-  authorizedExecutionSchema,
   executionRequestSchema,
-  type AuthorizedExecution,
   type ExecutionAuthorizationVerdict,
   type ExecutionRequest,
 } from "../model/execution.js";
@@ -182,7 +180,7 @@ export function checkExecutionEligibility(
   input: unknown
 ):
   | { status: "eligible" }
-  | Exclude<ExecutionAuthorizationVerdict, { status: "allowed" }> {
+  | Exclude<ExecutionAuthorizationVerdict, { status: "authorized" }> {
   try {
     const request = executionRequestSchema.parse(input);
     return withGovernanceLedger((ledger) => {
@@ -204,15 +202,10 @@ export function checkExecutionEligibility(
   }
 }
 
-type ExecutionDenial = Exclude<
-  ExecutionAuthorizationVerdict,
-  { status: "allowed" }
->;
-
-function reserveExecution(
-  input: unknown,
-  claimImmediately: boolean
-): { execution: AuthorizedExecution } | ExecutionDenial {
+// The durable use record survives even if the Worker never starts.
+export function authorizeExecutionForRun(
+  input: unknown
+): ExecutionAuthorizationVerdict {
   try {
     return withGovernanceLedger((ledger, save) => {
       const request = executionRequestSchema.parse(input);
@@ -238,74 +231,16 @@ function reserveExecution(
         requestDigest: governanceDigest(execution.request),
         executionDigest: governanceDigest(execution),
         reservedAt,
-        ...(claimImmediately && { claimedAt: reservedAt }),
+        claimedAt: reservedAt,
       });
       save();
-      return { execution };
+      return { status: "authorized", execution };
     });
   } catch {
     return {
       status: "denied",
       reason:
         "Execution request is invalid, stale, already reserved, exceeds authority, or could not be persisted.",
-    };
-  }
-}
-
-export function authorizeExecution(
-  input: unknown
-): ExecutionAuthorizationVerdict {
-  const result = reserveExecution(input, false);
-  return "execution" in result ? { status: "allowed", ...result } : result;
-}
-
-// Immediate execution consumes the reservation before returning authority.
-// That record survives even if the caller exits before starting the Worker.
-export function authorizeExecutionForRun(
-  input: unknown
-): { status: "authorized"; execution: AuthorizedExecution } | ExecutionDenial {
-  const result = reserveExecution(input, true);
-  return "execution" in result ? { status: "authorized", ...result } : result;
-}
-
-// Compatibility path for a permit issued earlier by authorizeExecution().
-export function claimAuthorizedExecution(
-  input: unknown
-):
-  | { status: "claimed"; execution: AuthorizedExecution }
-  | { status: "denied"; reason: string } {
-  try {
-    // Legacy permits contain extra request fields. Reject them as issued instead
-    // of translating either digest or releasing their durable reservation.
-    const execution = authorizedExecutionSchema.parse(input);
-    return withGovernanceLedger((ledger, save) => {
-      const evaluated = evaluateExecution(ledger, execution.request);
-      const reservation = evaluated?.entry.executionReservations?.find(
-        ({ id }) => id === execution.id
-      );
-      if (
-        !evaluated ||
-        !reservation ||
-        reservation.claimedAt ||
-        reservation.sourceId !== execution.request.executionSourceId ||
-        reservation.delegationId !== execution.delegationId ||
-        reservation.requestDigest !== governanceDigest(execution.request) ||
-        reservation.executionDigest !== governanceDigest(execution) ||
-        governanceDigest({ ...evaluated.execution, id: execution.id }) !==
-          reservation.executionDigest
-      )
-        throw new Error(
-          "Execution reservation is missing, stale, altered or already claimed."
-        );
-      reservation.claimedAt = new Date().toISOString();
-      save();
-      return { status: "claimed", execution };
-    });
-  } catch {
-    return {
-      status: "denied",
-      reason:
-        "Execution claim is invalid, stale, consumed, or could not be persisted.",
     };
   }
 }

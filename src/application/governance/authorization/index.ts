@@ -11,8 +11,6 @@ export {
 export { claimAuthorizedInvocation } from "./features/specialist-invocation/flow/claim-authorized-invocation.js";
 export {
   authorizeExecutionForRun,
-  authorizeExecution,
-  claimAuthorizedExecution,
   checkExecutionEligibility,
 } from "./features/work-item-execution/flow/execution-authorization.js";
 export {

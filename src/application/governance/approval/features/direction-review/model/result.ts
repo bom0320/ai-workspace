@@ -50,6 +50,7 @@ export type DirectionGovernanceResult = z.infer<
 export const directionConfirmationRequestSchema = z
   .object({
     binding: text,
+    workerModeNotice: text.optional(),
     action: directionActionSchema,
     review: directionReviewSchema,
     context: synthesisContextSchema,

@@ -27,11 +27,17 @@ function unique<T>(values: T[]) {
   return new Set(values).size === values.length;
 }
 
+export const codexWorktreeModeNotice =
+  "Codex can inspect and edit the Worktree and run development commands in workspace-write. The sandbox restricts writes and network access, but may expose host files to reading. The Harness checks final changed paths and runs separately approved verification. Scope checks cannot undo side effects.";
+
+export const codexWorktreeModeSchema = z.literal("codex-worktree");
+
 export const executionBoundsSchema = z
   .object({
     readPaths: z.array(exactPath).refine(unique),
     writePaths: z.array(exactPath).refine(unique),
-    // Command IDs represent exact argv, with no interpreter or user-supplied args.
+    workerMode: codexWorktreeModeSchema.optional(),
+    // Harness Verification IDs represent fixed argv. Worker tools use workerMode.
     shellCommands: z.array(z.literal("git diff --check")).refine(unique),
     budget: z
       .object({ maxExecutions: positive, maxTimeoutMs: positive })

@@ -6,6 +6,7 @@ import {
 } from "../../../../records/governance-transaction.js";
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import {
+  codexWorktreeModeNotice,
   executionSystemPolicySchema,
   type ExecutionSystemPolicy,
 } from "../model/execution-system-policy.js";
@@ -17,6 +18,7 @@ type ConfigurationResult =
       binding: string;
       repositoryRoot: string;
       policy: ExecutionSystemPolicy | null;
+      workerModeNotice?: string;
       version: number;
     }
   | { status: "configured"; version: number }
@@ -46,6 +48,9 @@ export function configureExecutionSystemPolicy(
           binding,
           repositoryRoot,
           policy,
+          ...(policy?.workerMode && {
+            workerModeNotice: codexWorktreeModeNotice,
+          }),
           version,
         };
       consumed = true;

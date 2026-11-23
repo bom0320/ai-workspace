@@ -16,7 +16,8 @@ export async function runCodexWorker(
     | "codexProcessDurationMs"
     | "workerOutputProcessingDurationMs"
   >,
-  workerContext?: WorkerContext
+  workerContext?: WorkerContext,
+  governedWorktree = false
 ): Promise<string> {
   const setupStartedAt = performance.now();
   let prompt = [
@@ -71,7 +72,30 @@ export async function runCodexWorker(
     telemetry.workerSetupDurationMs = processCallStartedAt - setupStartedAt;
   const result = await runCommand(
     "codex",
-    ["exec", "--sandbox", "workspace-write", prompt],
+    [
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      ...(governedWorktree
+        ? [
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--strict-config",
+            "--ephemeral",
+            "-c",
+            'approval_policy="never"',
+            "-c",
+            'web_search="disabled"',
+            "-c",
+            "sandbox_workspace_write={network_access=false,exclude_tmpdir_env_var=true,exclude_slash_tmp=true}",
+            "-c",
+            `projects.${JSON.stringify(workspaceRoot)}.trust_level="untrusted"`,
+            "-c",
+            "features={hooks=false,apps=false,plugins=false,browser_use=false,computer_use=false,multi_agent=false,multi_agent_v2=false,memories=false}",
+          ]
+        : []),
+      prompt,
+    ],
     { cwd: workspaceRoot, timeoutMs }
   );
 

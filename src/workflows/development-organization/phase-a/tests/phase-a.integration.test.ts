@@ -1576,10 +1576,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       fastPath = false,
       directoryScope = false,
       execution,
+      codexMode = false,
     }: {
       beforePlannerResult?: () => void;
       fastPath?: boolean;
       directoryScope?: boolean;
+      codexMode?: boolean;
       execution?: NonNullable<PhaseBGraphOptions["planning"]>["execution"];
     } = {}
   ) {
@@ -1590,10 +1592,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     symlinkSync("../a.ts", join(root, "docs", "link.ts"));
     git("add", target, "docs/link.ts", "docs-extra/other.md");
     git("commit", "--quiet", "-m", "Add execution target");
+    const workerMode = codexMode
+      ? { workerMode: "codex-worktree" as const }
+      : {};
     const policyVersion = withDelegation
-      ? configureExecutionPolicy(
-          directoryScope ? scopedPolicy : executionPolicy
-        )
+      ? configureExecutionPolicy({
+          ...(directoryScope ? scopedPolicy : executionPolicy),
+          ...workerMode,
+        })
       : undefined;
     const {
       pending,
@@ -1607,10 +1613,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             directoryScope
               ? {
                   ...delegationDraft,
+                  ...workerMode,
                   readScopes: scopedPolicy.readScopes,
                   writeScopes: scopedPolicy.writeScopes,
                 }
-              : delegationDraft
+              : { ...delegationDraft, ...workerMode }
         : undefined,
       withDelegation,
       fastPath ? target : undefined
@@ -1639,6 +1646,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                       }
                     : delegatedAction(review, policyVersion)
                         .executionDelegation),
+                  ...workerMode,
                   budget: { maxExecutions, maxTimeoutMs: 15_000 },
                 },
               },
@@ -1759,50 +1767,73 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     });
   }
 
-  it.each([
-    {
-      name: "no model transport",
-      readPaths: ["README.md"],
-      expected: "blocked",
-    },
-    {
-      name: "unapproved read",
-      readPaths: ["docs-extra/other.md"],
-      expected: "denied",
-    },
-    {
-      name: "write without read",
-      readPaths: [],
-      expected: "blocked",
-      apiKey: "test-key",
-    },
-  ])(
-    "ends governed execution for $name as $expected without launching or reserving",
-    async ({ readPaths, expected, apiKey }) => {
-      vi.stubEnv("AI_WORKSPACE_GOVERNED_OPENAI_API_KEY", apiKey);
-      const modelRequest = vi
-        .spyOn(globalThis, "fetch")
-        .mockRejectedValue(
-          new Error("A blocked request must not reach the model.")
-        );
+  it("binds Codex Worktree permission to policy and actual Human confirmation", async () => {
+    const { pending } = await pendingDirection(1);
+    const review = pending.directionReview!;
+    const legacyVersion = configureExecutionPolicy();
+    const legacyAction = delegatedAction(review, legacyVersion);
+    const unsupported = {
+      ...legacyAction,
+      executionDelegation: {
+        ...legacyAction.executionDelegation,
+        workerMode: "codex-worktree",
+      },
+    };
+    expect(() => governance.prepareDirectionConfirmation(unsupported)).toThrow(
+      /policy/
+    );
+    const version = configureExecutionPolicy({
+      ...executionPolicy,
+      workerMode: "codex-worktree",
+    });
+    const withoutMode = delegatedAction(review, version);
+    const withMode = {
+      ...withoutMode,
+      executionDelegation: {
+        ...withoutMode.executionDelegation,
+        workerMode: "codex-worktree",
+      },
+    };
+    const narrow = governance.prepareDirectionConfirmation(withoutMode);
+    const broad = governance.prepareDirectionConfirmation(withMode);
+    expect(broad.workerModeNotice).toMatch(/Worktree/);
+    expect(broad.binding).not.toBe(narrow.binding);
+    expect(
+      governance.finalizeDirectionReview(
+        withMode,
+        confirmDirection(narrow) ?? undefined
+      ).status
+    ).toBe("denied");
+    expect(
+      governance.finalizeDirectionReview(
+        withMode,
+        confirmDirection(broad) ?? undefined
+      )
+    ).toMatchObject({
+      status: "approved",
+      executionDelegation: { grant: { workerMode: "codex-worktree" } },
+    });
+  });
+
+  it.each(["legacy", "unapproved-read"] as const)(
+    "denies %s Phase B execution before Worker or reservation",
+    async (mode) => {
       const {
         executionPreparationResult,
+        workerExecutionResult,
         planningResults,
-        decision,
-        workItems,
       } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
-        execution: { workItemId: "first", readPaths, timeoutMs: 5_000 },
-      }).finally(() => vi.unstubAllEnvs());
-      expect(modelRequest).not.toHaveBeenCalled();
-      expect(executionPreparationResult?.status).toBe(expected);
-      if (expected === "blocked")
-        expect(executionPreparationResult?.reason).toMatch(
-          /runtime cannot enforce/
-        );
-      expect(planningResults).toHaveLength(1);
-      const [plan] = planningResults!;
-      expect(plan.result.status).toBe("completed");
-      expect(plan.executionSourceId).toBeDefined();
+        codexMode: mode === "unapproved-read",
+        execution: {
+          workItemId: "first",
+          readPaths:
+            mode === "legacy" ? ["README.md"] : ["docs-extra/other.md"],
+          timeoutMs: 5000,
+        },
+      });
+      expect(executionPreparationResult?.status).toBe("denied");
+      expect(workerExecutionResult).toBeUndefined();
+      expect(planningResults?.[0].executionSourceId).toBeDefined();
       expect(processRuntime.runCommand).not.toHaveBeenCalledWith(
         "codex",
         expect.arrayContaining(["workspace-write"]),
@@ -1817,115 +1848,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           )
         ).toEqual([]);
       });
-      if (plan.result.status !== "completed")
-        throw new Error("Expected a task.");
-      expect(
-        governance.checkExecutionEligibility({
-          approvedDecisionId: decision.id,
-          executionSourceId: plan.executionSourceId,
-          workItem: workItems[0],
-          task: plan.result.task,
-          repositoryPath: root,
-          readPaths: ["README.md"],
-          timeoutMs: 5_000,
-        }).status
-      ).toBe("eligible");
     }
   );
 
-  it.each([
-    "success",
-    "unknown-slot",
-    "model-command",
-    "absolute-target",
-    "relative-target",
-    "symlink",
-    "verification",
-    "worker-timeout",
-  ] as const)("enforces the governed patch boundary for %s", async (mode) => {
-    vi.stubEnv("AI_WORKSPACE_GOVERNED_OPENAI_API_KEY", "test-key");
-    const fetch = vi.fn(async (url: string, request: RequestInit) => {
-      expect(url).toBe("https://api.openai.com/v1/responses");
-      expect(request.redirect).toBe("error");
-      const body = JSON.parse(String(request.body));
-      expect(body.tools).toEqual([]);
-      expect(body.tool_choice).toBe("none");
-      expect(JSON.parse(body.input).files).toEqual([
-        { path: "README.md", content: "Original content\n", writableSlot: 0 },
-      ]);
-      withGovernanceRecords((raw) => {
-        const ledger =
-          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-        const [record] = Object.values(ledger.repositories).flatMap(
-          (entry) => entry.executionReservations ?? []
-        );
-        expect(record.claimedAt).toBe(record.reservedAt);
-      });
-      if (mode === "worker-timeout") {
-        vi.spyOn(performance, "now").mockReturnValue(
-          performance.now() + 10_000
-        );
-      }
-      if (mode === "symlink") {
-        const worktrees = execFileSync(
-          "git",
-          ["-C", root, "worktree", "list", "--porcelain"],
-          { encoding: "utf8" }
-        );
-        const workspace = worktrees
-          .split("\n")
-          .find(
-            (line) =>
-              line.startsWith("worktree ") &&
-              line.includes("ai-workspace-execution-")
-          )!
-          .slice(9);
-        const path = join(workspace, "README.md");
-        filesystem.unlinkSync(path);
-        symlinkSync(join(root, "README.md"), path);
-      }
-      if (mode === "model-command")
-        return Response.json({
-          status: "completed",
-          output: [{ type: "function_call", name: "shell", arguments: "{}" }],
-        });
-      return Response.json({
-        status: "completed",
-        output: [
-          {
-            type: "message",
-            role: "assistant",
-            content: [
-              {
-                type: "output_text",
-                text: JSON.stringify({
-                  edits: [
-                    {
-                      slot: 0,
-                      ...(mode === "absolute-target" && {
-                        path: "/tmp/unapproved",
-                      }),
-                      ...(mode === "relative-target" && {
-                        path: "../unapproved",
-                      }),
-                      content:
-                        mode === "verification"
-                          ? "Update with trailing spaces  \n"
-                          : "Governed update\n",
-                    },
-                    ...(mode === "unknown-slot"
-                      ? [{ slot: 4, content: "Unauthorized" }]
-                      : []),
-                  ],
-                }),
-              },
-            ],
-          },
-        ],
-      });
-    });
-    vi.stubGlobal("fetch", fetch);
-    try {
+  it.each(["success", "scope", "verification", "timeout"] as const)(
+    "executes the explicitly approved Codex Worktree mode and handles %s",
+    async (mode) => {
       const {
         workerExecutionResult: result,
         executionPreparationResult,
@@ -1933,14 +1861,49 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         decision,
         workItems,
       } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
+        codexMode: true,
         execution: {
           workItemId: "first",
           readPaths: ["README.md"],
-          timeoutMs: 5_000,
+          timeoutMs: 5000,
+        },
+        beforePlannerResult: () => {
+          const command = vi.mocked(processRuntime.runCommand);
+          const fallback = command.getMockImplementation()!;
+          command.mockImplementation(async (name, args, options) => {
+            if (name !== "codex" || !args.includes("workspace-write"))
+              return fallback(name, args, options);
+            expect(args).toContain('approval_policy="never"');
+            expect(args).toContain("--ignore-user-config");
+            expect(args.join(" ")).toContain("network_access=false");
+            expect(options.timeoutMs).toBeLessThanOrEqual(5000);
+            withGovernanceRecords((raw) => {
+              const ledger =
+                raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+              const entry = Object.values(ledger.repositories)[0];
+              expect(entry.executionDelegations?.[0].grant.workerMode).toBe(
+                "codex-worktree"
+              );
+              const [record] = entry.executionReservations!;
+              expect(record.claimedAt).toBe(record.reservedAt);
+            });
+            // Stand-in for the Codex process. Git and Harness stages are real.
+            const target =
+              mode === "scope" ? "docs-extra/other.md" : "README.md";
+            writeFileSync(
+              join(options.cwd, target),
+              mode === "verification" ? "Trailing spaces  \n" : "Codex update\n"
+            );
+            return {
+              stdout: "Codex worker output",
+              stderr: "",
+              exitCode: 0,
+              timedOut: mode === "timeout",
+            };
+          });
         },
       });
       expect(executionPreparationResult).toBeUndefined();
-      expect(fetch).toHaveBeenCalledOnce();
       expect(result?.passed, JSON.stringify(result?.failures)).toBe(
         mode === "success"
       );
@@ -1953,20 +1916,23 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             encoding: "utf8",
           }).trim()
         );
-        expect(artifacts).toBeDefined();
-        expect(artifacts!.startsWith(root + "/")).toBe(false);
+        expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
+          "Original content\n"
+        );
+        expect(readFileSync(join(root, "docs-extra", "other.md"), "utf8")).toBe(
+          "Outside scope\n"
+        );
         expect(
           JSON.parse(readFileSync(join(artifacts!, "result.json"), "utf8"))
             .passed
         ).toBe(result?.passed);
-        expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
-          "Original content\n"
-        );
         expect(
-          readFileSync(join(workspace!, "docs-extra", "other.md"), "utf8")
-        ).toBe("Outside scope\n");
+          readFileSync(join(artifacts!, "changes.patch"), "utf8")
+        ).toContain("diff --git");
+        expect(result?.evidence.changedPaths).toEqual([
+          mode === "scope" ? "docs-extra/other.md" : "README.md",
+        ]);
         if (mode === "success" || mode === "verification") {
-          expect(result?.evidence.changedPaths).toEqual(["README.md"]);
           expect(result?.evidence.verification?.passed).toBe(
             mode === "success"
           );
@@ -1976,15 +1942,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             expect.objectContaining({ shell: false })
           );
         } else {
+          expect(result?.evidence.verification).toBeUndefined();
           expect(result?.failures).toEqual(
             expect.arrayContaining([
-              expect.objectContaining({ stage: "worker" }),
+              expect.objectContaining({
+                stage: mode === "scope" ? "scope" : "worker",
+              }),
             ])
           );
-          expect(readFileSync(join(workspace!, "README.md"), "utf8")).toBe(
-            "Original content\n"
-          );
-          expect(result?.evidence.verification).toBeUndefined();
         }
         const [plan] = planningResults!;
         if (plan.result.status !== "completed")
@@ -1997,6 +1962,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             workItem: workItems[0],
             repositoryPath: root,
             readPaths: ["README.md"],
+            workerMode: "codex-worktree",
             timeoutMs: 5000,
           }).status
         ).toBe("denied");
@@ -2012,11 +1978,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           workspace!,
         ]);
       }
-    } finally {
-      vi.unstubAllGlobals();
-      vi.unstubAllEnvs();
     }
-  });
+  );
 
   function postDelegationInput(
     request: { approvedDecisionId: string },

@@ -1,3 +1,4 @@
+import { codexWorktreeModeNotice } from "../../system-policy/model/execution-system-policy.js";
 import { z } from "zod";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -36,6 +37,7 @@ type Result =
       decision: ApprovedDecision;
       snapshot: RepositorySnapshot;
       grant: ExecutionDelegationRequest;
+      workerModeNotice?: string;
     }
   | { status: "approved"; executionDelegation: ExecutionDelegation }
   | { status: "denied"; reason: string };
@@ -85,6 +87,9 @@ export function approveExecutionDelegation(
           decision,
           snapshot,
           grant,
+          ...(grant.workerMode && {
+            workerModeNotice: codexWorktreeModeNotice,
+          }),
         };
 
       consumed = true;

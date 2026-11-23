@@ -20,6 +20,8 @@ export function isExecutionGrantWithinPolicy(
 ): boolean {
   const duration = Date.parse(grant.expiresAt) - issuedAt;
   return (
+    (grant.workerMode === undefined ||
+      grant.workerMode === policy.workerMode) &&
     duration > 0 &&
     duration <= policy.maxDelegationDurationMs &&
     isExecutionScopeContained(

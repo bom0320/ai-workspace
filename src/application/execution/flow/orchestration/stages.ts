@@ -51,19 +51,18 @@ export async function runWorkerStage(
   state: ExecutionState,
   workspaceRoot: string,
   options: TaskExecutionOptions,
-  worker?: (workspace: string) => Promise<string>
+  governedRemaining?: () => number
 ): Promise<boolean> {
   const startedAt = performance.now();
   try {
-    state.evidence.workerOutput = worker
-      ? await worker(workspaceRoot)
-      : await runCodexWorker(
-          task,
-          workspaceRoot,
-          options.workerTimeoutMs,
-          state.telemetry,
-          options.workerContext
-        );
+    state.evidence.workerOutput = await runCodexWorker(
+      task,
+      workspaceRoot,
+      governedRemaining ? governedRemaining() : options.workerTimeoutMs,
+      state.telemetry,
+      options.workerContext,
+      ...(governedRemaining ? ([true] as const) : ([] as const))
+    );
 
     return true;
   } catch (error) {

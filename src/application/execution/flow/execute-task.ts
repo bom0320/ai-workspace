@@ -7,7 +7,6 @@ import {
 import { runCommand } from "@/infrastructure/process/index.js";
 import type { VerificationResult } from "@/services/verification/index.js";
 import { checkGovernedWorkerRuntime } from "../worker/check-governed-worker-runtime.js";
-import { runGovernedWorker } from "../worker/governed-worker.js";
 import type { TaskContract } from "@/contracts/task.js";
 import { createExecutionWorkspace } from "@/infrastructure/git/index.js";
 import {
@@ -41,9 +40,10 @@ export async function executeGovernedTask(input: unknown) {
   const parsed = executionRequestSchema.safeParse(input);
   if (!parsed.success)
     return { status: "denied" as const, reason: "Invalid execution request." };
-  const runtime = checkGovernedWorkerRuntime(parsed.data);
+  const request = { ...parsed.data, workerMode: "codex-worktree" as const };
+  const runtime = checkGovernedWorkerRuntime(request);
   if (runtime.status === "blocked") return runtime;
-  const authorization = authorizeExecutionForRun(parsed.data);
+  const authorization = authorizeExecutionForRun(request);
   if (authorization.status !== "authorized") return authorization;
   const execution = authorization.execution;
   const deadline = performance.now() + execution.request.timeoutMs;
@@ -63,8 +63,6 @@ export async function executeGovernedTask(input: unknown) {
     {
       baseCommit: execution.snapshot.commitSha,
       temporaryRoot: runtime.temporaryRoot,
-      worker: (workspace) =>
-        runGovernedWorker(execution, workspace, runtime.apiKey, remaining),
       verify: async (workspace) => {
         const commands = [];
         for (const command of execution.request.task.verification) {
@@ -103,7 +101,6 @@ export async function executeGovernedTask(input: unknown) {
 type GovernedPipeline = {
   baseCommit: string;
   temporaryRoot: string;
-  worker: (workspace: string) => Promise<string>;
   verify: (workspace: string) => Promise<VerificationResult>;
   remaining: () => number;
 };
@@ -188,7 +185,7 @@ async function executeTaskPipeline(
     state,
     workspaceRoot,
     options,
-    governed?.worker
+    governed?.remaining
   );
 
   if (!workerSucceeded) {

@@ -1,3 +1,4 @@
+import { codexWorktreeModeNotice } from "../../system-policy/model/execution-system-policy.js";
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
 import { StaffingIssuanceValidationError } from "../../proposal-management/flow/validation/staffing-issuance.js";
 import { DirectionReviewValidationError } from "./validation/validate-review-record.js";
@@ -74,6 +75,10 @@ export function prepareDirectionConfirmation(
       context,
       snapshot,
       binding: confirmationBinding(review, action),
+      ...(action.action === "approve" &&
+        action.executionDelegation?.workerMode && {
+          workerModeNotice: codexWorktreeModeNotice,
+        }),
     });
   });
 }

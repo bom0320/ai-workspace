@@ -40,7 +40,9 @@ export function resolveExecutionContext(
   if (
     !policy?.policy ||
     policy.version !== delegation.grant.policyVersion ||
-    delegation.repositoryRoot !== repositoryPath
+    delegation.repositoryRoot !== repositoryPath ||
+    (request.workerMode !== undefined &&
+      request.workerMode !== delegation.grant.workerMode)
   )
     throw new Error("Execution policy or delegation changed.");
 
@@ -79,6 +81,7 @@ export function resolveExecutionContext(
 
   const requestedGrant = {
     readPaths,
+    ...(request.workerMode && { workerMode: request.workerMode }),
     writePaths,
     shellCommands,
     budget: { maxExecutions: 1, maxTimeoutMs: timeoutMs },

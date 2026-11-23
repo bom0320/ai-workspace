@@ -218,7 +218,19 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 **R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { repositoryPath, limits, planner?, selectWorkItemIds } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `executeWorkItemPlanning()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
 
-선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약과 읽기 전용 업무의 실행 방식은 후속 범위다. Phase B는 `executeWorkItem()`으로 승인된 Work Item을 실행한다. Execution Application은 승인 Commit 기반 Worktree와 기존 Codex Worker를 재사용한다. 실행 준비 실패와 실행 결과는 각각 Work Item ID에 연결해 State에 기록한다.
+선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약은 후속 범위다.
+
+**Step 4.3 실행 Routing.** Phase B는 Execution Source에 연결된 Work Item 유형과 TaskContract를 사용한다.
+`workType: "read-only"`이면 작업 목적과 산출물로 수정 경로와 검증 명령이 비어 있는 계약을 구성한다.
+이 계획은 Repository 파일을 읽거나 Planner를 호출하지 않는다. 실행 직전에 Governance는 현재 공동 승인,
+위임 읽기 범위 및 예산, Execution Source와 Snapshot을 검증한다. 허용 경로는 비어 있지 않은 정확한
+tracked regular file 목록이어야 한다. Analysis Context는 64 KiB로 제한한다. 실행은 Phase B 예약을
+한 번 소비하며 Specialist에게 승인 Commit의 파일 내용만 전달한다. Specialist의 임시 cwd, Codex
+read-only sandbox와 도구 비활성화 설정, Snapshot 및 Evidence 검증을 재사용한다.
+유형이 없던 수정 업무는 등록된 TaskContract에 유효한 쓰기 경로가 있을 때 기존 `executeWorkItem()`의
+승인 Commit 기반 Worktree 및 Codex Worker를 사용한다. 쓰기 경로가 없는 미분류 업무는 실행하지 않는다.
+차단·거부, Worker 실행 결과, 읽기 전용 분석 결과는 각각 Work Item ID로 State에서 추적한다.
+하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
 
 ## 4. Phase A → Phase B Handoff Contract
 

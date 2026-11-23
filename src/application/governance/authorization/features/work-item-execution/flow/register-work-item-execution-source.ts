@@ -83,7 +83,7 @@ export function beginWorkItemExecutionSource(
       );
       const approvalBinding = governanceDigest(decision);
       const match = matchWorkItem(entry, proposal, workItem, approvalBinding);
-      if (!match) return;
+      if (!match || match.item.workType === "read-only") return;
       const { binding, item } = match;
       const root = resolveGovernanceRepository(repositoryPath);
       if (root !== snapshot.repositoryRoot) return;
@@ -192,8 +192,12 @@ export function beginValidatedWorkItemExecutionSource(
           )
         )
           return { executionBlockedReason: reason };
-        validateTaskExecutionContract(task, delegation.grant);
-        validateTaskExecutionContract(task, policy);
+        validateTaskExecutionContract(
+          task,
+          delegation.grant,
+          match.item.workType
+        );
+        validateTaskExecutionContract(task, policy, match.item.workType);
         if (Date.now() >= Date.parse(delegation.grant.expiresAt))
           return {
             executionBlockedReason:

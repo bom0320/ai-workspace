@@ -53,3 +53,27 @@ it("requires explicit bounds for verification and supports omitting it", () => {
     validateTaskExecutionContract({ ...task, verification: [] }, withoutShell)
   ).toEqual({ writePaths: task.allowedPaths, shellCommands: [] });
 });
+
+it("accepts an explicit read-only contract without granting writes or commands", () => {
+  const readOnlyTask = { ...task, allowedPaths: [], verification: [] };
+  expect(
+    validateTaskExecutionContract(readOnlyTask, bounds, "read-only")
+  ).toEqual({
+    writePaths: [],
+    shellCommands: [],
+  });
+  expect(() => validateTaskExecutionContract(readOnlyTask, bounds)).toThrow();
+});
+
+it.each([{ allowedPaths: task.allowedPaths }, { verification: [command] }])(
+  "rejects write or shell capability on read-only work %j",
+  (extra) => {
+    expect(() =>
+      validateTaskExecutionContract(
+        { ...task, allowedPaths: [], verification: [], ...extra },
+        bounds,
+        "read-only"
+      )
+    ).toThrow();
+  }
+);

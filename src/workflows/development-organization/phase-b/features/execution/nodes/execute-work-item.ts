@@ -1,4 +1,7 @@
-import { executeWorkItem } from "@/application/execution/index.js";
+import {
+  executeReadOnlyWorkItem,
+  executeWorkItem,
+} from "@/application/execution/index.js";
 import type { PhaseBState } from "../../../state.js";
 
 export type PhaseBExecutionOptions = {
@@ -28,6 +31,8 @@ export function createExecuteWorkItemNode(
     if (
       plan?.result.status !== "completed" ||
       !plan.executionSourceId ||
+      (workItem?.workType !== "read-only" &&
+        !plan.result.task.allowedPaths.length) ||
       plan.executionBlockedReason ||
       approval?.status !== "accepted" ||
       !workItem ||
@@ -51,6 +56,24 @@ export function createExecuteWorkItemNode(
       readPaths,
       timeoutMs,
     };
+    if (workItem.workType === "read-only") {
+      const outcome = await executeReadOnlyWorkItem(request);
+      return outcome.status === "executed"
+        ? {
+            readOnlyExecutionResult: {
+              workItemId: outcome.workItemId,
+              result: outcome.result,
+            },
+          }
+        : {
+            executionPreparationResult: {
+              status: outcome.status,
+              workItemId,
+              reason: outcome.reason,
+            },
+          };
+    }
+
     const outcome = await executeWorkItem(request);
     return outcome.status === "executed"
       ? {

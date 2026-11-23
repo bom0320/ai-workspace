@@ -47,6 +47,7 @@ export async function executeWorkItemPlanning({
       objective: workItem.objective,
       deliverable: workItem.deliverable,
       direction: review.proposal.direction.text,
+      ...(workItem.workType === "read-only" && { readOnly: true as const }),
       ...(executionCeiling && {
         executionCeiling: JSON.stringify(executionCeiling),
       }),

@@ -41,6 +41,7 @@ export function resolveExecutionContext(
     !policy?.policy ||
     policy.version !== delegation.grant.policyVersion ||
     delegation.repositoryRoot !== repositoryPath ||
+    delegation.status !== "active" ||
     (request.workerMode !== undefined &&
       request.workerMode !== delegation.grant.workerMode)
   )
@@ -68,9 +69,20 @@ export function resolveExecutionContext(
     throw new Error("Unverified Work Item, dependencies or TaskContract.");
 
   const { readPaths, timeoutMs, task } = request;
+  const readOnly = workItem.workType === "read-only";
+  if (
+    readOnly &&
+    (request.workerMode !== undefined ||
+      readPaths.length === 0 ||
+      delegation.approvalSource === "post-direction")
+  )
+    throw new Error(
+      "Read-only work requires supplied Context and cannot use a Worker mode."
+    );
   const { writePaths, shellCommands } = validateTaskExecutionContract(
     task,
-    delegation.grant
+    delegation.grant,
+    workItem.workType
   );
   if (
     !(context.goal.constraints ?? []).every((constraint) =>
@@ -106,10 +118,10 @@ export function resolveExecutionContext(
     throw new Error("Execution exceeds the policy or delegation.");
 
   assertRepositoryMatchesSnapshot(snapshot);
-  const files = new Set(
+  const files = new Map(
     listRepositoryFilesAtCommit(repositoryPath, snapshot.commitSha)
       .filter(({ mode }) => mode === "100644" || mode === "100755")
-      .map(({ path }) => path)
+      .map((file) => [file.path, file])
   );
   if (
     ![...new Set([...readPaths, ...writePaths])].every((path) => {
@@ -122,6 +134,15 @@ export function resolveExecutionContext(
     })
   )
     throw new Error("Execution scope must identify tracked regular files.");
+  if (
+    readOnly &&
+    readPaths.reduce(
+      (bytes, path) => bytes + (files.get(path)?.size ?? Infinity),
+      0
+    ) >
+      64 * 1024
+  )
+    throw new Error("Read-only Context exceeds the supported size.");
   if (Date.now() + timeoutMs > Date.parse(delegation.grant.expiresAt))
     throw new Error(
       "Execution delegation expired or remaining time is insufficient."

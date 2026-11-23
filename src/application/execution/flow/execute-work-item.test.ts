@@ -55,8 +55,11 @@ beforeEach(() => {
   });
 });
 
-it("exposes only the approved execution use case at runtime", () => {
-  expect(Object.keys(execution)).toEqual(["executeWorkItem"]);
+it("exposes only approved execution use cases at runtime", () => {
+  expect(Object.keys(execution).sort()).toEqual([
+    "executeReadOnlyWorkItem",
+    "executeWorkItem",
+  ]);
 });
 
 it("rejects invalid input before runtime or authorization", async () => {

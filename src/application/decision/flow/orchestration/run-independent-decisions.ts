@@ -12,6 +12,13 @@ import {
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import { validateDecisionEvidence } from "../validation/validate-evidence.js";
 
+export class DecisionValidationError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "DecisionValidationError";
+  }
+}
+
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;
   assignmentObjective?: string;
@@ -22,7 +29,7 @@ export async function runIndependentDecisions(
   snapshot: RepositorySnapshot,
   goal: GoalSpec,
   inputs: IndependentDecisionInput[],
-  options: CodexSpecialistOptions = {}
+  options: CodexSpecialistOptions & { classifyValidationErrors?: boolean } = {}
 ): Promise<AgentDecision[]> {
   const specialistIds = new Set<string>();
   for (const { specialist } of inputs) {
@@ -32,6 +39,10 @@ export async function runIndependentDecisions(
     specialistIds.add(specialist.id);
   }
 
+  const validationError = (error: unknown) =>
+    options.classifyValidationErrors
+      ? new DecisionValidationError(error)
+      : error;
   const decisions: AgentDecision[] = [];
   for (const input of inputs) {
     const context: SpecialistContext = {
@@ -42,14 +53,22 @@ export async function runIndependentDecisions(
       repositoryCommitSha: snapshot.commitSha,
       files: input.files,
     };
-    assertRepositoryMatchesSnapshot(snapshot);
+    try {
+      assertRepositoryMatchesSnapshot(snapshot);
+    } catch (error) {
+      throw validationError(error);
+    }
     const decision = await runCodexSpecialist(
       input.specialist,
       context,
       options
     );
-    assertRepositoryMatchesSnapshot(snapshot);
-    validateDecisionEvidence(context, decision);
+    try {
+      assertRepositoryMatchesSnapshot(snapshot);
+      validateDecisionEvidence(context, decision);
+    } catch (error) {
+      throw validationError(error);
+    }
     decisions.push(decision);
   }
   return decisions;

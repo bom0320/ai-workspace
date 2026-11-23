@@ -40,6 +40,38 @@ export async function planTask({
   const goalId = `goal-${randomUUID()}`;
   const taskId = `task-${randomUUID()}`;
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
+  if (detail?.readOnly) {
+    const task = buildTaskContract({
+      draft: {
+        objective: detail.objective,
+        targetRepository: goal.targetRepository,
+        allowedPaths: [],
+        forbiddenPaths: [],
+        constraints: [],
+        acceptanceCriteria: [detail.deliverable],
+        verification: [],
+      },
+      goal,
+      goalId,
+      taskId,
+    });
+    return {
+      status: "completed",
+      task,
+      state: {
+        goal,
+        detail,
+        repository: {
+          repositoryRoot,
+          repositoryName: goal.targetRepository,
+          fileTree: [],
+          packageScripts: {},
+        },
+        inspectedFiles: [],
+      },
+      rounds: 0,
+    };
+  }
   const repository = inspectRepository(repositoryRoot);
   const initialState: PlanningState = {
     goal,

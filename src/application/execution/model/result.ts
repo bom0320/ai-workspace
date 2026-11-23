@@ -1,3 +1,5 @@
+import type { AgentDecision } from "@/application/decision/index.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import type { ExecutionEvidence } from "@/services/evidence/index.js";
 import type { ScopeCheckResult } from "@/services/scope/index.js";
 
@@ -48,3 +50,11 @@ export type ExecutionOutcome =
       workItemId?: string;
       reason: string;
     };
+
+export type ReadOnlyExecutionResult =
+  | { passed: true; decision: AgentDecision; snapshot: RepositorySnapshot }
+  | { passed: false; failure: "execution" | "validation"; reason: string };
+
+export type ReadOnlyExecutionOutcome =
+  | { status: "executed"; workItemId: string; result: ReadOnlyExecutionResult }
+  | Exclude<ExecutionOutcome, { status: "executed" }>;

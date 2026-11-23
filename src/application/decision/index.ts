@@ -5,6 +5,7 @@ export {
 } from "./flow/run-decision.js";
 export {
   runIndependentDecisions,
+  DecisionValidationError,
   type IndependentDecisionInput,
 } from "./flow/orchestration/run-independent-decisions.js";
 export type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
@@ -24,3 +25,4 @@ export {
   assertRepositoryMatchesSnapshot,
 } from "./flow/context/repository-snapshot.js";
 export { agentDecisionSchema } from "./protocol/decision.js";
+export { loadSnapshotFiles } from "./flow/context/load-snapshot-files.js";

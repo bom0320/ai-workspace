@@ -1,4 +1,5 @@
 export {
+  assertGovernedGitConfiguration,
   createExecutionWorkspace,
   removeExecutionWorkspace,
 } from "./workspace/execution-workspace.js";

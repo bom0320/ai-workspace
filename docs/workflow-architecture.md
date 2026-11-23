@@ -244,7 +244,9 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 즉시 실행용 `authorizeExecutionForRun(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `authorized`와 검증된 실행 입력을 반환한다. 성공 상태는 실행 권한의 사용 확정을 뜻한다. 검증된 Runtime이 확보되면 Worker 시작 직전에 이 API를 호출하고, 반환된 기준 commit과 권한 범위를 사용한다. 과거 예약과 Digest는 변경 없이 보존하며, 미사용 예약도 예산과 동일 Work Item 중복 제한에 포함한다. 과거 Permit을 소비하는 분리 API는 제거되었다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
-**현재 Step 4 실행 경계:** Phase B의 `planning.execution` 옵션은 실행할 Work Item ID와 읽기 경로, 시간 제한을 명시한다. 계획 또는 출처 등록 실패 시 실행 준비 노드로 진입하지 않는다. 실행 준비 판정은 `executionPreparationResult`에 기록한다. Governance가 실행 요청과 예약 가능 여부를 읽기 전용으로 검증한다. 현재 Codex `workspace-write`와 Shell 기반 검증은 승인된 경로 및 명령만 허용하는 실행 환경이 아니므로 적격 요청도 `blocked`로 종료한다. 이 경로는 Reservation이나 Claim을 생성하지 않는다. 전체 commit ID를 지정한 Worktree 생성은 실제 기준 commit을 검증하고 외부 의존성을 연결하지 않는다. 이 Worktree 기능만으로 Worker 격리가 성립하지 않는다.
+**현재 Step 4 실행 경계:** Phase B의 `planning.execution`은 실행할 Work Item ID, 읽기 경로, 시간 제한을 지정한다. 읽기 전용 Eligibility 이후 Execution Application은 런타임 지원을 검사하고, 지원하는 경우에만 `authorizeExecutionForRun()`을 호출한다. 저장된 Permit을 입력받는 Worker 진입점은 제공하지 않는다. Phase B는 준비 판정과 실제 `workerExecutionResult`를 구분한다.
+
+`AI_WORKSPACE_GOVERNED_OPENAI_API_KEY`를 명시적으로 설정하면 승인된 읽기 파일의 Snapshot 내용과 작업 지시가 OpenAI Responses API로 전송된다. 모델 도구를 제공하지 않으며, 반환된 교체 텍스트는 승인된 쓰기·읽기 경로의 교집합에 해당하는 파일 번호로만 적용한다. 이 경로는 기존 UTF-8 파일 수정만 지원한다. 외부 Git 드라이버·훅·조건부 설정은 거부하며, 승인 Commit에 고정된 Worktree에는 외부 의존성을 연결하지 않는다. Harness는 허가된 `git diff --check`만 고정 argv로 실행한다. 초기 작업 공간 준비·모델 호출·교체·검증은 공통 시간 한도 및 위임 만료 시각을 사용하며, 실패 후 Evidence와 Artifact 보존은 Repository 외부의 임시 디렉터리에서 별도로 수행한다. 설정이 없거나 지원하지 않는 권한 조합은 예약 없이 차단한다.
 
 ## 5. Graph State & Output Ownership
 

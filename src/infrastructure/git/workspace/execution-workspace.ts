@@ -29,9 +29,51 @@ function linkDependencies(repositoryRoot: string, workspacePath: string): void {
   }
 }
 
+export function assertGovernedGitConfiguration(
+  repositoryRoot: string,
+  timeoutMs: number
+): void {
+  const keys = execFileSync(
+    "git",
+    ["config", "--null", "--name-only", "--list"],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+      timeout: timeoutMs,
+    }
+  ).split("\0");
+  if (
+    keys.some((key) =>
+      /^(?:include(?:if)?[.]|filter[.]|diff[.]external$|diff[.].*[.](?:command|textconv)$|core[.](?:fsmonitor|hookspath)$)/i.test(
+        key
+      )
+    )
+  )
+    throw new Error("Git configuration is unsupported for governed execution.");
+  const hooks = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    stdio: "pipe",
+    timeout: timeoutMs,
+  }).trim();
+  try {
+    if (
+      readdirSync(resolve(repositoryRoot, hooks)).some(
+        (name) => !name.endsWith(".sample")
+      )
+    )
+      throw new Error("Git hooks are unsupported for governed execution.");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT"))
+      throw error;
+  }
+}
+
 export function createExecutionWorkspace(
   repositoryRoot: string,
-  baseCommit?: string
+  baseCommit?: string,
+  timeoutMs?: number
 ): string {
   if (
     baseCommit !== undefined &&
@@ -39,6 +81,16 @@ export function createExecutionWorkspace(
   )
     throw new Error("Execution Workspace requires a full commit ID.");
 
+  const deadline =
+    timeoutMs === undefined ? undefined : performance.now() + timeoutMs;
+  const remaining = () => {
+    if (deadline === undefined) return;
+    const ms = Math.floor(deadline - performance.now());
+    if (ms < 1) throw new Error("Governed workspace setup timed out.");
+    return ms;
+  };
+  if (baseCommit && timeoutMs !== undefined)
+    assertGovernedGitConfiguration(repositoryRoot, timeoutMs);
   const workspacePath = join(
     tmpdir(),
     `ai-workspace-execution-${randomUUID()}`
@@ -50,13 +102,19 @@ export function createExecutionWorkspace(
       [
         "-C",
         repositoryRoot,
+        ...(baseCommit ? ["-c", "core.hooksPath=/dev/null"] : []),
         "worktree",
         "add",
         "--detach",
         workspacePath,
         baseCommit ?? "HEAD",
       ],
-      { encoding: "utf8", stdio: "pipe" }
+      {
+        encoding: "utf8",
+        stdio: "pipe",
+        timeout: remaining(),
+        killSignal: "SIGKILL",
+      }
     );
   } catch (error) {
     rmSync(workspacePath, { force: true, recursive: true });
@@ -88,6 +146,8 @@ export function createExecutionWorkspace(
         {
           encoding: "utf8",
           stdio: "pipe",
+          timeout: remaining(),
+          killSignal: "SIGKILL",
         }
       ).trim();
       if (actual !== baseCommit)

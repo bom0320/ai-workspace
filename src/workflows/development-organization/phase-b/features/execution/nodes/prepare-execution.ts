@@ -1,4 +1,4 @@
-import { checkGovernedWorkerRuntime } from "@/application/execution/index.js";
+import { executeGovernedTask } from "@/application/execution/index.js";
 import { checkExecutionEligibility } from "@/application/governance/index.js";
 import type { PhaseBState } from "../../../state.js";
 
@@ -13,7 +13,7 @@ export function createPrepareExecutionNode(
   options: PhaseBExecutionOptions | undefined
 ) {
   const execution = options && structuredClone(options);
-  return (state: PhaseBState): Partial<PhaseBState> => {
+  return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
     if (!repositoryPath || !execution) return {};
 
     const { workItemId, readPaths, timeoutMs } = execution;
@@ -43,7 +43,7 @@ export function createPrepareExecutionNode(
         },
       };
 
-    const verdict = checkExecutionEligibility({
+    const request = {
       approvedDecisionId: approval.handoff.decision.id,
       executionSourceId: plan.executionSourceId,
       workItem,
@@ -51,15 +51,14 @@ export function createPrepareExecutionNode(
       repositoryPath,
       readPaths,
       timeoutMs,
-    });
+    };
+    const verdict = checkExecutionEligibility(request);
     if (verdict.status !== "eligible")
       return { executionPreparationResult: { workItemId, ...verdict } };
 
-    return {
-      executionPreparationResult: {
-        workItemId,
-        ...checkGovernedWorkerRuntime(),
-      },
-    };
+    const outcome = await executeGovernedTask(request);
+    return outcome.status === "executed"
+      ? { workerExecutionResult: outcome.result }
+      : { executionPreparationResult: { workItemId, ...outcome } };
   };
 }

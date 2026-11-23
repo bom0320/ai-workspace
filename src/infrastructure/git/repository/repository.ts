@@ -13,7 +13,8 @@ export function getRepositoryHead(repositoryRoot: string): string {
 export function readRepositoryFileAtCommit(
   repositoryRoot: string,
   commitSha: string,
-  path: string
+  path: string,
+  timeoutMs?: number
 ): string {
   let content: Buffer;
   try {
@@ -23,6 +24,8 @@ export function readRepositoryFileAtCommit(
       {
         cwd: repositoryRoot,
         stdio: "pipe",
+        timeout: timeoutMs,
+        killSignal: "SIGKILL",
       }
     );
   } catch (cause) {

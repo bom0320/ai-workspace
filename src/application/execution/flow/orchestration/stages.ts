@@ -1,6 +1,9 @@
 import type { TaskContract } from "@/contracts/task.js";
 import { checkScope } from "@/services/scope/index.js";
-import { runVerification } from "@/services/verification/index.js";
+import {
+  runVerification,
+  type VerificationResult,
+} from "@/services/verification/index.js";
 import { collectChangedPaths } from "@/services/evidence/index.js";
 
 import { runCodexWorker } from "../../worker/codex-worker.js";
@@ -47,17 +50,20 @@ export async function runWorkerStage(
   task: TaskContract,
   state: ExecutionState,
   workspaceRoot: string,
-  options: TaskExecutionOptions
+  options: TaskExecutionOptions,
+  worker?: (workspace: string) => Promise<string>
 ): Promise<boolean> {
   const startedAt = performance.now();
   try {
-    state.evidence.workerOutput = await runCodexWorker(
-      task,
-      workspaceRoot,
-      options.workerTimeoutMs,
-      state.telemetry,
-      options.workerContext
-    );
+    state.evidence.workerOutput = worker
+      ? await worker(workspaceRoot)
+      : await runCodexWorker(
+          task,
+          workspaceRoot,
+          options.workerTimeoutMs,
+          state.telemetry,
+          options.workerContext
+        );
 
     return true;
   } catch (error) {
@@ -109,15 +115,18 @@ export async function runVerificationStage(
   task: TaskContract,
   state: ExecutionState,
   workspaceRoot: string,
-  options: TaskExecutionOptions
+  options: TaskExecutionOptions,
+  verify?: (workspace: string) => Promise<VerificationResult>
 ): Promise<void> {
   const startedAt = performance.now();
   try {
-    state.evidence.verification = await runVerification(
-      task.verification,
-      workspaceRoot,
-      options.verificationTimeoutMs
-    );
+    state.evidence.verification = verify
+      ? await verify(workspaceRoot)
+      : await runVerification(
+          task.verification,
+          workspaceRoot,
+          options.verificationTimeoutMs
+        );
   } catch (error) {
     addExecutionFailure(state, "verification", error);
     return;

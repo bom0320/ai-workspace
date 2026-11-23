@@ -30,7 +30,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -84,8 +84,17 @@ vi.mock("node:fs", async (original) => {
     closeSync: (fd: number) => {
       if (fd !== 999) actual.closeSync(fd);
     },
-    writeSync: (fd: number, text: string) => {
-      if (fd !== 999) throw new Error("Unexpected terminal descriptor");
+    writeSync: (
+      fd: number,
+      text: string | Buffer,
+      offset?: number,
+      length?: number,
+      position?: number
+    ) => {
+      if (fd !== 999 && Buffer.isBuffer(text))
+        return actual.writeSync(fd, text, offset, length, position);
+      if (fd !== 999 || typeof text !== "string")
+        throw new Error("Unexpected terminal descriptor");
       const token = /Type Approve ([a-f0-9-]+)/.exec(text)![1];
       terminal.line = `Approve ${token}\n`;
       terminal.offset = 0;
@@ -837,9 +846,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     mode: "success" | "decision" | "comparison" = "success",
     synthesisDirection?: string
   ) {
+    const runRealCommand = processRuntime.runCommand;
     return vi
       .spyOn(processRuntime, "runCommand")
-      .mockImplementation(async (_name, args) => {
+      .mockImplementation(async (name, args, options) => {
+        if (name === "git") return runRealCommand(name, args, options);
         const prompt = args.at(-1)!;
         if (prompt.includes("SynthesisContext:\n")) {
           const context = JSON.parse(prompt.split("SynthesisContext:\n")[1]);
@@ -1675,6 +1686,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const handoff = approved.phaseACompletion;
     let planningResults;
     let executionPreparationResult;
+    let workerExecutionResult;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1684,6 +1696,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(state.handoffResult?.status).toBe("accepted");
       planningResults = state.planningResults;
       executionPreparationResult = state.executionPreparationResult;
+      workerExecutionResult = state.workerExecutionResult;
     } else {
       const decomposition = await runWorkDecomposition(
         { approvedDecisionId: decision.id },
@@ -1713,7 +1726,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
       }
     }
-    return { planningResults, decision, workItems, executionPreparationResult };
+    return {
+      planningResults,
+      decision,
+      workItems,
+      executionPreparationResult,
+      workerExecutionResult,
+    };
   }
 
   async function plannedExecutions(
@@ -1792,6 +1811,186 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ).toBe("eligible");
     }
   );
+
+  it.each([
+    "success",
+    "unknown-slot",
+    "model-command",
+    "absolute-target",
+    "symlink",
+    "verification",
+    "worker-timeout",
+  ] as const)("enforces the governed patch boundary for %s", async (mode) => {
+    vi.stubEnv("AI_WORKSPACE_GOVERNED_OPENAI_API_KEY", "test-key");
+    const fetch = vi.fn(async (url: string, request: RequestInit) => {
+      expect(url).toBe("https://api.openai.com/v1/responses");
+      const body = JSON.parse(String(request.body));
+      expect(body.tools).toEqual([]);
+      expect(body.tool_choice).toBe("none");
+      expect(JSON.parse(body.input).files).toEqual([
+        { path: "README.md", content: "Original content\n", writableSlot: 0 },
+      ]);
+      withGovernanceRecords((raw) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        const [record] = Object.values(ledger.repositories).flatMap(
+          (entry) => entry.executionReservations ?? []
+        );
+        expect(record.claimedAt).toBe(record.reservedAt);
+      });
+      if (mode === "worker-timeout") {
+        vi.spyOn(performance, "now").mockReturnValue(
+          performance.now() + 10_000
+        );
+      }
+      if (mode === "symlink") {
+        const worktrees = execFileSync(
+          "git",
+          ["-C", root, "worktree", "list", "--porcelain"],
+          { encoding: "utf8" }
+        );
+        const workspace = worktrees
+          .split("\n")
+          .find(
+            (line) =>
+              line.startsWith("worktree ") &&
+              line.includes("ai-workspace-execution-")
+          )!
+          .slice(9);
+        const path = join(workspace, "README.md");
+        filesystem.unlinkSync(path);
+        symlinkSync(join(root, "README.md"), path);
+      }
+      if (mode === "model-command")
+        return Response.json({
+          status: "completed",
+          output: [{ type: "function_call", name: "shell", arguments: "{}" }],
+        });
+      return Response.json({
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: JSON.stringify({
+                  edits: [
+                    {
+                      slot: 0,
+                      ...(mode === "absolute-target" && {
+                        path: "/tmp/unapproved",
+                      }),
+                      content:
+                        mode === "verification"
+                          ? "Update with trailing spaces  \n"
+                          : "Governed update\n",
+                    },
+                    ...(mode === "unknown-slot"
+                      ? [{ slot: 4, content: "Unauthorized" }]
+                      : []),
+                  ],
+                }),
+              },
+            ],
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const {
+        workerExecutionResult: result,
+        executionPreparationResult,
+        planningResults,
+        decision,
+        workItems,
+      } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
+        execution: {
+          workItemId: "first",
+          readPaths: ["README.md"],
+          timeoutMs: 5_000,
+        },
+      });
+      expect(executionPreparationResult).toBeUndefined();
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(result?.passed, JSON.stringify(result?.failures)).toBe(
+        mode === "success"
+      );
+      const workspace = result?.workspace?.path;
+      const artifacts = result?.artifacts?.directory;
+      expect(workspace).toBeDefined();
+      try {
+        expect(result?.artifacts?.baseCommit).toBe(
+          execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
+            encoding: "utf8",
+          }).trim()
+        );
+        expect(artifacts).toBeDefined();
+        expect(artifacts!.startsWith(root + "/")).toBe(false);
+        expect(
+          JSON.parse(readFileSync(join(artifacts!, "result.json"), "utf8"))
+            .passed
+        ).toBe(result?.passed);
+        expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
+          "Original content\n"
+        );
+        expect(
+          readFileSync(join(workspace!, "docs-extra", "other.md"), "utf8")
+        ).toBe("Outside scope\n");
+        if (mode === "success" || mode === "verification") {
+          expect(result?.evidence.changedPaths).toEqual(["README.md"]);
+          expect(result?.evidence.verification?.passed).toBe(
+            mode === "success"
+          );
+          expect(processRuntime.runCommand).toHaveBeenCalledWith(
+            "git",
+            ["diff", "--check", "--no-ext-diff", "--no-textconv"],
+            expect.objectContaining({ shell: false })
+          );
+        } else {
+          expect(result?.failures).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ stage: "worker" }),
+            ])
+          );
+          expect(readFileSync(join(workspace!, "README.md"), "utf8")).toBe(
+            "Original content\n"
+          );
+          expect(result?.evidence.verification).toBeUndefined();
+        }
+        const [plan] = planningResults!;
+        if (plan.result.status !== "completed")
+          throw new Error("Expected a task.");
+        expect(
+          governance.authorizeExecutionForRun({
+            approvedDecisionId: decision.id,
+            executionSourceId: plan.executionSourceId,
+            task: plan.result.task,
+            workItem: workItems[0],
+            repositoryPath: root,
+            readPaths: ["README.md"],
+            timeoutMs: 5000,
+          }).status
+        ).toBe("denied");
+      } finally {
+        if (artifacts)
+          rmSync(dirname(artifacts), { recursive: true, force: true });
+        execFileSync("git", [
+          "-C",
+          root,
+          "worktree",
+          "remove",
+          "--force",
+          workspace!,
+        ]);
+      }
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
 
   function postDelegationInput(
     request: { approvedDecisionId: string },

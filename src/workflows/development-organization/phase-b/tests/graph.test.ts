@@ -15,6 +15,11 @@ import {
   type PhaseBHandoff,
 } from "../index.js";
 
+vi.mock("@/application/execution/index.js", () => ({
+  executeGovernedTask: vi
+    .fn()
+    .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
+}));
 vi.mock("@/application/governance/index.js", async () => ({
   approvedDecisionSchema: (
     await import("@/application/governance/approval/features/direction-review/model/result.js")

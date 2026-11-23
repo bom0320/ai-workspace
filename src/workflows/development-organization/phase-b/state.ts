@@ -1,3 +1,4 @@
+import type { ExecutionResult } from "@/application/execution/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import type { PlanningResult } from "@/application/planning/index.js";
@@ -28,6 +29,7 @@ export const phaseBState = new StateSchema({
     })
     .strict()
     .optional(),
+  workerExecutionResult: z.custom<ExecutionResult>().optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z
     .array(

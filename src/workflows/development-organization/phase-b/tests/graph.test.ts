@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { PlanningResult } from "@/application/planning/index.js";
 import {
+  checkExecutionEligibility,
   getApprovedDecision,
   verifyExecutionHandoff,
 } from "@/application/governance/index.js";
@@ -22,6 +23,7 @@ vi.mock("@/application/governance/index.js", async () => ({
     await import("@/application/governance/approval/features/execution-delegation/model/execution-delegation.js")
   ).executionDelegationSchema,
   getApprovedDecision: vi.fn(),
+  checkExecutionEligibility: vi.fn(),
   verifyExecutionHandoff: vi.fn(),
 }));
 vi.mock(
@@ -421,6 +423,7 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
     agent,
     planning: {
       ...planningOptions,
+      execution: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
       selectWorkItemIds: () => [api.id, client.id, docs.id],
     },
   }).invoke(input);
@@ -433,6 +436,8 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
     },
     { workItemId: client.id, result: failed },
   ]);
+  expect(checkExecutionEligibility).not.toHaveBeenCalled();
+  expect(result.executionPreparationResult).toBeUndefined();
 });
 
 it("keeps earlier sources and stops at the first blocked completed plan", async () => {
@@ -450,6 +455,7 @@ it("keeps earlier sources and stops at the first blocked completed plan", async 
     agent: async () => ({ type: "propose", workItems }),
     planning: {
       ...planningOptions,
+      execution: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
       selectWorkItemIds: (items) => items.map(({ id }) => id),
     },
   }).invoke(input);
@@ -469,7 +475,50 @@ it("keeps earlier sources and stops at the first blocked completed plan", async 
       executionBlockedReason: "Unverified source.",
     },
   ]);
+  expect(checkExecutionEligibility).not.toHaveBeenCalled();
+  expect(result.executionPreparationResult).toBeUndefined();
 });
+
+it.each([
+  { workItemId: "docs", eligible: true },
+  { workItemId: "missing", eligible: false },
+  { workItemId: "client", eligible: false },
+])(
+  "prepares only the explicit Work Item $workItemId",
+  async ({ workItemId, eligible }) => {
+    const items = [api, client, docs];
+    vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
+      completedPlan(phaseB.workItem.id)
+    );
+    vi.mocked(checkExecutionEligibility).mockReturnValue({
+      status: "eligible",
+    });
+    const result = await createPhaseBGraph({
+      agent: async () => ({ type: "propose", workItems: items }),
+      planning: {
+        ...planningOptions,
+        execution: { workItemId, readPaths: [], timeoutMs: 1000 },
+        selectWorkItemIds: () => items.map(({ id }) => id),
+      },
+    }).invoke(input);
+
+    expect(
+      result.planningResults?.map((plan) => plan.executionSourceId)
+    ).toEqual(items.map((item) => `source-${item.id}`));
+    expect(result.executionPreparationResult).toMatchObject({
+      workItemId,
+      status: "blocked",
+    });
+    if (eligible)
+      expect(checkExecutionEligibility).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          workItem: docs,
+          executionSourceId: "source-docs",
+        })
+      );
+    else expect(checkExecutionEligibility).not.toHaveBeenCalled();
+  }
+);
 
 it.each([
   { type: "escalate", reason: "Need clarification", questions: ["Which API?"] },

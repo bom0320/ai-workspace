@@ -20,9 +20,10 @@ export const phaseBState = new StateSchema({
     ])
     .optional(),
   workDecompositionResult: workDecompositionResultSchema.optional(),
-  executionResult: z
+  executionPreparationResult: z
     .object({
       status: z.enum(["blocked", "denied", "approval-required"]),
+      workItemId: z.string(),
       reason: z.string().min(1),
     })
     .strict()

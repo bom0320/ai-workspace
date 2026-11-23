@@ -1,7 +1,9 @@
-import { prepareGovernedExecution } from "@/application/execution/index.js";
+import { checkGovernedWorkerRuntime } from "@/application/execution/index.js";
+import { checkExecutionEligibility } from "@/application/governance/index.js";
 import type { PhaseBState } from "../../../state.js";
 
 export type PhaseBExecutionOptions = {
+  workItemId: string;
   readPaths: string[];
   timeoutMs: number;
 };
@@ -14,15 +16,17 @@ export function createPrepareExecutionNode(
   return (state: PhaseBState): Partial<PhaseBState> => {
     if (!repositoryPath || !execution) return {};
 
-    const [plan] = state.planningResults ?? [];
+    const { workItemId, readPaths, timeoutMs } = execution;
+    const plan = state.planningResults?.find(
+      (entry) => entry.workItemId === workItemId
+    );
     const proposal = state.workDecompositionResult;
     const approval = state.handoffResult;
     const workItem =
       proposal?.status === "proposed"
-        ? proposal.workItems.find(({ id }) => id === plan?.workItemId)
+        ? proposal.workItems.find(({ id }) => id === workItemId)
         : undefined;
     if (
-      state.planningResults?.length !== 1 ||
       plan?.result.status !== "completed" ||
       !plan.executionSourceId ||
       plan.executionBlockedReason ||
@@ -31,23 +35,31 @@ export function createPrepareExecutionNode(
       workItem.dependsOn.length
     )
       return {
-        executionResult: {
+        executionPreparationResult: {
           status: "blocked",
+          workItemId,
           reason:
-            "Execution requires one ready Work Item without dependencies.",
+            "The selected Work Item must be ready and have no dependencies.",
         },
       };
 
+    const verdict = checkExecutionEligibility({
+      approvedDecisionId: approval.handoff.decision.id,
+      executionSourceId: plan.executionSourceId,
+      workItem,
+      task: plan.result.task,
+      repositoryPath,
+      readPaths,
+      timeoutMs,
+    });
+    if (verdict.status !== "eligible")
+      return { executionPreparationResult: { workItemId, ...verdict } };
+
     return {
-      executionResult: prepareGovernedExecution({
-        approvedDecisionId: approval.handoff.decision.id,
-        executionSourceId: plan.executionSourceId,
-        workItem,
-        task: plan.result.task,
-        repositoryPath,
-        readPaths: execution.readPaths,
-        timeoutMs: execution.timeoutMs,
-      }),
+      executionPreparationResult: {
+        workItemId,
+        ...checkGovernedWorkerRuntime(),
+      },
     };
   };
 }

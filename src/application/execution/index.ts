@@ -7,4 +7,4 @@ export type {
   ExecutionResult,
   ExecutionTelemetry,
 } from "./model/result.js";
-export { prepareGovernedExecution } from "./flow/prepare-governed-execution.js";
+export { checkGovernedWorkerRuntime } from "./worker/check-governed-worker-runtime.js";

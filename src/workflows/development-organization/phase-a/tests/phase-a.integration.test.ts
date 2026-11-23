@@ -1674,7 +1674,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
     const handoff = approved.phaseACompletion;
     let planningResults;
-    let executionResult;
+    let executionPreparationResult;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1683,7 +1683,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       });
       expect(state.handoffResult?.status).toBe("accepted");
       planningResults = state.planningResults;
-      executionResult = state.executionResult;
+      executionPreparationResult = state.executionPreparationResult;
     } else {
       const decomposition = await runWorkDecomposition(
         { approvedDecisionId: decision.id },
@@ -1713,7 +1713,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
       }
     }
-    return { planningResults, decision, workItems, executionResult };
+    return { planningResults, decision, workItems, executionPreparationResult };
   }
 
   async function plannedExecutions(
@@ -1746,13 +1746,19 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   ])(
     "ends governed execution as $expected without launching or reserving",
     async ({ readPaths, expected }) => {
-      const { executionResult, planningResults, decision, workItems } =
-        await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
-          execution: { readPaths, timeoutMs: 5_000 },
-        });
-      expect(executionResult?.status).toBe(expected);
+      const {
+        executionPreparationResult,
+        planningResults,
+        decision,
+        workItems,
+      } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
+        execution: { workItemId: "first", readPaths, timeoutMs: 5_000 },
+      });
+      expect(executionPreparationResult?.status).toBe(expected);
       if (expected === "blocked")
-        expect(executionResult?.reason).toMatch(/runtime cannot enforce/);
+        expect(executionPreparationResult?.reason).toMatch(
+          /runtime cannot enforce/
+        );
       expect(planningResults).toHaveLength(1);
       const [plan] = planningResults!;
       expect(plan.result.status).toBe("completed");

@@ -7,7 +7,7 @@ import {
 } from "./features/planning/nodes/select-planning-work-items.js";
 import type { executeWorkItemPlanning } from "./features/planning/execution/execute-work-item-planning.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
-import { phaseBInput, phaseBState, type PhaseBState } from "./state.js";
+import { phaseBInput, phaseBState } from "./state.js";
 
 import {
   createPrepareExecutionNode,
@@ -26,15 +26,6 @@ export type PhaseBGraphOptions = Omit<
     execution?: PhaseBExecutionOptions;
   };
 };
-
-function routeAfterPlanning(state: PhaseBState) {
-  const latest = state.planningResults?.at(-1);
-  return state.pendingPlanningIds?.length &&
-    (!latest ||
-      (latest.result.status === "completed" && latest.executionSourceId))
-    ? "plan-work-item"
-    : END;
-}
 
 export function createPhaseBGraph({
   planning,
@@ -71,15 +62,23 @@ export function createPhaseBGraph({
         : END,
     ["select-planning-work-items", END]
   );
-  graph.addConditionalEdges("select-planning-work-items", routeAfterPlanning, [
-    "plan-work-item",
-    END,
-  ]);
+  graph.addConditionalEdges(
+    "select-planning-work-items",
+    (state) => (state.pendingPlanningIds?.length ? "plan-work-item" : END),
+    ["plan-work-item", END]
+  );
   graph.addConditionalEdges(
     "plan-work-item",
     (state) => {
-      const next = routeAfterPlanning(state);
-      return next === END && execution ? "prepare-execution" : next;
+      const latest = state.planningResults?.at(-1);
+      if (
+        latest?.result.status !== "completed" ||
+        !latest.executionSourceId ||
+        latest.executionBlockedReason
+      )
+        return END;
+      if (state.pendingPlanningIds?.length) return "plan-work-item";
+      return execution ? "prepare-execution" : END;
     },
     ["plan-work-item", "prepare-execution", END]
   );

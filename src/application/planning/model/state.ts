@@ -17,7 +17,6 @@ export const detailedPlanningInputSchema = z
     objective: planningText,
     deliverable: planningText,
     direction: planningText,
-    readOnly: z.literal(true).optional(),
     executionCeiling: planningText.optional(),
   })
   .strict();

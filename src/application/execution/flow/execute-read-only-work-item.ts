@@ -6,16 +6,16 @@ import {
 } from "@/application/decision/index.js";
 import {
   authorizeExecutionForRun,
-  executionRequestSchema,
+  readOnlyExecutionRequestSchema,
 } from "@/application/governance/index.js";
 import type { ReadOnlyExecutionOutcome } from "../model/result.js";
-import { checkGovernedWorkerRuntime } from "../worker/check-governed-worker-runtime.js";
+import { checkReadOnlyRuntime } from "../worker/check-execution-runtime.js";
 
 export async function executeReadOnlyWorkItem(
   input: unknown
 ): Promise<ReadOnlyExecutionOutcome> {
-  const parsed = executionRequestSchema.safeParse(input);
-  if (!parsed.success || parsed.data.workItem.workType !== "read-only")
+  const parsed = readOnlyExecutionRequestSchema.safeParse(input);
+  if (!parsed.success)
     return {
       status: "denied",
       reason: "An explicit read-only Work Item is required.",
@@ -23,14 +23,21 @@ export async function executeReadOnlyWorkItem(
 
   const request = parsed.data;
   const workItemId = request.workItem.id;
-  const runtime = checkGovernedWorkerRuntime(request);
+  const runtime = checkReadOnlyRuntime(request);
   if (runtime.status === "blocked") return { ...runtime, workItemId };
 
   const authorization = authorizeExecutionForRun(request);
   if (authorization.status !== "authorized")
     return { ...authorization, workItemId };
 
-  const { request: approved, snapshot, expiresAt } = authorization.execution;
+  const execution = authorization.execution;
+  if (!("goal" in execution))
+    return {
+      status: "denied",
+      workItemId,
+      reason: "Read-only authorization is missing its approved Goal.",
+    };
+  const { request: approved, snapshot, expiresAt, goal } = execution;
   const deadline = performance.now() + approved.timeoutMs;
   const remaining = () =>
     Math.floor(
@@ -54,11 +61,7 @@ export async function executeReadOnlyWorkItem(
       throw new Error("Read-only execution exceeded its time limit.");
     const [decision] = await runIndependentDecisions(
       snapshot,
-      {
-        objective: approved.workItem.objective,
-        targetRepository: approved.task.targetRepository,
-        constraints: approved.task.constraints,
-      },
+      goal,
       [
         {
           specialist: {
@@ -70,9 +73,8 @@ export async function executeReadOnlyWorkItem(
           },
           files,
           assignmentObjective: JSON.stringify({
-            objective: approved.task.objective,
+            objective: approved.workItem.objective,
             deliverable: approved.workItem.deliverable,
-            acceptanceCriteria: approved.task.acceptanceCriteria,
           }),
         },
       ],

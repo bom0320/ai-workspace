@@ -15,6 +15,7 @@ export {
 } from "./features/work-item-execution/flow/execution-authorization.js";
 export {
   executionRequestSchema,
+  readOnlyExecutionRequestSchema,
   authorizedExecutionSchema,
   executionAuthorizationVerdictSchema,
   type ExecutionRequest,

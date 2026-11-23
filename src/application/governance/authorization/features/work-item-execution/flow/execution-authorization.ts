@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import {
-  executionRequestSchema,
+  workItemExecutionRequestSchema,
   type ExecutionAuthorizationVerdict,
 } from "../model/execution.js";
 import { resolveExecutionContext } from "./context/resolve-execution-context.js";
@@ -14,7 +14,7 @@ export function checkExecutionEligibility(
   | { status: "eligible" }
   | Exclude<ExecutionAuthorizationVerdict, { status: "authorized" }> {
   try {
-    const request = executionRequestSchema.parse(input);
+    const request = workItemExecutionRequestSchema.parse(input);
     return withGovernanceLedger((ledger) => {
       const evaluated = resolveExecutionContext(ledger, request);
       if (!evaluated)
@@ -40,7 +40,7 @@ export function authorizeExecutionForRun(
 ): ExecutionAuthorizationVerdict {
   try {
     return withGovernanceLedger((ledger, save) => {
-      const request = executionRequestSchema.parse(input);
+      const request = workItemExecutionRequestSchema.parse(input);
       const evaluated = resolveExecutionContext(ledger, request);
       if (!evaluated)
         return {

@@ -3,7 +3,7 @@ import {
   executionRequestSchema,
 } from "@/application/governance/index.js";
 import type { ExecutionOutcome } from "../model/result.js";
-import { checkGovernedWorkerRuntime } from "../worker/check-governed-worker-runtime.js";
+import { checkGovernedWorkerRuntime } from "../worker/check-execution-runtime.js";
 import { runExecutionPipeline } from "./orchestration/run-execution-pipeline.js";
 
 export async function executeWorkItem(
@@ -26,10 +26,14 @@ export async function executeWorkItem(
   if (authorization.status !== "authorized")
     return { ...authorization, workItemId };
 
-  const result = await runExecutionPipeline(
-    authorization.execution,
-    runtime.temporaryRoot
-  );
+  const execution = authorization.execution;
+  if ("goal" in execution)
+    return {
+      status: "denied",
+      workItemId,
+      reason: "Modification authorization lacks a TaskContract.",
+    };
+  const result = await runExecutionPipeline(execution, runtime.temporaryRoot);
   return {
     status: "executed",
     workItemId: authorization.execution.request.workItem.id,

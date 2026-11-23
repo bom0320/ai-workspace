@@ -265,11 +265,29 @@ describe("runWorkDecomposition", () => {
     });
   });
 
-  it("runs the default CEO through context-only Codex", async () => {
+  it("rejects an untyped Work Item from the default CEO", async () => {
     command.mockResolvedValue({
       stdout: JSON.stringify({
         type: "propose",
         workItems: [work("task-entry")],
+      }),
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    });
+    expect(await runWorkDecomposition(input)).toMatchObject({
+      status: "failed",
+      failure: "invalid-output",
+    });
+  });
+
+  it("runs the default CEO through context-only Codex", async () => {
+    command.mockResolvedValue({
+      stdout: JSON.stringify({
+        type: "propose",
+        workItems: [
+          { ...work("task-entry"), workType: "repository-modification" },
+        ],
       }),
       stderr: "",
       exitCode: 0,

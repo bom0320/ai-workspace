@@ -14,36 +14,33 @@ import {
 } from "../../../../../approval/features/system-policy/model/execution-system-policy.js";
 import type { GovernanceLedger } from "../../../../../model/ledger.js";
 import { resolveGovernanceRepository } from "../../../../../records/governance-transaction.js";
-import type { ExecutionRequest } from "../../model/execution.js";
+import type { WorkItemExecutionRequest } from "../../model/execution.js";
 import { validateTaskExecutionContract } from "../validation/validate-task-execution-contract.js";
 
 export function resolveExecutionContext(
   ledger: GovernanceLedger,
-  request: ExecutionRequest
+  request: WorkItemExecutionRequest
 ) {
   const { entry, decision, context, snapshot } = resolveApprovedDecision(
     ledger,
     request.approvedDecisionId
   );
   const repositoryPath = resolveGovernanceRepository(request.repositoryPath);
-  if (
-    repositoryPath !== snapshot.repositoryRoot ||
-    request.task.targetRepository !== context.goal.targetRepository
-  )
+  if (repositoryPath !== snapshot.repositoryRoot)
     throw new Error("Execution Repository mismatch.");
 
   const delegation = entry.executionDelegations?.find(
     ({ id }) => id === executionDelegationId(decision.id)
   );
   if (!delegation) return undefined;
+  const workerMode = "workerMode" in request ? request.workerMode : undefined;
   const policy = entry.executionPolicies?.at(-1);
   if (
     !policy?.policy ||
     policy.version !== delegation.grant.policyVersion ||
     delegation.repositoryRoot !== repositoryPath ||
     delegation.status !== "active" ||
-    (request.workerMode !== undefined &&
-      request.workerMode !== delegation.grant.workerMode)
+    (workerMode !== undefined && workerMode !== delegation.grant.workerMode)
   )
     throw new Error("Execution policy or delegation changed.");
 
@@ -61,39 +58,40 @@ export function resolveExecutionContext(
     decomposition?.approvedDecisionId !== decision.id ||
     decomposition.approvalBinding !== governanceDigest(decision) ||
     governanceDigest(source.snapshot) !== governanceDigest(snapshot) ||
-    source.taskDigest !== governanceDigest(request.task) ||
     !workItem ||
     governanceDigest(workItem) !== governanceDigest(request.workItem) ||
     workItem.dependsOn.length
   )
     throw new Error("Unverified Work Item, dependencies or TaskContract.");
 
-  const { readPaths, timeoutMs, task } = request;
-  const readOnly = workItem.workType === "read-only";
+  const { readPaths, timeoutMs } = request;
+  const readOnly = !("task" in request);
   if (
-    readOnly &&
-    (request.workerMode !== undefined ||
-      readPaths.length === 0 ||
-      delegation.approvalSource === "post-direction")
+    readOnly
+      ? workItem.workType !== "read-only" ||
+        !("readOnly" in source) ||
+        !readPaths.length ||
+        delegation.approvalSource === "post-direction"
+      : workItem.workType === "read-only" ||
+        !("taskDigest" in source) ||
+        source.taskDigest !== governanceDigest(request.task) ||
+        request.task.targetRepository !== context.goal.targetRepository ||
+        !(context.goal.constraints ?? []).every((constraint) =>
+          request.task.constraints.includes(constraint)
+        )
   )
     throw new Error(
-      "Read-only work requires supplied Context and cannot use a Worker mode."
+      "Execution contract does not match the approved Work Item."
     );
-  const { writePaths, shellCommands } = validateTaskExecutionContract(
-    task,
-    delegation.grant,
-    workItem.workType
-  );
-  if (
-    !(context.goal.constraints ?? []).every((constraint) =>
-      task.constraints.includes(constraint)
-    )
-  )
-    throw new Error("Task must preserve the approved Goal constraints.");
+
+  const { writePaths, shellCommands } =
+    "task" in request
+      ? validateTaskExecutionContract(request.task, delegation.grant)
+      : { writePaths: [], shellCommands: [] };
 
   const requestedGrant = {
     readPaths,
-    ...(request.workerMode && { workerMode: request.workerMode }),
+    ...(workerMode && { workerMode }),
     writePaths,
     shellCommands,
     budget: { maxExecutions: 1, maxTimeoutMs: timeoutMs },
@@ -148,6 +146,14 @@ export function resolveExecutionContext(
       "Execution delegation expired or remaining time is insufficient."
     );
 
+  const execution = {
+    snapshot,
+    delegationId: delegation.id,
+    delegationBinding: governanceDigest(delegation),
+    policyVersion: policy.version,
+    policyBinding: policy.binding,
+    expiresAt: delegation.grant.expiresAt,
+  };
   return {
     entry,
     source,
@@ -155,14 +161,13 @@ export function resolveExecutionContext(
       policy.policy.budget.maxExecutions,
       delegation.grant.budget.maxExecutions
     ),
-    execution: {
-      request: { ...request, repositoryPath },
-      snapshot,
-      delegationId: delegation.id,
-      delegationBinding: governanceDigest(delegation),
-      policyVersion: policy.version,
-      policyBinding: policy.binding,
-      expiresAt: delegation.grant.expiresAt,
-    },
+    execution:
+      "task" in request
+        ? { ...execution, request: { ...request, repositoryPath } }
+        : {
+            ...execution,
+            request: { ...request, repositoryPath },
+            goal: context.goal,
+          },
   };
 }

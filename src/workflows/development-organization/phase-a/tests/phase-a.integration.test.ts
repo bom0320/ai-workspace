@@ -1725,6 +1725,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       registerExecutionDecomposition(decomposition);
       planningResults = [];
       for (const workItem of decomposition.workItems) {
+        if (workItem.workType === "read-only") continue;
         const recordSource = beginWorkItemExecutionSource(
           decomposition,
           workItem,
@@ -1867,6 +1868,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "denied-context",
     "invalid-evidence",
     "process-failure",
+    "runtime-blocked",
   ] as const)(
     "routes Phase B read-only execution and handles %s",
     async (mode) => {
@@ -1885,7 +1887,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           readPaths: [
             mode === "denied-context" ? "docs-extra/other.md" : "README.md",
           ],
-          timeoutMs: 5000,
+          timeoutMs: mode === "runtime-blocked" ? 2_147_483_648 : 5000,
         },
         beforePhaseB: () => {
           vi.mocked(processRuntime.runCommand).mockImplementation(
@@ -1938,16 +1940,23 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       );
       const [plan] = planningResults!;
       expect(plan.executionSourceId).toBeDefined();
-      expect(plan.result).toMatchObject({
-        status: "completed",
-        task: { allowedPaths: [], verification: [] },
-        state: { inspectedFiles: [] },
-      });
-      if (mode === "denied-context") {
+      expect(plan.result).toEqual({ status: "read-only" });
+      const recordedSource = withGovernanceRecords((raw) =>
+        Object.values(
+          (
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+          ).repositories
+        )
+          .flatMap((entry) => entry.workItemExecutionSources ?? [])
+          .find(({ id }) => id === plan.executionSourceId)
+      );
+      expect(recordedSource).toMatchObject({ readOnly: true });
+      expect(recordedSource).not.toHaveProperty("taskDigest");
+      if (mode === "denied-context" || mode === "runtime-blocked") {
         expect(specialist).not.toHaveBeenCalled();
         expect(executionPreparationResult).toMatchObject({
           workItemId: "first",
-          status: "denied",
+          status: mode === "runtime-blocked" ? "blocked" : "denied",
         });
         expect(readOnlyExecutionResult).toBeUndefined();
         expect(
@@ -1974,34 +1983,117 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                   mode === "invalid-evidence" ? "validation" : "execution",
               },
       });
-      if (plan.result.status !== "completed")
-        throw new Error("Expected read-only plan");
+      const request = {
+        approvedDecisionId: decision.id,
+        executionSourceId: plan.executionSourceId,
+        workItem: workItems[0],
+        repositoryPath: root,
+        readPaths: ["README.md"],
+        timeoutMs: 5000,
+      };
+      await expect(executeReadOnlyWorkItem(request)).resolves.toMatchObject({
+        status: "denied",
+      });
       await expect(
         executeReadOnlyWorkItem({
-          approvedDecisionId: decision.id,
-          executionSourceId: plan.executionSourceId,
-          workItem: workItems[0],
-          task: plan.result.task,
-          repositoryPath: root,
-          readPaths: ["README.md"],
-          timeoutMs: 5000,
+          ...request,
+          executionSourceId: "0".repeat(64),
+        })
+      ).resolves.toMatchObject({ status: "denied" });
+      await expect(
+        executeReadOnlyWorkItem({
+          ...request,
+          workItem: { ...request.workItem, objective: "Forged objective" },
         })
       ).resolves.toMatchObject({ status: "denied" });
       expect(specialist).toHaveBeenCalledOnce();
     }
   );
 
+  it.each([
+    "expired",
+    "revoked",
+    "superseded",
+    "snapshot",
+    "legacy-source",
+  ] as const)(
+    "rejects %s read-only authority without consuming a reservation",
+    async (change) => {
+      const { decision, workItems, planningResults } = await planExecutionItems(
+        true,
+        1,
+        [],
+        "README.md",
+        { readOnly: true }
+      );
+      const request = {
+        approvedDecisionId: decision.id,
+        executionSourceId: planningResults![0].executionSourceId!,
+        workItem: workItems[0],
+        repositoryPath: root,
+        readPaths: ["README.md"],
+        timeoutMs: 5000,
+      };
+      expect(governance.checkExecutionEligibility(request).status).toBe(
+        "eligible"
+      );
+      if (change === "expired")
+        vi.spyOn(Date, "now").mockReturnValue(
+          Date.parse(
+            governance.getExecutionDelegation(decision.id)!.grant.expiresAt
+          )
+        );
+      if (change === "revoked") configureExecutionPolicy(null);
+      if (change === "superseded") configureExecutionPolicy();
+      if (change === "snapshot")
+        writeFileSync(join(root, "README.md"), "Drift");
+      if (change === "legacy-source") {
+        request.executionSourceId = withGovernanceRecords((raw, save) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          const entry = Object.values(ledger.repositories)[0];
+          const source = entry.workItemExecutionSources!.find(
+            ({ id }) => id === request.executionSourceId
+          )!;
+          const subject = {
+            decompositionBinding: source.decompositionBinding,
+            workItemId: source.workItemId,
+            snapshot: source.snapshot,
+            taskDigest: governanceDigest({
+              id: "legacy",
+              allowedPaths: [],
+              verification: [],
+            }),
+          };
+          const id = governanceDigest(subject);
+          entry.workItemExecutionSources!.push({ id, ...subject });
+          save(ledger);
+          return id;
+        });
+        expect(governance.getApprovedDecision(decision.id).decision).toEqual(
+          decision
+        );
+      }
+      const command = vi.mocked(processRuntime.runCommand);
+      const calls = command.mock.calls.length;
+      const path = join(home, ".ai-workspace-governance", "records.json");
+      const before = readFileSync(path, "utf8");
+      await expect(executeReadOnlyWorkItem(request)).resolves.toMatchObject({
+        status: "denied",
+      });
+      expect(command).toHaveBeenCalledTimes(calls);
+      expect(readFileSync(path, "utf8")).toBe(before);
+    }
+  );
+
   it("requires a Phase B delegation before running read-only work", async () => {
-    const { decision, planningResults, workItems } = await planExecutionItems(
+    const { decision, workItems } = await planExecutionItems(
       false,
       1,
       [],
       "README.md",
       { readOnly: true }
     );
-    const [plan] = planningResults!;
-    if (plan.result.status !== "completed")
-      throw new Error("Expected read-only plan");
     const command = vi.mocked(processRuntime.runCommand);
     const calls = command.mock.calls.length;
     await expect(
@@ -2009,7 +2101,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         approvedDecisionId: decision.id,
         executionSourceId: "a".repeat(64),
         workItem: workItems[0],
-        task: plan.result.task,
         repositoryPath: root,
         readPaths: ["README.md"],
         timeoutMs: 5000,

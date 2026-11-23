@@ -31,7 +31,8 @@ function linkDependencies(repositoryRoot: string, workspacePath: string): void {
 
 export function assertGovernedGitConfiguration(
   repositoryRoot: string,
-  timeoutMs: number
+  timeoutMs: number,
+  operation: "worktree" | "read-only" = "worktree"
 ): void {
   const keys = execFileSync(
     "git",
@@ -60,7 +61,9 @@ export function assertGovernedGitConfiguration(
   try {
     if (
       readdirSync(resolve(repositoryRoot, hooks)).some(
-        (name) => !name.endsWith(".sample")
+        (name) =>
+          !name.endsWith(".sample") &&
+          (operation === "worktree" || name !== "post-checkout")
       )
     )
       throw new Error("Git hooks are unsupported for governed execution.");

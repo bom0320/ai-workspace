@@ -29,9 +29,11 @@ export function createExecuteWorkItemNode(
         ? proposal.workItems.find(({ id }) => id === workItemId)
         : undefined;
     if (
-      plan?.result.status !== "completed" ||
-      !plan.executionSourceId ||
-      (workItem?.workType !== "read-only" &&
+      !plan?.executionSourceId ||
+      plan.result.status === "failed" ||
+      (plan.result.status === "read-only") !==
+        (workItem?.workType === "read-only") ||
+      (plan.result.status === "completed" &&
         !plan.result.task.allowedPaths.length) ||
       plan.executionBlockedReason ||
       approval?.status !== "accepted" ||
@@ -51,12 +53,11 @@ export function createExecuteWorkItemNode(
       approvedDecisionId: approval.handoff.decision.id,
       executionSourceId: plan.executionSourceId,
       workItem,
-      task: plan.result.task,
       repositoryPath,
       readPaths,
       timeoutMs,
     };
-    if (workItem.workType === "read-only") {
+    if (plan.result.status === "read-only") {
       const outcome = await executeReadOnlyWorkItem(request);
       return outcome.status === "executed"
         ? {
@@ -74,7 +75,10 @@ export function createExecuteWorkItemNode(
           };
     }
 
-    const outcome = await executeWorkItem(request);
+    const outcome = await executeWorkItem({
+      ...request,
+      task: plan.result.task,
+    });
     return outcome.status === "executed"
       ? {
           workerExecutionResult: {

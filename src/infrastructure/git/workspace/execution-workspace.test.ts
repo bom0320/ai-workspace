@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assertGovernedGitConfiguration,
   createExecutionWorkspace,
   removeExecutionWorkspace,
 } from "./execution-workspace.js";
@@ -75,6 +76,26 @@ afterEach(() => {
 
   repositoryPath = undefined;
   workspacePath = undefined;
+});
+
+it("checks checkout hooks only for Worktrees and keeps common Git restrictions", () => {
+  const repository = createGitRepository();
+  writeFileSync(
+    join(repository, ".git", "hooks", "post-checkout"),
+    "#!/bin/sh\n"
+  );
+
+  expect(() =>
+    assertGovernedGitConfiguration(repository, 5000, "read-only")
+  ).not.toThrow();
+  expect(() => assertGovernedGitConfiguration(repository, 5000)).toThrow(
+    "Git hooks"
+  );
+
+  execFileSync("git", ["-C", repository, "config", "core.fsmonitor", "true"]);
+  expect(() =>
+    assertGovernedGitConfiguration(repository, 5000, "read-only")
+  ).toThrow("Git configuration");
 });
 
 describe("createExecutionWorkspace", () => {

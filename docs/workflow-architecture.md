@@ -220,17 +220,23 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약은 후속 범위다.
 
-**Step 4.3 실행 Routing.** Phase B는 Execution Source에 연결된 Work Item 유형과 TaskContract를 사용한다.
-`workType: "read-only"`이면 작업 목적과 산출물로 수정 경로와 검증 명령이 비어 있는 계약을 구성한다.
-이 계획은 Repository 파일을 읽거나 Planner를 호출하지 않는다. 실행 직전에 Governance는 현재 공동 승인,
-위임 읽기 범위 및 예산, Execution Source와 Snapshot을 검증한다. 허용 경로는 비어 있지 않은 정확한
-tracked regular file 목록이어야 한다. Analysis Context는 64 KiB로 제한한다. 실행은 Phase B 예약을
-한 번 소비하며 Specialist에게 승인 Commit의 파일 내용만 전달한다. Specialist의 임시 cwd, Codex
-read-only sandbox와 도구 비활성화 설정, Snapshot 및 Evidence 검증을 재사용한다.
-유형이 없던 수정 업무는 등록된 TaskContract에 유효한 쓰기 경로가 있을 때 기존 `executeWorkItem()`의
-승인 Commit 기반 Worktree 및 Codex Worker를 사용한다. 쓰기 경로가 없는 미분류 업무는 실행하지 않는다.
-차단·거부, Worker 실행 결과, 읽기 전용 분석 결과는 각각 Work Item ID로 State에서 추적한다.
-하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
+**Step 4.3 실행 Routing.** 현재 `workType`은 단일 Work Item이 한 번 사용할 실행 경로를 선택한다.
+기본 Codex 분해 결과는 유형을 명시해야 한다. 기존 유형 미지정 Work Item은 유효한 수정 TaskContract가
+등록된 경우에만 실행한다.
+
+Read-only 계획은 기존 Work Item의 목적·산출물과 승인 Goal을 재사용한다. Planner를 호출하거나
+빈 TaskContract를 생성하지 않는다. Ledger의 Read-only Execution Source는 유형 표식과 Work Item 전체를
+포함하는 Decomposition Binding, 승인 Decision 참조, Snapshot에 묶인다. 읽기 요청 경로와 제한 시간은
+최종 Governance 승인에서 검증하고 기존 예약의 요청·실행 Digest에 기록한다. 기존 `taskDigest` 형태는
+그대로 읽고 검증한다. 이전 빈 TaskContract 기반 Read-only 출처로 새 실행을 시작할 수 없으며, 새 형식으로
+등록하더라도 기존 Work Item 예약은 유지된다.
+
+두 실행 경로 모두 실제 Git 호출의 안전 설정과 Snapshot을 확인한다. `post-checkout` 검사만
+Worktree 경로에 적용한다. Read-only는 승인된 Git blob만
+기존 Specialist의 격리된 임시 cwd에 전달하며 Worktree를 만들지 않는다. 단일 Context는 64 KiB로
+제한하고 Codex read-only sandbox와 도구 비활성화 설정을 유지한다. 변경 업무는 기존 Codex Worktree,
+Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참조 범위를 확인한다. 실행 준비 실패와
+실행 결과는 각각 Work Item ID로 기록한다. 하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
 
 ## 4. Phase A → Phase B Handoff Contract
 

@@ -1,3 +1,4 @@
+import { readOnlyExecutionRequestSchema } from "../../model/execution.js";
 import { expect, it } from "vitest";
 import { validateTaskExecutionContract } from "./validate-task-execution-contract.js";
 
@@ -54,26 +55,39 @@ it("requires explicit bounds for verification and supports omitting it", () => {
   ).toEqual({ writePaths: task.allowedPaths, shellCommands: [] });
 });
 
-it("accepts an explicit read-only contract without granting writes or commands", () => {
-  const readOnlyTask = { ...task, allowedPaths: [], verification: [] };
+const readOnlyRequest = {
+  readPaths: ["docs/README.md"],
+  approvedDecisionId: "decision",
+  executionSourceId: "a".repeat(64),
+  workItem: {
+    id: "work",
+    workType: "read-only",
+    objective: "Analyze",
+    deliverable: "Findings",
+    dependsOn: [],
+  },
+  repositoryPath: "/repo",
+  timeoutMs: 1000,
+};
+
+it("accepts only an explicitly typed, taskless read-only request", () => {
+  expect(readOnlyExecutionRequestSchema.parse(readOnlyRequest)).toEqual(
+    readOnlyRequest
+  );
   expect(
-    validateTaskExecutionContract(readOnlyTask, bounds, "read-only")
-  ).toEqual({
-    writePaths: [],
-    shellCommands: [],
-  });
-  expect(() => validateTaskExecutionContract(readOnlyTask, bounds)).toThrow();
+    readOnlyExecutionRequestSchema.safeParse({
+      ...readOnlyRequest,
+      workItem: { ...readOnlyRequest.workItem, workType: undefined },
+    }).success
+  ).toBe(false);
 });
 
-it.each([{ allowedPaths: task.allowedPaths }, { verification: [command] }])(
-  "rejects write or shell capability on read-only work %j",
+it.each([{ task }, { workerMode: "codex-worktree" }])(
+  "rejects modification contract fields on a read-only request %j",
   (extra) => {
-    expect(() =>
-      validateTaskExecutionContract(
-        { ...task, allowedPaths: [], verification: [], ...extra },
-        bounds,
-        "read-only"
-      )
-    ).toThrow();
+    expect(
+      readOnlyExecutionRequestSchema.safeParse({ ...readOnlyRequest, ...extra })
+        .success
+    ).toBe(false);
   }
 );

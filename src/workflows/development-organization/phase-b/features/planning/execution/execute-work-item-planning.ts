@@ -31,6 +31,10 @@ export async function executeWorkItemPlanning({
 }) {
   const { approvedDecisionId, workItem } =
     phaseBPlanningInputSchema.parse(phaseB);
+  if (workItem.workType === "read-only")
+    throw new Error(
+      "Read-only Work Items do not require TaskContract planning."
+    );
   const { context, review, snapshot } = getApprovedDecision(approvedDecisionId);
   const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   if (realpathSync(repositoryRoot) !== realpathSync(snapshot.repositoryRoot)) {
@@ -47,7 +51,6 @@ export async function executeWorkItemPlanning({
       objective: workItem.objective,
       deliverable: workItem.deliverable,
       direction: review.proposal.direction.text,
-      ...(workItem.workType === "read-only" && { readOnly: true as const }),
       ...(executionCeiling && {
         executionCeiling: JSON.stringify(executionCeiling),
       }),

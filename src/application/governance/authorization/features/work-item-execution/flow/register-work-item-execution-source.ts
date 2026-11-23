@@ -109,7 +109,7 @@ export function beginWorkItemExecutionSource(
               save,
               binding,
               item.id,
-              task,
+              { taskDigest: governanceDigest(task) },
               snapshot
             );
           });
@@ -128,13 +128,13 @@ function saveExecutionSource(
   save: () => void,
   decompositionBinding: string,
   workItemId: string,
-  task: TaskContract,
+  contract: { taskDigest: string } | { readOnly: true },
   snapshot: RepositorySnapshot
 ) {
   const subject = {
     decompositionBinding,
     workItemId,
-    taskDigest: governanceDigest(task),
+    ...contract,
     snapshot,
   };
   const id = governanceDigest(subject);
@@ -154,9 +154,9 @@ export function beginValidatedWorkItemExecutionSource(
   proposal: Proposal,
   workItem: WorkItem,
   repositoryPath: string
-): (task: TaskContract) => ExecutionSourceRegistration {
+): (task?: TaskContract) => ExecutionSourceRegistration {
   function validateAndRecord(submission?: {
-    task: TaskContract;
+    task?: TaskContract;
   }): ExecutionSourceRegistration | undefined {
     let reason = "Current joint execution approval could not be verified.";
     try {
@@ -182,22 +182,29 @@ export function beginValidatedWorkItemExecutionSource(
         assertRepositoryMatchesSnapshot(snapshot);
         if (!submission) return;
 
-        reason =
-          "TaskContract is incompatible with the approved execution bounds.";
-        const task = taskContractSchema.strict().parse(submission.task);
-        if (
-          task.targetRepository !== context.goal.targetRepository ||
-          !(context.goal.constraints ?? []).every((constraint) =>
-            task.constraints.includes(constraint)
+        let contract: { taskDigest: string } | { readOnly: true };
+        if (match.item.workType === "read-only") {
+          if (submission.task !== undefined)
+            return {
+              executionBlockedReason:
+                "Read-only execution does not accept a TaskContract.",
+            };
+          contract = { readOnly: true };
+        } else {
+          reason =
+            "TaskContract is incompatible with the approved execution bounds.";
+          const task = taskContractSchema.strict().parse(submission.task);
+          if (
+            task.targetRepository !== context.goal.targetRepository ||
+            !(context.goal.constraints ?? []).every((constraint) =>
+              task.constraints.includes(constraint)
+            )
           )
-        )
-          return { executionBlockedReason: reason };
-        validateTaskExecutionContract(
-          task,
-          delegation.grant,
-          match.item.workType
-        );
-        validateTaskExecutionContract(task, policy, match.item.workType);
+            return { executionBlockedReason: reason };
+          validateTaskExecutionContract(task, delegation.grant);
+          validateTaskExecutionContract(task, policy);
+          contract = { taskDigest: governanceDigest(task) };
+        }
         if (Date.now() >= Date.parse(delegation.grant.expiresAt))
           return {
             executionBlockedReason:
@@ -211,7 +218,7 @@ export function beginValidatedWorkItemExecutionSource(
             save,
             match.binding,
             match.item.id,
-            task,
+            contract,
             snapshot
           ),
         };
@@ -221,9 +228,10 @@ export function beginValidatedWorkItemExecutionSource(
     }
   }
 
-  // Check provenance before Planning reads the Repository. Recheck against
-  // the latest Ledger and save within one transaction after Planning.
-  const blocked = validateAndRecord();
+  // Modification planning may read the Repository before submission.
+  // Read-only submits immediately, so validate it only at registration.
+  const blocked =
+    workItem.workType === "read-only" ? undefined : validateAndRecord();
   return (task) =>
     blocked ??
     validateAndRecord({ task }) ?? {

@@ -32,12 +32,14 @@ export function hasValidExecutionReservations(
       return false;
   }
   for (const { id, ...subject } of sources.values()) {
+    const item = decompositions
+      .get(subject.decompositionBinding)
+      ?.workItems.find(({ id }) => id === subject.workItemId);
     if (
       governanceDigest(subject) !== id ||
       governanceDigest(subject.snapshot.repositoryRoot) !== repositoryKey ||
-      !decompositions
-        .get(subject.decompositionBinding)
-        ?.workItems.some(({ id }) => id === subject.workItemId)
+      !item ||
+      ("readOnly" in subject && item.workType !== "read-only")
     )
       return false;
   }

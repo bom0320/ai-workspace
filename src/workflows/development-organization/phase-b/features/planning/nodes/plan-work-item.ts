@@ -26,15 +26,25 @@ export function createPlanWorkItemNode(
       workItem,
       repositoryPath
     );
-    const result = await executeWorkItemPlanning({
-      repositoryPath,
-      limits,
-      planner,
-      executionCeiling: handoff.handoff.executionDelegation.grant,
-      phaseB: { approvedDecisionId: proposal.approvedDecisionId, workItem },
-    });
+    const result =
+      workItem.workType === "read-only"
+        ? { status: "read-only" as const }
+        : await executeWorkItemPlanning({
+            repositoryPath,
+            limits,
+            planner,
+            executionCeiling: handoff.handoff.executionDelegation.grant,
+            phaseB: {
+              approvedDecisionId: proposal.approvedDecisionId,
+              workItem,
+            },
+          });
     const readiness =
-      result.status === "completed" ? recordSource(result.task) : {};
+      result.status === "read-only"
+        ? recordSource()
+        : result.status === "completed"
+          ? recordSource(result.task)
+          : {};
     return {
       pendingPlanningIds,
       planningResults: [

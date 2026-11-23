@@ -72,7 +72,9 @@ export function createPhaseBGraph({
     (state) => {
       const latest = state.planningResults?.at(-1);
       if (
-        latest?.result.status !== "completed" ||
+        !latest ||
+        (latest.result.status !== "completed" &&
+          latest.result.status !== "read-only") ||
         !latest.executionSourceId ||
         latest.executionBlockedReason
       )

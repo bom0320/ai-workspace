@@ -1,3 +1,4 @@
+import { goalSpecSchema } from "@/contracts/goal.js";
 import { z } from "zod";
 import { workItemSchema } from "@/application/work-decomposition/index.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
@@ -19,6 +20,21 @@ export const executionRequestSchema = executionBoundsSchema
   });
 export type ExecutionRequest = z.infer<typeof executionRequestSchema>;
 
+export const readOnlyExecutionRequestSchema = executionRequestSchema
+  .omit({ task: true, workerMode: true })
+  .strict()
+  .refine(({ workItem }) => workItem.workType === "read-only", {
+    message: "An explicit read-only Work Item is required.",
+  });
+
+export const workItemExecutionRequestSchema = z.union([
+  readOnlyExecutionRequestSchema,
+  executionRequestSchema,
+]);
+export type WorkItemExecutionRequest = z.infer<
+  typeof workItemExecutionRequestSchema
+>;
+
 export const authorizedExecutionSchema = z
   .object({
     id: text,
@@ -39,7 +55,13 @@ export const executionAuthorizationVerdictSchema = z.discriminatedUnion(
     z
       .object({
         status: z.literal("authorized"),
-        execution: authorizedExecutionSchema,
+        execution: z.union([
+          authorizedExecutionSchema,
+          authorizedExecutionSchema.extend({
+            request: readOnlyExecutionRequestSchema,
+            goal: goalSpecSchema,
+          }),
+        ]),
       })
       .strict(),
     z.object({ status: z.literal("approval-required"), reason: text }).strict(),
@@ -59,15 +81,17 @@ export const executionDecompositionSchema = z
   })
   .strict();
 
-export const workItemExecutionSourceSchema = z
-  .object({
-    id: digest,
-    decompositionBinding: digest,
-    workItemId: text,
-    taskDigest: digest,
-    snapshot: repositorySnapshotSchema,
-  })
-  .strict();
+const executionSourceSchema = z.object({
+  id: digest,
+  decompositionBinding: digest,
+  workItemId: text,
+  snapshot: repositorySnapshotSchema,
+});
+
+export const workItemExecutionSourceSchema = z.union([
+  executionSourceSchema.extend({ taskDigest: digest }).strict(),
+  executionSourceSchema.extend({ readOnly: z.literal(true) }).strict(),
+]);
 
 export const executionReservationSchema = z
   .object({

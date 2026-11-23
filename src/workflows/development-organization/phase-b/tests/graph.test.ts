@@ -251,8 +251,12 @@ it("preserves agent execution failure and ends without retry", async () => {
 });
 
 it("passes timeout to the default Codex adapter without storing it in State", async () => {
+  const typedWorkItems = workItems.map((item) => ({
+    ...item,
+    workType: "repository-modification",
+  }));
   vi.mocked(runCommand).mockResolvedValueOnce({
-    stdout: JSON.stringify({ type: "propose", workItems }),
+    stdout: JSON.stringify({ type: "propose", workItems: typedWorkItems }),
     stderr: "",
     exitCode: 0,
     timedOut: false,
@@ -263,7 +267,7 @@ it("passes timeout to the default Codex adapter without storing it in State", as
     workDecompositionResult: {
       status: "proposed",
       ...decompositionInput,
-      workItems,
+      workItems: typedWorkItems,
     },
   });
   expect(runCommand).toHaveBeenCalledExactlyOnceWith(

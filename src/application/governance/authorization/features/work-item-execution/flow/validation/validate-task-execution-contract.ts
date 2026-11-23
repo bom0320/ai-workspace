@@ -1,4 +1,3 @@
-import type { WorkItem } from "@/application/work-decomposition/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 import {
   executionBoundsSchema,
@@ -15,8 +14,7 @@ type TaskExecutionFields = Pick<
 // established separately by the Ledger-backed authorization flow.
 export function validateTaskExecutionContract(
   task: TaskExecutionFields,
-  bounds: Parameters<typeof executionScopes>[0],
-  workType?: WorkItem["workType"]
+  bounds: Parameters<typeof executionScopes>[0]
 ) {
   const writePaths = executionBoundsSchema.shape.writePaths.parse(
     task.allowedPaths
@@ -27,13 +25,6 @@ export function validateTaskExecutionContract(
   const shellCommands = executionBoundsSchema.shape.shellCommands.parse(
     task.verification
   );
-  if (workType === "read-only") {
-    if (writePaths.length || shellCommands.length)
-      throw new Error(
-        "Read-only work cannot request write paths or verification commands."
-      );
-    return { writePaths, shellCommands };
-  }
   if (
     !writePaths.length ||
     writePaths.some((path) => forbiddenPaths.includes(path)) ||

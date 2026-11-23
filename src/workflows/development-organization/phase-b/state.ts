@@ -51,7 +51,7 @@ export const phaseBState = new StateSchema({
         executionBlockedReason: z.string().min(1).optional(),
         executionSourceId: z.string().optional(),
         // This value is produced by the internal Detailed Planning call only.
-        result: z.custom<PlanningResult>(),
+        result: z.custom<PlanningResult | { status: "read-only" }>(),
       })
     )
     .optional(),

@@ -1,3 +1,4 @@
+import type { GovernanceLedger } from "../../../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import {
@@ -12,38 +13,58 @@ import {
   executionDelegationId,
 } from "../validation/validate-execution-delegation-records.js";
 
-// Read both records in a single trusted transaction. The Ledger validates the
-// approval evidence and the exact grant against the approved Review resolution.
-export function verifyExecutionHandoff(input: {
+type ExecutionHandoffApproval = {
   decision: ApprovedDecision;
   executionDelegation: ExecutionDelegation;
-}) {
+};
+
+// The caller owns the Ledger transaction and the Repository Snapshot check.
+export function resolveExecutionHandoff(
+  ledger: GovernanceLedger,
+  input: ExecutionHandoffApproval
+) {
+  const { entry, decision, review, context, snapshot } =
+    resolveApprovedDecision(ledger, input.decision.id);
+  const delegation = entry.executionDelegations?.find(
+    ({ id }) => id === executionDelegationId(decision.id)
+  );
+  const policy =
+    delegation &&
+    currentPolicyForExecutionGrant(entry, delegation.grant, Date.now());
+  if (
+    !review.executionDelegationProposal ||
+    !delegation ||
+    review.executionDelegationProposal.policyVersion !==
+      delegation.grant.policyVersion ||
+    delegation.approvalSource === "post-direction" ||
+    delegation.status !== "active" ||
+    delegation.repositoryRoot !== snapshot.repositoryRoot ||
+    resolveGovernanceRepository(snapshot.repositoryRoot) !==
+      snapshot.repositoryRoot ||
+    governanceDigest(decision) !== governanceDigest(input.decision) ||
+    governanceDigest(delegation) !==
+      governanceDigest(input.executionDelegation) ||
+    !policy?.policy
+  )
+    throw new Error(
+      "Execution Handoff lacks a matching, current joint approval."
+    );
+  return {
+    entry,
+    decision,
+    context,
+    snapshot,
+    delegation,
+    policy: policy.policy,
+  };
+}
+
+export function verifyExecutionHandoff(input: ExecutionHandoffApproval) {
   return withGovernanceLedger((ledger) => {
-    const { entry, decision, review, snapshot } = resolveApprovedDecision(
+    const { decision, delegation, snapshot } = resolveExecutionHandoff(
       ledger,
-      input.decision.id
+      input
     );
-    const delegation = entry.executionDelegations?.find(
-      ({ id }) => id === executionDelegationId(decision.id)
-    );
-    if (
-      !review.executionDelegationProposal ||
-      !delegation ||
-      review.executionDelegationProposal.policyVersion !==
-        delegation.grant.policyVersion ||
-      delegation.approvalSource === "post-direction" ||
-      delegation.status !== "active" ||
-      delegation.repositoryRoot !== snapshot.repositoryRoot ||
-      resolveGovernanceRepository(snapshot.repositoryRoot) !==
-        snapshot.repositoryRoot ||
-      governanceDigest(decision) !== governanceDigest(input.decision) ||
-      governanceDigest(delegation) !==
-        governanceDigest(input.executionDelegation) ||
-      !currentPolicyForExecutionGrant(entry, delegation.grant, Date.now())
-    )
-      throw new Error(
-        "Execution Handoff lacks a matching, current joint approval."
-      );
     assertRepositoryMatchesSnapshot(snapshot);
     return structuredClone({ decision, executionDelegation: delegation });
   });

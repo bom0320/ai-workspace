@@ -22,8 +22,10 @@ export type PhaseBGraphOptions = Omit<
 };
 
 function routeAfterPlanning(state: PhaseBState) {
+  const latest = state.planningResults?.at(-1);
   return state.pendingPlanningIds?.length &&
-    state.planningResults?.at(-1)?.result.status !== "failed"
+    (!latest ||
+      (latest.result.status === "completed" && latest.executionSourceId))
     ? "plan-work-item"
     : END;
 }

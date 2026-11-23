@@ -5,6 +5,7 @@ import {
   verifyExecutionHandoff,
 } from "@/application/governance/index.js";
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
+import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import { executeWorkItemPlanning } from "../features/planning/execution/execute-work-item-planning.js";
 import {
@@ -27,7 +28,7 @@ vi.mock(
   "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
   () => ({
     registerExecutionDecomposition: vi.fn(),
-    beginWorkItemExecutionSource: vi.fn(),
+    beginValidatedWorkItemExecutionSource: vi.fn(),
   })
 );
 vi.mock("../features/planning/execution/execute-work-item-planning.js", () => ({
@@ -151,6 +152,11 @@ const workItems = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(executeWorkItemPlanning).mockReset();
+  vi.mocked(beginValidatedWorkItemExecutionSource)
+    .mockReset()
+    .mockImplementation((_handoff, _proposal, item) => () => ({
+      executionSourceId: `source-${item.id}`,
+    }));
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
   vi.mocked(verifyExecutionHandoff).mockReturnValue({
     decision: handoff.decision,
@@ -354,6 +360,7 @@ it.each([
       selected.map(({ id }) => ({
         workItemId: id,
         result: completedPlan(id),
+        executionSourceId: `source-${id}`,
       }))
     );
     expect(result.pendingPlanningIds).toEqual([]);
@@ -419,8 +426,48 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
   }).invoke(input);
   expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
   expect(result.planningResults).toEqual([
-    { workItemId: api.id, result: completedPlan(api.id) },
+    {
+      workItemId: api.id,
+      result: completedPlan(api.id),
+      executionSourceId: `source-${api.id}`,
+    },
     { workItemId: client.id, result: failed },
+  ]);
+});
+
+it("keeps earlier sources and stops at the first blocked completed plan", async () => {
+  const workItems = [api, client, docs];
+  vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
+    completedPlan(phaseB.workItem.id)
+  );
+  vi.mocked(beginValidatedWorkItemExecutionSource)
+    .mockReturnValueOnce(() => ({ executionSourceId: "first-source" }))
+    .mockReturnValueOnce(() => ({
+      executionBlockedReason: "Unverified source.",
+    }));
+
+  const result = await createPhaseBGraph({
+    agent: async () => ({ type: "propose", workItems }),
+    planning: {
+      ...planningOptions,
+      selectWorkItemIds: (items) => items.map(({ id }) => id),
+    },
+  }).invoke(input);
+
+  expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
+  expect(beginValidatedWorkItemExecutionSource).toHaveBeenCalledTimes(2);
+  expect(result.pendingPlanningIds).toEqual([docs.id]);
+  expect(result.planningResults).toEqual([
+    {
+      workItemId: api.id,
+      result: completedPlan(api.id),
+      executionSourceId: "first-source",
+    },
+    {
+      workItemId: client.id,
+      result: completedPlan(client.id),
+      executionBlockedReason: "Unverified source.",
+    },
   ]);
 });
 
@@ -475,7 +522,11 @@ it("takes the selection and prior results only from the current Graph run", asyn
   const second = await graph.invoke(input);
   expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
   expect(first.planningResults).toEqual([
-    { workItemId: feedback.id, result: completedPlan(feedback.id) },
+    {
+      workItemId: feedback.id,
+      result: completedPlan(feedback.id),
+      executionSourceId: `source-${feedback.id}`,
+    },
   ]);
   expect(second).toEqual(first);
 });

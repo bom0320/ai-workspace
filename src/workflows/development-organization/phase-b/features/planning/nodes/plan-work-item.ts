@@ -1,6 +1,6 @@
 import { executeWorkItemPlanning } from "../execution/execute-work-item-planning.js";
 import type { PhaseBState } from "../../../state.js";
-import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
+import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 
 export function createPlanWorkItemNode(
   options?: Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB">
@@ -17,7 +17,11 @@ export function createPlanWorkItemNode(
     }
 
     const { repositoryPath, limits, planner } = options;
-    const recordSource = beginWorkItemExecutionSource(
+    const handoff = state.handoffResult;
+    if (handoff?.status !== "accepted")
+      throw new Error("Detailed Planning requires an accepted Handoff.");
+    const recordSource = beginValidatedWorkItemExecutionSource(
+      handoff.handoff,
       proposal,
       workItem,
       repositoryPath
@@ -26,13 +30,11 @@ export function createPlanWorkItemNode(
       repositoryPath,
       limits,
       planner,
-      ...(state.handoffResult?.status === "accepted" && {
-        executionCeiling: state.handoffResult.handoff.executionDelegation.grant,
-      }),
+      executionCeiling: handoff.handoff.executionDelegation.grant,
       phaseB: { approvedDecisionId: proposal.approvedDecisionId, workItem },
     });
-    const executionSourceId =
-      result.status === "completed" ? recordSource?.(result.task) : undefined;
+    const readiness =
+      result.status === "completed" ? recordSource(result.task) : {};
     return {
       pendingPlanningIds,
       planningResults: [
@@ -40,7 +42,7 @@ export function createPlanWorkItemNode(
         {
           workItemId: workItem.id,
           result,
-          ...(executionSourceId && { executionSourceId }),
+          ...readiness,
         },
       ],
     };

@@ -238,7 +238,7 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 `getExecutionDelegation(approvedDecisionId)`은 Decision과 Human 확인 출처에 연결된 기록을 복원한다. 정책 교체는 이전 버전의 위임을 `superseded`로, Human 확인을 거친 정책 비활성화는 기존 위임을 `revoked`로 처리한다. 발급 기록은 보존하며 새 정책은 기존 위임을 활성화하지 않는다. 만료 시점은 상태와 별도로 확인한다.
 
-**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node는 Handoff 검증 후 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인하며, 출처를 기록할 수 없는 계획은 계획 결과로 남는다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
+**Step 10.2-2 — Execution Authorization:** Phase B의 내부 분해·계획 Node는 Handoff 검증 후 성공 결과를 Governance Ledger에 등록한다. 분해 바인딩은 ApprovedDecision과 Work Item 전체를, `executionSourceId`는 분해·지역 Work Item ID·TaskContract digest·승인 Snapshot을 연결한다. 계획 전후에 승인된 깨끗한 Snapshot을 확인한다. 완료된 계획은 Ledger의 최신 공동 승인, 위임과 정책의 상한 및 TaskContract의 적합성을 같은 트랜잭션에서 검증한 뒤 출처를 저장한다. 실패 시 완료된 계획과 차단 사유를 보존하고 후속 계획을 중단한다. 독립 Direction-only 계획은 기존 출처 등록 경로를 유지한다. 내부 등록 함수는 Governance 공개 API에 포함하지 않는다.
 
 `authorizeExecution(request)`은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청과 TaskContract는 정확한 파일 경로를 유지한다. 요청 경로는 양쪽 Scope의 부분집합이면서 승인 commit의 추적된 일반 파일이어야 한다. 작업 트리에서도 Symlink를 통해 해석되는 경로를 거부한다. 선행 업무가 없는 Work Item만 지원한다. 쓰기 경로와 Verification 명령은 각각 `task.allowedPaths`와 `task.verification`에서 가져오며, 위임과 정책 양쪽의 상한을 적용한다. 성공 시 동일 분해의 Work Item 중복 예약을 차단하고 위임 예산 1회를 예약한 뒤에만 `AuthorizedExecution`을 반환한다. 미사용 예약도 예산에 포함된다. 이전 요청 형식으로 발급한 Permit은 Claim에서 거부한다. 저장된 예약과 Digest를 그대로 보존하며 예산과 중복 예약 제한에도 계속 반영한다.
 
@@ -314,7 +314,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 선택적으로 Ledger의 계획 출처를 가리키는 `executionSourceId`를 포함한다. 공개 입력은 Phase A 완료 계약과 같은 구조의 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 실행 준비가 검증되면 `executionSourceId`를, 완료 후 검증이나 등록이 실패하면 `executionBlockedReason`을 포함한다. 공개 입력은 Phase A 완료 계약과 같은 구조의 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 

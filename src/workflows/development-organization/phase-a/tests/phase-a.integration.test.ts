@@ -833,7 +833,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         )[0].reservations ?? []
     );
   }
-  function runtime(mode: "success" | "decision" | "comparison" = "success") {
+  function runtime(
+    mode: "success" | "decision" | "comparison" = "success",
+    synthesisDirection?: string
+  ) {
     return vi
       .spyOn(processRuntime, "runCommand")
       .mockImplementation(async (_name, args) => {
@@ -854,7 +857,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           const statement = {
             text: context.revision
               ? "Revised reversible direction addressing Human feedback"
-              : "Propose reversible direction while retaining unresolved coverage",
+              : (synthesisDirection ??
+                "Propose reversible direction while retaining unresolved coverage"),
             sources,
           };
           return {
@@ -924,14 +928,18 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     count = 2,
     confirmDirection?: import("../graph.js").PhaseAGraphOptions["confirmDirection"],
     executionDelegationProposalAgent?: governance.ExecutionDelegationProposalAgent,
-    normalWorkflow = false
+    normalWorkflow = false,
+    typoTarget?: string
   ) {
     if (count === 2) prepareBatch();
     else {
       configure();
       delegate();
     }
-    const command = runtime();
+    const command = runtime(
+      "success",
+      typoTarget && `Fix typos in ${typoTarget}`
+    );
     const graph = createPhaseAGraph({
       ...options,
       executionTarget: normalWorkflow
@@ -942,7 +950,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     });
     const config = { configurable: { thread_id: "direction-test" } };
     const pending = await graph.invoke(
-      { goal: options.goal, repositoryPath: root },
+      {
+        goal: typoTarget
+          ? {
+              ...options.goal,
+              objective: `Fix typos in ${typoTarget}`,
+              constraints: [],
+            }
+          : options.goal,
+        repositoryPath: root,
+      },
       config
     );
     if (!normalWorkflow) expect(pending.directionReview).toBeDefined();
@@ -1538,11 +1555,20 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     };
   }
 
-  async function plannedExecutions(
+  async function planExecutionItems(
     withDelegation = true,
     maxExecutions = 1,
     verification = ["git diff --check"],
-    target = "README.md"
+    target = "README.md",
+    {
+      beforePlannerResult,
+      fastPath = false,
+      directoryScope = false,
+    }: {
+      beforePlannerResult?: () => void;
+      fastPath?: boolean;
+      directoryScope?: boolean;
+    } = {}
   ) {
     mkdirSync(join(root, "docs"), { recursive: true });
     mkdirSync(join(root, "docs-extra"), { recursive: true });
@@ -1552,7 +1578,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     git("add", target, "docs/link.ts", "docs-extra/other.md");
     git("commit", "--quiet", "-m", "Add execution target");
     const policyVersion = withDelegation
-      ? configureExecutionPolicy()
+      ? configureExecutionPolicy(
+          directoryScope ? scopedPolicy : executionPolicy
+        )
       : undefined;
     const {
       pending,
@@ -1561,8 +1589,18 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     } = await pendingDirection(
       1,
       confirmDirection,
-      withDelegation ? async () => delegationDraft : undefined,
       withDelegation
+        ? async () =>
+            directoryScope
+              ? {
+                  ...delegationDraft,
+                  readScopes: scopedPolicy.readScopes,
+                  writeScopes: scopedPolicy.writeScopes,
+                }
+              : delegationDraft
+        : undefined,
+      withDelegation,
+      fastPath ? target : undefined
     );
     const review = pending.directionReview!;
     const approved = await phaseA.invoke(
@@ -1577,7 +1615,17 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             : {
                 ...delegatedAction(review, policyVersion),
                 executionDelegation: {
-                  ...delegatedAction(review, policyVersion).executionDelegation,
+                  ...(directoryScope
+                    ? {
+                        readScopes: scopedPolicy.readScopes,
+                        writeScopes: scopedPolicy.writeScopes,
+                        shellCommands: scopedPolicy.shellCommands,
+                        policyVersion,
+                        expiresAt: delegatedAction(review, policyVersion)
+                          .executionDelegation.expiresAt,
+                      }
+                    : delegatedAction(review, policyVersion)
+                        .executionDelegation),
                   budget: { maxExecutions, maxTimeoutMs: 15_000 },
                 },
               },
@@ -1589,8 +1637,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const decision = approved.directionGovernanceResult.decision;
     const workItems = ["first", "second", "third"].map((id) => ({
       id,
-      objective: `Revise ${id} wording in ${target}`,
-      deliverable: `Revised ${target}`,
+      objective: fastPath
+        ? `Fix typos in ${target}`
+        : `Revise ${id} wording in ${target}`,
+      deliverable: fastPath
+        ? `Corrected typos in ${target}`
+        : `Revised ${target}`,
       dependsOn: [],
     }));
     const agent = async () => ({ type: "propose", workItems });
@@ -1598,18 +1650,22 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       repositoryPath: root,
       limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
       selectWorkItemIds: (items) => items.map(({ id }) => id),
-      planner: async ({ goal, detail }) => ({
-        type: "complete",
-        task: {
-          objective: detail!.objective,
-          targetRepository: goal.targetRepository,
-          allowedPaths: [target],
-          forbiddenPaths: [],
-          constraints: [],
-          acceptanceCriteria: ["Revise wording"],
-          verification,
-        },
-      }),
+      planner: async ({ goal, detail }) => {
+        if (fastPath) throw new Error("Fast Path must not call the Planner.");
+        beforePlannerResult?.();
+        return {
+          type: "complete",
+          task: {
+            objective: detail!.objective,
+            targetRepository: goal.targetRepository,
+            allowedPaths: [target],
+            forbiddenPaths: [],
+            constraints: [],
+            acceptanceCriteria: ["Revise wording"],
+            verification,
+          },
+        };
+      },
     };
 
     const handoff = approved.phaseACompletion;
@@ -1651,6 +1707,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
       }
     }
+    return { planningResults, decision, workItems };
+  }
+
+  async function plannedExecutions(
+    ...args: Parameters<typeof planExecutionItems>
+  ) {
+    const { planningResults, decision, workItems } = await planExecutionItems(
+      ...args
+    );
+    const target = args[3] ?? "README.md";
     expect(planningResults).toHaveLength(3);
     return planningResults!.map(({ workItemId, result, executionSourceId }) => {
       if (result.status !== "completed")
@@ -1928,18 +1994,124 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
   });
 
-  it("denies a recorded plan whose verification requires an arbitrary shell command", async () => {
-    const [request] = await plannedExecutions(true, 1, ["pnpm test"]);
-    expect(governance.authorizeExecution(request).status).toBe("denied");
+  it.each([
+    "command",
+    "write",
+    "fast-path-write",
+    "expired",
+    "revoked",
+    "policy",
+    "snapshot",
+    "work-item",
+    "save",
+  ] as const)("blocks Execution Source registration on %s", async (failure) => {
+    const target =
+      failure === "write" || failure === "fast-path-write"
+        ? "docs-extra/planned.md"
+        : "README.md";
+    const beforePlannerResult = () => {
+      if (failure === "expired") {
+        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31 * 60_000);
+      }
+      if (failure === "revoked") configureExecutionPolicy(null);
+      if (failure === "policy") configureExecutionPolicy();
+      if (failure === "snapshot")
+        writeFileSync(join(root, "README.md"), "Drift during Planning");
+      if (failure === "work-item") {
+        withGovernanceRecords((raw, persist) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          const entry = Object.values(ledger.repositories)[0];
+          const [decomposition] = entry.executionDecompositions!;
+          const { binding: _binding, ...subject } = decomposition;
+          subject.workItems[0].objective = "Different Work Item";
+          entry.executionDecompositions = [
+            {
+              ...subject,
+              binding: governanceDigest(subject),
+            },
+          ];
+          persist(raw);
+        });
+      }
+      if (failure === "save") {
+        vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
+          throw new Error("Execution Source write failed.");
+        });
+      }
+    };
+    const { planningResults } = await planExecutionItems(
+      true,
+      1,
+      failure === "command" ? ["pnpm test"] : ["git diff --check"],
+      target,
+      { beforePlannerResult, fastPath: failure === "fast-path-write" }
+    );
+    expect(planningResults).toHaveLength(1);
+    expect(planningResults![0]).toMatchObject({
+      result: {
+        status: "completed",
+        ...(failure === "fast-path-write" && { rounds: 0 }),
+      },
+      executionBlockedReason:
+        failure === "snapshot"
+          ? "Repository does not match the approved Snapshot."
+          : failure === "work-item"
+            ? "Stored Work Item provenance could not be verified."
+            : failure === "save"
+              ? "Execution Source could not be persisted."
+              : failure === "expired" ||
+                  failure === "revoked" ||
+                  failure === "policy"
+                ? "Current joint execution approval could not be verified."
+                : "TaskContract is incompatible with the approved execution bounds.",
+    });
+    expect(planningResults![0].executionSourceId).toBeUndefined();
+    withGovernanceRecords((raw) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      expect(
+        Object.values(ledger.repositories).flatMap(
+          (entry) => entry.workItemExecutionSources ?? []
+        )
+      ).toEqual([]);
+    });
   });
 
-  it("denies execution of a Phase B plan outside the Handoff write ceiling", async () => {
+  it("registers a Planner task under a joint Directory grant", async () => {
     const [request] = await plannedExecutions(
       true,
       1,
       ["git diff --check"],
-      "docs-extra/planned.md"
+      "docs/README.md",
+      { directoryScope: true }
     );
+    const allowed = governance.authorizeExecution(request);
+    expect(allowed.status).toBe("allowed");
+  });
+
+  it("registers a valid Fast Path task through the same Governance boundary", async () => {
+    const { planningResults } = await planExecutionItems(
+      true,
+      1,
+      ["git diff --check"],
+      "README.md",
+      { fastPath: true }
+    );
+    expect(planningResults).toHaveLength(3);
+    for (const plan of planningResults!) {
+      expect(plan.result).toMatchObject({ status: "completed", rounds: 0 });
+      expect(plan.executionSourceId).toMatch(/^[a-f0-9]{64}$/);
+    }
+  });
+
+  it("still denies an unsupported command from a legacy Planning-only source", async () => {
+    const [request] = await plannedExecutions(false, 1, ["pnpm test"]);
+    const input = postDelegationInput(request, executionPolicy);
+    expect(
+      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
+        .status
+    ).toBe("approved");
     expect(governance.authorizeExecution(request).status).toBe("denied");
   });
 

@@ -153,6 +153,57 @@ function evaluateExecution(
   };
 }
 
+function assertExecutionReservationAvailable(
+  evaluated: NonNullable<ReturnType<typeof evaluateExecution>>
+) {
+  const { entry, source, maxExecutions } = evaluated;
+  const reservations = entry.executionReservations ?? [];
+  const matchingSourceIds = new Set(
+    entry.workItemExecutionSources
+      ?.filter(
+        (record) =>
+          record.decompositionBinding === source.decompositionBinding &&
+          record.workItemId === source.workItemId
+      )
+      .map(({ id }) => id)
+  );
+  if (
+    reservations.filter(
+      ({ delegationId }) => delegationId === evaluated.execution.delegationId
+    ).length >= maxExecutions ||
+    reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId))
+  )
+    throw new Error(
+      "Execution budget exhausted or Work Item already reserved."
+    );
+}
+
+export function checkExecutionEligibility(
+  input: unknown
+):
+  | { status: "eligible" }
+  | Exclude<ExecutionAuthorizationVerdict, { status: "allowed" }> {
+  try {
+    const request = executionRequestSchema.parse(input);
+    return withGovernanceLedger((ledger) => {
+      const evaluated = evaluateExecution(ledger, request);
+      if (!evaluated)
+        return {
+          status: "approval-required",
+          reason: "An explicit Execution Delegation is required.",
+        };
+      assertExecutionReservationAvailable(evaluated);
+      return { status: "eligible" };
+    });
+  } catch {
+    return {
+      status: "denied",
+      reason:
+        "Execution request is invalid, stale, already reserved, or exceeds authority.",
+    };
+  }
+}
+
 export function authorizeExecution(
   input: unknown
 ): ExecutionAuthorizationVerdict {
@@ -166,27 +217,9 @@ export function authorizeExecution(
             status: "approval-required",
             reason: "An explicit Execution Delegation is required.",
           };
-        const { entry, source, maxExecutions } = evaluated;
+        const { entry, source } = evaluated;
+        assertExecutionReservationAvailable(evaluated);
         const reservations = (entry.executionReservations ??= []);
-        const matchingSourceIds = new Set(
-          entry.workItemExecutionSources
-            ?.filter(
-              (record) =>
-                record.decompositionBinding === source.decompositionBinding &&
-                record.workItemId === source.workItemId
-            )
-            .map(({ id }) => id)
-        );
-        if (
-          reservations.filter(
-            ({ delegationId }) =>
-              delegationId === evaluated.execution.delegationId
-          ).length >= maxExecutions ||
-          reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId))
-        )
-          throw new Error(
-            "Execution budget exhausted or Work Item already reserved."
-          );
         const execution = { ...evaluated.execution, id: randomUUID() };
         reservations.push({
           id: execution.id,

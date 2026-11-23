@@ -7,3 +7,4 @@ export type {
   ExecutionResult,
   ExecutionTelemetry,
 } from "./model/result.js";
+export { prepareGovernedExecution } from "./flow/prepare-governed-execution.js";

@@ -1564,10 +1564,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       beforePlannerResult,
       fastPath = false,
       directoryScope = false,
+      execution,
     }: {
       beforePlannerResult?: () => void;
       fastPath?: boolean;
       directoryScope?: boolean;
+      execution?: NonNullable<PhaseBGraphOptions["planning"]>["execution"];
     } = {}
   ) {
     mkdirSync(join(root, "docs"), { recursive: true });
@@ -1649,7 +1651,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const planning: NonNullable<PhaseBGraphOptions["planning"]> = {
       repositoryPath: root,
       limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
-      selectWorkItemIds: (items) => items.map(({ id }) => id),
+      selectWorkItemIds: (items) =>
+        (execution ? items.slice(0, 1) : items).map(({ id }) => id),
+      execution,
       planner: async ({ goal, detail }) => {
         if (fastPath) throw new Error("Fast Path must not call the Planner.");
         beforePlannerResult?.();
@@ -1670,6 +1674,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
     const handoff = approved.phaseACompletion;
     let planningResults;
+    let executionResult;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1678,6 +1683,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       });
       expect(state.handoffResult?.status).toBe("accepted");
       planningResults = state.planningResults;
+      executionResult = state.executionResult;
     } else {
       const decomposition = await runWorkDecomposition(
         { approvedDecisionId: decision.id },
@@ -1707,7 +1713,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
       }
     }
-    return { planningResults, decision, workItems };
+    return { planningResults, decision, workItems, executionResult };
   }
 
   async function plannedExecutions(
@@ -1733,6 +1739,53 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       };
     });
   }
+
+  it.each([
+    { readPaths: ["README.md"], expected: "blocked" },
+    { readPaths: ["docs-extra/other.md"], expected: "denied" },
+  ])(
+    "ends governed execution as $expected without launching or reserving",
+    async ({ readPaths, expected }) => {
+      const { executionResult, planningResults, decision, workItems } =
+        await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
+          execution: { readPaths, timeoutMs: 5_000 },
+        });
+      expect(executionResult?.status).toBe(expected);
+      if (expected === "blocked")
+        expect(executionResult?.reason).toMatch(/runtime cannot enforce/);
+      expect(planningResults).toHaveLength(1);
+      const [plan] = planningResults!;
+      expect(plan.result.status).toBe("completed");
+      expect(plan.executionSourceId).toBeDefined();
+      expect(processRuntime.runCommand).not.toHaveBeenCalledWith(
+        "codex",
+        expect.arrayContaining(["workspace-write"]),
+        expect.anything()
+      );
+      withGovernanceRecords((raw) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        expect(
+          Object.values(ledger.repositories).flatMap(
+            (entry) => entry.executionReservations ?? []
+          )
+        ).toEqual([]);
+      });
+      if (plan.result.status !== "completed")
+        throw new Error("Expected a task.");
+      expect(
+        governance.authorizeExecution({
+          approvedDecisionId: decision.id,
+          executionSourceId: plan.executionSourceId,
+          workItem: workItems[0],
+          task: plan.result.task,
+          repositoryPath: root,
+          readPaths: ["README.md"],
+          timeoutMs: 5_000,
+        }).status
+      ).toBe("allowed");
+    }
+  );
 
   function postDelegationInput(
     request: { approvedDecisionId: string },

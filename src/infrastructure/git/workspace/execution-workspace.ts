@@ -29,7 +29,16 @@ function linkDependencies(repositoryRoot: string, workspacePath: string): void {
   }
 }
 
-export function createExecutionWorkspace(repositoryRoot: string): string {
+export function createExecutionWorkspace(
+  repositoryRoot: string,
+  baseCommit?: string
+): string {
+  if (
+    baseCommit !== undefined &&
+    !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseCommit)
+  )
+    throw new Error("Execution Workspace requires a full commit ID.");
+
   const workspacePath = join(
     tmpdir(),
     `ai-workspace-execution-${randomUUID()}`
@@ -45,7 +54,7 @@ export function createExecutionWorkspace(repositoryRoot: string): string {
         "add",
         "--detach",
         workspacePath,
-        "HEAD",
+        baseCommit ?? "HEAD",
       ],
       { encoding: "utf8", stdio: "pipe" }
     );
@@ -70,23 +79,39 @@ export function createExecutionWorkspace(repositoryRoot: string): string {
   }
 
   try {
-    linkDependencies(repositoryRoot, workspacePath);
+    if (baseCommit === undefined) {
+      linkDependencies(repositoryRoot, workspacePath);
+    } else {
+      const actual = execFileSync(
+        "git",
+        ["-C", workspacePath, "rev-parse", "HEAD"],
+        {
+          encoding: "utf8",
+          stdio: "pipe",
+        }
+      ).trim();
+      if (actual !== baseCommit)
+        throw new Error(
+          "Execution Workspace does not match the approved commit."
+        );
+    }
   } catch (error) {
+    const stage =
+      baseCommit === undefined
+        ? "link execution workspace dependencies"
+        : "verify the approved Workspace commit";
     try {
       removeExecutionWorkspace(repositoryRoot, workspacePath);
     } catch (cleanupError) {
       throw new Error(
-        `Failed to link execution workspace dependencies; cleanup also failed at ${workspacePath}.`,
+        `Failed to ${stage}; cleanup also failed at ${workspacePath}.`,
         {
           cause: new AggregateError([error, cleanupError]),
         }
       );
     }
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to link execution workspace dependencies: ${detail}`,
-      { cause: error }
-    );
+    throw new Error(`Failed to ${stage}: ${detail}`, { cause: error });
   }
 
   return resolve(workspacePath);

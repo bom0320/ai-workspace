@@ -9,6 +9,11 @@ import type { executeWorkItemPlanning } from "./features/planning/execution/exec
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { phaseBInput, phaseBState, type PhaseBState } from "./state.js";
 
+import {
+  createPrepareExecutionNode,
+  type PhaseBExecutionOptions,
+} from "./features/execution/nodes/prepare-execution.js";
+
 export type PhaseBGraphOptions = Omit<
   RunWorkDecompositionOptions,
   "executionCeiling"
@@ -18,6 +23,7 @@ export type PhaseBGraphOptions = Omit<
     "phaseB" | "executionCeiling"
   > & {
     selectWorkItemIds: SelectWorkItemIds;
+    execution?: PhaseBExecutionOptions;
   };
 };
 
@@ -35,6 +41,7 @@ export function createPhaseBGraph({
   ...decompositionOptions
 }: PhaseBGraphOptions = {}) {
   const selectWorkItemIds = planning?.selectWorkItemIds;
+  const execution = planning?.execution;
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
@@ -46,7 +53,11 @@ export function createPhaseBGraph({
       "select-planning-work-items",
       createSelectPlanningWorkItemsNode(selectWorkItemIds)
     )
-    .addNode("plan-work-item", createPlanWorkItemNode(planning));
+    .addNode("plan-work-item", createPlanWorkItemNode(planning))
+    .addNode(
+      "prepare-execution",
+      createPrepareExecutionNode(planning?.repositoryPath, execution)
+    );
 
   // 2. Connect Execution Edges
   graph.addEdge(START, "run-work-decomposition");
@@ -64,10 +75,15 @@ export function createPhaseBGraph({
     "plan-work-item",
     END,
   ]);
-  graph.addConditionalEdges("plan-work-item", routeAfterPlanning, [
+  graph.addConditionalEdges(
     "plan-work-item",
-    END,
-  ]);
+    (state) => {
+      const next = routeAfterPlanning(state);
+      return next === END && execution ? "prepare-execution" : next;
+    },
+    ["plan-work-item", "prepare-execution", END]
+  );
+  graph.addEdge("prepare-execution", END);
 
   // 3. Compile Graph
   return graph

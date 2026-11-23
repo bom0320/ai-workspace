@@ -78,6 +78,34 @@ afterEach(() => {
 });
 
 describe("createExecutionWorkspace", () => {
+  it("pins a full commit independently of HEAD and avoids dependency links", () => {
+    const repository = createGitRepository();
+    const approved = execFileSync(
+      "git",
+      ["-C", repository, "rev-parse", "HEAD"],
+      {
+        encoding: "utf8",
+      }
+    ).trim();
+    writeFileSync(join(repository, "committed.txt"), "new head");
+    execFileSync("git", ["-C", repository, "commit", "-qam", "advance head"]);
+    mkdirSync(join(repository, "node_modules", "outside"), { recursive: true });
+    expect(() => createExecutionWorkspace(repository, "HEAD")).toThrow(
+      "full commit ID"
+    );
+
+    workspacePath = createExecutionWorkspace(repository, approved);
+    expect(
+      execFileSync("git", ["-C", workspacePath, "rev-parse", "HEAD"], {
+        encoding: "utf8",
+      }).trim()
+    ).toBe(approved);
+    expect(readFileSync(join(workspacePath, "committed.txt"), "utf8")).toBe(
+      "committed content\n"
+    );
+    expect(existsSync(join(workspacePath, "node_modules"))).toBe(false);
+  });
+
   it("links installed dependencies, honors directory ignore rules, and preserves originals on cleanup", () => {
     const repository = createGitRepository();
     const dependencies = join(repository, "node_modules");

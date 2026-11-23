@@ -1817,6 +1817,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "unknown-slot",
     "model-command",
     "absolute-target",
+    "relative-target",
     "symlink",
     "verification",
     "worker-timeout",
@@ -1824,6 +1825,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     vi.stubEnv("AI_WORKSPACE_GOVERNED_OPENAI_API_KEY", "test-key");
     const fetch = vi.fn(async (url: string, request: RequestInit) => {
       expect(url).toBe("https://api.openai.com/v1/responses");
+      expect(request.redirect).toBe("error");
       const body = JSON.parse(String(request.body));
       expect(body.tools).toEqual([]);
       expect(body.tool_choice).toBe("none");
@@ -1881,6 +1883,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                       slot: 0,
                       ...(mode === "absolute-target" && {
                         path: "/tmp/unapproved",
+                      }),
+                      ...(mode === "relative-target" && {
+                        path: "../unapproved",
                       }),
                       content:
                         mode === "verification"

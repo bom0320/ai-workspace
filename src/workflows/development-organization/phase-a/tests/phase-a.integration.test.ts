@@ -2010,6 +2010,44 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(governance.authorizeExecution(third).status).toBe("denied");
   });
 
+  it("atomically claims an execution and shares the budget with unused permits", async () => {
+    const [first, second, third] = await plannedExecutions(true, 2);
+    const prior = governance.authorizeExecution(first);
+    if (prior.status !== "allowed") throw new Error(JSON.stringify(prior));
+    expect(governance.authorizeAndClaimExecution(first).status).toBe("denied");
+
+    const rename = vi.spyOn(filesystem, "renameSync");
+    const claimed = governance.authorizeAndClaimExecution(second);
+    if (claimed.status !== "claimed") throw new Error(JSON.stringify(claimed));
+    expect(rename).toHaveBeenCalledOnce();
+    withGovernanceRecords((raw) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const records = Object.values(ledger.repositories).flatMap(
+        (entry) => entry.executionReservations ?? []
+      );
+      expect(records).toHaveLength(2);
+      expect(
+        records.find(({ id }) => id === prior.execution.id)?.claimedAt
+      ).toBeUndefined();
+      const record = records.find(({ id }) => id === claimed.execution.id)!;
+      expect(record.claimedAt).toBe(record.reservedAt);
+      expect(record.claimedAt).toBeDefined();
+      expect(record.requestDigest).toBe(
+        governanceDigest(claimed.execution.request)
+      );
+      expect(record.executionDigest).toBe(governanceDigest(claimed.execution));
+    });
+    expect(governance.authorizeAndClaimExecution(second).status).toBe("denied");
+    expect(governance.claimAuthorizedExecution(claimed.execution).status).toBe(
+      "denied"
+    );
+    expect(governance.authorizeAndClaimExecution(third).status).toBe("denied");
+    expect(governance.claimAuthorizedExecution(prior.execution).status).toBe(
+      "claimed"
+    );
+  });
+
   it("preserves legacy reservations without accepting old or translated permits", async () => {
     const [request, second, third] = await plannedExecutions(true, 2);
     const allowed = governance.authorizeExecution(request);
@@ -2049,6 +2087,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it("requires a delegation for a valid Direction-only plan", async () => {
     const [request] = await plannedExecutions(false);
     expect(governance.authorizeExecution(request).status).toBe(
+      "approval-required"
+    );
+    expect(governance.authorizeAndClaimExecution(request).status).toBe(
       "approval-required"
     );
   });
@@ -2214,6 +2255,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         governance.claimAuthorizedExecution(allowed.execution).status
       ).toBe("denied");
       expect(governance.authorizeExecution(second).status).toBe("denied");
+      expect(governance.authorizeAndClaimExecution(second).status).toBe(
+        "denied"
+      );
     }
   );
 
@@ -2227,6 +2271,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     };
     rename.mockImplementationOnce(fail);
     expect(governance.authorizeExecution(request).status).toBe("denied");
+    expect(readFileSync(path, "utf8")).toBe(before);
+    rename.mockImplementationOnce(fail);
+    expect(governance.authorizeAndClaimExecution(request).status).toBe(
+      "denied"
+    );
     expect(readFileSync(path, "utf8")).toBe(before);
     const allowed = governance.authorizeExecution(request);
     if (allowed.status !== "allowed") throw new Error(JSON.stringify(allowed));

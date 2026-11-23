@@ -204,35 +204,45 @@ export function checkExecutionEligibility(
   }
 }
 
-export function authorizeExecution(
-  input: unknown
-): ExecutionAuthorizationVerdict {
+type ExecutionDenial = Exclude<
+  ExecutionAuthorizationVerdict,
+  { status: "allowed" }
+>;
+
+function reserveExecution(
+  input: unknown,
+  claimImmediately: boolean
+): { execution: AuthorizedExecution } | ExecutionDenial {
   try {
-    const request = executionRequestSchema.parse(input);
-    return withGovernanceLedger(
-      (ledger, save): ExecutionAuthorizationVerdict => {
-        const evaluated = evaluateExecution(ledger, request);
-        if (!evaluated)
-          return {
-            status: "approval-required",
-            reason: "An explicit Execution Delegation is required.",
-          };
-        const { entry, source } = evaluated;
-        assertExecutionReservationAvailable(evaluated);
-        const reservations = (entry.executionReservations ??= []);
-        const execution = { ...evaluated.execution, id: randomUUID() };
-        reservations.push({
-          id: execution.id,
-          sourceId: source.id,
-          delegationId: execution.delegationId,
-          requestDigest: governanceDigest(execution.request),
-          executionDigest: governanceDigest(execution),
-          reservedAt: new Date().toISOString(),
-        });
-        save();
-        return { status: "allowed", execution };
-      }
-    );
+    return withGovernanceLedger((ledger, save) => {
+      const request = executionRequestSchema.parse(input);
+      const evaluated = evaluateExecution(ledger, request);
+      if (!evaluated)
+        return {
+          status: "approval-required",
+          reason: "An explicit Execution Delegation is required.",
+        };
+      const { entry, source } = evaluated;
+      assertExecutionReservationAvailable(evaluated);
+      const execution = { ...evaluated.execution, id: randomUUID() };
+      const now = Date.now();
+      if (now + request.timeoutMs > Date.parse(execution.expiresAt))
+        throw new Error(
+          "Execution delegation has insufficient time remaining."
+        );
+      const reservedAt = new Date(now).toISOString();
+      (entry.executionReservations ??= []).push({
+        id: execution.id,
+        sourceId: source.id,
+        delegationId: execution.delegationId,
+        requestDigest: governanceDigest(execution.request),
+        executionDigest: governanceDigest(execution),
+        reservedAt,
+        ...(claimImmediately && { claimedAt: reservedAt }),
+      });
+      save();
+      return { execution };
+    });
   } catch {
     return {
       status: "denied",
@@ -240,6 +250,22 @@ export function authorizeExecution(
         "Execution request is invalid, stale, already reserved, exceeds authority, or could not be persisted.",
     };
   }
+}
+
+export function authorizeExecution(
+  input: unknown
+): ExecutionAuthorizationVerdict {
+  const result = reserveExecution(input, false);
+  return "execution" in result ? { status: "allowed", ...result } : result;
+}
+
+// The durable claim is written before returning the permit. It may be consumed
+// even if the caller exits before a Worker process starts.
+export function authorizeAndClaimExecution(
+  input: unknown
+): { status: "claimed"; execution: AuthorizedExecution } | ExecutionDenial {
+  const result = reserveExecution(input, true);
+  return "execution" in result ? { status: "claimed", ...result } : result;
 }
 
 // Step 10.2-3 must call this immediately before starting the Worker and use

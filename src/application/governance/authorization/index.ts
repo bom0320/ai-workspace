@@ -10,6 +10,7 @@ export {
 } from "./features/specialist-invocation/model/reservation.js";
 export { claimAuthorizedInvocation } from "./features/specialist-invocation/flow/claim-authorized-invocation.js";
 export {
+  authorizeAndClaimExecution,
   authorizeExecution,
   claimAuthorizedExecution,
   checkExecutionEligibility,

@@ -12,8 +12,8 @@ export function resolveDetailedPlanningReadiness(
     const item = workItems.find((workItem) => workItem.id === id);
     if (item?.workType !== "repository-modification") continue;
     const workers = assignments.filter(
-      ({ workItemId, executor }) =>
-        workItemId === id && executor.kind === "worker"
+      ({ workItemId, repositoryAccessCeiling }) =>
+        workItemId === id && repositoryAccessCeiling === "write"
     );
     if (
       !item.dependsOn.length &&

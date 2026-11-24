@@ -1,7 +1,10 @@
 import { assignmentExecutionRecordSchema } from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import { validateAssignmentProposal } from "@/contracts/phase-b-assignment.js";
+import {
+  selectAssignmentWorkItems,
+  validateAssignmentProposal,
+} from "@/contracts/phase-b-assignment.js";
 import { approvedDecisionSchema } from "../approval/features/direction-review/model/result.js";
 import {
   directionAnalysisSchema,
@@ -112,12 +115,18 @@ export const governanceLedgerSchema = z
         const decomposition = entry.executionDecompositions?.find(
           ({ binding }) => binding === plan.decompositionBinding
         );
+        const selected =
+          decomposition &&
+          selectAssignmentWorkItems(
+            decomposition.workItems,
+            plan.selectedWorkItemIds
+          );
         if (
           planIds.has(id) ||
           governanceDigest(plan) !== id ||
           governanceDigest(plan.snapshot.repositoryRoot) !== key ||
-          !decomposition ||
-          validateAssignmentProposal(plan.assignments, decomposition.workItems)
+          !selected ||
+          validateAssignmentProposal(plan.assignments, selected)
         )
           context.addIssue({
             code: "custom",
@@ -156,7 +165,7 @@ export const governanceLedgerSchema = z
           !delegation ||
           !decomposition ||
           delegation.approvedDecisionId !== decomposition.approvedDecisionId ||
-          assignment?.executor.kind !== "specialist" ||
+          assignment?.repositoryAccessCeiling !== "read" ||
           count > delegation.grant.budget.maxExecutions ||
           record.reservedAt < delegation.issuedAt ||
           record.reservedAt >= delegation.grant.expiresAt ||
@@ -173,8 +182,7 @@ export const governanceLedgerSchema = z
                 }))) ||
           (record.result &&
             (!record.claimedAt ||
-              record.result.decision.specialistId !==
-                assignment.executor.specialistId ||
+              record.result.decision.specialistId !== assignment.specialistId ||
               record.result.digest !==
                 governanceDigest({
                   id: record.id,

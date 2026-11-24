@@ -71,7 +71,9 @@ export async function executeAssignmentPlan(
   const attemptedWorkerPlans = new Set<string>();
   const completedWorkerPlans = new Set<string>();
   const workerPlans = detailedPlanning
-    ? plan.assignments.filter(({ executor }) => executor.kind === "worker")
+    ? plan.assignments.filter(
+        ({ repositoryAccessCeiling }) => repositoryAccessCeiling === "write"
+      )
     : [];
   const planningFailures = new Set<string>();
   const executionKey = (id: string) => `execution:${id}`;
@@ -107,7 +109,7 @@ export async function executeAssignmentPlan(
           pending.find(
             (assignment) =>
               assignment.workItemId === workItemId &&
-              assignment.executor.kind === "specialist" &&
+              assignment.repositoryAccessCeiling === "read" &&
               !running.has(executionKey(assignment.id)) &&
               !waiting.has(assignment.id) &&
               assignment.dependsOn.every((id) => completed.has(id))
@@ -223,16 +225,18 @@ export async function executeAssignmentPlan(
     ...(planningFailures.size && {
       failedPlanningWorkItemIds: [...planningFailures],
     }),
-    pendingAssignments: pending.map(({ id, workItemId, executor }) => ({
-      assignmentId: id,
-      workItemId,
-      reason:
-        executor.kind === "worker"
-          ? ("worker-pending" as const)
-          : Object.hasOwn(contexts, id)
-            ? ("dependency-pending" as const)
-            : ("context-required" as const),
-    })),
+    pendingAssignments: pending.map(
+      ({ id, workItemId, repositoryAccessCeiling }) => ({
+        assignmentId: id,
+        workItemId,
+        reason:
+          repositoryAccessCeiling === "write"
+            ? ("worker-pending" as const)
+            : Object.hasOwn(contexts, id)
+              ? ("dependency-pending" as const)
+              : ("context-required" as const),
+      })
+    ),
   };
 }
 

@@ -5,6 +5,7 @@ import {
 } from "@/application/governance/index.js";
 import {
   phaseBAssignmentsSchema,
+  selectAssignmentWorkItems,
   validateAssignmentProposal,
 } from "@/contracts/phase-b-assignment.js";
 
@@ -42,11 +43,9 @@ export async function prepareAssignmentPlan(
     return denied("provenance");
   }
 
-  const workItems = context.workItems.filter(({ id }) =>
-    selectedIds.includes(id)
-  );
-  if (!workItems.length || workItems.length !== new Set(selectedIds).size)
-    return denied("proposal");
+  const selection = [...selectedIds];
+  const workItems = selectAssignmentWorkItems(context.workItems, selection);
+  if (!workItems) return denied("proposal");
 
   let input: unknown;
   try {
@@ -56,13 +55,19 @@ export async function prepareAssignmentPlan(
   }
 
   const parsed = phaseBAssignmentsSchema.safeParse(input);
-  if (!parsed.success || validateAssignmentProposal(parsed.data, workItems))
+  if (
+    !parsed.success ||
+    validateAssignmentProposal(parsed.data, workItems, {
+      specialistIds: context.specialists.map(({ id }) => id),
+      repositoryAccessCeilings: context.repositoryAccessCeilings,
+    })
+  )
     return denied("proposal");
 
   try {
     return {
       status: "prepared" as const,
-      plan: registerAssignmentPlan(handoff, proposal, parsed.data, selectedIds),
+      plan: registerAssignmentPlan(handoff, proposal, parsed.data, selection),
     };
   } catch (error) {
     return denied(

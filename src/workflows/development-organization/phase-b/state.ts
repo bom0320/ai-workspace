@@ -26,7 +26,15 @@ export const phaseBState = new StateSchema({
     ])
     .optional(),
   assignmentExecutionResult: z
-    .custom<Awaited<ReturnType<typeof executeAssignmentPlan>>>()
+    .custom<
+      | Awaited<ReturnType<typeof executeAssignmentPlan>>
+      | {
+          status: "denied";
+          failure: "unsupported";
+          planId: string;
+          reason: string;
+        }
+    >()
     .optional(),
   assignmentPlanResult: z
     .custom<Awaited<ReturnType<typeof prepareAssignmentPlan>>>()

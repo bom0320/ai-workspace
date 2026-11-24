@@ -20,6 +20,7 @@ export type AssignmentExecutionRequest = z.infer<
 
 export const assignmentExecutionFailureStageSchema = z.enum([
   "authority",
+  "unsupported",
   "budget",
   "duplicate",
   "claim",

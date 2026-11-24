@@ -21,7 +21,8 @@ function worker(
   return {
     id: `worker-${workItemId}`,
     workItemId,
-    executor: { kind: "worker", mode: "codex-worktree" },
+    specialistId: "approved",
+    repositoryAccessCeiling: "write",
     objective: "Implement",
     deliverable: "Patch",
     dependsOn: [],

@@ -32,7 +32,8 @@ const proposal = {
 const assignment = {
   id: "review",
   workItemId: "work",
-  executor: { kind: "specialist", specialistId: "reviewer" },
+  specialistId: "reviewer",
+  repositoryAccessCeiling: "read",
   objective: "Analyze",
   deliverable: "Findings",
   dependsOn: [],
@@ -42,9 +43,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getAssignmentPlanContext).mockReturnValue({
     workItems: [workItem],
-    specialists: [],
-    specialistAllowed: true,
-    workerMode: undefined,
+    specialists: [{ id: "reviewer", role: "Review", objective: "Analyze" }],
+    repositoryAccessCeilings: ["read"],
   });
 });
 
@@ -99,3 +99,12 @@ it.each(["provenance", "proposal", "ledger"] as const)(
     expect(JSON.stringify(result)).not.toContain("Private Ledger path");
   }
 );
+
+it("rejects an unknown Specialist before writing the Plan", async () => {
+  await expect(
+    prepareAssignmentPlan(handoff, proposal, ["work"], async () => [
+      { ...assignment, specialistId: "invented" },
+    ])
+  ).resolves.toMatchObject({ status: "denied", failure: "proposal" });
+  expect(registerAssignmentPlan).not.toHaveBeenCalled();
+});

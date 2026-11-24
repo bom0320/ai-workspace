@@ -10,6 +10,7 @@ export const assignmentPlanSchema = z
     decompositionBinding: digest,
     staffingBinding: digest,
     snapshot: repositorySnapshotSchema,
+    selectedWorkItemIds: z.array(z.string().min(1)).min(1),
     assignments: phaseBAssignmentsSchema,
   })
   .strict();

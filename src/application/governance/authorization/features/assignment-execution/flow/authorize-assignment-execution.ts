@@ -13,8 +13,18 @@ import { resolvePreparedAssignmentPlan } from "../../../../records/assignment-pl
 import type { Handoff } from "../../../../records/assignment-plans/resolve-assignment-context.js";
 import { resolveAssignmentExecution } from "./resolve-assignment-execution.js";
 
+// The replacement Phase B Plan only assigns responsibility. Step 5.3.2 must
+// introduce an Assignment-specific grant before this runtime can be enabled.
+const assignmentAuthorizationAvailable = false;
+
+function assertAssignmentAuthorizationAvailable() {
+  if (!assignmentAuthorizationAvailable)
+    throw new AssignmentExecutionError("unsupported");
+}
+
 export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
   const request = assignmentExecutionRequestSchema.parse(input);
+  assertAssignmentAuthorizationAvailable();
   return withGovernanceLedger((ledger, save) => {
     const {
       entry,
@@ -88,6 +98,7 @@ export function claimAssignmentExecution(
   planId: string,
   id: string
 ) {
+  assertAssignmentAuthorizationAvailable();
   return withGovernanceLedger((ledger, save) => {
     const { entry } = resolvePreparedAssignmentPlan(ledger, handoff, planId);
     const record = entry.assignmentExecutions?.find(

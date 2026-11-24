@@ -633,12 +633,14 @@ const combinedPlan = {
   id: "plan",
   decompositionBinding: "binding",
   staffingBinding: "staffing",
+  selectedWorkItemIds: combinedItems.map(({ id }) => id),
   snapshot: approval.snapshot,
   assignments: [
     {
       id: "review",
       workItemId: "awaiting",
-      executor: { kind: "specialist" as const, specialistId: "ux" },
+      specialistId: "ux",
+      repositoryAccessCeiling: "read" as const,
       objective: "Review",
       deliverable: "Findings",
       dependsOn: [],
@@ -646,7 +648,8 @@ const combinedPlan = {
     ...["ready", "awaiting"].map((id) => ({
       id,
       workItemId: id,
-      executor: { kind: "worker" as const, mode: "codex-worktree" as const },
+      specialistId: "ux",
+      repositoryAccessCeiling: "write" as const,
       objective: "Implement",
       deliverable: "Patch",
       dependsOn: id === "awaiting" ? ["review"] : [],
@@ -697,35 +700,24 @@ it.each(["prepared", "denied"] as const)(
       agent
     );
     expect(result.assignmentPlanResult).toEqual(assignmentResult);
-    expect(result.executionPreparationResult).toMatchObject({
-      status: "blocked",
-      workItemId: "ready",
-    });
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
-    if (status === "denied") {
-      expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-      expect(getPreparedAssignmentPlan).not.toHaveBeenCalled();
-      expect(result.pendingPlanningIds).toBeUndefined();
-      expect(result.planningResults).toEqual([]);
-    } else {
-      expect(getPreparedAssignmentPlan).toHaveBeenCalledExactlyOnceWith(
-        handoff,
-        combinedPlan.id
-      );
-      expect(executeWorkItemPlanning).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          phaseB: { ...decompositionInput, workItem: combinedItems[0] },
-        })
-      );
+    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+    expect(getPreparedAssignmentPlan).not.toHaveBeenCalled();
+    expect(result.pendingPlanningIds).toBeUndefined();
+    expect(result.planningResults).toEqual([]);
+    if (status === "prepared") {
+      expect(result.executionPreparationResult).toMatchObject({
+        status: "blocked",
+        workItemId: "ready",
+      });
       expect(result.deferredDetailedPlanningIds).toEqual([
+        "ready",
         "awaiting",
         "without-worker",
       ]);
-      expect(result.pendingPlanningIds).toEqual([]);
-      expect(result.planningResults).toEqual([
-        { workItemId: "ready", result: completedPlan("ready") },
-      ]);
+    } else {
+      expect(result.executionPreparationResult).toBeUndefined();
     }
   }
 );

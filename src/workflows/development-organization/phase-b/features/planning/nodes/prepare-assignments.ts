@@ -2,12 +2,12 @@ import {
   prepareAssignmentPlan,
   type AssignmentPlanAgent,
 } from "@/application/planning/index.js";
-import { resolveDetailedPlanningReadiness } from "../coordination/resolve-detailed-planning-readiness.js";
 import type { PhaseBState } from "../../../state.js";
 
 export function createPrepareAssignmentsNode(
   agent: AssignmentPlanAgent | undefined,
   hasDetailedPlanning: boolean,
+  assignmentExecutionRequested: boolean,
   executionWorkItemId?: string
 ) {
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
@@ -28,26 +28,30 @@ export function createPrepareAssignmentsNode(
       agent
     );
     const result: Partial<PhaseBState> = { assignmentPlanResult };
+    if (assignmentPlanResult.status !== "prepared") return result;
+    const reason =
+      "Assignment execution requires Phase-scoped Assignment Authorization.";
+    if (assignmentExecutionRequested)
+      result.assignmentExecutionResult = {
+        status: "denied",
+        failure: "unsupported",
+        planId: assignmentPlanResult.plan.id,
+        reason,
+      };
     if (executionWorkItemId !== undefined)
       result.executionPreparationResult = {
         status: "blocked",
         workItemId: executionWorkItemId,
-        reason:
-          "Assignment-based execution requires Assignment Authorization and Result Handoff.",
+        reason,
       };
-    if (!hasDetailedPlanning || assignmentPlanResult.status !== "prepared")
-      return result;
-
-    const { readyWorkItemIds, deferredWorkItemIds } =
-      resolveDetailedPlanningReadiness(
-        selectedWorkItemIds,
-        workDecompositionResult.workItems,
-        assignmentPlanResult.plan.assignments
-      );
-    return {
-      ...result,
-      pendingPlanningIds: readyWorkItemIds,
-      deferredDetailedPlanningIds: deferredWorkItemIds,
-    };
+    if (hasDetailedPlanning)
+      result.deferredDetailedPlanningIds = workDecompositionResult.workItems
+        .filter(
+          ({ id, workType }) =>
+            selectedWorkItemIds.includes(id) &&
+            workType === "repository-modification"
+        )
+        .map(({ id }) => id);
+    return result;
   };
 }

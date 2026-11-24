@@ -1,3 +1,5 @@
+import type { PhaseBAssignment } from "@/contracts/phase-b-assignment.js";
+import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import type { WorkDecompositionResult } from "@/application/work-decomposition/index.js";
@@ -53,7 +55,32 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
       definition,
     };
   });
-  const scopes = executionScopes(delegation.grant);
+  const definitions = new Map<string, string>();
+  for (const { definition } of sources) {
+    const digest = governanceDigest(definition);
+    const prior = definitions.get(definition.id);
+    if (prior && prior !== digest)
+      throw new Error("Approved Specialist identity is ambiguous.");
+    definitions.set(definition.id, digest);
+  }
+  const granted = executionScopes(delegation.grant);
+  const permitted = executionScopes(policy);
+  const overlaps = (kind: keyof typeof granted) =>
+    granted[kind].some((scope) =>
+      isContextScopeContained(scope, { allowedScopes: permitted[kind] })
+    ) ||
+    permitted[kind].some((scope) =>
+      isContextScopeContained(scope, { allowedScopes: granted[kind] })
+    );
+  const repositoryAccessCeilings: PhaseBAssignment["repositoryAccessCeiling"][] =
+    [];
+  if (overlaps("readScopes")) repositoryAccessCeilings.push("read");
+  if (
+    overlaps("writeScopes") &&
+    delegation.grant.workerMode === "codex-worktree" &&
+    policy.workerMode === "codex-worktree"
+  )
+    repositoryAccessCeilings.push("write");
   return {
     entry,
     goal: context.goal,
@@ -64,11 +91,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     snapshot,
     sources,
     staffingBinding: governanceDigest(sources),
-    specialistAllowed: scopes.readScopes.length > 0,
-    workerAllowed:
-      scopes.writeScopes.length > 0 &&
-      delegation.grant.workerMode === "codex-worktree" &&
-      policy.workerMode === "codex-worktree",
+    repositoryAccessCeilings,
   };
 }
 
@@ -94,20 +117,20 @@ export function resolveProposalContext(
 export function getAssignmentPlanContext(handoff: Handoff, proposal: Proposal) {
   return withGovernanceLedger((ledger) => {
     const context = resolveProposalContext(ledger, handoff, proposal);
-    return structuredClone({
-      workItems: context.decomposition.workItems,
-      specialists: context.sources.map(
-        ({ definition, assignmentObjective }) => ({
+    const specialists = new Map(
+      context.sources.map(({ definition }) => [
+        definition.id,
+        {
           id: definition.id,
           role: definition.role,
           objective: definition.objective,
-          assignmentObjective,
-        })
-      ),
-      specialistAllowed: context.specialistAllowed,
-      workerMode: context.workerAllowed
-        ? ("codex-worktree" as const)
-        : undefined,
+        },
+      ])
+    );
+    return structuredClone({
+      workItems: context.decomposition.workItems,
+      specialists: [...specialists.values()],
+      repositoryAccessCeilings: context.repositoryAccessCeilings,
     });
   });
 }

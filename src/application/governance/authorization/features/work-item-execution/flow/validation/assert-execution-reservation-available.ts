@@ -15,21 +15,20 @@ export function assertExecutionReservationAvailable(
       .map(({ id }) => id)
   );
   if (
+    entry.assignmentPlans?.some(
+      (plan) =>
+        plan.decompositionBinding === source.decompositionBinding &&
+        plan.selectedWorkItemIds.includes(source.workItemId)
+    )
+  )
+    throw new Error(
+      "Work Item has an Assignment Plan and requires Assignment Authorization."
+    );
+  if (
     [...reservations, ...(entry.assignmentExecutions ?? [])].filter(
       ({ delegationId }) => delegationId === evaluated.execution.delegationId
     ).length >= maxExecutions ||
-    reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId)) ||
-    entry.assignmentExecutions?.some(({ request }) =>
-      entry.assignmentPlans?.some(
-        (plan) =>
-          plan.id === request.planId &&
-          plan.decompositionBinding === source.decompositionBinding &&
-          plan.assignments.some(
-            ({ id, workItemId }) =>
-              id === request.assignmentId && workItemId === source.workItemId
-          )
-      )
-    )
+    reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId))
   )
     throw new Error(
       "Execution budget exhausted or Work Item already reserved."

@@ -1813,7 +1813,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       specialists.map(({ id }, index) => ({
         id: `assignment-${index}`,
         workItemId: "first",
-        executor: { kind: "specialist", specialistId: id },
+        specialistId: id,
+        repositoryAccessCeiling: "read",
         objective: "Assess the existing wording",
         deliverable: "Evidence-linked findings",
         dependsOn: [],
@@ -1839,6 +1840,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(planningResults).toEqual([]);
     const persisted = governance.getPreparedAssignmentPlan(handoff, plan.id);
     expect(persisted.plan).toEqual(plan);
+    const { id, ...subject } = plan;
+    expect(plan.selectedWorkItemIds).toEqual(["first"]);
+    expect(id).toBe(governanceDigest(subject));
+
     expect(persisted.specialistSources[0]).toMatchObject({
       definition: {
         id: expect.any(String),
@@ -1869,11 +1874,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       [
         {
           ...assignment,
-          executor: { kind: "specialist", specialistId: "not-registered" },
+          specialistId: "not-registered",
         },
       ],
-      [{ ...assignment, executor: { kind: "specialist", specialistId: "ux" } }],
+      [{ ...assignment, specialistId: "ux" }],
       [{ ...assignment, workItemId: "unbound" }],
+      [{ ...assignment, workItemId: "second" }],
+      [{ ...assignment, repositoryAccessCeiling: "write" }],
       [{ ...assignment, role: "Forged role" }],
       [{ ...assignment, readPaths: ["outside.txt"] }],
       [{ ...assignment, id: "" }],
@@ -1888,7 +1895,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ];
     for (const candidate of rejects)
       expect(() =>
-        governance.registerAssignmentPlan(handoff, proposal, candidate)
+        governance.registerAssignmentPlan(handoff, proposal, candidate, [
+          "first",
+        ])
       ).toThrow();
     expect(() =>
       governance.registerAssignmentPlan(
@@ -1900,7 +1909,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             objective: "Forged",
           })),
         },
-        plan.assignments
+        plan.assignments,
+        ["first"]
       )
     ).toThrow(governance.AssignmentRegistrationError);
     const ledgerPath = join(home, ".ai-workspace-governance", "records.json");
@@ -1911,35 +1921,86 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       const entry = Object.values(ledger.repositories).find(
         (item) => item.assignmentPlans?.length
       )!;
-      entry.assignmentPlans![0].assignments[0].objective = "Tampered";
+      entry.assignmentPlans![0].selectedWorkItemIds = ["second"];
       save(ledger);
     });
     expect(() =>
       governance.getPreparedAssignmentPlan(handoff, plan.id)
     ).toThrow("Invalid Assignment Plan binding");
     writeFileSync(ledgerPath, original);
+    withGovernanceRecords((raw, save) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const entry = Object.values(ledger.repositories).find(
+        (item) => item.assignmentPlans?.length
+      )!;
+      const {
+        selectedWorkItemIds: _selection,
+        assignments,
+        id: _id,
+        ...binding
+      } = entry.assignmentPlans![0];
+      const legacy = {
+        ...binding,
+        assignments: assignments.map(
+          ({ specialistId, repositoryAccessCeiling: _ceiling, ...item }) => ({
+            ...item,
+            executor: { kind: "specialist", specialistId },
+          })
+        ),
+      };
+      save({
+        ...ledger,
+        repositories: Object.fromEntries(
+          Object.entries(ledger.repositories).map(([key, value]) => [
+            key,
+            value === entry
+              ? {
+                  ...value,
+                  assignmentPlans: [
+                    { ...legacy, id: governanceDigest(legacy) },
+                  ],
+                }
+              : value,
+          ])
+        ),
+      });
+    });
+    const legacyLedger = readFileSync(ledgerPath, "utf8");
+    expect(() =>
+      governance.getPreparedAssignmentPlan(handoff, plan.id)
+    ).toThrow();
+    expect(readFileSync(ledgerPath, "utf8")).toBe(legacyLedger);
+    writeFileSync(ledgerPath, original);
     writeFileSync(join(root, "README.md"), "Snapshot drift");
     expect(() =>
       governance.getPreparedAssignmentPlan(handoff, plan.id)
     ).toThrow();
     expect(() =>
-      governance.registerAssignmentPlan(handoff, proposal, plan.assignments)
+      governance.registerAssignmentPlan(handoff, proposal, plan.assignments, [
+        "first",
+      ])
     ).toThrow();
   });
 
   it.each(["assignment-only", "dependent", "independent"] as const)(
-    "prepares approved Specialists and a Worker in %s Planning",
+    "prepares approved Specialists with read and write ceilings in %s Planning",
     async (mode) => {
       const assignmentAgent: NonNullable<
         NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
-      >["agent"] = async ({ specialists, workItems, workerMode }) => {
+      >["agent"] = async ({
+        specialists,
+        workItems,
+        repositoryAccessCeilings,
+      }) => {
         expect(specialists).toHaveLength(2);
         expect(workItems.map(({ id }) => id)).toEqual(["first"]);
-        expect(workerMode).toBe("codex-worktree");
+        expect(repositoryAccessCeilings).toEqual(["read", "write"]);
         const assignments = specialists.map(({ id }) => ({
           id,
           workItemId: "first",
-          executor: { kind: "specialist", specialistId: id },
+          specialistId: id,
+          repositoryAccessCeiling: "read",
           objective: "Review existing behavior",
           deliverable: "Findings",
           dependsOn: [],
@@ -1949,18 +2010,31 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           {
             id: "implement",
             workItemId: "first",
-            executor: { kind: "worker", mode: workerMode },
+            specialistId: specialists[0].id,
+            repositoryAccessCeiling: "write",
             objective: "Implement approved direction",
             deliverable: "Patch",
             dependsOn:
               mode === "independent" ? [] : assignments.map(({ id }) => id),
           },
+          {
+            id: "validate",
+            workItemId: "first",
+            specialistId: specialists[0].id,
+            repositoryAccessCeiling: "write",
+            objective: "Prepare test changes",
+            deliverable: "Test patch",
+            dependsOn: ["implement"],
+          },
         ];
       };
       const {
         handoff,
+        decision,
+        workItems,
         assignmentPlanResult,
         workerExecutionResult,
+        assignmentExecutionResult,
         planningResults,
         deferredDetailedPlanningIds,
       } = await planExecutionItems(true, 1, [], "README.md", {
@@ -1968,6 +2042,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         specialistCount: 2,
         codexMode: true,
         assignmentWithDetailed: mode !== "assignment-only",
+        collaborativeExecution: {
+          contexts: {
+            implement: { readPaths: ["README.md"], timeoutMs: 5000 },
+          },
+        },
         execution: {
           workItemId: "first",
           readPaths: ["README.md"],
@@ -1984,22 +2063,31 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         assignmentPlanResult.plan.id
       );
       expect(
-        prepared.plan.assignments.map(({ executor }) => executor.kind)
-      ).toEqual(["specialist", "specialist", "worker"]);
+        prepared.plan.assignments.map(
+          ({ repositoryAccessCeiling }) => repositoryAccessCeiling
+        )
+      ).toEqual(["read", "read", "write", "write"]);
       expect(prepared.specialistSources).toHaveLength(2);
       expect(workerExecutionResult).toBeUndefined();
-      if (mode === "independent") {
-        expect(deferredDetailedPlanningIds).toEqual([]);
-        expect(planningResults).toMatchObject([
-          { workItemId: "first", result: { status: "completed" } },
-        ]);
-        expect(planningResults?.[0].executionSourceId).toBeUndefined();
-      } else {
-        expect(planningResults).toEqual([]);
-        expect(deferredDetailedPlanningIds).toEqual(
-          mode === "dependent" ? ["first"] : undefined
-        );
-      }
+      expect(planningResults).toEqual([]);
+      expect(deferredDetailedPlanningIds).toEqual(
+        mode === "assignment-only" ? undefined : ["first"]
+      );
+      expect(assignmentExecutionResult).toMatchObject({
+        status: "denied",
+        failure: "unsupported",
+      });
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          planId: prepared.plan.id,
+          assignmentId: "implement",
+          readPaths: ["README.md"],
+          timeoutMs: 5000,
+        })
+      ).toThrow("unsupported");
+      expect(() =>
+        governance.claimAssignmentExecution(handoff, prepared.plan.id, "unused")
+      ).toThrow("unsupported");
       expect(
         withGovernanceRecords((raw) =>
           Object.values(
@@ -2012,432 +2100,42 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           }))
         )
       ).toEqual([{ executionReservations: [], workItemExecutionSources: [] }]);
-    }
-  );
-
-  it.each([true, false])(
-    "gates dependent Work Items on persisted read-only completion: %s",
-    async (validEvidence) => {
-      const executed: string[] = [];
-      const context = { readPaths: ["README.md"], timeoutMs: 5000 };
-      const { assignmentExecutionResult } = await planExecutionItems(
-        true,
-        2,
-        [],
-        "README.md",
-        {
-          readOnly: true,
-          secondDependsOnFirst: true,
-          selectedAssignmentWorkItems: ["second", "first"],
-          collaborativeExecution: {
-            contexts: { first: context, second: context },
-          },
-          assignmentAgent: async ({ specialists }) =>
-            ["second", "first"].map((id) => ({
-              id,
-              workItemId: id,
-              executor: { kind: "specialist", specialistId: specialists[0].id },
-              objective: id,
-              deliverable: "Review",
-              dependsOn: [],
-            })),
-          beforePhaseB: (approvedDirection) => {
-            vi.mocked(processRuntime.runCommand).mockImplementation(
-              async (_name, args) => {
-                const prompt = args.at(-1)!;
-                const {
-                  assignmentObjective,
-                  approvedDirection: direction,
-                  workItem,
-                  assignmentDeliverable,
-                  workItemPredecessorResults,
-                  predecessorResults,
-                } = JSON.parse(prompt.split("SpecialistContext:\n")[1]);
-                executed.push(assignmentObjective);
-                expect(direction).toBe(approvedDirection);
-                expect(workItem).toEqual({
-                  id: assignmentObjective,
-                  objective: `Revise ${assignmentObjective} wording in README.md`,
-                  deliverable: "Revised README.md",
-                });
-                expect(assignmentDeliverable).toBe("Review");
-                expect(predecessorResults).toEqual([]);
-                if (assignmentObjective === "second") {
-                  expect(workItemPredecessorResults).toMatchObject([
-                    {
-                      workItemId: "first",
-                      results: [
-                        {
-                          assignmentId: "first",
-                          invocationId: expect.any(String),
-                          digest: expect.any(String),
-                          decision: { recommendation: "Finding" },
-                        },
-                      ],
-                    },
-                  ]);
-                } else expect(workItemPredecessorResults).toBeUndefined();
-                return {
-                  stdout: JSON.stringify({
-                    recommendation: "Finding",
-                    evidence: [
-                      {
-                        path: validEvidence ? "README.md" : "outside.md",
-                        description: "Introduction",
-                      },
-                    ],
-                    risks: [],
-                    uncertainty: [],
-                  }),
-                  stderr: "",
-                  exitCode: 0,
-                  timedOut: false,
-                };
-              }
-            );
-          },
-        }
-      );
-      expect(executed).toEqual(validEvidence ? ["first", "second"] : ["first"]);
-      expect(assignmentExecutionResult).toMatchObject({
-        status: validEvidence ? "completed" : "failed",
-        workItemResults: [
-          {
-            workItemId: "second",
-            status: validEvidence ? "completed" : "pending",
-          },
-          {
-            workItemId: "first",
-            status: validEvidence ? "completed" : "failed",
-          },
-        ],
-      });
-    }
-  );
-
-  it.each([
-    "success",
-    "invalid-evidence",
-    "second-invalid-evidence",
-    "snapshot-drift",
-    "oversized-context",
-    "process-failure",
-    "unauthorized",
-  ] as const)(
-    "coordinates collaborative Assignment execution with %s",
-    async (mode) => {
-      const specialist = vi.fn();
-      const requestContext = { readPaths: ["README.md"], timeoutMs: 5000 };
-      const {
-        assignmentExecutionResult,
-        planningResults,
-        assignmentPlanResult,
+      const proposal = {
+        status: "proposed" as const,
+        approvedDecisionId: decision.id,
         workItems,
-        decision,
-        handoff,
-        workerExecutionResult,
-      } = await planExecutionItems(true, 2, [], "README.md", {
-        specialistCount: 2,
-        assignmentWithDetailed: mode === "success",
-        beforePlannerResult: (prior) => {
-          expect(JSON.parse(prior!)).toMatchObject({
-            predecessors: [
-              {
-                assignmentId: "second-review",
-                decision: { recommendation: "Finding from second-review" },
-              },
-            ],
-          });
-        },
-        codexMode: true,
-        assignmentAgent: async ({ specialists }) => {
-          const review = (id: string, index: number, dependsOn: string[]) => ({
-            id,
-            workItemId: "first",
-            executor: {
-              kind: "specialist",
-              specialistId: specialists[index].id,
-            },
-            objective: `Assignment objective for ${id}`,
-            deliverable:
-              mode === "oversized-context" ? "x".repeat(64 * 1024) : "Findings",
-            dependsOn,
-          });
-          return [
-            review("second-review", 1, ["first-review"]),
-            review("first-review", 0, []),
-            {
-              id: "worker",
-              workItemId: "first",
-              executor: { kind: "worker", mode: "codex-worktree" },
-              objective: "Modify",
-              deliverable: "Patch",
-              dependsOn: ["second-review"],
-            },
-            review("post-worker", 0, ["worker"]),
-            review("extra-review", 0, []),
-          ];
-        },
-        collaborativeExecution: {
-          contexts: {
-            "first-review":
-              mode === "unauthorized"
-                ? { ...requestContext, readPaths: ["docs-extra/other.md"] }
-                : requestContext,
-            "second-review": requestContext,
-            "post-worker": requestContext,
-          },
-        },
-        beforePhaseB: (approvedDirection) => {
-          vi.mocked(processRuntime.runCommand).mockImplementation(
-            async (name, args, options) => {
-              specialist(name, args, options);
-              expect(name).toBe("codex");
-              expect(args).toContain("read-only");
-              expect(args.join(" ")).toContain(
-                "shell_tool=false,unified_exec=false"
-              );
-              const prompt = args.at(-1)!;
-              const context = JSON.parse(
-                prompt.split("SpecialistContext:\n")[1]
-              );
-              expect(context.files).toEqual([
-                { path: "README.md", content: "Original content\n" },
-              ]);
-              expect(prompt).toContain(
-                "Do not reselect or change the approved direction."
-              );
-              expect(context).toMatchObject({
-                approvedDirection,
-                workItem: {
-                  id: "first",
-                  objective: "Revise first wording in README.md",
-                  deliverable: "Revised README.md",
-                },
-                assignmentDeliverable: "Findings",
-              });
-              const first = specialist.mock.calls.length === 1;
-              expect(context.assignmentObjective).toBe(
-                `Assignment objective for ${first ? "first-review" : "second-review"}`
-              );
-              expect(context.predecessorResults).toEqual(
-                first
-                  ? []
-                  : [
-                      {
-                        assignmentId: "first-review",
-                        invocationId: expect.any(String),
-                        decision: expect.objectContaining({
-                          recommendation: "Finding from first-review",
-                        }),
-                      },
-                    ]
-              );
-              if (mode === "snapshot-drift")
-                writeFileSync(join(root, "README.md"), "Snapshot drift");
-              return {
-                stdout: JSON.stringify({
-                  recommendation: `Finding from ${first ? "first-review" : "second-review"}`,
-                  evidence: [
-                    {
-                      path:
-                        mode === "invalid-evidence" ||
-                        (mode === "second-invalid-evidence" && !first)
-                          ? "outside.md"
-                          : "README.md",
-                      description: "Introduction",
-                    },
-                  ],
-                  risks: [],
-                  uncertainty: [],
-                }),
-                stderr: "",
-                exitCode: mode === "process-failure" ? 1 : 0,
-                timedOut: false,
-              };
-            }
-          );
-        },
-      });
-      if (mode === "snapshot-drift")
-        writeFileSync(join(root, "README.md"), "Original content\n");
-      expect(workerExecutionResult).toBeUndefined();
-      if (
-        !assignmentExecutionResult ||
-        assignmentExecutionResult.failure === "plan" ||
-        assignmentPlanResult?.status !== "prepared" ||
-        handoff?.status !== "completed"
-      )
-        throw new Error(JSON.stringify(assignmentExecutionResult));
-
-      const { results, pendingAssignments } = assignmentExecutionResult;
-      expect(assignmentExecutionResult.status).toBe(
-        mode === "success"
-          ? "pending"
-          : mode === "unauthorized"
-            ? "denied"
-            : "failed"
-      );
+      };
+      const task = {
+        id: "standalone-bypass",
+        goalId: "goal",
+        objective: workItems[0].objective,
+        targetRepository: options.goal.targetRepository,
+        allowedPaths: ["README.md"],
+        forbiddenPaths: [],
+        constraints: options.goal.constraints ?? [],
+        acceptanceCriteria: ["Patch"],
+        verification: [],
+      };
+      const executionSourceId = beginWorkItemExecutionSource(
+        proposal,
+        workItems[0],
+        root
+      )?.(task);
+      expect(executionSourceId).toBeDefined();
       expect(
-        pendingAssignments.map(({ assignmentId }) => assignmentId)
-      ).toEqual(
-        mode === "success" || mode === "second-invalid-evidence"
-          ? ["worker", "post-worker", "extra-review"]
-          : ["second-review", "worker", "post-worker", "extra-review"]
-      );
-      expect(specialist).toHaveBeenCalledTimes(
-        mode === "success" || mode === "second-invalid-evidence"
-          ? 2
-          : mode === "unauthorized" || mode === "oversized-context"
-            ? 0
-            : 1
-      );
-      if (mode === "success") {
-        expect(planningResults).toMatchObject([
-          {
-            workItemId: "first",
-            assignmentId: "worker",
-            assignmentPlanId: assignmentPlanResult.plan.id,
-            result: { status: "completed", task: { objective: "Modify" } },
-          },
-        ]);
-        expect(
-          results.map(({ assignmentId, status }) => [assignmentId, status])
-        ).toEqual([
-          ["first-review", "completed"],
-          ["second-review", "completed"],
-        ]);
-        const first = results[0];
-        if (first.status !== "completed")
-          throw new Error("Missing result ref.");
-        expect(() =>
-          governance.claimAssignmentExecution(
-            handoff,
-            assignmentPlanResult.plan.id,
-            first.invocationId
-          )
-        ).toThrow("claim");
-        expect(() =>
-          governance.reserveAssignmentExecution(handoff, {
-            ...requestContext,
-            planId: assignmentPlanResult.plan.id,
-            assignmentId: "first-review",
-          })
-        ).toThrow("duplicate");
-        const next = {
-          ...requestContext,
-          planId: assignmentPlanResult.plan.id,
-          assignmentId: "extra-review",
-        };
-        expect(() =>
-          governance.reserveAssignmentExecution(handoff, {
-            ...next,
-            approvedDirection: "Forged direction",
-          })
-        ).toThrow(/approvedDirection/);
-        expect(() =>
-          governance.reserveAssignmentExecution(
-            {
-              ...handoff,
-              decision: { ...handoff.decision, reviewBinding: "forged" },
-            },
-            next
-          )
-        ).toThrow();
-        expect(() =>
-          governance.reserveAssignmentExecution(handoff, next)
-        ).toThrow("budget");
-        const task = {
-          id: "legacy-task",
-          goalId: "goal",
-          objective: "Modify",
-          targetRepository: options.goal.targetRepository,
-          allowedPaths: ["README.md"],
-          forbiddenPaths: [],
-          constraints: options.goal.constraints ?? [],
-          acceptanceCriteria: ["Patch"],
-          verification: [],
-        };
-        const recordSource = beginWorkItemExecutionSource(
-          {
-            status: "proposed",
-            approvedDecisionId: decision.id,
-            workItems,
-          },
-          workItems[1],
-          root
-        );
-        const sourceId = recordSource?.(task);
-        expect(sourceId).toBeDefined();
-        expect(
-          governance.authorizeExecutionForRun({
-            ...requestContext,
-            approvedDecisionId: decision.id,
-            executionSourceId: sourceId,
-            workItem: workItems[1],
-            task,
-            repositoryPath: root,
-            workerMode: "codex-worktree",
-          }).status
-        ).toBe("denied");
-        writeFileSync(join(root, "README.md"), "Snapshot drift");
-        expect(() =>
-          governance.reserveAssignmentExecution(handoff, next)
-        ).toThrow(/dirty/);
-        writeFileSync(join(root, "README.md"), "Original content\n");
-        configureExecutionPolicy(null);
-        expect(() =>
-          governance.reserveAssignmentExecution(handoff, next)
-        ).toThrow();
-      } else if (mode === "second-invalid-evidence") {
-        expect(results).toMatchObject([
-          { assignmentId: "first-review", status: "completed" },
-          {
-            assignmentId: "second-review",
-            status: "failed",
-            failure: "validation",
-          },
-        ]);
-      } else {
-        expect(results).toMatchObject([
-          {
-            assignmentId: "first-review",
-            status: mode === "unauthorized" ? "denied" : "failed",
-            failure:
-              mode === "unauthorized"
-                ? "authority"
-                : mode === "invalid-evidence" || mode === "oversized-context"
-                  ? "validation"
-                  : mode === "snapshot-drift"
-                    ? "snapshot"
-                    : "execution",
-          },
-        ]);
-      }
-      if (mode !== "success") {
-        const planId = assignmentPlanResult.plan.id;
-        const stored = governance.getAssignmentExecutionResults(
-          handoff,
-          planId
-        );
-        if (mode === "unauthorized") {
-          expect(stored).toEqual([]);
-        } else {
-          expect(results.at(-1)).toMatchObject({ failureRecorded: true });
-          expect(stored).toEqual(results);
-          const failure = stored.at(-1)!;
-          expect(() =>
-            governance.claimAssignmentExecution(
-              handoff,
-              planId,
-              failure.invocationId
-            )
-          ).toThrow("claim");
-        }
-      }
-      expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
-        "Original content\n"
-      );
+        governance.authorizeExecutionForRun({
+          approvedDecisionId: decision.id,
+          executionSourceId,
+          task,
+          workItem: workItems[0],
+          repositoryPath: root,
+          readPaths: ["README.md"],
+          timeoutMs: 5000,
+          workerMode: "codex-worktree",
+        })
+      ).toMatchObject({
+        status: "denied",
+      });
     }
   );
 

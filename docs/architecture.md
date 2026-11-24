@@ -383,7 +383,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |
 | Human — Final Authority | Goal / Constraints, Staffing Approval, Governance Approve / Override / Reject, Task Approval, Change Review, Apply / Commit / Push | 각 승인은 독립된 대상과 의미를 가지며 다른 권한의 포괄 승인이 아님 |
 
-현재 Phase B는 Specialist 읽기 전용 협업과 Worker Assignment 상세 계획의 재개를 지원한다. Specialist가 구현을 소유하는 Phase B 목표는 기존 Planning·Execution Application과 Codex Worker를 재사용하며, Capability와 이번 실행의 Authority를 구분한다. 변경 근거와 완료 기준은 [Phase B Step 5.3](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)에 둔다.
+Phase B는 Specialist 중심 Assignment Plan을 등록한다. 기존 읽기 전용 협업과 지연 상세 계획의 기반은 보존하며 새 Plan의 실행은 Phase-scoped Authorization까지 차단한다. Specialist가 구현을 소유하는 Phase B 목표는 기존 Planning·Execution Application과 Codex Worker를 재사용하며, Capability와 이번 실행의 Authority를 구분한다. 변경 근거와 완료 기준은 [Phase B Step 5.3](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)에 둔다.
 
 ### 통합 시 지켜야 할 invariant
 

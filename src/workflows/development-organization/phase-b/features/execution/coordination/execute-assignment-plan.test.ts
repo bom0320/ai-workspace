@@ -35,10 +35,8 @@ function fixture(
           dependsOn,
           objective: id,
           deliverable: id,
-          executor:
-            kind === "worker"
-              ? { kind, mode: "codex-worktree" }
-              : { kind: "specialist", specialistId: "approved" },
+          specialistId: "approved",
+          repositoryAccessCeiling: kind === "worker" ? "write" : "read",
         })
       ),
     },

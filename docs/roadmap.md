@@ -248,11 +248,11 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 
 ### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
 
-**현재 기반 — Implemented:** Step 5.2.2 읽기 전용 Specialist 협업, 검증된 선행 결과 Handoff, 공유 동시성 한도와 선행 결과에 따른 Deferred Detailed Planning 재개가 구현되어 있다. Worker Assignment 상세 계획은 초안까지 생성한다. 다음 표는 [Phase B Step 5.3 설계](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)의 구현 순서다. 이 번호는 아래 Phase A 독립 Decision의 Step 5.3과 별개다.
+**계약 교체 전 구현 기반:** Step 5.2.2 읽기 전용 Specialist 협업, 검증된 선행 결과 Handoff, 공유 동시성 한도와 선행 결과에 따른 Deferred Detailed Planning 재개가 구현되어 있다. Worker Assignment 상세 계획은 초안까지 생성한다. 다음 표는 [Phase B Step 5.3 설계](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)의 구현 순서다. 이 번호는 아래 Phase A 독립 Decision의 Step 5.3과 별개다.
 
 | 순서 | 작업 | 목적 및 완료 기준 | 상태 |
 | --- | --- | --- | --- |
-| 5.3.1 | Multi-Specialist Assignment Contract 및 기존 Plan 호환성 | 업무·담당자·산출물과 의존성 추적, 기존 Plan과 Digest의 읽기 호환 검증 | Planned |
+| 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 과거 Plan은 자동 변환 없이 거부 | Implemented |
 | 5.3.2 | Phase-scoped Capability & Authorization | Phase B 능력과 실행 권한을 구분하고 승인·위임·개별 Reservation/Claim을 검증. Phase A 읽기 전용 유지 | Planned |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 승인 방향·선행 결과로 상세 계획을 수립하고 수정 계약을 정확한 Assignment와 Snapshot에 결합 | Planned |
 | 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |

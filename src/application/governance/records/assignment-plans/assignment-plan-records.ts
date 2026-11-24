@@ -2,6 +2,7 @@ import type { GovernanceLedger } from "../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   phaseBAssignmentsSchema,
+  selectAssignmentWorkItems,
   validateAssignmentProposal,
   type PhaseBAssignment,
 } from "@/contracts/phase-b-assignment.js";
@@ -23,26 +24,18 @@ export class AssignmentRegistrationError extends Error {
 function assertAssignments(
   context: ReturnType<typeof resolveProposalContext>,
   assignments: PhaseBAssignment[],
-  selectedIds?: readonly string[]
+  selectedIds: readonly string[]
 ) {
-  const workItems = context.decomposition.workItems.filter(
-    ({ id }) => !selectedIds || selectedIds.includes(id)
+  const workItems = selectAssignmentWorkItems(
+    context.decomposition.workItems,
+    selectedIds
   );
-  const reason = validateAssignmentProposal(assignments, workItems);
+  if (!workItems) throw new Error("Invalid Assignment Plan selection.");
+  const reason = validateAssignmentProposal(assignments, workItems, {
+    specialistIds: context.sources.map(({ definition }) => definition.id),
+    repositoryAccessCeilings: context.repositoryAccessCeilings,
+  });
   if (reason) throw new Error(reason);
-  for (const { executor } of assignments) {
-    if (
-      executor.kind === "specialist"
-        ? !context.specialistAllowed ||
-          !context.sources.some(
-            ({ definition }) => definition.id === executor.specialistId
-          )
-        : !context.workerAllowed
-    )
-      throw new Error(
-        "Assignment executor is outside approved preparation bounds."
-      );
-  }
 }
 
 // Internal writer. The proposal is untrusted, even after it has passed the agent boundary.
@@ -50,7 +43,7 @@ export function registerAssignmentPlan(
   handoff: Handoff,
   proposal: Proposal,
   input: unknown,
-  selectedIds?: readonly string[]
+  selectedIds: readonly string[]
 ): AssignmentPlan {
   let failure: AssignmentRegistrationError["failure"] = "ledger";
   try {
@@ -65,6 +58,7 @@ export function registerAssignmentPlan(
         decompositionBinding: context.decomposition.binding,
         staffingBinding: context.staffingBinding,
         snapshot: context.snapshot,
+        selectedWorkItemIds: [...selectedIds],
         assignments,
       };
       const plan = { ...subject, id: governanceDigest(subject) };
@@ -99,13 +93,13 @@ export function resolvePreparedAssignmentPlan(
     governanceDigest(plan.snapshot) !== governanceDigest(context.snapshot)
   )
     throw new Error("Assignment Plan provenance changed.");
-  assertAssignments({ ...context, decomposition }, plan.assignments);
+  assertAssignments(
+    { ...context, decomposition },
+    plan.assignments,
+    plan.selectedWorkItemIds
+  );
   const specialistSources = context.sources.filter(({ definition }) =>
-    plan.assignments.some(
-      ({ executor }) =>
-        executor.kind === "specialist" &&
-        executor.specialistId === definition.id
-    )
+    plan.assignments.some(({ specialistId }) => specialistId === definition.id)
   );
   return { ...context, plan, decomposition, specialistSources };
 }

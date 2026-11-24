@@ -35,9 +35,9 @@ function resolveAssignmentBinding(
   const assignment = plan.assignments.find(
     ({ id }) => id === request.assignmentId
   );
-  if (assignment?.executor.kind !== "specialist")
+  if (assignment?.repositoryAccessCeiling !== "read")
     throw new AssignmentExecutionError("authority");
-  const { specialistId } = assignment.executor;
+  const { specialistId } = assignment;
   const specialist = context.specialistSources.find(
     ({ definition }) => definition.id === specialistId
   )?.definition;

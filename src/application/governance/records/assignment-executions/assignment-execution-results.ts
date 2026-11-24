@@ -188,7 +188,7 @@ export function getWorkerAssignmentPlanningContext(
       ({ id }) => id === assignment?.workItemId
     );
     if (
-      assignment?.executor.kind !== "worker" ||
+      assignment?.repositoryAccessCeiling !== "write" ||
       workItem?.workType !== "repository-modification"
     )
       throw new AssignmentExecutionError("authority");

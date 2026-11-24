@@ -1,4 +1,3 @@
-import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";
 import type { CollaborativeExecutionOptions } from "./features/execution/coordination/execute-assignment-plan.js";
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
@@ -51,10 +50,7 @@ export function createPhaseBGraph({
   const { assignment: assignmentExecution, workItem: workItemExecution } =
     execution ?? {};
 
-  const planWorkItem = createPlanWorkItemNode(
-    detailed,
-    assignment ? "draft" : "execution-source"
-  );
+  const planWorkItem = createPlanWorkItemNode(detailed, "execution-source");
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
@@ -72,17 +68,11 @@ export function createPhaseBGraph({
       createPrepareAssignmentsNode(
         assignment?.agent,
         !!detailed,
+        !!assignmentExecution,
         workItemExecution?.workItemId
       )
     )
     .addNode("plan-work-item", (state) => planWorkItem(state))
-    .addNode(
-      "execute-assignments",
-      createExecuteAssignmentsNode(
-        assignmentExecution,
-        detailed && createPlanWorkItemNode(detailed, "draft")
-      )
-    )
     .addNode(
       "execute-work-item",
       createExecuteWorkItemNode(detailed?.repositoryPath, workItemExecution)
@@ -128,18 +118,7 @@ export function createPhaseBGraph({
     },
     ["plan-work-item", "execute-work-item", END]
   );
-  graph.addConditionalEdges(
-    "prepare-assignments",
-    (state) => {
-      if (state.assignmentPlanResult?.status !== "prepared") return END;
-      if (assignmentExecution) return "execute-assignments";
-      return detailed && state.pendingPlanningIds?.length
-        ? "plan-work-item"
-        : END;
-    },
-    ["plan-work-item", "execute-assignments", END]
-  );
-  graph.addEdge("execute-assignments", END);
+  graph.addEdge("prepare-assignments", END);
   graph.addEdge("execute-work-item", END);
 
   // 3. Compile Graph

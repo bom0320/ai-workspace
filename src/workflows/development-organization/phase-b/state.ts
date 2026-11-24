@@ -47,7 +47,9 @@ export const phaseBState = new StateSchema({
     })
     .strict()
     .optional(),
+  // Selection stays fixed while Detailed Planning consumes its queue.
   selectedWorkItemIds: z.array(z.string()).optional(),
+  // A record of held work, with no automatic resumption.
   deferredDetailedPlanningIds: z.array(z.string()).optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z

@@ -2,6 +2,7 @@ import {
   prepareAssignmentPlan,
   type AssignmentPlanAgent,
 } from "@/application/planning/index.js";
+import { resolveDetailedPlanningReadiness } from "../coordination/resolve-detailed-planning-readiness.js";
 import type { PhaseBState } from "../../../state.js";
 
 export function createPrepareAssignmentsNode(
@@ -37,29 +38,16 @@ export function createPrepareAssignmentsNode(
     if (!hasDetailedPlanning || assignmentPlanResult.status !== "prepared")
       return result;
 
-    const pendingPlanningIds: string[] = [];
-    const deferredDetailedPlanningIds: string[] = [];
-    for (const id of selectedWorkItemIds) {
-      const item = workDecompositionResult.workItems.find(
-        (workItem) => workItem.id === id
+    const { readyWorkItemIds, deferredWorkItemIds } =
+      resolveDetailedPlanningReadiness(
+        selectedWorkItemIds,
+        workDecompositionResult.workItems,
+        assignmentPlanResult.plan.assignments
       );
-      if (item?.workType !== "repository-modification") continue;
-      const workers = assignmentPlanResult.plan.assignments.filter(
-        ({ workItemId, executor }) =>
-          workItemId === id && executor.kind === "worker"
-      );
-      if (
-        !item.dependsOn.length &&
-        workers.length === 1 &&
-        !workers[0].dependsOn.length
-      )
-        pendingPlanningIds.push(id);
-      else deferredDetailedPlanningIds.push(id);
-    }
     return {
       ...result,
-      pendingPlanningIds,
-      deferredDetailedPlanningIds,
+      pendingPlanningIds: readyWorkItemIds,
+      deferredDetailedPlanningIds: deferredWorkItemIds,
     };
   };
 }

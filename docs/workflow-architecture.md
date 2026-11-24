@@ -239,6 +239,9 @@ Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참�
 실행 결과는 각각 Work Item ID로 기록한다. 하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
 
 **Phase B Planning Coordination.** `planning.selectWorkItemIds`로 Work Item을 한 번 선택한다.
+선택 노드의 출력은 `selectedWorkItemIds`다. 초기화 노드는 빈 선택을 포함해 새 Planning 실행의
+`planningResults`를 한 번 초기화하고, Detailed Planning 단독 경로에만 초기 대기열을 구성한다.
+상세 계획 반복은 초기화 노드를 다시 거치지 않으며 기존 결과에 추가한다.
 `planning.assignment`만 설정하면 별도 노드가 검증된 Assignment Plan을 준비하고 종료한다.
 `planning.detailed`만 설정하면 기존 상세 계획과 Execution Source 등록을 유지하고,
 `planning.execution`이 설정된 경우 기존 단일 실행 경로를 사용한다.

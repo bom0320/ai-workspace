@@ -2,6 +2,7 @@ import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
 import type { AssignmentPlanAgent } from "@/application/planning/index.js";
 import { createPrepareAssignmentsNode } from "./features/planning/nodes/prepare-assignments.js";
+import { createInitializePlanningNode } from "./features/planning/nodes/initialize-planning.js";
 import { createPlanWorkItemNode } from "./features/planning/nodes/plan-work-item.js";
 import {
   createSelectWorkItemsNode,
@@ -45,9 +46,10 @@ export function createPhaseBGraph({
       "run-work-decomposition",
       createRunWorkDecompositionNode(decompositionOptions)
     )
+    .addNode("select-work-items", createSelectWorkItemsNode(selectWorkItemIds))
     .addNode(
-      "select-work-items",
-      createSelectWorkItemsNode(selectWorkItemIds, !assignment && !!detailed)
+      "initialize-planning",
+      createInitializePlanningNode(!assignment && !!detailed)
     )
     .addNode(
       "prepare-assignments",
@@ -82,8 +84,9 @@ export function createPhaseBGraph({
         : END,
     ["select-work-items", END]
   );
+  graph.addEdge("select-work-items", "initialize-planning");
   graph.addConditionalEdges(
-    "select-work-items",
+    "initialize-planning",
     (state) => {
       if (!state.selectedWorkItemIds?.length) return END;
       if (assignment) return "prepare-assignments";

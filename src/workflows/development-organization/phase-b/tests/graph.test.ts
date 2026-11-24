@@ -567,6 +567,8 @@ it("skips Planning for an empty selection", async () => {
     planning: { detailed: planningOptions, selectWorkItemIds: () => [] },
   }).invoke(input);
   expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+  expect(result.selectedWorkItemIds).toEqual([]);
+  expect(result.pendingPlanningIds).toEqual([]);
   expect(result.planningResults).toEqual([]);
 });
 

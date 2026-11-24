@@ -14,6 +14,31 @@ export const assignmentExecutionRequestSchema = executionBoundsSchema
   .strict()
   .refine(({ readPaths }) => readPaths.length > 0);
 
+export type AssignmentExecutionRequest = z.infer<
+  typeof assignmentExecutionRequestSchema
+>;
+
+export const assignmentExecutionFailureStageSchema = z.enum([
+  "authority",
+  "budget",
+  "duplicate",
+  "claim",
+  "dependency",
+  "validation",
+  "handoff",
+  "snapshot",
+  "execution",
+]);
+export type AssignmentExecutionFailureStage = z.infer<
+  typeof assignmentExecutionFailureStageSchema
+>;
+
+export class AssignmentExecutionError extends Error {
+  constructor(public readonly failure: AssignmentExecutionFailureStage) {
+    super(`Collaborative Assignment failed at ${failure}.`);
+  }
+}
+
 export const assignmentExecutionRecordSchema = z
   .object({
     id,
@@ -22,6 +47,10 @@ export const assignmentExecutionRecordSchema = z
     binding: digest,
     reservedAt: z.iso.datetime(),
     claimedAt: z.iso.datetime().optional(),
+    failure: z
+      .object({ stage: assignmentExecutionFailureStageSchema, digest })
+      .strict()
+      .optional(),
     result: z
       .object({ decision: agentDecisionSchema, digest })
       .strict()

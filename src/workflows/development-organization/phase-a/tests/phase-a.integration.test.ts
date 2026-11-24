@@ -1592,12 +1592,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       beforePhaseB?: () => void;
       assignmentWithDetailed?: boolean;
       collaborativeExecution?: NonNullable<
-        NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
-      >["execution"];
+        PhaseBGraphOptions["execution"]
+      >["assignment"];
       assignmentAgent?: NonNullable<
         NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
       >["agent"];
-      execution?: NonNullable<PhaseBGraphOptions["planning"]>["execution"];
+      execution?: NonNullable<PhaseBGraphOptions["execution"]>["workItem"];
     } = {}
   ) {
     mkdirSync(join(root, "docs"), { recursive: true });
@@ -1690,7 +1690,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const planning: NonNullable<PhaseBGraphOptions["planning"]> = {
       selectWorkItemIds: (items) =>
         (execution ? items.slice(0, 1) : items).map(({ id }) => id),
-      execution,
       detailed: {
         repositoryPath: root,
         limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
@@ -1730,17 +1729,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       beforePhaseB?.();
       const state = await createPhaseBGraph({
         agent,
+        execution: { assignment: collaborativeExecution, workItem: execution },
         ...(assignmentAgent
           ? {
               planning: {
                 assignment: {
                   agent: assignmentAgent,
-                  execution: collaborativeExecution,
                 },
                 selectWorkItemIds: () => ["first"],
                 ...(assignmentWithDetailed && {
                   detailed: planning.detailed,
-                  execution,
                 }),
               },
             }
@@ -2016,6 +2014,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it.each([
     "success",
     "invalid-evidence",
+    "second-invalid-evidence",
+    "snapshot-drift",
     "process-failure",
     "unauthorized",
   ] as const)(
@@ -2103,13 +2103,16 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                       },
                     ]
               );
+              if (mode === "snapshot-drift")
+                writeFileSync(join(root, "README.md"), "Snapshot drift");
               return {
                 stdout: JSON.stringify({
                   recommendation: `Finding from ${first ? "first-review" : "second-review"}`,
                   evidence: [
                     {
                       path:
-                        mode === "invalid-evidence"
+                        mode === "invalid-evidence" ||
+                        (mode === "second-invalid-evidence" && !first)
                           ? "outside.md"
                           : "README.md",
                       description: "Introduction",
@@ -2126,24 +2129,37 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           );
         },
       });
+      if (mode === "snapshot-drift")
+        writeFileSync(join(root, "README.md"), "Original content\n");
       expect(workerExecutionResult).toBeUndefined();
       if (
-        assignmentExecutionResult?.status !== "coordinated" ||
+        !assignmentExecutionResult?.results ||
         assignmentPlanResult?.status !== "prepared" ||
         handoff?.status !== "completed"
       )
         throw new Error(JSON.stringify(assignmentExecutionResult));
 
       const { results, pendingAssignments } = assignmentExecutionResult;
+      expect(assignmentExecutionResult.status).toBe(
+        mode === "success"
+          ? "pending"
+          : mode === "unauthorized"
+            ? "denied"
+            : "failed"
+      );
       expect(
         pendingAssignments.map(({ assignmentId }) => assignmentId)
       ).toEqual(
-        mode === "success"
+        mode === "success" || mode === "second-invalid-evidence"
           ? ["worker", "post-worker", "extra-review"]
           : ["second-review", "worker", "post-worker", "extra-review"]
       );
       expect(specialist).toHaveBeenCalledTimes(
-        mode === "success" ? 2 : mode === "unauthorized" ? 0 : 1
+        mode === "success" || mode === "second-invalid-evidence"
+          ? 2
+          : mode === "unauthorized"
+            ? 0
+            : 1
       );
       if (mode === "success") {
         expect(
@@ -2219,19 +2235,51 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         expect(() =>
           governance.reserveAssignmentExecution(handoff, next)
         ).toThrow();
+      } else if (mode === "second-invalid-evidence") {
+        expect(results).toMatchObject([
+          { assignmentId: "first-review", status: "completed" },
+          {
+            assignmentId: "second-review",
+            status: "failed",
+            failure: "validation",
+          },
+        ]);
       } else {
         expect(results).toMatchObject([
           {
             assignmentId: "first-review",
-            status: "failed",
+            status: mode === "unauthorized" ? "denied" : "failed",
             failure:
               mode === "unauthorized"
                 ? "authority"
                 : mode === "invalid-evidence"
                   ? "validation"
-                  : "execution",
+                  : mode === "snapshot-drift"
+                    ? "snapshot"
+                    : "execution",
           },
         ]);
+      }
+      if (mode !== "success") {
+        const planId = assignmentPlanResult.plan.id;
+        const stored = governance.getAssignmentExecutionResults(
+          handoff,
+          planId
+        );
+        if (mode === "unauthorized") {
+          expect(stored).toEqual([]);
+        } else {
+          expect(results.at(-1)).toMatchObject({ failureRecorded: true });
+          expect(stored).toEqual(results);
+          const failure = stored.at(-1)!;
+          expect(() =>
+            governance.claimAssignmentExecution(
+              handoff,
+              planId,
+              failure.invocationId
+            )
+          ).toThrow("claim");
+        }
       }
       expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
         "Original content\n"

@@ -244,13 +244,13 @@ Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참�
 상세 계획 반복은 초기화 노드를 다시 거치지 않으며 기존 결과에 추가한다.
 `planning.assignment`만 설정하면 별도 노드가 검증된 Assignment Plan을 준비하고 종료한다.
 `planning.detailed`만 설정하면 기존 상세 계획과 Execution Source 등록을 유지하고,
-`planning.execution`이 설정된 경우 기존 단일 실행 경로를 사용한다.
+`execution.workItem`이 설정된 경우 기존 단일 실행 경로를 사용한다.
 
 두 기능을 함께 설정하면 Assignment 준비가 먼저 진행된다. 준비가 성공하고 저장된 Plan을 재검증할 수
 있으면 선행 Work Item과 선행 Assignment가 없는 단일 Worker의 수정 업무만 Detailed Planning 초안을
 작성한다. 선행 결과가 필요하거나 단일 Worker가 지정되지 않은 수정 업무는
 `deferredDetailedPlanningIds`로 기록한다. Read-only 업무는 초안 대상에서 제외한다.
-이 경로는 기존 단일 실행용 Execution Source를 발급하지 않는다. 협업 실행을 별도로 요청한 경우 Specialist 실행으로 이어질 수 있다. 기존 단일 실행 옵션인 `planning.execution`이 함께 전달되면
+이 경로는 기존 단일 실행용 Execution Source를 발급하지 않는다. 협업 실행을 별도로 요청한 경우 Specialist 실행으로 이어질 수 있다. 기존 단일 실행 옵션인 `execution.workItem`이 함께 전달되면
 `executionPreparationResult`에 차단 상태를 기록한다.
 
 읽기 전용 업무에는 Specialist를 배치할 수 있다. 수정 업무에는 Specialist와 승인된
@@ -260,16 +260,16 @@ Work Item 간 선행 관계는 기존 `WorkItem.dependsOn`을 사용한다. 미�
 
 Governance는 등록·조회에서 승인 출처, 등록된 Decomposition, Snapshot과 Executor를 독립적으로 검증한다.
 Plan ID는 기존처럼 Decomposition·Staffing Binding, Snapshot, Assignment 목록의 Digest다. 준비 경로는
-Plan을 기록하고 종료한다. Assignment별 권한·예약·결과 Handoff와 실제 CEO Adapter는 후속 범위다.
+Plan을 기록하고 종료한다. 실제 CEO Assignment Adapter는 후속 범위다.
 
-**Step 5.2.2 Specialist 협업 실행.** `planning.assignment.execution.contexts`에 Assignment ID별
+**Step 5.2.2 Specialist 협업 실행.** `execution.assignment.contexts`에 Assignment ID별
 `readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 순차 실행한다. 실행 시 저장된
 Plan과 현재 Phase B 위임을 확인하고, 위임 예산을 기존 Work Item 예약과 합산한다. 별도 Assignment 예약을
 기록한 뒤 Claim 시 권한·선행 결과를 다시 검증한다. 후속 Specialist는 검증된 선행 판단을 Repository 파일과
 구분된 참고 자료로 받는다. 결과는 Snapshot 및 승인 입력에 연결된 예약에 저장하며 Graph에는 식별자와 Digest를
-기록한다. 실패한 판단은 후속 입력으로 사용하지 않는다. Context가 누락된 Assignment, Worker 및 그 결과를
+기록한다. 예약 이후 실패하면 예약에 연결된 실패 단계와 Digest를 보존한다. 검증된 성공 결과만 후속 입력으로 사용한다. Context가 누락된 Assignment, Worker 및 그 결과를
 기다리는 Assignment는 대기한다. Work Item 간 선행 관계는 Work Item 완료 계약이 생길 때까지 보수적으로 대기한다.
-실패한 예약의 재사용·자동 재시도, Worker 수정 및 Worktree 통합은 후속 범위다.
+Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집계하며 개별 Assignment 결과와 대기 목록도 제공한다. 실행 기록은 기존 예약 예산을 계속 차지한다. Assignment 기반 Worker 수정 및 Worktree 통합은 후속 범위다.
 
 ## 4. Phase A → Phase B Handoff Contract
 
@@ -295,7 +295,7 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 즉시 실행용 `authorizeExecutionForRun(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `authorized`와 검증된 실행 입력을 반환한다. 성공 상태는 실행 권한의 사용 확정을 뜻한다. 검증된 Runtime이 확보되면 Worker 시작 직전에 이 API를 호출하고, 반환된 기준 commit과 권한 범위를 사용한다. 과거 예약과 Digest는 변경 없이 보존하며, 미사용 예약도 예산과 동일 Work Item 중복 제한에 포함한다. 과거 Permit을 소비하는 분리 API는 제거되었다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
-**현재 Step 4 실행 경계:** Phase B의 `planning.execution`은 실행할 Work Item ID, 읽기 경로, 시간 제한을 지정한다. 읽기 전용 Eligibility 이후 Execution Application은 런타임 지원을 검사하고, 지원하는 경우에만 `authorizeExecutionForRun()`을 호출한다. 저장된 Permit을 입력받는 Worker 진입점은 제공하지 않는다. Phase B는 준비 판정과 실제 `workerExecutionResult`를 구분한다.
+**현재 Step 4 실행 경계:** Phase B의 `execution.workItem`은 실행할 Work Item ID, 읽기 경로, 시간 제한을 지정한다. 읽기 전용 Eligibility 이후 Execution Application은 런타임 지원을 검사하고, 지원하는 경우에만 `authorizeExecutionForRun()`을 호출한다. 저장된 Permit을 입력받는 Worker 진입점은 제공하지 않는다. Phase B는 준비 판정과 실제 `workerExecutionResult`를 구분한다.
 
 Phase B와 v0/v1 직접 실행은 동일한 Codex Worker와 공통 Worktree·Scope·Verification·Evidence·Artifact 파이프라인을 사용한다. Phase B에서 실행하려면 최신 Execution System Policy와 실제 Human이 확인한 Execution Delegation 양쪽에 `"workerMode": "codex-worktree"`가 있어야 한다. 이 필드는 기존 정책 및 위임 바인딩에 포함되며, 값이 없는 이전 기록에는 새 권한이 생기지 않는다. 기존 Decision의 위임을 수정하거나 재발급하지 않는다. 전환하려면 새 정책 버전을 승인하고 새 Phase A 방향 및 위임을 함께 승인한다.
 

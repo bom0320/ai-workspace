@@ -19,10 +19,10 @@ import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { runCodexWorker } from "../../worker/codex-worker.js";
+import { runCodexWorker } from "../../../worker/codex-worker.js";
 import { runExecutionPipeline } from "./run-execution-pipeline.js";
 
-vi.mock("../../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
+vi.mock("../../../worker/codex-worker.js", () => ({ runCodexWorker: vi.fn() }));
 vi.mock("@/services/artifacts/index.js", () => ({
   createExecutionRun: vi.fn(),
   getExecutionBaseCommit: vi.fn(),

@@ -2,7 +2,7 @@ import type { PhaseBState } from "../../../state.js";
 import {
   executeAssignmentPlan,
   type CollaborativeExecutionOptions,
-} from "../execution/execute-assignment-plan.js";
+} from "../coordination/execute-assignment-plan.js";
 
 export function createExecuteAssignmentsNode(
   options?: CollaborativeExecutionOptions

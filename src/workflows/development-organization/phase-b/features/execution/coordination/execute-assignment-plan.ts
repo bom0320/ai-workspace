@@ -27,8 +27,13 @@ export async function executeAssignmentPlan(
     assignmentId: string;
     workItemId: string;
   })[] = [...recorded];
-  const completed = new Set(recorded.map(({ assignmentId }) => assignmentId));
-  let pending = plan.assignments.filter(({ id }) => !completed.has(id));
+  const completed = new Set(
+    recorded
+      .filter(({ status }) => status === "completed")
+      .map(({ assignmentId }) => assignmentId)
+  );
+  const terminal = new Set(recorded.map(({ assignmentId }) => assignmentId));
+  let pending = plan.assignments.filter(({ id }) => !terminal.has(id));
   const waiting = new Set<string>();
   for (;;) {
     const next = pending.find(
@@ -51,7 +56,7 @@ export async function executeAssignmentPlan(
       readPaths: context.readPaths,
       timeoutMs: context.timeoutMs,
     });
-    if (result.status === "failed" && result.failure === "dependency") {
+    if (result.status === "denied" && result.failure === "dependency") {
       waiting.add(next.id);
       continue;
     }
@@ -64,7 +69,13 @@ export async function executeAssignmentPlan(
     if (result.status === "completed") completed.add(next.id);
   }
   return {
-    status: "coordinated" as const,
+    status: results.some(({ status }) => status === "failed")
+      ? ("failed" as const)
+      : results.some(({ status }) => status === "denied")
+        ? ("denied" as const)
+        : pending.length
+          ? ("pending" as const)
+          : ("completed" as const),
     planId,
     results,
     pendingAssignments: pending.map(({ id, workItemId, executor }) => ({

@@ -1,4 +1,4 @@
-import type { executeAssignmentPlan } from "./features/execution/execution/execute-assignment-plan.js";
+import type { executeAssignmentPlan } from "./features/execution/coordination/execute-assignment-plan.js";
 import type { prepareAssignmentPlan } from "@/application/planning/index.js";
 import type {
   ExecutionResult,

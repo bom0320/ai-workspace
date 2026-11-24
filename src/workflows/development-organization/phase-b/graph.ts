@@ -1,5 +1,5 @@
 import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";
-import type { CollaborativeExecutionOptions } from "./features/execution/execution/execute-assignment-plan.js";
+import type { CollaborativeExecutionOptions } from "./features/execution/coordination/execute-assignment-plan.js";
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
 import type { AssignmentPlanAgent } from "@/application/planning/index.js";
@@ -32,18 +32,24 @@ export type PhaseBGraphOptions = Omit<
     selectWorkItemIds: SelectWorkItemIds;
     assignment?: {
       agent: AssignmentPlanAgent;
-      execution?: CollaborativeExecutionOptions;
     };
     detailed?: DetailedPlanningOptions;
-    execution?: PhaseBExecutionOptions;
+  };
+  execution?: {
+    assignment?: CollaborativeExecutionOptions;
+    workItem?: PhaseBExecutionOptions;
   };
 };
 
 export function createPhaseBGraph({
   planning,
+  execution,
   ...decompositionOptions
 }: PhaseBGraphOptions = {}) {
-  const { assignment, detailed, execution, selectWorkItemIds } = planning ?? {};
+  const { assignment, detailed, selectWorkItemIds } = planning ?? {};
+
+  const { assignment: assignmentExecution, workItem: workItemExecution } =
+    execution ?? {};
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
@@ -61,7 +67,7 @@ export function createPhaseBGraph({
       createPrepareAssignmentsNode(
         assignment?.agent,
         !!detailed,
-        execution?.workItemId
+        workItemExecution?.workItemId
       )
     )
     .addNode(
@@ -73,11 +79,11 @@ export function createPhaseBGraph({
     )
     .addNode(
       "execute-assignments",
-      createExecuteAssignmentsNode(assignment?.execution)
+      createExecuteAssignmentsNode(assignmentExecution)
     )
     .addNode(
       "execute-work-item",
-      createExecuteWorkItemNode(detailed?.repositoryPath, execution)
+      createExecuteWorkItemNode(detailed?.repositoryPath, workItemExecution)
     );
 
   // 2. Connect Execution Edges
@@ -116,8 +122,8 @@ export function createPhaseBGraph({
       )
         return END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
-      if (assignment?.execution) return "execute-assignments";
-      return execution && !assignment ? "execute-work-item" : END;
+      if (assignment && assignmentExecution) return "execute-assignments";
+      return workItemExecution && !assignment ? "execute-work-item" : END;
     },
     ["plan-work-item", "execute-work-item", "execute-assignments", END]
   );
@@ -126,7 +132,7 @@ export function createPhaseBGraph({
     (state) => {
       if (state.assignmentPlanResult?.status !== "prepared") return END;
       if (detailed && state.pendingPlanningIds?.length) return "plan-work-item";
-      return assignment?.execution ? "execute-assignments" : END;
+      return assignmentExecution ? "execute-assignments" : END;
     },
     ["plan-work-item", "execute-assignments", END]
   );

@@ -1,7 +1,10 @@
 import type { TaskContract } from "@/contracts/task.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import type { VerificationResult } from "@/services/verification/index.js";
-import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
+import {
+  addExecutionFailure,
+  type ExecutionState,
+} from "../../../model/state.js";
 
 export async function runApprovedVerification(
   task: TaskContract,

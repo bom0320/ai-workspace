@@ -443,9 +443,11 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
     .mockResolvedValueOnce(failed);
   const result = await createPhaseBGraph({
     agent,
+    execution: {
+      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
+    },
     planning: {
       detailed: planningOptions,
-      execution: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
       selectWorkItemIds: () => [api.id, client.id, docs.id],
     },
   }).invoke(input);
@@ -475,9 +477,11 @@ it("keeps earlier sources and stops at the first blocked completed plan", async 
 
   const result = await createPhaseBGraph({
     agent: async () => ({ type: "propose", workItems }),
+    execution: {
+      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
+    },
     planning: {
       detailed: planningOptions,
-      execution: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
       selectWorkItemIds: (items) => items.map(({ id }) => id),
     },
   }).invoke(input);
@@ -514,9 +518,12 @@ it.each([
     );
     const result = await createPhaseBGraph({
       agent: async () => ({ type: "propose", workItems: items }),
+      execution: {
+        assignment: { contexts: {} },
+        workItem: { workItemId, readPaths: [], timeoutMs: 1000 },
+      },
       planning: {
         detailed: planningOptions,
-        execution: { workItemId, readPaths: [], timeoutMs: 1000 },
         selectWorkItemIds: () => items.map(({ id }) => id),
       },
     }).invoke(input);
@@ -666,10 +673,12 @@ it.each(["prepared", "denied"] as const)(
     const agent = vi.fn();
     const result = await createPhaseBGraph({
       agent: async () => ({ type: "propose", workItems: combinedItems }),
+      execution: {
+        workItem: { workItemId: "ready", readPaths: [], timeoutMs: 1000 },
+      },
       planning: {
         assignment: { agent },
         detailed: planningOptions,
-        execution: { workItemId: "ready", readPaths: [], timeoutMs: 1000 },
         selectWorkItemIds,
       },
     }).invoke(input);

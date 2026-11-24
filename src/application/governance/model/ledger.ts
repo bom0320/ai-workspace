@@ -163,6 +163,14 @@ export const governanceLedgerSchema = z
           (record.claimedAt &&
             (record.claimedAt < record.reservedAt ||
               record.claimedAt >= delegation.grant.expiresAt)) ||
+          (record.failure &&
+            (record.result ||
+              record.failure.digest !==
+                governanceDigest({
+                  id: record.id,
+                  binding: record.binding,
+                  stage: record.failure.stage,
+                }))) ||
           (record.result &&
             (!record.claimedAt ||
               record.result.decision.specialistId !==

@@ -2,8 +2,8 @@ import {
   authorizeExecutionForRun,
   executionRequestSchema,
 } from "@/application/governance/index.js";
-import type { ExecutionOutcome } from "../model/result.js";
-import { checkGovernedWorkerRuntime } from "../worker/check-execution-runtime.js";
+import type { ExecutionOutcome } from "../../model/result.js";
+import { checkGovernedWorkerRuntime } from "../../worker/check-execution-runtime.js";
 import { runExecutionPipeline } from "./orchestration/run-execution-pipeline.js";
 
 export async function executeWorkItem(

@@ -5,9 +5,10 @@ import {
   reserveAssignmentExecution,
   claimAssignmentExecution,
   recordAssignmentResult,
+  recordAssignmentFailure,
 } from "@/application/governance/index.js";
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
-import { checkReadOnlyRuntime } from "../worker/check-execution-runtime.js";
+import { checkReadOnlyRuntime } from "../../worker/check-execution-runtime.js";
 
 type Handoff = Parameters<typeof reserveAssignmentExecution>[0];
 
@@ -21,6 +22,7 @@ export async function executeCollaborativeAssignment(
   }
 ) {
   let stage: "authority" | "claim" | "execution" | "handoff" = "authority";
+  let id: string | undefined;
   try {
     if (
       checkReadOnlyRuntime({
@@ -28,8 +30,8 @@ export async function executeCollaborativeAssignment(
         timeoutMs: request.timeoutMs,
       }).status === "blocked"
     )
-      return { status: "failed" as const, failure: "runtime" as const };
-    const id = reserveAssignmentExecution(handoff, request);
+      return { status: "denied" as const, failure: "runtime" as const };
+    id = reserveAssignmentExecution(handoff, request);
     stage = "claim";
     const claimed = claimAssignmentExecution(handoff, request.planId, id);
     const timeoutMs = Math.min(
@@ -55,19 +57,29 @@ export async function executeCollaborativeAssignment(
       ...recordAssignmentResult(handoff, request.planId, id, decision),
     };
   } catch (error) {
+    const failure =
+      error instanceof AssignmentExecutionError
+        ? error.failure
+        : error instanceof RepositorySnapshotMismatchError
+          ? "snapshot"
+          : stage !== "authority" &&
+              (error instanceof ZodError ||
+                (error instanceof Error && error.cause instanceof SyntaxError))
+            ? "validation"
+            : stage;
+    if (!id) return { status: "denied" as const, failure };
+    let failureRecorded = false;
+    try {
+      recordAssignmentFailure(handoff, request.planId, id, failure);
+      failureRecorded = true;
+    } catch {
+      // The original rejection remains observable even if persistence fails.
+    }
     return {
       status: "failed" as const,
-      failure:
-        error instanceof AssignmentExecutionError
-          ? error.failure
-          : error instanceof RepositorySnapshotMismatchError
-            ? "snapshot"
-            : stage !== "authority" &&
-                (error instanceof ZodError ||
-                  (error instanceof Error &&
-                    error.cause instanceof SyntaxError))
-              ? "validation"
-              : stage,
+      failure,
+      invocationId: id,
+      failureRecorded,
     };
   }
 }

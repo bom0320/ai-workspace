@@ -1,5 +1,5 @@
-export { executeReadOnlyWorkItem } from "./flow/execute-read-only-work-item.js";
-export { executeWorkItem } from "./flow/execute-work-item.js";
+export { executeReadOnlyWorkItem } from "./work-item/flow/execute-read-only-work-item.js";
+export { executeWorkItem } from "./work-item/flow/execute-work-item.js";
 export type {
   ExecutionFailure,
   ExecutionFailureStage,
@@ -9,4 +9,4 @@ export type {
   ReadOnlyExecutionOutcome,
   ExecutionTelemetry,
 } from "./model/result.js";
-export { executeCollaborativeAssignment } from "./flow/execute-collaborative-assignment.js";
+export { executeCollaborativeAssignment } from "./assignment/flow/execute-collaborative-assignment.js";

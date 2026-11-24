@@ -1,10 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as execution from "../index.js";
+import * as execution from "../../index.js";
 import {
   authorizeExecutionForRun,
   type ExecutionRequest,
 } from "@/application/governance/index.js";
-import { checkGovernedWorkerRuntime } from "../worker/check-execution-runtime.js";
+import { checkGovernedWorkerRuntime } from "../../worker/check-execution-runtime.js";
 import { runExecutionPipeline } from "./orchestration/run-execution-pipeline.js";
 
 vi.mock("@/application/governance/index.js", async (importOriginal) => ({
@@ -13,7 +13,7 @@ vi.mock("@/application/governance/index.js", async (importOriginal) => ({
   >()),
   authorizeExecutionForRun: vi.fn(),
 }));
-vi.mock("../worker/check-execution-runtime.js", () => ({
+vi.mock("../../worker/check-execution-runtime.js", () => ({
   checkGovernedWorkerRuntime: vi.fn(),
 }));
 vi.mock("./orchestration/run-execution-pipeline.js", () => ({

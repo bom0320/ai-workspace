@@ -25,10 +25,13 @@ export {
   registerAssignmentPlan,
 } from "./records/assignment-plans/assignment-plan-records.js";
 
+export { AssignmentExecutionError } from "./model/assignment-execution.js";
 export {
-  AssignmentExecutionError,
   reserveAssignmentExecution,
   claimAssignmentExecution,
+} from "./authorization/features/assignment-execution/flow/authorize-assignment-execution.js";
+export {
   recordAssignmentResult,
+  recordAssignmentFailure,
   getAssignmentExecutionResults,
-} from "./records/assignment-plans/assignment-execution.js";
+} from "./records/assignment-executions/assignment-execution-results.js";

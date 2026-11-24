@@ -60,6 +60,8 @@ export const phaseBState = new StateSchema({
     .array(
       z.object({
         workItemId: z.string(),
+        assignmentId: z.string().optional(),
+        assignmentPlanId: z.string().optional(),
         executionBlockedReason: z.string().min(1).optional(),
         executionSourceId: z.string().optional(),
         // This value is produced by the internal Detailed Planning call only.

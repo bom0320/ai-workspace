@@ -11,9 +11,15 @@ export type SpecialistContext = {
 };
 
 export type CollaborativeSpecialistContext = SpecialistContext & {
-  predecessorResults: {
-    assignmentId: string;
-    invocationId: string;
-    decision: AgentDecision;
+  predecessorResults: PredecessorDecision[];
+  workItemPredecessorResults?: {
+    workItemId: string;
+    results: PredecessorDecision[];
   }[];
+};
+
+type PredecessorDecision = {
+  assignmentId: string;
+  invocationId: string;
+  decision: AgentDecision;
 };

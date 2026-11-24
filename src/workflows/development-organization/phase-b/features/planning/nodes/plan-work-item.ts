@@ -1,14 +1,24 @@
-import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
+import {
+  getPreparedAssignmentPlan,
+  getWorkerAssignmentPlanningContext,
+} from "@/application/governance/index.js";
 import { executeWorkItemPlanning } from "../execution/execute-work-item-planning.js";
 import type { PhaseBState } from "../../../state.js";
 import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 
 export function createPlanWorkItemNode(
   options:
-    Omit<Parameters<typeof executeWorkItemPlanning>[0], "phaseB"> | undefined,
+    | Omit<
+        Parameters<typeof executeWorkItemPlanning>[0],
+        "phaseB" | "predecessorResults"
+      >
+    | undefined,
   mode: "draft" | "execution-source"
 ) {
-  return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
+  return async (
+    state: PhaseBState,
+    workerAssignmentId?: string
+  ): Promise<Partial<PhaseBState>> => {
     const proposal = state.workDecompositionResult;
     const [workItemId, ...pendingPlanningIds] = state.pendingPlanningIds ?? [];
     const workItem =
@@ -23,15 +33,27 @@ export function createPlanWorkItemNode(
     const handoff = state.handoffResult;
     if (handoff?.status !== "accepted")
       throw new Error("Detailed Planning requires an accepted Handoff.");
+    let workerContext:
+      ReturnType<typeof getWorkerAssignmentPlanningContext> | undefined;
     if (mode === "draft") {
       if (state.assignmentPlanResult?.status !== "prepared")
         throw new Error(
           "Detailed Planning draft requires a prepared Assignment Plan."
         );
-      getPreparedAssignmentPlan(
-        handoff.handoff,
-        state.assignmentPlanResult.plan.id
-      );
+      const planId = state.assignmentPlanResult.plan.id;
+      if (workerAssignmentId) {
+        workerContext = getWorkerAssignmentPlanningContext(
+          handoff.handoff,
+          planId,
+          workerAssignmentId
+        );
+        if (workerContext.workItem.id !== workItemId)
+          throw new Error(
+            "Worker Assignment does not belong to the selected Work Item."
+          );
+      } else {
+        getPreparedAssignmentPlan(handoff.handoff, planId);
+      }
     }
     const recordSource =
       mode === "execution-source"
@@ -49,10 +71,17 @@ export function createPlanWorkItemNode(
             repositoryPath,
             limits,
             planner,
+            predecessorResults: workerContext?.priorResults,
             executionCeiling: handoff.handoff.executionDelegation.grant,
             phaseB: {
               approvedDecisionId: proposal.approvedDecisionId,
-              workItem,
+              workItem: workerContext
+                ? {
+                    ...workerContext.workItem,
+                    objective: workerContext.assignment.objective,
+                    deliverable: workerContext.assignment.deliverable,
+                  }
+                : workItem,
             },
           });
     const readiness =
@@ -67,6 +96,11 @@ export function createPlanWorkItemNode(
         ...(state.planningResults ?? []),
         {
           workItemId: workItem.id,
+          ...(workerContext &&
+            state.assignmentPlanResult?.status === "prepared" && {
+              assignmentId: workerContext.assignment.id,
+              assignmentPlanId: state.assignmentPlanResult.plan.id,
+            }),
           result,
           ...readiness,
         },

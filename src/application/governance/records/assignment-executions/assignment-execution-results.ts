@@ -4,7 +4,10 @@ import {
   validateDecisionEvidence,
 } from "@/application/decision/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import { resolveAssignmentExecution } from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
+import {
+  resolveAssignmentExecution,
+  resolvePredecessorResults,
+} from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
 import { resolveApprovedDecision } from "../../approval/features/direction-review/flow/approved-decision.js";
 import {
   AssignmentExecutionError,
@@ -168,5 +171,42 @@ export function getAssignmentExecutionResults(
         },
       ];
     });
+  });
+}
+
+export function getWorkerAssignmentPlanningContext(
+  handoff: Handoff,
+  planId: string,
+  assignmentId: string
+) {
+  return withGovernanceLedger((ledger) => {
+    const context = resolvePreparedAssignmentPlan(ledger, handoff, planId);
+    const assignment = context.plan.assignments.find(
+      ({ id }) => id === assignmentId
+    );
+    const workItem = context.decomposition.workItems.find(
+      ({ id }) => id === assignment?.workItemId
+    );
+    if (
+      assignment?.executor.kind !== "worker" ||
+      workItem?.workType !== "repository-modification"
+    )
+      throw new AssignmentExecutionError("authority");
+    const results = resolvePredecessorResults(
+      context,
+      workItem.dependsOn,
+      assignment.dependsOn
+    );
+    const priorResults = JSON.stringify(results);
+    if (Buffer.byteLength(priorResults) > 64 * 1024)
+      throw new AssignmentExecutionError("validation");
+    return {
+      assignment,
+      workItem,
+      priorResults:
+        results.predecessors.length || results.workItemPredecessors.length
+          ? priorResults
+          : undefined,
+    };
   });
 }

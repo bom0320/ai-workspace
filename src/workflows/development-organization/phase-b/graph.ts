@@ -21,7 +21,7 @@ import {
 
 type DetailedPlanningOptions = Omit<
   Parameters<typeof executeWorkItemPlanning>[0],
-  "phaseB" | "executionCeiling"
+  "phaseB" | "executionCeiling" | "predecessorResults"
 >;
 
 export type PhaseBGraphOptions = Omit<
@@ -51,6 +51,11 @@ export function createPhaseBGraph({
   const { assignment: assignmentExecution, workItem: workItemExecution } =
     execution ?? {};
 
+  const planWorkItem = createPlanWorkItemNode(
+    detailed,
+    assignment ? "draft" : "execution-source"
+  );
+
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
     .addNode(
@@ -70,13 +75,7 @@ export function createPhaseBGraph({
         workItemExecution?.workItemId
       )
     )
-    .addNode(
-      "plan-work-item",
-      createPlanWorkItemNode(
-        detailed,
-        assignment ? "draft" : "execution-source"
-      )
-    )
+    .addNode("plan-work-item", (state) => planWorkItem(state))
     .addNode(
       "execute-assignments",
       createExecuteAssignmentsNode(

@@ -104,7 +104,11 @@ export function claimAssignmentExecution(
     const files = loadSnapshotFiles(context.snapshot, record.request.readPaths);
     if (
       Buffer.byteLength(
-        JSON.stringify({ files, predecessors: context.predecessors })
+        JSON.stringify({
+          files,
+          predecessors: context.predecessors,
+          workItemPredecessors: context.workItemPredecessors,
+        })
       ) >
       64 * 1024
     )
@@ -117,6 +121,7 @@ export function claimAssignmentExecution(
       assignment: context.assignment,
       specialist: context.specialist,
       predecessors: context.predecessors,
+      workItemPredecessors: context.workItemPredecessors,
       files,
       expiresAt,
       timeoutMs: record.request.timeoutMs,

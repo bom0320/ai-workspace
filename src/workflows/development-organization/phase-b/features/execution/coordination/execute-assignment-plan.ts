@@ -16,8 +16,7 @@ export async function executeAssignmentPlan(
   selectedWorkItemIds: readonly string[],
   { contexts, maxConcurrentRuns = 1 }: CollaborativeExecutionOptions,
   detailedPlanning?: {
-    workItemIds: readonly string[];
-    run: (id: string) => Promise<boolean>;
+    run: (id: string, assignmentId: string) => Promise<boolean>;
   }
 ) {
   if (!Number.isSafeInteger(maxConcurrentRuns) || maxConcurrentRuns < 1)
@@ -55,7 +54,13 @@ export async function executeAssignmentPlan(
   let pending = plan.assignments.filter(({ id }) => !terminal.has(id));
   const waiting = new Set<string>();
   type Completion =
-    | { kind: "planning"; workItemId: string; passed: boolean }
+    | {
+        kind: "planning";
+        key: string;
+        workItemId: string;
+        assignmentId: string;
+        passed: boolean;
+      }
     | {
         kind: "execution";
         assignmentId: string;
@@ -63,7 +68,11 @@ export async function executeAssignmentPlan(
         result: Awaited<ReturnType<typeof executeCollaborativeAssignment>>;
       };
   const running = new Map<string, Promise<Completion>>();
-  const planningQueue = [...(detailedPlanning?.workItemIds ?? [])];
+  const attemptedWorkerPlans = new Set<string>();
+  const completedWorkerPlans = new Set<string>();
+  const workerPlans = detailedPlanning
+    ? plan.assignments.filter(({ executor }) => executor.kind === "worker")
+    : [];
   const planningFailures = new Set<string>();
   const executionKey = (id: string) => `execution:${id}`;
   const selectedWorkItems = selectedWorkItemIds.map((id) =>
@@ -106,13 +115,38 @@ export async function executeAssignmentPlan(
         )
         .find((assignment) => assignment !== undefined);
       if (!next) {
-        const workItemId = planningQueue.shift();
-        if (!detailedPlanning || workItemId === undefined) break;
+        const worker = workerPlans.find(
+          ({ id, workItemId, dependsOn }) =>
+            !attemptedWorkerPlans.has(id) &&
+            !planningFailures.has(workItemId) &&
+            dependsOn.every((dependency) => completed.has(dependency)) &&
+            workItems
+              .find((item) => item.id === workItemId)
+              ?.dependsOn.every((dependency) =>
+                completedWorkItems.has(dependency)
+              )
+        );
+        if (!worker || !detailedPlanning) break;
+        const { id: assignmentId, workItemId } = worker;
+        attemptedWorkerPlans.add(assignmentId);
+        const key = `worker-plan:${assignmentId}`;
         running.set(
-          `planning:${workItemId}`,
-          detailedPlanning.run(workItemId).then(
-            (passed) => ({ kind: "planning", workItemId, passed }),
-            () => ({ kind: "planning", workItemId, passed: false })
+          key,
+          detailedPlanning.run(workItemId, assignmentId).then(
+            (passed) => ({
+              kind: "planning",
+              key,
+              workItemId,
+              assignmentId,
+              passed,
+            }),
+            () => ({
+              kind: "planning",
+              key,
+              workItemId,
+              assignmentId,
+              passed: false,
+            })
           )
         );
         continue;
@@ -143,7 +177,8 @@ export async function executeAssignmentPlan(
     if (!running.size) break;
     const finished = await Promise.race(running.values());
     if (finished.kind === "planning") {
-      running.delete(`planning:${finished.workItemId}`);
+      running.delete(finished.key);
+      if (finished.passed) completedWorkerPlans.add(finished.assignmentId);
       if (!finished.passed) planningFailures.add(finished.workItemId);
       continue;
     }
@@ -176,6 +211,15 @@ export async function executeAssignmentPlan(
     planId,
     results,
     workItemResults,
+    ...(detailedPlanning && {
+      deferredPlanningWorkItemIds: [
+        ...new Set(
+          workerPlans
+            .filter(({ id }) => !completedWorkerPlans.has(id))
+            .map(({ workItemId }) => workItemId)
+        ),
+      ],
+    }),
     ...(planningFailures.size && {
       failedPlanningWorkItemIds: [...planningFailures],
     }),

@@ -16,12 +16,22 @@ export function resolveAssignmentExecution(
   handoff: Handoff,
   request: AssignmentExecutionRequest
 ) {
-  const context = resolvePreparedAssignmentPlan(
-    ledger,
-    handoff,
-    request.planId
+  return resolveAssignmentBinding(
+    resolvePreparedAssignmentPlan(ledger, handoff, request.planId),
+    request,
+    new Set()
   );
-  const { entry, plan, delegation, policy, snapshot } = context;
+}
+
+type PlanContext = ReturnType<typeof resolvePreparedAssignmentPlan>;
+
+function resolveAssignmentBinding(
+  context: PlanContext,
+  request: AssignmentExecutionRequest,
+  verified: Set<string>
+) {
+  const { plan, delegation, policy, snapshot } = context;
+
   const assignment = plan.assignments.find(
     ({ id }) => id === request.assignmentId
   );
@@ -35,31 +45,6 @@ export function resolveAssignmentExecution(
     ({ id }) => id === assignment.workItemId
   );
   if (!specialist || !workItem) throw new AssignmentExecutionError("authority");
-  // Only read-only Work Items have a complete result contract in this path.
-  const workItemPredecessors = workItem.dependsOn.map((workItemId) => {
-    const predecessor = context.decomposition.workItems.find(
-      ({ id }) => id === workItemId
-    );
-    const assignments = plan.assignments.filter(
-      (item) => item.workItemId === workItemId
-    );
-    if (predecessor?.workType !== "read-only" || !assignments.length)
-      throw new AssignmentExecutionError("dependency");
-    return {
-      workItemId,
-      results: assignments.map(({ id }) => {
-        const record = entry.assignmentExecutions?.find(
-          (item) =>
-            item.request.planId === plan.id &&
-            item.request.assignmentId === id &&
-            item.delegationId === delegation.id
-        );
-        if (!record?.claimedAt || !record.result)
-          throw new AssignmentExecutionError("dependency");
-        return { invocationId: record.id, digest: record.result.digest };
-      }),
-    };
-  });
   const requested = {
     readScopes: request.readPaths.map((path) => ({
       kind: "file" as const,
@@ -75,21 +60,12 @@ export function resolveAssignmentExecution(
   )
     throw new AssignmentExecutionError("authority");
 
-  const predecessors = assignment.dependsOn.map((assignmentId) => {
-    const record = entry.assignmentExecutions?.find(
-      (item) =>
-        item.request.planId === plan.id &&
-        item.request.assignmentId === assignmentId &&
-        item.delegationId === delegation.id
-    );
-    if (!record?.claimedAt || !record.result)
-      throw new AssignmentExecutionError("dependency");
-    return {
-      assignmentId,
-      invocationId: record.id,
-      decision: record.result.decision,
-    };
-  });
+  const { predecessors, workItemPredecessors } = resolvePredecessorResults(
+    context,
+    workItem.dependsOn,
+    assignment.dependsOn,
+    verified
+  );
   const binding = governanceDigest({
     request,
     delegation,
@@ -97,7 +73,102 @@ export function resolveAssignmentExecution(
     assignment,
     specialist,
     predecessors,
-    ...(workItemPredecessors.length && { workItemPredecessors }),
+    ...(workItemPredecessors.length && {
+      workItemPredecessors: workItemPredecessors.map(
+        ({ workItemId, results }) => ({
+          workItemId,
+          results: results.map(({ invocationId, digest }) => ({
+            invocationId,
+            digest,
+          })),
+        })
+      ),
+    }),
   });
-  return { ...context, assignment, specialist, predecessors, binding };
+  return {
+    ...context,
+    assignment,
+    specialist,
+    predecessors,
+    workItemPredecessors,
+    binding,
+  };
+}
+
+type ExecutionRecord = NonNullable<
+  PlanContext["entry"]["assignmentExecutions"]
+>[number];
+
+function verifiedAssignmentResult(
+  context: PlanContext,
+  assignmentId: string,
+  verified: Set<string>
+): ExecutionRecord & { result: NonNullable<ExecutionRecord["result"]> } {
+  const record = context.entry.assignmentExecutions?.find(
+    (item) =>
+      item.request.planId === context.plan.id &&
+      item.request.assignmentId === assignmentId &&
+      item.delegationId === context.delegation.id
+  );
+  if (!record?.claimedAt || !record.result || record.failure)
+    throw new AssignmentExecutionError("dependency");
+  const { result } = record;
+  if (!verified.has(record.id)) {
+    const { binding } = resolveAssignmentBinding(
+      context,
+      record.request,
+      verified
+    );
+    if (
+      binding !== record.binding ||
+      governanceDigest({
+        id: record.id,
+        binding,
+        decision: result.decision,
+      }) !== result.digest
+    )
+      throw new AssignmentExecutionError("handoff");
+    verified.add(record.id);
+  }
+  return { ...record, result };
+}
+
+export function resolvePredecessorResults(
+  context: PlanContext,
+  dependsOn: readonly string[],
+  assignmentDependencies: readonly string[],
+  verified = new Set<string>()
+) {
+  // Only read-only Work Items have a complete result contract in this path.
+  const workItemPredecessors = dependsOn.map((workItemId) => {
+    const predecessor = context.decomposition.workItems.find(
+      ({ id }) => id === workItemId
+    );
+    const assignments = context.plan.assignments.filter(
+      (item) => item.workItemId === workItemId
+    );
+    if (predecessor?.workType !== "read-only" || !assignments.length)
+      throw new AssignmentExecutionError("dependency");
+    return {
+      workItemId,
+      results: assignments.map(({ id }) => {
+        const record = verifiedAssignmentResult(context, id, verified);
+        return {
+          assignmentId: id,
+          invocationId: record.id,
+          digest: record.result.digest,
+          decision: record.result.decision,
+        };
+      }),
+    };
+  });
+  const predecessors = assignmentDependencies.map((assignmentId) => {
+    const record = verifiedAssignmentResult(context, assignmentId, verified);
+    return {
+      assignmentId,
+      invocationId: record.id,
+      decision: record.result.decision,
+    };
+  });
+  return { predecessors, workItemPredecessors };
 }

@@ -25,9 +25,11 @@ export async function executeWorkItemPlanning({
   limits,
   planner,
   executionCeiling,
+  predecessorResults,
 }: Pick<PlanTaskOptions, "repositoryPath" | "limits" | "planner"> & {
   phaseB: PhaseBPlanningInput;
   executionCeiling?: ExecutionDelegationRequest;
+  predecessorResults?: string;
 }) {
   const { approvedDecisionId, workItem } =
     phaseBPlanningInputSchema.parse(phaseB);
@@ -51,6 +53,7 @@ export async function executeWorkItemPlanning({
       objective: workItem.objective,
       deliverable: workItem.deliverable,
       direction: review.proposal.direction.text,
+      ...(predecessorResults && { predecessorResults }),
       ...(executionCeiling && {
         executionCeiling: JSON.stringify(executionCeiling),
       }),

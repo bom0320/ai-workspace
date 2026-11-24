@@ -22,18 +22,23 @@ function deferred<T>() {
 
 function fixture(
   dependencies: Record<string, string[]>,
-  assignments: Array<[id: string, workItemId: string, dependsOn?: string[]]>
+  assignments: Array<
+    [id: string, workItemId: string, dependsOn?: string[], kind?: "worker"]
+  >
 ) {
   const subject = {
     plan: {
       assignments: assignments.map(
-        ([id, workItemId, dependsOn = []]): PhaseBAssignment => ({
+        ([id, workItemId, dependsOn = [], kind]): PhaseBAssignment => ({
           id,
           workItemId,
           dependsOn,
           objective: id,
           deliverable: id,
-          executor: { kind: "specialist", specialistId: "approved" },
+          executor:
+            kind === "worker"
+              ? { kind, mode: "codex-worktree" }
+              : { kind: "specialist", specialistId: "approved" },
         })
       ),
     },
@@ -42,7 +47,11 @@ function fixture(
       dependsOn,
       objective: id,
       deliverable: id,
-      workType: "read-only",
+      workType: assignments.some(
+        ([, workItemId, , kind]) => workItemId === id && kind === "worker"
+      )
+        ? "repository-modification"
+        : "read-only",
     })),
   };
   vi.mocked(getPreparedAssignmentPlan).mockReturnValue(
@@ -134,14 +143,14 @@ it("fills slots as each result arrives and waits for every dependency", async ()
 it("shares capacity with draft planning and continues independent execution after failure", async () => {
   const fixtureRun = fixture({ A: [], B: [], C: ["A"] }, [
     ["a", "A"],
-    ["b", "B"],
+    ["b", "B", [], "worker"],
     ["c", "C"],
   ]);
   const draft = deferred<boolean>();
   const plan = vi.fn(() => draft.promise);
-  const result = fixtureRun.run(["a", "c"], { workItemIds: ["B"], run: plan });
+  const result = fixtureRun.run(["a", "c"], { run: plan });
   expect(fixtureRun.started).toEqual(["a"]);
-  expect(plan).toHaveBeenCalledExactlyOnceWith("B");
+  expect(plan).toHaveBeenCalledExactlyOnceWith("B", "b");
   fixtureRun.fail("a");
   draft.resolve(true);
   expect(await result).toMatchObject({
@@ -152,14 +161,17 @@ it("shares capacity with draft planning and continues independent execution afte
 
 it("starts independent drafts together and retains failures arriving out of order", async () => {
   const fixtureRun = fixture({ A: [], B: [] }, [
-    ["a", "A"],
-    ["b", "B"],
+    ["a", "A", [], "worker"],
+    ["b", "B", [], "worker"],
   ]);
   const a = deferred<boolean>();
   const b = deferred<boolean>();
   const plan = vi.fn((id: string) => (id === "A" ? a.promise : b.promise));
-  const result = fixtureRun.run([], { workItemIds: ["A", "B"], run: plan });
-  expect(plan.mock.calls).toEqual([["A"], ["B"]]);
+  const result = fixtureRun.run([], { run: plan });
+  expect(plan.mock.calls).toEqual([
+    ["A", "a"],
+    ["B", "b"],
+  ]);
   b.resolve(false);
   a.resolve(true);
   expect(await result).toMatchObject({ failedPlanningWorkItemIds: ["B"] });

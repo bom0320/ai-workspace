@@ -48,6 +48,9 @@ export async function executeCollaborativeAssignment(
         repositoryCommitSha: claimed.snapshot.commitSha,
         files: claimed.files,
         predecessorResults: claimed.predecessors,
+        ...(claimed.workItemPredecessors.length && {
+          workItemPredecessorResults: claimed.workItemPredecessors,
+        }),
       },
       { timeoutMs }
     );

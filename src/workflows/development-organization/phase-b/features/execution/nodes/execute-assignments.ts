@@ -19,7 +19,6 @@ export function createExecuteAssignmentsNode(
       assignmentPlanResult?.status !== "prepared"
     )
       return {};
-    const workItemIds = state.pendingPlanningIds ?? [];
     const drafts = new Map<
       string,
       NonNullable<PhaseBState["planningResults"]>[number]
@@ -30,16 +29,18 @@ export function createExecuteAssignmentsNode(
       selectedWorkItemIds,
       configured,
       planDraft && {
-        workItemIds,
-        run: async (workItemId) => {
-          const planned = await planDraft({
-            ...state,
-            pendingPlanningIds: [workItemId],
-            planningResults: [],
-          });
+        run: async (workItemId, assignmentId) => {
+          const planned = await planDraft(
+            {
+              ...state,
+              pendingPlanningIds: [workItemId],
+              planningResults: [],
+            },
+            assignmentId
+          );
           const draft = planned.planningResults?.[0];
           if (!draft) return false;
-          drafts.set(workItemId, draft);
+          drafts.set(assignmentId, draft);
           return draft.result.status === "completed";
         },
       }
@@ -49,13 +50,9 @@ export function createExecuteAssignmentsNode(
     return {
       assignmentExecutionResult,
       pendingPlanningIds: [],
-      planningResults: [
-        ...(state.planningResults ?? []),
-        ...workItemIds.flatMap((id) => {
-          const draft = drafts.get(id);
-          return draft ? [draft] : [];
-        }),
-      ],
+      deferredDetailedPlanningIds:
+        assignmentExecutionResult.deferredPlanningWorkItemIds ?? [],
+      planningResults: [...(state.planningResults ?? []), ...drafts.values()],
     };
   };
 }

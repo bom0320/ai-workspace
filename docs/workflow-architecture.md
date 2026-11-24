@@ -263,10 +263,10 @@ Plan ID는 기존처럼 Decomposition·Staffing Binding, Snapshot, Assignment �
 Plan을 기록하고 종료한다. 실제 CEO Assignment Adapter는 후속 범위다.
 
 **Step 5.2.2 Specialist 협업 실행.** `execution.assignment.contexts`에 Assignment ID별
-`readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 실행한다. `execution.assignment.maxConcurrentRuns`는 Specialist 실행과 이미 준비된 Detailed Planning 초안의 공유 동시성 한도이며 기본값은 1이다. 각 호출이 끝날 때 선행 조건과 빈 슬롯을 다시 확인한다. 실행 시 저장된
+`readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 실행한다. `execution.assignment.maxConcurrentRuns`는 Specialist 실행과 이미 준비된 Detailed Planning 초안의 공유 동시성 한도이며 기본값은 1이다. 각 호출이 끝날 때 선행 조건과 빈 슬롯을 다시 확인한다. Worker Assignment의 상세 계획은 검증된 선행 결과가 모두 준비됐을 때 시작하며, 결과에는 Plan ID와 Assignment ID가 포함된다. 이 결과는 실행 권한이 없는 초안이다. 실행 시 저장된
 Plan과 현재 Phase B 위임을 확인하고, 위임 예산을 기존 Work Item 예약과 합산한다. 별도 Assignment 예약을
 기록한 뒤 Claim 시 권한·선행 결과를 다시 검증한다. 후속 Specialist는 검증된 선행 판단을 Repository 파일과
-구분된 참고 자료로 받는다. 결과는 Snapshot 및 승인 입력에 연결된 예약에 저장하며 Graph에는 식별자와 Digest를
+구분된 참고 자료로 받는다. 같은 Work Item의 선행 판단과 선행 Work Item의 판단은 별도 필드로 전달하며, Claim에서 Context 전체 크기를 검사한다. 결과는 Snapshot 및 승인 입력에 연결된 예약에 저장하며 Graph에는 식별자와 Digest를
 기록한다. 예약 이후 실패하면 예약에 연결된 실패 단계와 Digest를 보존한다. 검증된 성공 결과만 후속 입력으로 사용한다. Context가 누락된 Assignment, Worker 및 그 결과를
 기다리는 Assignment는 대기한다. Work Item별 상태를 집계한다. 선행 Work Item이 읽기 전용이고 같은 Plan의 모든 Assignment 결과가 검증·저장된 경우에만 후속 Work Item을 시작한다. Repository 변경 Work Item은 Worker 결과 및 통합 검증 계약이 연결될 때까지 선행 완료로 인정하지 않는다.
 Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집계하며 개별 Assignment 결과와 대기 목록도 제공한다. 실행 기록은 기존 예약 예산을 계속 차지한다. Assignment 기반 Worker 수정 및 Worktree 통합은 후속 범위다.

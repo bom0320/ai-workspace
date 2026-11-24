@@ -1585,7 +1585,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       selectedAssignmentWorkItems = ["first"],
       secondDependsOnFirst = false,
     }: {
-      beforePlannerResult?: () => void;
+      beforePlannerResult?: (predecessorResults: string | undefined) => void;
       fastPath?: boolean;
       directoryScope?: boolean;
       codexMode?: boolean;
@@ -1702,7 +1702,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             throw new Error(
               "Deterministic Planning must not call the Planner."
             );
-          beforePlannerResult?.();
+          beforePlannerResult?.(detail?.predecessorResults);
           return {
             type: "complete",
             task: {
@@ -2045,10 +2045,28 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             vi.mocked(processRuntime.runCommand).mockImplementation(
               async (_name, args) => {
                 const prompt = args.at(-1)!;
-                const { assignmentObjective } = JSON.parse(
-                  prompt.split("SpecialistContext:\n")[1]
-                );
+                const {
+                  assignmentObjective,
+                  workItemPredecessorResults,
+                  predecessorResults,
+                } = JSON.parse(prompt.split("SpecialistContext:\n")[1]);
                 executed.push(assignmentObjective);
+                expect(predecessorResults).toEqual([]);
+                if (assignmentObjective === "second") {
+                  expect(workItemPredecessorResults).toMatchObject([
+                    {
+                      workItemId: "first",
+                      results: [
+                        {
+                          assignmentId: "first",
+                          invocationId: expect.any(String),
+                          digest: expect.any(String),
+                          decision: { recommendation: "Finding" },
+                        },
+                      ],
+                    },
+                  ]);
+                } else expect(workItemPredecessorResults).toBeUndefined();
                 return {
                   stdout: JSON.stringify({
                     recommendation: "Finding",
@@ -2101,6 +2119,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       const requestContext = { readPaths: ["README.md"], timeoutMs: 5000 };
       const {
         assignmentExecutionResult,
+        planningResults,
         assignmentPlanResult,
         workItems,
         decision,
@@ -2108,6 +2127,17 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         workerExecutionResult,
       } = await planExecutionItems(true, 2, [], "README.md", {
         specialistCount: 2,
+        assignmentWithDetailed: mode === "success",
+        beforePlannerResult: (prior) => {
+          expect(JSON.parse(prior!)).toMatchObject({
+            predecessors: [
+              {
+                assignmentId: "second-review",
+                decision: { recommendation: "Finding from second-review" },
+              },
+            ],
+          });
+        },
         codexMode: true,
         assignmentAgent: async ({ specialists }) => {
           const review = (id: string, index: number, dependsOn: string[]) => ({
@@ -2239,6 +2269,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             : 1
       );
       if (mode === "success") {
+        expect(planningResults).toMatchObject([
+          {
+            workItemId: "first",
+            assignmentId: "worker",
+            assignmentPlanId: assignmentPlanResult.plan.id,
+            result: { status: "completed", task: { objective: "Modify" } },
+          },
+        ]);
         expect(
           results.map(({ assignmentId, status }) => [assignmentId, status])
         ).toEqual([

@@ -9,3 +9,4 @@ export type {
   ReadOnlyExecutionOutcome,
   ExecutionTelemetry,
 } from "./model/result.js";
+export { executeCollaborativeAssignment } from "./flow/execute-collaborative-assignment.js";

@@ -1579,6 +1579,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       readOnly = false,
       beforePhaseB,
       assignmentAgent,
+      collaborativeExecution,
       assignmentWithDetailed = false,
       specialistCount = 1,
     }: {
@@ -1590,6 +1591,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       specialistCount?: number;
       beforePhaseB?: () => void;
       assignmentWithDetailed?: boolean;
+      collaborativeExecution?: NonNullable<
+        NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
+      >["execution"];
       assignmentAgent?: NonNullable<
         NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
       >["agent"];
@@ -1718,6 +1722,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     let workerExecutionResult;
     let readOnlyExecutionResult;
     let assignmentPlanResult;
+    let assignmentExecutionResult;
     let deferredDetailedPlanningIds;
     if (withDelegation) {
       if (handoff?.status !== "completed")
@@ -1728,7 +1733,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         ...(assignmentAgent
           ? {
               planning: {
-                assignment: { agent: assignmentAgent },
+                assignment: {
+                  agent: assignmentAgent,
+                  execution: collaborativeExecution,
+                },
                 selectWorkItemIds: () => ["first"],
                 ...(assignmentWithDetailed && {
                   detailed: planning.detailed,
@@ -1746,6 +1754,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       workerExecutionResult = state.workerExecutionResult;
       readOnlyExecutionResult = state.readOnlyExecutionResult;
       assignmentPlanResult = state.assignmentPlanResult;
+      assignmentExecutionResult = state.assignmentExecutionResult;
       deferredDetailedPlanningIds = state.deferredDetailedPlanningIds;
     } else {
       const decomposition = await runWorkDecomposition(
@@ -1780,6 +1789,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     return {
       planningResults,
       assignmentPlanResult,
+      assignmentExecutionResult,
       deferredDetailedPlanningIds,
       handoff,
       decision,
@@ -2000,6 +2010,232 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           }))
         )
       ).toEqual([{ executionReservations: [], workItemExecutionSources: [] }]);
+    }
+  );
+
+  it.each([
+    "success",
+    "invalid-evidence",
+    "process-failure",
+    "unauthorized",
+  ] as const)(
+    "coordinates collaborative Assignment execution with %s",
+    async (mode) => {
+      const specialist = vi.fn();
+      const requestContext = { readPaths: ["README.md"], timeoutMs: 5000 };
+      const {
+        assignmentExecutionResult,
+        assignmentPlanResult,
+        workItems,
+        decision,
+        handoff,
+        workerExecutionResult,
+      } = await planExecutionItems(true, 2, [], "README.md", {
+        specialistCount: 2,
+        codexMode: true,
+        assignmentAgent: async ({ specialists }) => {
+          const review = (id: string, index: number, dependsOn: string[]) => ({
+            id,
+            workItemId: "first",
+            executor: {
+              kind: "specialist",
+              specialistId: specialists[index].id,
+            },
+            objective: `Assignment objective for ${id}`,
+            deliverable: "Findings",
+            dependsOn,
+          });
+          return [
+            review("second-review", 1, ["first-review"]),
+            review("first-review", 0, []),
+            {
+              id: "worker",
+              workItemId: "first",
+              executor: { kind: "worker", mode: "codex-worktree" },
+              objective: "Modify",
+              deliverable: "Patch",
+              dependsOn: ["second-review"],
+            },
+            review("post-worker", 0, ["worker"]),
+            review("extra-review", 0, []),
+          ];
+        },
+        collaborativeExecution: {
+          contexts: {
+            "first-review":
+              mode === "unauthorized"
+                ? { ...requestContext, readPaths: ["docs-extra/other.md"] }
+                : requestContext,
+            "second-review": requestContext,
+            "post-worker": requestContext,
+          },
+        },
+        beforePhaseB: () => {
+          vi.mocked(processRuntime.runCommand).mockImplementation(
+            async (name, args, options) => {
+              specialist(name, args, options);
+              expect(name).toBe("codex");
+              expect(args).toContain("read-only");
+              expect(args.join(" ")).toContain(
+                "shell_tool=false,unified_exec=false"
+              );
+              const prompt = args.at(-1)!;
+              const context = JSON.parse(
+                prompt.split("SpecialistContext:\n")[1]
+              );
+              expect(context.files).toEqual([
+                { path: "README.md", content: "Original content\n" },
+              ]);
+              const first = specialist.mock.calls.length === 1;
+              expect(context.assignmentObjective).toBe(
+                `Assignment objective for ${first ? "first-review" : "second-review"}`
+              );
+              expect(context.predecessorResults).toEqual(
+                first
+                  ? []
+                  : [
+                      {
+                        assignmentId: "first-review",
+                        invocationId: expect.any(String),
+                        decision: expect.objectContaining({
+                          recommendation: "Finding from first-review",
+                        }),
+                      },
+                    ]
+              );
+              return {
+                stdout: JSON.stringify({
+                  recommendation: `Finding from ${first ? "first-review" : "second-review"}`,
+                  evidence: [
+                    {
+                      path:
+                        mode === "invalid-evidence"
+                          ? "outside.md"
+                          : "README.md",
+                      description: "Introduction",
+                    },
+                  ],
+                  risks: [],
+                  uncertainty: [],
+                }),
+                stderr: "",
+                exitCode: mode === "process-failure" ? 1 : 0,
+                timedOut: false,
+              };
+            }
+          );
+        },
+      });
+      expect(workerExecutionResult).toBeUndefined();
+      if (
+        assignmentExecutionResult?.status !== "coordinated" ||
+        assignmentPlanResult?.status !== "prepared" ||
+        handoff?.status !== "completed"
+      )
+        throw new Error(JSON.stringify(assignmentExecutionResult));
+
+      const { results, pendingAssignments } = assignmentExecutionResult;
+      expect(
+        pendingAssignments.map(({ assignmentId }) => assignmentId)
+      ).toEqual(
+        mode === "success"
+          ? ["worker", "post-worker", "extra-review"]
+          : ["second-review", "worker", "post-worker", "extra-review"]
+      );
+      expect(specialist).toHaveBeenCalledTimes(
+        mode === "success" ? 2 : mode === "unauthorized" ? 0 : 1
+      );
+      if (mode === "success") {
+        expect(
+          results.map(({ assignmentId, status }) => [assignmentId, status])
+        ).toEqual([
+          ["first-review", "completed"],
+          ["second-review", "completed"],
+        ]);
+        const first = results[0];
+        if (first.status !== "completed")
+          throw new Error("Missing result ref.");
+        expect(() =>
+          governance.claimAssignmentExecution(
+            handoff,
+            assignmentPlanResult.plan.id,
+            first.invocationId
+          )
+        ).toThrow("claim");
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, {
+            ...requestContext,
+            planId: assignmentPlanResult.plan.id,
+            assignmentId: "first-review",
+          })
+        ).toThrow("duplicate");
+        const next = {
+          ...requestContext,
+          planId: assignmentPlanResult.plan.id,
+          assignmentId: "extra-review",
+        };
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, next)
+        ).toThrow("budget");
+        const task = {
+          id: "legacy-task",
+          goalId: "goal",
+          objective: "Modify",
+          targetRepository: options.goal.targetRepository,
+          allowedPaths: ["README.md"],
+          forbiddenPaths: [],
+          constraints: options.goal.constraints ?? [],
+          acceptanceCriteria: ["Patch"],
+          verification: [],
+        };
+        const recordSource = beginWorkItemExecutionSource(
+          {
+            status: "proposed",
+            approvedDecisionId: decision.id,
+            workItems,
+          },
+          workItems[1],
+          root
+        );
+        const sourceId = recordSource?.(task);
+        expect(sourceId).toBeDefined();
+        expect(
+          governance.authorizeExecutionForRun({
+            ...requestContext,
+            approvedDecisionId: decision.id,
+            executionSourceId: sourceId,
+            workItem: workItems[1],
+            task,
+            repositoryPath: root,
+            workerMode: "codex-worktree",
+          }).status
+        ).toBe("denied");
+        writeFileSync(join(root, "README.md"), "Snapshot drift");
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, next)
+        ).toThrow(/dirty/);
+        writeFileSync(join(root, "README.md"), "Original content\n");
+        configureExecutionPolicy(null);
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, next)
+        ).toThrow();
+      } else {
+        expect(results).toMatchObject([
+          {
+            assignmentId: "first-review",
+            status: "failed",
+            failure:
+              mode === "unauthorized"
+                ? "authority"
+                : mode === "invalid-evidence"
+                  ? "validation"
+                  : "execution",
+          },
+        ]);
+      }
+      expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
+        "Original content\n"
+      );
     }
   );
 

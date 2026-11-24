@@ -15,10 +15,21 @@ export function assertExecutionReservationAvailable(
       .map(({ id }) => id)
   );
   if (
-    reservations.filter(
+    [...reservations, ...(entry.assignmentExecutions ?? [])].filter(
       ({ delegationId }) => delegationId === evaluated.execution.delegationId
     ).length >= maxExecutions ||
-    reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId))
+    reservations.some(({ sourceId }) => matchingSourceIds.has(sourceId)) ||
+    entry.assignmentExecutions?.some(({ request }) =>
+      entry.assignmentPlans?.some(
+        (plan) =>
+          plan.id === request.planId &&
+          plan.decompositionBinding === source.decompositionBinding &&
+          plan.assignments.some(
+            ({ id, workItemId }) =>
+              id === request.assignmentId && workItemId === source.workItemId
+          )
+      )
+    )
   )
     throw new Error(
       "Execution budget exhausted or Work Item already reserved."

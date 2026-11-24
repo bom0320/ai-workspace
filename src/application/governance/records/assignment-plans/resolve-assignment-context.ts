@@ -11,8 +11,15 @@ export type Handoff = Parameters<typeof resolveExecutionHandoff>[1];
 export type Proposal = Extract<WorkDecompositionResult, { status: "proposed" }>;
 
 export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
-  const { entry, decision, analysisSources, snapshot, delegation, policy } =
-    resolveExecutionHandoff(ledger, handoff);
+  const {
+    entry,
+    decision,
+    context,
+    analysisSources,
+    snapshot,
+    delegation,
+    policy,
+  } = resolveExecutionHandoff(ledger, handoff);
   if (Date.parse(delegation.grant.expiresAt) <= Date.now())
     throw new Error(
       "Assignment Plan requires an unexpired Execution Delegation."
@@ -48,6 +55,9 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
   const scopes = executionScopes(delegation.grant);
   return {
     entry,
+    goal: context.goal,
+    delegation,
+    policy,
     decision,
     snapshot,
     sources,

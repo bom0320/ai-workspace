@@ -26,3 +26,5 @@ export {
 } from "./flow/context/repository-snapshot.js";
 export { agentDecisionSchema } from "./protocol/decision.js";
 export { loadSnapshotFiles } from "./flow/context/load-snapshot-files.js";
+export { runCollaborativeSpecialist } from "./specialist/codex-specialist.js";
+export { validateDecisionEvidence } from "./flow/validation/validate-evidence.js";

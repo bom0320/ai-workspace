@@ -1,3 +1,5 @@
+import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";
+import type { CollaborativeExecutionOptions } from "./features/execution/execution/execute-assignment-plan.js";
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
 import type { AssignmentPlanAgent } from "@/application/planning/index.js";
@@ -28,7 +30,10 @@ export type PhaseBGraphOptions = Omit<
 > & {
   planning?: {
     selectWorkItemIds: SelectWorkItemIds;
-    assignment?: { agent: AssignmentPlanAgent };
+    assignment?: {
+      agent: AssignmentPlanAgent;
+      execution?: CollaborativeExecutionOptions;
+    };
     detailed?: DetailedPlanningOptions;
     execution?: PhaseBExecutionOptions;
   };
@@ -65,6 +70,10 @@ export function createPhaseBGraph({
         detailed,
         assignment ? "draft" : "execution-source"
       )
+    )
+    .addNode(
+      "execute-assignments",
+      createExecuteAssignmentsNode(assignment?.execution)
     )
     .addNode(
       "execute-work-item",
@@ -107,20 +116,21 @@ export function createPhaseBGraph({
       )
         return END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
+      if (assignment?.execution) return "execute-assignments";
       return execution && !assignment ? "execute-work-item" : END;
     },
-    ["plan-work-item", "execute-work-item", END]
+    ["plan-work-item", "execute-work-item", "execute-assignments", END]
   );
   graph.addConditionalEdges(
     "prepare-assignments",
-    (state) =>
-      detailed &&
-      state.assignmentPlanResult?.status === "prepared" &&
-      state.pendingPlanningIds?.length
-        ? "plan-work-item"
-        : END,
-    ["plan-work-item", END]
+    (state) => {
+      if (state.assignmentPlanResult?.status !== "prepared") return END;
+      if (detailed && state.pendingPlanningIds?.length) return "plan-work-item";
+      return assignment?.execution ? "execute-assignments" : END;
+    },
+    ["plan-work-item", "execute-assignments", END]
   );
+  graph.addEdge("execute-assignments", END);
   graph.addEdge("execute-work-item", END);
 
   // 3. Compile Graph

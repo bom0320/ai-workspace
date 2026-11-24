@@ -57,6 +57,7 @@ beforeEach(() => {
 
 it("exposes only approved execution use cases at runtime", () => {
   expect(Object.keys(execution).sort()).toEqual([
+    "executeCollaborativeAssignment",
     "executeReadOnlyWorkItem",
     "executeWorkItem",
   ]);

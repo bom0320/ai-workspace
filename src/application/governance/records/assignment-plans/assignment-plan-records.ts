@@ -1,3 +1,4 @@
+import type { GovernanceLedger } from "../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   phaseBAssignmentsSchema,
@@ -78,30 +79,43 @@ export function registerAssignmentPlan(
   }
 }
 
+export function resolvePreparedAssignmentPlan(
+  ledger: GovernanceLedger,
+  handoff: Handoff,
+  id: string
+) {
+  const context = resolvePlanContext(ledger, handoff);
+  const { entry, decision } = context;
+  const plan = entry.assignmentPlans?.find((record) => record.id === id);
+  const decomposition = entry.executionDecompositions?.find(
+    ({ binding }) => binding === plan?.decompositionBinding
+  );
+  if (!plan || !decomposition)
+    throw new Error("Assignment Plan is unavailable.");
+  if (
+    decomposition.approvedDecisionId !== decision.id ||
+    decomposition.approvalBinding !== governanceDigest(decision) ||
+    plan.staffingBinding !== context.staffingBinding ||
+    governanceDigest(plan.snapshot) !== governanceDigest(context.snapshot)
+  )
+    throw new Error("Assignment Plan provenance changed.");
+  assertAssignments({ ...context, decomposition }, plan.assignments);
+  const specialistSources = context.sources.filter(({ definition }) =>
+    plan.assignments.some(
+      ({ executor }) =>
+        executor.kind === "specialist" &&
+        executor.specialistId === definition.id
+    )
+  );
+  return { ...context, plan, decomposition, specialistSources };
+}
+
 export function getPreparedAssignmentPlan(handoff: Handoff, id: string) {
   return withGovernanceLedger((ledger) => {
-    const context = resolvePlanContext(ledger, handoff);
-    const { entry, decision } = context;
-    const plan = entry.assignmentPlans?.find((record) => record.id === id);
-    const decomposition = entry.executionDecompositions?.find(
-      ({ binding }) => binding === plan?.decompositionBinding
-    );
-    if (!plan || !decomposition)
-      throw new Error("Assignment Plan is unavailable.");
-    if (
-      decomposition.approvedDecisionId !== decision.id ||
-      decomposition.approvalBinding !== governanceDigest(decision) ||
-      plan.staffingBinding !== context.staffingBinding ||
-      governanceDigest(plan.snapshot) !== governanceDigest(context.snapshot)
-    )
-      throw new Error("Assignment Plan provenance changed.");
-    assertAssignments({ ...context, decomposition }, plan.assignments);
-    const specialistSources = context.sources.filter(({ definition }) =>
-      plan.assignments.some(
-        ({ executor }) =>
-          executor.kind === "specialist" &&
-          executor.specialistId === definition.id
-      )
+    const { plan, specialistSources } = resolvePreparedAssignmentPlan(
+      ledger,
+      handoff,
+      id
     );
     return structuredClone({ plan, specialistSources });
   });

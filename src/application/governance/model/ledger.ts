@@ -1,3 +1,4 @@
+import { assignmentExecutionRecordSchema } from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { validateAssignmentProposal } from "@/contracts/phase-b-assignment.js";
@@ -57,6 +58,9 @@ export const governanceLedgerSchema = z
           assignmentPlans: z.array(assignmentPlanSchema).optional(),
           workItemExecutionSources: z
             .array(workItemExecutionSourceSchema)
+            .optional(),
+          assignmentExecutions: z
+            .array(assignmentExecutionRecordSchema)
             .optional(),
           executionReservations: z.array(executionReservationSchema).optional(),
           reservations: z.array(invocationReservationSchema).optional(),
@@ -120,6 +124,63 @@ export const governanceLedgerSchema = z
             message: "Invalid Assignment Plan binding.",
           });
         planIds.add(id);
+      }
+      const assignmentKeys = new Set<string>();
+      const executionCounts = new Map<string, number>();
+      for (const reservation of entry.executionReservations ?? [])
+        executionCounts.set(
+          reservation.delegationId,
+          (executionCounts.get(reservation.delegationId) ?? 0) + 1
+        );
+      for (const record of entry.assignmentExecutions ?? []) {
+        const plan = entry.assignmentPlans?.find(
+          ({ id }) => id === record.request.planId
+        );
+        const decomposition = entry.executionDecompositions?.find(
+          ({ binding }) => binding === plan?.decompositionBinding
+        );
+        const assignment = plan?.assignments.find(
+          ({ id }) => id === record.request.assignmentId
+        );
+        const delegation = entry.executionDelegations?.find(
+          ({ id }) => id === record.delegationId
+        );
+        const count = (executionCounts.get(record.delegationId) ?? 0) + 1;
+        const key = JSON.stringify([
+          record.request.planId,
+          record.request.assignmentId,
+        ]);
+        if (
+          executionIds.has(record.id) ||
+          assignmentKeys.has(key) ||
+          !delegation ||
+          !decomposition ||
+          delegation.approvedDecisionId !== decomposition.approvedDecisionId ||
+          assignment?.executor.kind !== "specialist" ||
+          count > delegation.grant.budget.maxExecutions ||
+          record.reservedAt < delegation.issuedAt ||
+          record.reservedAt >= delegation.grant.expiresAt ||
+          (record.claimedAt &&
+            (record.claimedAt < record.reservedAt ||
+              record.claimedAt >= delegation.grant.expiresAt)) ||
+          (record.result &&
+            (!record.claimedAt ||
+              record.result.decision.specialistId !==
+                assignment.executor.specialistId ||
+              record.result.digest !==
+                governanceDigest({
+                  id: record.id,
+                  binding: record.binding,
+                  decision: record.result.decision,
+                })))
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Invalid Assignment execution record.",
+          });
+        executionIds.add(record.id);
+        assignmentKeys.add(key);
+        executionCounts.set(record.delegationId, count);
       }
       if (!hasValidExecutionReservations(entry, key, executionIds))
         context.addIssue({

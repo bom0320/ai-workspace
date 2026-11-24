@@ -1,3 +1,4 @@
+import type { AgentDecision } from "./decision.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
@@ -7,4 +8,12 @@ export type SpecialistContext = {
   assignmentObjective?: string;
   repositoryCommitSha: string;
   files: InspectedFile[];
+};
+
+export type CollaborativeSpecialistContext = SpecialistContext & {
+  predecessorResults: {
+    assignmentId: string;
+    invocationId: string;
+    decision: AgentDecision;
+  }[];
 };

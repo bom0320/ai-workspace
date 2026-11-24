@@ -1,3 +1,4 @@
+import type { executeAssignmentPlan } from "./features/execution/execution/execute-assignment-plan.js";
 import type { prepareAssignmentPlan } from "@/application/planning/index.js";
 import type {
   ExecutionResult,
@@ -23,6 +24,9 @@ export const phaseBState = new StateSchema({
         .strict(),
       z.object({ status: z.literal("denied"), reason: z.string() }).strict(),
     ])
+    .optional(),
+  assignmentExecutionResult: z
+    .custom<Awaited<ReturnType<typeof executeAssignmentPlan>>>()
     .optional(),
   assignmentPlanResult: z
     .custom<Awaited<ReturnType<typeof prepareAssignmentPlan>>>()

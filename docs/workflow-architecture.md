@@ -250,7 +250,7 @@ Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참�
 있으면 선행 Work Item과 선행 Assignment가 없는 단일 Worker의 수정 업무만 Detailed Planning 초안을
 작성한다. 선행 결과가 필요하거나 단일 Worker가 지정되지 않은 수정 업무는
 `deferredDetailedPlanningIds`로 기록한다. Read-only 업무는 초안 대상에서 제외한다.
-이 경로는 Execution Source를 발급하지 않으며 실행으로 넘어가지 않는다. 실행 옵션이 함께 전달되면
+이 경로는 기존 단일 실행용 Execution Source를 발급하지 않는다. 협업 실행을 별도로 요청한 경우 Specialist 실행으로 이어질 수 있다. 기존 단일 실행 옵션인 `planning.execution`이 함께 전달되면
 `executionPreparationResult`에 차단 상태를 기록한다.
 
 읽기 전용 업무에는 Specialist를 배치할 수 있다. 수정 업무에는 Specialist와 승인된
@@ -261,6 +261,15 @@ Work Item 간 선행 관계는 기존 `WorkItem.dependsOn`을 사용한다. 미�
 Governance는 등록·조회에서 승인 출처, 등록된 Decomposition, Snapshot과 Executor를 독립적으로 검증한다.
 Plan ID는 기존처럼 Decomposition·Staffing Binding, Snapshot, Assignment 목록의 Digest다. 준비 경로는
 Plan을 기록하고 종료한다. Assignment별 권한·예약·결과 Handoff와 실제 CEO Adapter는 후속 범위다.
+
+**Step 5.2.2 Specialist 협업 실행.** `planning.assignment.execution.contexts`에 Assignment ID별
+`readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 순차 실행한다. 실행 시 저장된
+Plan과 현재 Phase B 위임을 확인하고, 위임 예산을 기존 Work Item 예약과 합산한다. 별도 Assignment 예약을
+기록한 뒤 Claim 시 권한·선행 결과를 다시 검증한다. 후속 Specialist는 검증된 선행 판단을 Repository 파일과
+구분된 참고 자료로 받는다. 결과는 Snapshot 및 승인 입력에 연결된 예약에 저장하며 Graph에는 식별자와 Digest를
+기록한다. 실패한 판단은 후속 입력으로 사용하지 않는다. Context가 누락된 Assignment, Worker 및 그 결과를
+기다리는 Assignment는 대기한다. Work Item 간 선행 관계는 Work Item 완료 계약이 생길 때까지 보수적으로 대기한다.
+실패한 예약의 재사용·자동 재시도, Worker 수정 및 Worktree 통합은 후속 범위다.
 
 ## 4. Phase A → Phase B Handoff Contract
 

@@ -24,3 +24,11 @@ export {
   getPreparedAssignmentPlan,
   registerAssignmentPlan,
 } from "./records/assignment-plans/assignment-plan-records.js";
+
+export {
+  AssignmentExecutionError,
+  reserveAssignmentExecution,
+  claimAssignmentExecution,
+  recordAssignmentResult,
+  getAssignmentExecutionResults,
+} from "./records/assignment-plans/assignment-execution.js";

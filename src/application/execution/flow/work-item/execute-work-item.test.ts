@@ -4,8 +4,8 @@ import {
   authorizeExecutionForRun,
   type ExecutionRequest,
 } from "@/application/governance/index.js";
-import { checkGovernedWorkerRuntime } from "../../worker/check-execution-runtime.js";
-import { runExecutionPipeline } from "./orchestration/run-execution-pipeline.js";
+import { checkGovernedWorkerRuntime } from "../check-execution-runtime.js";
+import { runExecutionPipeline } from "../orchestration/run-execution-pipeline.js";
 
 vi.mock("@/application/governance/index.js", async (importOriginal) => ({
   ...(await importOriginal<
@@ -13,10 +13,10 @@ vi.mock("@/application/governance/index.js", async (importOriginal) => ({
   >()),
   authorizeExecutionForRun: vi.fn(),
 }));
-vi.mock("../../worker/check-execution-runtime.js", () => ({
+vi.mock("../check-execution-runtime.js", () => ({
   checkGovernedWorkerRuntime: vi.fn(),
 }));
-vi.mock("./orchestration/run-execution-pipeline.js", () => ({
+vi.mock("../orchestration/run-execution-pipeline.js", () => ({
   runExecutionPipeline: vi.fn(),
 }));
 

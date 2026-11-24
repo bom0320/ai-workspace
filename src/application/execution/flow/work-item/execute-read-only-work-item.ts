@@ -9,7 +9,7 @@ import {
   readOnlyExecutionRequestSchema,
 } from "@/application/governance/index.js";
 import type { ReadOnlyExecutionOutcome } from "../../model/result.js";
-import { checkReadOnlyRuntime } from "../../worker/check-execution-runtime.js";
+import { checkReadOnlyRuntime } from "../check-execution-runtime.js";
 
 export async function executeReadOnlyWorkItem(
   input: unknown

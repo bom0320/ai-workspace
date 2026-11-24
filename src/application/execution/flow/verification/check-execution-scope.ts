@@ -1,10 +1,7 @@
 import type { TaskContract } from "@/contracts/task.js";
 import { collectChangedPaths } from "@/services/evidence/index.js";
 import { checkScope } from "@/services/scope/index.js";
-import {
-  addExecutionFailure,
-  type ExecutionState,
-} from "../../../model/state.js";
+import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
 
 export function collectChangedPathsEvidence(
   state: ExecutionState,

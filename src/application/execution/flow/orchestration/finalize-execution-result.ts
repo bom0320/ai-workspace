@@ -1,10 +1,7 @@
 import { writeExecutionResult } from "@/services/artifacts/index.js";
 
-import type { ExecutionResult } from "../../../model/result.js";
-import {
-  addExecutionFailure,
-  type ExecutionState,
-} from "../../../model/state.js";
+import type { ExecutionResult } from "../../model/result.js";
+import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
 
 export function finalizeExecutionResult(
   state: ExecutionState,

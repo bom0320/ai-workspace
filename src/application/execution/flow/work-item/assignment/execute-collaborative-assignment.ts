@@ -8,7 +8,7 @@ import {
   recordAssignmentFailure,
 } from "@/application/governance/index.js";
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
-import { checkReadOnlyRuntime } from "../../worker/check-execution-runtime.js";
+import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
 
 type Handoff = Parameters<typeof reserveAssignmentExecution>[0];
 

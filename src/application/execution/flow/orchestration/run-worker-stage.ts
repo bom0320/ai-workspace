@@ -1,9 +1,6 @@
 import type { TaskContract } from "@/contracts/task.js";
-import { runCodexWorker } from "../../../worker/codex-worker.js";
-import {
-  addExecutionFailure,
-  type ExecutionState,
-} from "../../../model/state.js";
+import { runCodexWorker } from "../../worker/codex-worker.js";
+import { addExecutionFailure, type ExecutionState } from "../../model/state.js";
 
 export async function runWorkerStage(
   task: TaskContract,

@@ -42,16 +42,7 @@ export async function executeCollaborativeAssignment(
     stage = "execution";
     const decision = await runCollaborativeSpecialist(
       claimed.specialist,
-      {
-        goal: claimed.goal,
-        assignmentObjective: claimed.assignment.objective,
-        repositoryCommitSha: claimed.snapshot.commitSha,
-        files: claimed.files,
-        predecessorResults: claimed.predecessors,
-        ...(claimed.workItemPredecessors.length && {
-          workItemPredecessorResults: claimed.workItemPredecessors,
-        }),
-      },
+      claimed.context,
       { timeoutMs }
     );
     stage = "handoff";

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { loadSnapshotFiles } from "@/application/decision/index.js";
+import {
+  loadSnapshotFiles,
+  type CollaborativeSpecialistContext,
+} from "@/application/decision/index.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import {
   AssignmentExecutionError,
@@ -102,27 +105,28 @@ export function claimAssignmentExecution(
     if (Date.now() + record.request.timeoutMs > expiresAt)
       throw new AssignmentExecutionError("claim");
     const files = loadSnapshotFiles(context.snapshot, record.request.readPaths);
-    if (
-      Buffer.byteLength(
-        JSON.stringify({
-          files,
-          predecessors: context.predecessors,
-          workItemPredecessors: context.workItemPredecessors,
-        })
-      ) >
-      64 * 1024
-    )
+    const { id: workItemId, objective, deliverable } = context.workItem;
+    const specialistContext: CollaborativeSpecialistContext = {
+      goal: context.goal,
+      approvedDirection: context.approvedDirection,
+      workItem: { id: workItemId, objective, deliverable },
+      assignmentObjective: context.assignment.objective,
+      assignmentDeliverable: context.assignment.deliverable,
+      repositoryCommitSha: context.snapshot.commitSha,
+      files,
+      predecessorResults: context.predecessors,
+      ...(context.workItemPredecessors.length && {
+        workItemPredecessorResults: context.workItemPredecessors,
+      }),
+    };
+    if (Buffer.byteLength(JSON.stringify(specialistContext)) > 64 * 1024)
       throw new AssignmentExecutionError("validation");
     record.claimedAt = new Date().toISOString();
     save();
     return {
       snapshot: context.snapshot,
-      goal: context.goal,
-      assignment: context.assignment,
       specialist: context.specialist,
-      predecessors: context.predecessors,
-      workItemPredecessors: context.workItemPredecessors,
-      files,
+      context: specialistContext,
       expiresAt,
       timeoutMs: record.request.timeoutMs,
     };

@@ -44,7 +44,8 @@ function resolveAssignmentBinding(
   const workItem = context.decomposition.workItems.find(
     ({ id }) => id === assignment.workItemId
   );
-  if (!specialist || !workItem) throw new AssignmentExecutionError("authority");
+  if (!specialist || !workItem || !context.approvedDirection?.trim())
+    throw new AssignmentExecutionError("authority");
   const requested = {
     readScopes: request.readPaths.map((path) => ({
       kind: "file" as const,
@@ -88,6 +89,7 @@ function resolveAssignmentBinding(
   return {
     ...context,
     assignment,
+    workItem,
     specialist,
     predecessors,
     workItemPredecessors,

@@ -16,6 +16,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     decision,
     context,
     analysisSources,
+    approvedDirection,
     snapshot,
     delegation,
     policy,
@@ -56,6 +57,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
   return {
     entry,
     goal: context.goal,
+    approvedDirection,
     delegation,
     policy,
     decision,

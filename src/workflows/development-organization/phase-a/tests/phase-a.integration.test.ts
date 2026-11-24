@@ -1593,7 +1593,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       specialistCount?: number;
       selectedAssignmentWorkItems?: string[];
       secondDependsOnFirst?: boolean;
-      beforePhaseB?: () => void;
+      beforePhaseB?: (approvedDirection: string) => void;
       assignmentWithDetailed?: boolean;
       collaborativeExecution?: NonNullable<
         PhaseBGraphOptions["execution"]
@@ -1730,7 +1730,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
-      beforePhaseB?.();
+      beforePhaseB?.(review.proposal.direction.text);
       const state = await createPhaseBGraph({
         agent,
         execution: { assignment: collaborativeExecution, workItem: execution },
@@ -2041,16 +2041,26 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               deliverable: "Review",
               dependsOn: [],
             })),
-          beforePhaseB: () => {
+          beforePhaseB: (approvedDirection) => {
             vi.mocked(processRuntime.runCommand).mockImplementation(
               async (_name, args) => {
                 const prompt = args.at(-1)!;
                 const {
                   assignmentObjective,
+                  approvedDirection: direction,
+                  workItem,
+                  assignmentDeliverable,
                   workItemPredecessorResults,
                   predecessorResults,
                 } = JSON.parse(prompt.split("SpecialistContext:\n")[1]);
                 executed.push(assignmentObjective);
+                expect(direction).toBe(approvedDirection);
+                expect(workItem).toEqual({
+                  id: assignmentObjective,
+                  objective: `Revise ${assignmentObjective} wording in README.md`,
+                  deliverable: "Revised README.md",
+                });
+                expect(assignmentDeliverable).toBe("Review");
                 expect(predecessorResults).toEqual([]);
                 if (assignmentObjective === "second") {
                   expect(workItemPredecessorResults).toMatchObject([
@@ -2110,6 +2120,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "invalid-evidence",
     "second-invalid-evidence",
     "snapshot-drift",
+    "oversized-context",
     "process-failure",
     "unauthorized",
   ] as const)(
@@ -2148,7 +2159,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               specialistId: specialists[index].id,
             },
             objective: `Assignment objective for ${id}`,
-            deliverable: "Findings",
+            deliverable:
+              mode === "oversized-context" ? "x".repeat(64 * 1024) : "Findings",
             dependsOn,
           });
           return [
@@ -2176,7 +2188,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             "post-worker": requestContext,
           },
         },
-        beforePhaseB: () => {
+        beforePhaseB: (approvedDirection) => {
           vi.mocked(processRuntime.runCommand).mockImplementation(
             async (name, args, options) => {
               specialist(name, args, options);
@@ -2192,6 +2204,18 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               expect(context.files).toEqual([
                 { path: "README.md", content: "Original content\n" },
               ]);
+              expect(prompt).toContain(
+                "Do not reselect or change the approved direction."
+              );
+              expect(context).toMatchObject({
+                approvedDirection,
+                workItem: {
+                  id: "first",
+                  objective: "Revise first wording in README.md",
+                  deliverable: "Revised README.md",
+                },
+                assignmentDeliverable: "Findings",
+              });
               const first = specialist.mock.calls.length === 1;
               expect(context.assignmentObjective).toBe(
                 `Assignment objective for ${first ? "first-review" : "second-review"}`
@@ -2264,7 +2288,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(specialist).toHaveBeenCalledTimes(
         mode === "success" || mode === "second-invalid-evidence"
           ? 2
-          : mode === "unauthorized"
+          : mode === "unauthorized" || mode === "oversized-context"
             ? 0
             : 1
       );
@@ -2305,6 +2329,21 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           planId: assignmentPlanResult.plan.id,
           assignmentId: "extra-review",
         };
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, {
+            ...next,
+            approvedDirection: "Forged direction",
+          })
+        ).toThrow(/approvedDirection/);
+        expect(() =>
+          governance.reserveAssignmentExecution(
+            {
+              ...handoff,
+              decision: { ...handoff.decision, reviewBinding: "forged" },
+            },
+            next
+          )
+        ).toThrow();
         expect(() =>
           governance.reserveAssignmentExecution(handoff, next)
         ).toThrow("budget");
@@ -2367,7 +2406,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             failure:
               mode === "unauthorized"
                 ? "authority"
-                : mode === "invalid-evidence"
+                : mode === "invalid-evidence" || mode === "oversized-context"
                   ? "validation"
                   : mode === "snapshot-drift"
                     ? "snapshot"

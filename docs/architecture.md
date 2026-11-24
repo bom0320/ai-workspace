@@ -375,12 +375,15 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 | 주체 | v4 책임 | 권한 경계 |
 | --- | --- | --- |
 | CEO Agent — Autonomous Decision Maker | Phase A 판단·종합·제안, Phase B 업무 분해·배치·의존성·진행·실패 평가·재작업·재배치·Escalation·최종 보고 | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
-| Specialist / Worker | Phase A 독립 판단, Phase B 역할별 상세 설계·구현·QA·리뷰 산출물 | 현재 v2는 read-only Decision만 수행; 미래 업무 실행도 승인된 Context / Scope / Authority / Budget 안에서만 허용 |
+| Specialist | Phase A 독립 판단, Phase B 배정에 따른 분석·설계·구현·테스트·검토. 담당 Specialist에 결과 출처를 연결 | Phase A는 승인 Context의 읽기 전용·Shell 비활성화 실행. Phase B 수정은 별도 개별 Assignment Authorization 필요 |
+| Codex Worker | Specialist의 Repository 수정에 재사용하는 내부 Worktree 실행 Runtime | 조직 구성원에 해당하는 책임은 Specialist가 소유. Runtime은 승인 계약에 따라 실행하며 Harness가 독립 Verification을 수행 |
 | Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 기존 Goal → TaskDraft / TaskContract를 재사용. Phase B Planning 기능이 승인 참조에서 개별 업무의 상세 계획 입력을 구성하며 Phase B Graph가 선택된 업무의 계획을 조정 |
 | Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
 | LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |
 | Human — Final Authority | Goal / Constraints, Staffing Approval, Governance Approve / Override / Reject, Task Approval, Change Review, Apply / Commit / Push | 각 승인은 독립된 대상과 의미를 가지며 다른 권한의 포괄 승인이 아님 |
+
+현재 Phase B는 Specialist 읽기 전용 협업과 Worker Assignment 상세 계획의 재개를 지원한다. Specialist가 구현을 소유하는 Phase B 목표는 기존 Planning·Execution Application과 Codex Worker를 재사용하며, Capability와 이번 실행의 Authority를 구분한다. 변경 근거와 완료 기준은 [Phase B Step 5.3](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)에 둔다.
 
 ### 통합 시 지켜야 할 invariant
 

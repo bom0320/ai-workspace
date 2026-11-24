@@ -34,8 +34,10 @@ Human이 상위 Goal과 Constraints를 제시하면 CEO가 조직을 구성하�
 
 목표는 **여러 AI 직원이 의사결정부터 설계·개발·검증까지 협력하고 Human이 이를 통제할 수 있는
 AI Development Organization**이다. Harness는 전체 Lifecycle의 Context / Authority / Scope / Budget /
-Evidence / Verification / Human Approval을 통제한다. 현재의 독립 의견 생성과 단일 Worker 실행은
-이 목표를 이루는 재사용 가능한 기반 capability다. 조직의 규모를 늘리기 전에 제한된 업무의 실행과
+Evidence / Verification / Human Approval을 통제한다. 여러 분야의 Specialist는 맡은 Assignment에 따라
+분석·설계·구현·테스트·검토에 참여하고 산출물의 출처로 기록된다. 기존 Codex Worker는 Specialist가
+승인된 코드 수정에 사용하는 내부 실행 Capability다. 독립 의견 생성과 단일 Worker 실행은
+이 목표를 이루는 재사용 가능한 기반이다. 조직의 규모를 늘리기 전에 제한된 업무의 실행과
 검증을 신뢰할 수 있게 만드는 Reliable Worker before Agent Team 원칙을 유지한다.
 
 해결 방향을 승인하는 Phase A와 상세 설계·실행을 관리하는 Phase B의 책임은

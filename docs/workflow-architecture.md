@@ -160,8 +160,8 @@ Step 7.2에서 Human Direction Governance를 연결했다. 전체 Phase A Outcom
 
 ```text
 Phase A Completed → Governance Handoff 검증 → CEO Work Decomposition
-→ Planning Coordination → 계획 가능한 Work Item의 Detailed Planning
-→ Work Execution Contract → 승인·권한 확인 → Specialist / Worker Execution
+→ Planning Coordination → Multi-Specialist Assignment Plan
+→ 준비된 Assignment의 분석 / Detailed Planning → 개별 권한 확인 → Specialist Execution
 → Verification & Review → CEO Progress Evaluation
    ├─ Continue → 다음 계획 또는 실행 가능 업무
    ├─ Rework → 업무 재계획 및 필요한 재검증·재승인
@@ -246,11 +246,11 @@ Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참�
 `planning.detailed`만 설정하면 기존 상세 계획과 Execution Source 등록을 유지하고,
 `execution.workItem`이 설정된 경우 기존 단일 실행 경로를 사용한다.
 
-두 기능을 함께 설정하면 Assignment 준비가 먼저 진행된다. 준비가 성공하고 저장된 Plan을 재검증할 수
+두 Planning 기능을 함께 설정하면 Assignment 준비가 먼저 진행된다. 협업 실행 옵션 없이 준비와 상세 계획만 요청하고 저장된 Plan을 재검증할 수
 있으면 선행 Work Item과 선행 Assignment가 없는 단일 Worker의 수정 업무만 Detailed Planning 초안을
-작성한다. 선행 결과가 필요하거나 단일 Worker가 지정되지 않은 수정 업무는
+작성한다. 이 준비 경로에서 선행 결과가 필요하거나 단일 Worker가 지정되지 않은 수정 업무는
 `deferredDetailedPlanningIds`로 기록한다. Read-only 업무는 초안 대상에서 제외한다.
-이 경로는 기존 단일 실행용 Execution Source를 발급하지 않는다. 협업 실행을 별도로 요청한 경우 Specialist 실행으로 이어질 수 있다. 기존 단일 실행 옵션인 `execution.workItem`이 함께 전달되면
+이 경로는 기존 단일 실행용 Execution Source를 발급하지 않는다. 협업 실행을 요청하면 등록된 Plan을 검증하고 아래의 Step 5.2.2 Coordination에서 Specialist 실행 및 Worker별 초안을 조정한다. 기존 단일 실행 옵션인 `execution.workItem`이 함께 전달되면
 `executionPreparationResult`에 차단 상태를 기록한다.
 
 읽기 전용 업무에는 Specialist를 배치할 수 있다. 수정 업무에는 Specialist와 승인된
@@ -270,6 +270,48 @@ Plan과 현재 Phase B 위임을 확인하고, 위임 예산을 기존 Work Item
 기록한다. 예약 이후 실패하면 예약에 연결된 실패 단계와 Digest를 보존한다. 검증된 성공 결과만 후속 입력으로 사용한다. Context가 누락된 Assignment, Worker 및 그 결과를
 기다리는 Assignment는 대기한다. Work Item별 상태를 집계한다. 선행 Work Item이 읽기 전용이고 같은 Plan의 모든 Assignment 결과가 검증·저장된 경우에만 후속 Work Item을 시작한다. Repository 변경 Work Item은 Worker 결과 및 통합 검증 계약이 연결될 때까지 선행 완료로 인정하지 않는다.
 Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집계하며 개별 Assignment 결과와 대기 목록도 제공한다. 실행 기록은 기존 예약 예산을 계속 차지한다. Assignment 기반 Worker 수정 및 Worktree 통합은 후속 범위다.
+
+#### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
+
+**상태 — Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
+
+| 개념 | 소유권과 의미 |
+| --- | --- |
+| Specialist | 전문성과 식별자를 가진 조직 구성원. 배정된 업무와 결과의 책임 주체 |
+| Work Item / Assignment | CEO가 정의한 업무와 완료 조건, 그 안에 배정된 담당자·책임·산출물·의존성 |
+| Capability | Specialist가 수행할 수 있는 기능. 이번 실행에서의 허용 범위는 별도 Authorization으로 결정 |
+| Authorization | Harness가 유효한 승인·위임·정책·Snapshot·범위·예산을 검증해 개별 실행에 부여하는 권한 |
+| Runtime / Verification | Runtime은 승인된 실행을 수행한다. Harness는 별도로 변경 범위·검증 결과·Evidence를 확인하고 기록한다. |
+
+**Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/staffing/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/decision/specialist/codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
+
+**현재 재사용 기반.** Step 5.2.2의 읽기 전용 협업은 승인 방향과 선행 결과를 전달하며, 공유 동시성 한도에서 Specialist 실행과 Worker Assignment의 지연 상세 계획을 진행한다. 현재 `PhaseBAssignment`에는 Specialist와 Worker Executor가 모두 남아 있다. 저장된 Plan은 Decomposition·Staffing Binding 및 Snapshot에 연결되고, Assignment Reservation·Claim과 성공 결과 기록은 Specialist에 연결되어 있다. Worker Assignment의 초안은 Plan·Assignment 식별자를 포함하지만 실행 권한을 부여하지 않는다. 기존 단일 Work Item 실행은 Codex Worktree, Scope 검사, 승인된 Verification, Evidence와 Artifact 보존을 제공한다. Assignment 수정 실행과 다중 Worktree 통합은 Planned다.
+
+```text
+Approved Direction + ExecutionDelegation
+    ↓
+CEO Work Decomposition → Multi-Specialist Assignment Plan
+    ↓
+Specialist별 업무 분석 / Planning
+    ↓
+Assignment-bound TaskContract (구현 업무)
+    ↓
+Governance Authorization / Reservation / Claim
+    ↓
+Specialist Implementation → 기존 Codex Worktree Runtime
+    ↓
+Harness Independent Verification → Assignment Result
+    ↓
+Work Item Coordination / Integration
+```
+
+구현 TaskContract는 승인 방향과 Human 제약을 보존하고, Plan·Work Item·Assignment·담당 Specialist 및 승인 Snapshot에 결합한다. Planning 결과를 근거로 Governance가 실제 수정 범위와 실행 조건을 검증한 뒤에만 Runtime을 시작한다. Coordination은 기존 Work Item 및 Assignment 의존성과 공유 동시성 한도를 재사용한다. 완료·검증·저장된 결과만 후속 업무의 출처로 넘기며, 분석 결과는 참고 자료로 전달한다. 실패한 실행은 결과와 원인을 보존하고 의존 업무를 차단한다.
+
+복수 구현 결과는 원본 Repository와 분리된 작업 공간에서 출처와 변경 범위를 확인하고, 선행 관계에 맞춰 통합한 뒤 다시 검증한다. 충돌·범위 위반·검증 실패 시 완료 처리를 보류하고 근거를 남긴다. Work Item 완료에는 필수 Assignment의 검증 및 필요한 통합 검증이 모두 필요하다. 최종 평가와 원본 반영은 후속 CEO Evaluation 및 Human Change Review / Delivery의 경계를 따른다.
+
+**구현 전 결정할 사항.** 기존 Plan·Digest의 읽기 호환을 유지하면서 새 Assignment Schema와 Activity 구분을 정한다. Capability의 저장 형식, 위임 필드, TaskContract Binding 및 결과 Ledger 구조, 실행 인스턴스 표현은 다음 구현에서 검토한다. 통합 순서 및 충돌 처리 알고리즘, 재시도·재작업·재승인 정책도 이 결정에서 확정하지 않는다.
+
+**완료 기준.** 승인된 Specialist가 분석과 구현 업무를 수행하고, 승인 거부·실패·충돌이 후속 실행과 완료 판정에 반영되어야 한다. 격리된 구현과 통합 검증, 결과 출처와 Handoff, 기존 기록 호환성 및 Phase A 읽기 전용 회귀를 E2E에서 확인한다. [구현 순서](roadmap.md#phase-b-step-53--multi-specialist-capability--governed-execution)
 
 ## 4. Phase A → Phase B Handoff Contract
 

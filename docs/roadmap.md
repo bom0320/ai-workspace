@@ -221,7 +221,7 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 5. **Independent Decision & Comparison — Phase A, 5.1–5.4 Implemented**: 기존 v2 / v3와 원본 Evidence 참조·독립성 유지. 5.5의 별도 검증 단계는 생략하고 후속 통합 검증으로 이관한다.
 6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 명시적 ceo-synthesis 대상에서 Graph 연결.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
-7. **Human Governance — Implemented (Step 7.2), Handoff Planned**: Approve / Request Revision / Reject, 검증 출처 Review 등록, 실제 Human Receipt와 ApprovedDecision 발급. 동일 프로세스 Interrupt / Resume와 최대 두 번 Synthesis Revision을 연결했다. Direct Override·Phase B Handoff·영속 복구는 없음.
+7. **Human Governance — Implemented (Step 7.2)**: Approve / Request Revision / Reject, 검증 출처 Review 등록, 실제 Human Receipt와 ApprovedDecision 발급. 동일 프로세스 Interrupt / Resume와 최대 두 번 Synthesis Revision을 연결했다. Direct Override와 영속 복구는 미구현이다. Phase B는 별도로 이미 승인된 방향과 활성 ExecutionDelegation의 Handoff를 검증한다.
 
 8–13은 Phase B 마일스톤 번호를 유지한다. 세부 개발 순서와 상태는 아래 표에서 관리한다.
 
@@ -234,8 +234,8 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 | 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성하고 Phase B Graph에서 실행 | Graph Integrated |
 | 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
 | 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Detailed Planning 재사용, Phase B Graph에서 명시적 업무 선택·반복·결과 기록 | R5.1–R5.4 Implemented |
-| 4 | 10 | Work Execution Contract | 읽기 전용·Repository 변경 업무 구분, Shell 실행, 업무별 승인·권한 계약 | Planned |
-| 5 | 10 | Multi-Specialist / Worker Execution | 협업, 순차·병렬 실행, 기존 v0 연동, Worktree 격리·통합과 충돌 처리 | Planned |
+| 4 | 10 | Work Execution Contract | 기존 단일 업무 권한과 Specialist 협업 실행 사용 가능. Specialist 구현 Assignment 권한 계약은 Step 5.3에서 확장 | Partially Implemented |
+| 5 | 10 | Multi-Specialist Capability & Governed Execution | Specialist가 배정된 개발 업무와 결과를 소유하고 기존 Codex Worktree Runtime을 재사용 | Planned |
 | 6 | 11 | Verification & Review | 산출물·Evidence·Acceptance Criteria와 실패 검증 | Planned |
 | 7 | 11 | CEO Progress Evaluation | Continue / Rework / Reassign / Escalate / Complete 및 재계획 검토 | Planned |
 | 8 | 12 | Human Change Review & Delivery | Human 변경 검토와 Apply / Commit / Push 경계 | Planned |
@@ -245,6 +245,20 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 LangGraph.js의 state / routing / coordination / interrupt·resume / checkpoint·recovery / lifecycle 통합은
 이 순서 중 실제로 필요한 단계에서 진행한다. Graph 설계·checkpoint backend·CEO 호출 방식·Domain
 schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 구조적 대칭만을 위해 미리 만들지 않는다.
+
+### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
+
+**현재 기반 — Implemented:** Step 5.2.2 읽기 전용 Specialist 협업, 검증된 선행 결과 Handoff, 공유 동시성 한도와 선행 결과에 따른 Deferred Detailed Planning 재개가 구현되어 있다. Worker Assignment 상세 계획은 초안까지 생성한다. 다음 표는 [Phase B Step 5.3 설계](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)의 구현 순서다. 이 번호는 아래 Phase A 독립 Decision의 Step 5.3과 별개다.
+
+| 순서 | 작업 | 목적 및 완료 기준 | 상태 |
+| --- | --- | --- | --- |
+| 5.3.1 | Multi-Specialist Assignment Contract 및 기존 Plan 호환성 | 업무·담당자·산출물과 의존성 추적, 기존 Plan과 Digest의 읽기 호환 검증 | Planned |
+| 5.3.2 | Phase-scoped Capability & Authorization | Phase B 능력과 실행 권한을 구분하고 승인·위임·개별 Reservation/Claim을 검증. Phase A 읽기 전용 유지 | Planned |
+| 5.3.3 | Specialist Planning & TaskContract Binding | 승인 방향·선행 결과로 상세 계획을 수립하고 수정 계약을 정확한 Assignment와 Snapshot에 결합 | Planned |
+| 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |
+| 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |
+| 5.3.6 | Multi-Worktree Integration | 출처·범위·충돌 확인 후 격리된 통합 결과를 재검증하고 원본 보호 | Planned |
+| 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |
 
 ### Compatibility Refactoring — runDecision() (Planned)
 

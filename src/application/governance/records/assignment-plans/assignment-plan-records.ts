@@ -112,11 +112,12 @@ export function resolvePreparedAssignmentPlan(
 
 export function getPreparedAssignmentPlan(handoff: Handoff, id: string) {
   return withGovernanceLedger((ledger) => {
-    const { plan, specialistSources } = resolvePreparedAssignmentPlan(
-      ledger,
-      handoff,
-      id
-    );
-    return structuredClone({ plan, specialistSources });
+    const { plan, specialistSources, decomposition } =
+      resolvePreparedAssignmentPlan(ledger, handoff, id);
+    return structuredClone({
+      plan,
+      specialistSources,
+      workItems: decomposition.workItems,
+    });
   });
 }

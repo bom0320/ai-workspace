@@ -35,9 +35,31 @@ export function resolveAssignmentExecution(
     ({ id }) => id === assignment.workItemId
   );
   if (!specialist || !workItem) throw new AssignmentExecutionError("authority");
-  // Work Item completion will be tracked separately once Workers can publish results.
-  if (workItem.dependsOn.length)
-    throw new AssignmentExecutionError("dependency");
+  // Only read-only Work Items have a complete result contract in this path.
+  const workItemPredecessors = workItem.dependsOn.map((workItemId) => {
+    const predecessor = context.decomposition.workItems.find(
+      ({ id }) => id === workItemId
+    );
+    const assignments = plan.assignments.filter(
+      (item) => item.workItemId === workItemId
+    );
+    if (predecessor?.workType !== "read-only" || !assignments.length)
+      throw new AssignmentExecutionError("dependency");
+    return {
+      workItemId,
+      results: assignments.map(({ id }) => {
+        const record = entry.assignmentExecutions?.find(
+          (item) =>
+            item.request.planId === plan.id &&
+            item.request.assignmentId === id &&
+            item.delegationId === delegation.id
+        );
+        if (!record?.claimedAt || !record.result)
+          throw new AssignmentExecutionError("dependency");
+        return { invocationId: record.id, digest: record.result.digest };
+      }),
+    };
+  });
   const requested = {
     readScopes: request.readPaths.map((path) => ({
       kind: "file" as const,
@@ -75,6 +97,7 @@ export function resolveAssignmentExecution(
     assignment,
     specialist,
     predecessors,
+    ...(workItemPredecessors.length && { workItemPredecessors }),
   });
   return { ...context, assignment, specialist, predecessors, binding };
 }

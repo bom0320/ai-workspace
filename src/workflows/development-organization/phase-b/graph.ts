@@ -79,7 +79,10 @@ export function createPhaseBGraph({
     )
     .addNode(
       "execute-assignments",
-      createExecuteAssignmentsNode(assignmentExecution)
+      createExecuteAssignmentsNode(
+        assignmentExecution,
+        detailed && createPlanWorkItemNode(detailed, "draft")
+      )
     )
     .addNode(
       "execute-work-item",
@@ -122,17 +125,18 @@ export function createPhaseBGraph({
       )
         return END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
-      if (assignment && assignmentExecution) return "execute-assignments";
       return workItemExecution && !assignment ? "execute-work-item" : END;
     },
-    ["plan-work-item", "execute-work-item", "execute-assignments", END]
+    ["plan-work-item", "execute-work-item", END]
   );
   graph.addConditionalEdges(
     "prepare-assignments",
     (state) => {
       if (state.assignmentPlanResult?.status !== "prepared") return END;
-      if (detailed && state.pendingPlanningIds?.length) return "plan-work-item";
-      return assignmentExecution ? "execute-assignments" : END;
+      if (assignmentExecution) return "execute-assignments";
+      return detailed && state.pendingPlanningIds?.length
+        ? "plan-work-item"
+        : END;
     },
     ["plan-work-item", "execute-assignments", END]
   );

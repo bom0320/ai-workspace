@@ -1,3 +1,4 @@
+import type { createPlanWorkItemNode } from "../../planning/nodes/plan-work-item.js";
 import type { PhaseBState } from "../../../state.js";
 import {
   executeAssignmentPlan,
@@ -5,25 +6,56 @@ import {
 } from "../coordination/execute-assignment-plan.js";
 
 export function createExecuteAssignmentsNode(
-  options?: CollaborativeExecutionOptions
+  options?: CollaborativeExecutionOptions,
+  planDraft?: ReturnType<typeof createPlanWorkItemNode>
 ) {
   const configured = options && structuredClone(options);
-  return async ({
-    handoffResult,
-    assignmentPlanResult,
-  }: PhaseBState): Promise<Partial<PhaseBState>> => {
+  return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
+    const { handoffResult, assignmentPlanResult, selectedWorkItemIds } = state;
     if (
       !configured ||
+      !selectedWorkItemIds?.length ||
       handoffResult?.status !== "accepted" ||
       assignmentPlanResult?.status !== "prepared"
     )
       return {};
+    const workItemIds = state.pendingPlanningIds ?? [];
+    const drafts = new Map<
+      string,
+      NonNullable<PhaseBState["planningResults"]>[number]
+    >();
+    const assignmentExecutionResult = await executeAssignmentPlan(
+      handoffResult.handoff,
+      assignmentPlanResult.plan.id,
+      selectedWorkItemIds,
+      configured,
+      planDraft && {
+        workItemIds,
+        run: async (workItemId) => {
+          const planned = await planDraft({
+            ...state,
+            pendingPlanningIds: [workItemId],
+            planningResults: [],
+          });
+          const draft = planned.planningResults?.[0];
+          if (!draft) return false;
+          drafts.set(workItemId, draft);
+          return draft.result.status === "completed";
+        },
+      }
+    );
+    if (!planDraft || "failure" in assignmentExecutionResult)
+      return { assignmentExecutionResult };
     return {
-      assignmentExecutionResult: await executeAssignmentPlan(
-        handoffResult.handoff,
-        assignmentPlanResult.plan.id,
-        configured
-      ),
+      assignmentExecutionResult,
+      pendingPlanningIds: [],
+      planningResults: [
+        ...(state.planningResults ?? []),
+        ...workItemIds.flatMap((id) => {
+          const draft = drafts.get(id);
+          return draft ? [draft] : [];
+        }),
+      ],
     };
   };
 }

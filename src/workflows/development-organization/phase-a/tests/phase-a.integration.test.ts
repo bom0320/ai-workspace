@@ -1582,6 +1582,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       collaborativeExecution,
       assignmentWithDetailed = false,
       specialistCount = 1,
+      selectedAssignmentWorkItems = ["first"],
+      secondDependsOnFirst = false,
     }: {
       beforePlannerResult?: () => void;
       fastPath?: boolean;
@@ -1589,6 +1591,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       codexMode?: boolean;
       readOnly?: boolean;
       specialistCount?: number;
+      selectedAssignmentWorkItems?: string[];
+      secondDependsOnFirst?: boolean;
       beforePhaseB?: () => void;
       assignmentWithDetailed?: boolean;
       collaborativeExecution?: NonNullable<
@@ -1684,7 +1688,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       deliverable: fastPath
         ? `Corrected typos in ${target}`
         : `Revised ${target}`,
-      dependsOn: [],
+      dependsOn: secondDependsOnFirst && id === "second" ? ["first"] : [],
     }));
     const agent = async () => ({ type: "propose", workItems });
     const planning: NonNullable<PhaseBGraphOptions["planning"]> = {
@@ -1736,7 +1740,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                 assignment: {
                   agent: assignmentAgent,
                 },
-                selectWorkItemIds: () => ["first"],
+                selectWorkItemIds: () => selectedAssignmentWorkItems,
                 ...(assignmentWithDetailed && {
                   detailed: planning.detailed,
                 }),
@@ -2011,6 +2015,78 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }
   );
 
+  it.each([true, false])(
+    "gates dependent Work Items on persisted read-only completion: %s",
+    async (validEvidence) => {
+      const executed: string[] = [];
+      const context = { readPaths: ["README.md"], timeoutMs: 5000 };
+      const { assignmentExecutionResult } = await planExecutionItems(
+        true,
+        2,
+        [],
+        "README.md",
+        {
+          readOnly: true,
+          secondDependsOnFirst: true,
+          selectedAssignmentWorkItems: ["second", "first"],
+          collaborativeExecution: {
+            contexts: { first: context, second: context },
+          },
+          assignmentAgent: async ({ specialists }) =>
+            ["second", "first"].map((id) => ({
+              id,
+              workItemId: id,
+              executor: { kind: "specialist", specialistId: specialists[0].id },
+              objective: id,
+              deliverable: "Review",
+              dependsOn: [],
+            })),
+          beforePhaseB: () => {
+            vi.mocked(processRuntime.runCommand).mockImplementation(
+              async (_name, args) => {
+                const prompt = args.at(-1)!;
+                const { assignmentObjective } = JSON.parse(
+                  prompt.split("SpecialistContext:\n")[1]
+                );
+                executed.push(assignmentObjective);
+                return {
+                  stdout: JSON.stringify({
+                    recommendation: "Finding",
+                    evidence: [
+                      {
+                        path: validEvidence ? "README.md" : "outside.md",
+                        description: "Introduction",
+                      },
+                    ],
+                    risks: [],
+                    uncertainty: [],
+                  }),
+                  stderr: "",
+                  exitCode: 0,
+                  timedOut: false,
+                };
+              }
+            );
+          },
+        }
+      );
+      expect(executed).toEqual(validEvidence ? ["first", "second"] : ["first"]);
+      expect(assignmentExecutionResult).toMatchObject({
+        status: validEvidence ? "completed" : "failed",
+        workItemResults: [
+          {
+            workItemId: "second",
+            status: validEvidence ? "completed" : "pending",
+          },
+          {
+            workItemId: "first",
+            status: validEvidence ? "completed" : "failed",
+          },
+        ],
+      });
+    }
+  );
+
   it.each([
     "success",
     "invalid-evidence",
@@ -2133,7 +2209,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         writeFileSync(join(root, "README.md"), "Original content\n");
       expect(workerExecutionResult).toBeUndefined();
       if (
-        !assignmentExecutionResult?.results ||
+        !assignmentExecutionResult ||
+        assignmentExecutionResult.failure === "plan" ||
         assignmentPlanResult?.status !== "prepared" ||
         handoff?.status !== "completed"
       )

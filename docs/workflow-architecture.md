@@ -216,7 +216,7 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 
 Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 확인한 뒤 기존 Working Tree 조사와 Planning Application을 실행한다. Phase B Planning 기능은 원본 Goal / Constraints와 승인 방향의 텍스트, Work Item의 Objective·Deliverable만 상세 계획 입력으로 구성한다. Planning Application은 일반화된 `detail`과 실제 Repository Context로 계획을 수립하며, 승인 참조와 Work Item 계약은 Workflow 기능에서 소유한다. Phase B Fast Path는 조사된 단일 Markdown/TXT 파일의 전체 Repository 상대 경로를 기준으로 Work Item Objective와 Deliverable이 지원되는 오타 교정 표현과 일치하는지 확인한다. 승인 방향도 해당 파일의 오타 교정을 명시해야 하며, 원본 Goal은 같은 교정 작업 또는 지원되는 문서 개선 목표여야 한다. 원본 Constraints는 호환되는 것으로 정의된 표현만 허용한다. 복합 요구사항이나 해석이 필요한 입력은 Planning Loop로 전달한다. TaskDraft의 최종화에는 기존 ID 발급과 원본 Human Goal Constraints 병합을 사용한다. 이 경로는 Work Item의 실행 자격이나 선행 업무 완료를 판단하지 않는다. 현재 Repository와 승인 Snapshot의 commit 차이에 대한 정책은 후속 과제다.
 
-**R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { repositoryPath, limits, planner?, selectWorkItemIds } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `executeWorkItemPlanning()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
+**R5.3 / R5.4 구현 범위:** `createPhaseBGraph({ planning: { selectWorkItemIds, detailed: { repositoryPath, limits, planner? } } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 Repository 변경 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `executeWorkItemPlanning()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
 
 선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약은 후속 범위다.
 
@@ -238,10 +238,17 @@ Worktree 경로에 적용한다. Read-only는 승인된 Git blob만
 Scope와 Verification을 사용한다. 분석 Evidence 검증은 출처와 참조 범위를 확인한다. 실행 준비 실패와
 실행 결과는 각각 Work Item ID로 기록한다. 하나의 업무에서 여러 실행을 조정하는 기능은 후속 범위다.
 
-**Step 5.2.1 Assignment Plan 준비.** Phase B는 `assignmentPlanning`으로 Agent와 Work Item 선택을
-명시한 경우에 준비 경로를 사용한다. 기존 `planning`과 동시에 선택할 수 없다. Work Decomposition을 등록하고
-선택을 마친 뒤 별도 노드가 Assignment Planning Application을 호출한다. Agent는 선택된 Work Item과
-최종 승인 Review의 Staffing Issuance에서 복원한 Specialist ID·역할·기본 Objective를 받는다.
+**Phase B Planning Coordination.** `planning.selectWorkItemIds`로 Work Item을 한 번 선택한다.
+`planning.assignment`만 설정하면 별도 노드가 검증된 Assignment Plan을 준비하고 종료한다.
+`planning.detailed`만 설정하면 기존 상세 계획과 Execution Source 등록을 유지하고,
+`planning.execution`이 설정된 경우 기존 단일 실행 경로를 사용한다.
+
+두 기능을 함께 설정하면 Assignment 준비가 먼저 진행된다. 준비가 성공하고 저장된 Plan을 재검증할 수
+있으면 선행 Work Item과 선행 Assignment가 없는 단일 Worker의 수정 업무만 Detailed Planning 초안을
+작성한다. 선행 결과가 필요하거나 단일 Worker가 지정되지 않은 수정 업무는
+`deferredDetailedPlanningIds`로 기록한다. Read-only 업무는 초안 대상에서 제외한다.
+이 경로는 Execution Source를 발급하지 않으며 실행으로 넘어가지 않는다. 실행 옵션이 함께 전달되면
+`executionPreparationResult`에 차단 상태를 기록한다.
 
 읽기 전용 업무에는 Specialist를 배치할 수 있다. 수정 업무에는 Specialist와 승인된
 `codex-worktree` Worker를 함께 배치할 수 있다. Assignment 의존성은 같은 Work Item 안으로 제한하고

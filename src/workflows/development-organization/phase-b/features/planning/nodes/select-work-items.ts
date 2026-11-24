@@ -5,8 +5,9 @@ export type SelectWorkItemIds = (
   workItems: readonly WorkItem[]
 ) => readonly string[];
 
-export function createSelectPlanningWorkItemsNode(
-  selectWorkItemIds: SelectWorkItemIds | undefined
+export function createSelectWorkItemsNode(
+  selectWorkItemIds: SelectWorkItemIds | undefined,
+  queueDetailedPlanning: boolean
 ) {
   return (state: PhaseBState) => {
     const proposal = state.workDecompositionResult;
@@ -19,8 +20,10 @@ export function createSelectPlanningWorkItemsNode(
     ) {
       throw new Error("Planning selection contains an unknown Work Item ID.");
     }
+    const selectedWorkItemIds = [...new Set(selectedIds)];
     return {
-      pendingPlanningIds: [...new Set(selectedIds)],
+      selectedWorkItemIds,
+      ...(queueDetailedPlanning && { pendingPlanningIds: selectedWorkItemIds }),
       planningResults: [],
     };
   };

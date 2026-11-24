@@ -1,12 +1,12 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
-import type { AssignmentPlanAgent } from "@/application/assignment-planning/index.js";
-import { createPrepareAssignmentsNode } from "./features/assignment/nodes/prepare-assignments.js";
+import type { AssignmentPlanAgent } from "@/application/planning/index.js";
+import { createPrepareAssignmentsNode } from "./features/planning/nodes/prepare-assignments.js";
 import { createPlanWorkItemNode } from "./features/planning/nodes/plan-work-item.js";
 import {
-  createSelectPlanningWorkItemsNode,
+  createSelectWorkItemsNode,
   type SelectWorkItemIds,
-} from "./features/planning/nodes/select-planning-work-items.js";
+} from "./features/planning/nodes/select-work-items.js";
 import type { executeWorkItemPlanning } from "./features/planning/execution/execute-work-item-planning.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { phaseBInput, phaseBState } from "./state.js";
@@ -16,33 +16,28 @@ import {
   type PhaseBExecutionOptions,
 } from "./features/execution/nodes/execute-work-item.js";
 
+type DetailedPlanningOptions = Omit<
+  Parameters<typeof executeWorkItemPlanning>[0],
+  "phaseB" | "executionCeiling"
+>;
+
 export type PhaseBGraphOptions = Omit<
   RunWorkDecompositionOptions,
   "executionCeiling"
 > & {
-  assignmentPlanning?: {
-    agent: AssignmentPlanAgent;
+  planning?: {
     selectWorkItemIds: SelectWorkItemIds;
-  };
-  planning?: Omit<
-    Parameters<typeof executeWorkItemPlanning>[0],
-    "phaseB" | "executionCeiling"
-  > & {
-    selectWorkItemIds: SelectWorkItemIds;
+    assignment?: { agent: AssignmentPlanAgent };
+    detailed?: DetailedPlanningOptions;
     execution?: PhaseBExecutionOptions;
   };
 };
 
 export function createPhaseBGraph({
   planning,
-  assignmentPlanning,
   ...decompositionOptions
 }: PhaseBGraphOptions = {}) {
-  if (assignmentPlanning && planning)
-    throw new Error("Choose Assignment Preparation or Detailed Planning.");
-  const selectWorkItemIds =
-    assignmentPlanning?.selectWorkItemIds ?? planning?.selectWorkItemIds;
-  const execution = planning?.execution;
+  const { assignment, detailed, execution, selectWorkItemIds } = planning ?? {};
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
@@ -51,17 +46,27 @@ export function createPhaseBGraph({
       createRunWorkDecompositionNode(decompositionOptions)
     )
     .addNode(
-      "select-planning-work-items",
-      createSelectPlanningWorkItemsNode(selectWorkItemIds)
+      "select-work-items",
+      createSelectWorkItemsNode(selectWorkItemIds, !assignment && !!detailed)
     )
     .addNode(
       "prepare-assignments",
-      createPrepareAssignmentsNode(assignmentPlanning?.agent)
+      createPrepareAssignmentsNode(
+        assignment?.agent,
+        !!detailed,
+        execution?.workItemId
+      )
     )
-    .addNode("plan-work-item", createPlanWorkItemNode(planning))
+    .addNode(
+      "plan-work-item",
+      createPlanWorkItemNode(
+        detailed,
+        assignment ? "draft" : "execution-source"
+      )
+    )
     .addNode(
       "execute-work-item",
-      createExecuteWorkItemNode(planning?.repositoryPath, execution)
+      createExecuteWorkItemNode(detailed?.repositoryPath, execution)
     );
 
   // 2. Connect Execution Edges
@@ -69,21 +74,21 @@ export function createPhaseBGraph({
   graph.addConditionalEdges(
     "run-work-decomposition",
     (state) =>
+      (assignment || detailed) &&
       selectWorkItemIds &&
       state.handoffResult?.status === "accepted" &&
       state.workDecompositionResult?.status === "proposed"
-        ? "select-planning-work-items"
+        ? "select-work-items"
         : END,
-    ["select-planning-work-items", END]
+    ["select-work-items", END]
   );
   graph.addConditionalEdges(
-    "select-planning-work-items",
-    (state) =>
-      state.pendingPlanningIds?.length
-        ? assignmentPlanning
-          ? "prepare-assignments"
-          : "plan-work-item"
-        : END,
+    "select-work-items",
+    (state) => {
+      if (!state.selectedWorkItemIds?.length) return END;
+      if (assignment) return "prepare-assignments";
+      return detailed ? "plan-work-item" : END;
+    },
     ["prepare-assignments", "plan-work-item", END]
   );
   graph.addConditionalEdges(
@@ -94,16 +99,25 @@ export function createPhaseBGraph({
         !latest ||
         (latest.result.status !== "completed" &&
           latest.result.status !== "read-only") ||
-        !latest.executionSourceId ||
+        (!assignment && !latest.executionSourceId) ||
         latest.executionBlockedReason
       )
         return END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
-      return execution ? "execute-work-item" : END;
+      return execution && !assignment ? "execute-work-item" : END;
     },
     ["plan-work-item", "execute-work-item", END]
   );
-  graph.addEdge("prepare-assignments", END);
+  graph.addConditionalEdges(
+    "prepare-assignments",
+    (state) =>
+      detailed &&
+      state.assignmentPlanResult?.status === "prepared" &&
+      state.pendingPlanningIds?.length
+        ? "plan-work-item"
+        : END,
+    ["plan-work-item", END]
+  );
   graph.addEdge("execute-work-item", END);
 
   // 3. Compile Graph

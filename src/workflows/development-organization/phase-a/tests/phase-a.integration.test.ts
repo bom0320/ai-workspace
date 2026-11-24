@@ -1579,6 +1579,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       readOnly = false,
       beforePhaseB,
       assignmentAgent,
+      assignmentWithDetailed = false,
       specialistCount = 1,
     }: {
       beforePlannerResult?: () => void;
@@ -1588,8 +1589,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       readOnly?: boolean;
       specialistCount?: number;
       beforePhaseB?: () => void;
+      assignmentWithDetailed?: boolean;
       assignmentAgent?: NonNullable<
-        PhaseBGraphOptions["assignmentPlanning"]
+        NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
       >["agent"];
       execution?: NonNullable<PhaseBGraphOptions["planning"]>["execution"];
     } = {}
@@ -1682,27 +1684,31 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }));
     const agent = async () => ({ type: "propose", workItems });
     const planning: NonNullable<PhaseBGraphOptions["planning"]> = {
-      repositoryPath: root,
-      limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
       selectWorkItemIds: (items) =>
         (execution ? items.slice(0, 1) : items).map(({ id }) => id),
       execution,
-      planner: async ({ goal, detail }) => {
-        if (fastPath || readOnly)
-          throw new Error("Deterministic Planning must not call the Planner.");
-        beforePlannerResult?.();
-        return {
-          type: "complete",
-          task: {
-            objective: detail!.objective,
-            targetRepository: goal.targetRepository,
-            allowedPaths: [target],
-            forbiddenPaths: [],
-            constraints: [],
-            acceptanceCriteria: ["Revise wording"],
-            verification,
-          },
-        };
+      detailed: {
+        repositoryPath: root,
+        limits: { maxRounds: 2, maxFilesPerRequest: 3, maxTotalFiles: 3 },
+        planner: async ({ goal, detail }) => {
+          if (fastPath || readOnly)
+            throw new Error(
+              "Deterministic Planning must not call the Planner."
+            );
+          beforePlannerResult?.();
+          return {
+            type: "complete",
+            task: {
+              objective: detail!.objective,
+              targetRepository: goal.targetRepository,
+              allowedPaths: [target],
+              forbiddenPaths: [],
+              constraints: [],
+              acceptanceCriteria: ["Revise wording"],
+              verification,
+            },
+          };
+        },
       },
     };
 
@@ -1712,6 +1718,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     let workerExecutionResult;
     let readOnlyExecutionResult;
     let assignmentPlanResult;
+    let deferredDetailedPlanningIds;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1720,9 +1727,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         agent,
         ...(assignmentAgent
           ? {
-              assignmentPlanning: {
-                agent: assignmentAgent,
+              planning: {
+                assignment: { agent: assignmentAgent },
                 selectWorkItemIds: () => ["first"],
+                ...(assignmentWithDetailed && {
+                  detailed: planning.detailed,
+                  execution,
+                }),
               },
             }
           : { planning }),
@@ -1735,6 +1746,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       workerExecutionResult = state.workerExecutionResult;
       readOnlyExecutionResult = state.readOnlyExecutionResult;
       assignmentPlanResult = state.assignmentPlanResult;
+      deferredDetailedPlanningIds = state.deferredDetailedPlanningIds;
     } else {
       const decomposition = await runWorkDecomposition(
         { approvedDecisionId: decision.id },
@@ -1752,7 +1764,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           root
         );
         const result = await executeWorkItemPlanning({
-          ...planning,
+          ...planning.detailed!,
           phaseB: { approvedDecisionId: decision.id, workItem },
         });
         planningResults.push({
@@ -1768,6 +1780,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     return {
       planningResults,
       assignmentPlanResult,
+      deferredDetailedPlanningIds,
       handoff,
       decision,
       workItems,
@@ -1780,7 +1793,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it("prepares a provenance-bound Assignment Plan without starting execution", async () => {
     const assignmentAgent = vi.fn<
       NonNullable<
-        NonNullable<PhaseBGraphOptions["assignmentPlanning"]>["agent"]
+        NonNullable<
+          NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
+        >["agent"]
       >
     >(async ({ specialists }) =>
       specialists.map(({ id }, index) => ({
@@ -1900,59 +1915,93 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toThrow();
   });
 
-  it("prepares multiple approved Specialists and a Worker on one modification Work Item", async () => {
-    const assignmentAgent: NonNullable<
-      PhaseBGraphOptions["assignmentPlanning"]
-    >["agent"] = async ({ specialists, workItems, workerMode }) => {
-      expect(specialists).toHaveLength(2);
-      expect(workItems.map(({ id }) => id)).toEqual(["first"]);
-      expect(workerMode).toBe("codex-worktree");
-      const assignments = specialists.map(({ id }) => ({
-        id,
-        workItemId: "first",
-        executor: { kind: "specialist", specialistId: id },
-        objective: "Review existing behavior",
-        deliverable: "Findings",
-        dependsOn: [],
-      }));
-      return [
-        ...assignments,
-        {
-          id: "implement",
+  it.each(["assignment-only", "dependent", "independent"] as const)(
+    "prepares approved Specialists and a Worker in %s Planning",
+    async (mode) => {
+      const assignmentAgent: NonNullable<
+        NonNullable<PhaseBGraphOptions["planning"]>["assignment"]
+      >["agent"] = async ({ specialists, workItems, workerMode }) => {
+        expect(specialists).toHaveLength(2);
+        expect(workItems.map(({ id }) => id)).toEqual(["first"]);
+        expect(workerMode).toBe("codex-worktree");
+        const assignments = specialists.map(({ id }) => ({
+          id,
           workItemId: "first",
-          executor: { kind: "worker", mode: workerMode },
-          objective: "Implement approved direction",
-          deliverable: "Patch",
-          dependsOn: assignments.map(({ id }) => id),
+          executor: { kind: "specialist", specialistId: id },
+          objective: "Review existing behavior",
+          deliverable: "Findings",
+          dependsOn: [],
+        }));
+        return [
+          ...assignments,
+          {
+            id: "implement",
+            workItemId: "first",
+            executor: { kind: "worker", mode: workerMode },
+            objective: "Implement approved direction",
+            deliverable: "Patch",
+            dependsOn:
+              mode === "independent" ? [] : assignments.map(({ id }) => id),
+          },
+        ];
+      };
+      const {
+        handoff,
+        assignmentPlanResult,
+        workerExecutionResult,
+        planningResults,
+        deferredDetailedPlanningIds,
+      } = await planExecutionItems(true, 1, [], "README.md", {
+        assignmentAgent,
+        specialistCount: 2,
+        codexMode: true,
+        assignmentWithDetailed: mode !== "assignment-only",
+        execution: {
+          workItemId: "first",
+          readPaths: ["README.md"],
+          timeoutMs: 5000,
         },
-      ];
-    };
-    const {
-      handoff,
-      assignmentPlanResult,
-      workerExecutionResult,
-      planningResults,
-    } = await planExecutionItems(true, 1, [], "README.md", {
-      assignmentAgent,
-      specialistCount: 2,
-      codexMode: true,
-    });
-    if (
-      handoff?.status !== "completed" ||
-      assignmentPlanResult?.status !== "prepared"
-    )
-      throw new Error(JSON.stringify(assignmentPlanResult));
-    const prepared = governance.getPreparedAssignmentPlan(
-      handoff,
-      assignmentPlanResult.plan.id
-    );
-    expect(
-      prepared.plan.assignments.map(({ executor }) => executor.kind)
-    ).toEqual(["specialist", "specialist", "worker"]);
-    expect(prepared.specialistSources).toHaveLength(2);
-    expect(workerExecutionResult).toBeUndefined();
-    expect(planningResults).toEqual([]);
-  });
+      });
+      if (
+        handoff?.status !== "completed" ||
+        assignmentPlanResult?.status !== "prepared"
+      )
+        throw new Error(JSON.stringify(assignmentPlanResult));
+      const prepared = governance.getPreparedAssignmentPlan(
+        handoff,
+        assignmentPlanResult.plan.id
+      );
+      expect(
+        prepared.plan.assignments.map(({ executor }) => executor.kind)
+      ).toEqual(["specialist", "specialist", "worker"]);
+      expect(prepared.specialistSources).toHaveLength(2);
+      expect(workerExecutionResult).toBeUndefined();
+      if (mode === "independent") {
+        expect(deferredDetailedPlanningIds).toEqual([]);
+        expect(planningResults).toMatchObject([
+          { workItemId: "first", result: { status: "completed" } },
+        ]);
+        expect(planningResults?.[0].executionSourceId).toBeUndefined();
+      } else {
+        expect(planningResults).toEqual([]);
+        expect(deferredDetailedPlanningIds).toEqual(
+          mode === "dependent" ? ["first"] : undefined
+        );
+      }
+      expect(
+        withGovernanceRecords((raw) =>
+          Object.values(
+            (
+              raw as import("@/application/governance/model/ledger.js").GovernanceLedger
+            ).repositories
+          ).map(({ executionReservations, workItemExecutionSources }) => ({
+            executionReservations: executionReservations ?? [],
+            workItemExecutionSources: workItemExecutionSources ?? [],
+          }))
+        )
+      ).toEqual([{ executionReservations: [], workItemExecutionSources: [] }]);
+    }
+  );
 
   async function plannedExecutions(
     ...args: Parameters<typeof planExecutionItems>

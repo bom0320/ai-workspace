@@ -1,4 +1,4 @@
-import type { prepareAssignmentPlan } from "@/application/assignment-planning/index.js";
+import type { prepareAssignmentPlan } from "@/application/planning/index.js";
 import type {
   ExecutionResult,
   ReadOnlyExecutionResult,
@@ -47,6 +47,8 @@ export const phaseBState = new StateSchema({
     })
     .strict()
     .optional(),
+  selectedWorkItemIds: z.array(z.string()).optional(),
+  deferredDetailedPlanningIds: z.array(z.string()).optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z
     .array(

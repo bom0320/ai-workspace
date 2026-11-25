@@ -233,8 +233,8 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 | --- | --- | --- | --- | --- |
 | 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성하고 Phase B Graph에서 실행 | Graph Integrated |
 | 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
-| 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Detailed Planning 재사용, Phase B Graph에서 명시적 업무 선택·반복·결과 기록 | R5.1–R5.4 Implemented |
-| 4 | 10 | Work Execution Contract | Work Item은 목표·산출물·의존성만 정의. 직접 실행은 차단되며 Assignment 권한은 Step 5.3.2에서 연결 | Partially Implemented |
+| 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Detailed Planning 재사용 기반과 명시적 업무 선택. 현재 Phase B 상세 계획은 Assignment 권한 연결까지 보류 | Partially Implemented |
+| 4 | 10 | Work Execution Contract | Work Item은 목표·산출물·의존성만 정의. 직접 실행은 차단되며 Assignment 읽기 실행만 연결 | Partially Implemented |
 | 5 | 10 | Multi-Specialist Capability & Governed Execution | Specialist가 배정된 개발 업무와 결과를 소유하고 기존 Codex Worktree Runtime을 재사용 | Planned |
 | 6 | 11 | Verification & Review | 산출물·Evidence·Acceptance Criteria와 실패 검증 | Planned |
 | 7 | 11 | CEO Progress Evaluation | Continue / Rework / Reassign / Escalate / Complete 및 재계획 검토 | Planned |
@@ -253,7 +253,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 순서 | 작업 | 목적 및 완료 기준 | 상태 |
 | --- | --- | --- | --- |
 | 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 5.3.1-R에서 Work Item 실행 유형을 제거하고 직접 실행 차단. 구형 계약은 자동 변환 없이 거부 | Implemented |
-| 5.3.2 | Phase-scoped Capability & Authorization | 5.3.2.1 Identity·Authority 분리 및 5.3.2.2 Read 권한 계약·Reservation·Claim 구현. Context 제공과 Write 권한 발급은 후속 범위 | Partially Implemented |
+| 5.3.2 | Phase-scoped Capability & Authorization | Identity·Authority 분리, Read Reservation·Claim, 제한된 Snapshot Context 조회, Specialist 읽기 실행 및 결과 기록. Write 권한 발급은 5.3.3의 Binding에 의존 | Implemented (Read) |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 승인 방향·선행 결과로 상세 계획을 수립하고 수정 계약을 정확한 Assignment와 Snapshot에 결합 | Planned |
 | 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |
 | 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |

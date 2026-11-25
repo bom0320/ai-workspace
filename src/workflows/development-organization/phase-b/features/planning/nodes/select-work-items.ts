@@ -19,6 +19,9 @@ export function createSelectWorkItemsNode(
     ) {
       throw new Error("Planning selection contains an unknown Work Item ID.");
     }
-    return { selectedWorkItemIds: [...new Set(selectedIds)] };
+    return {
+      selectedWorkItemIds: [...new Set(selectedIds)],
+      planningResults: [],
+    };
   };
 }

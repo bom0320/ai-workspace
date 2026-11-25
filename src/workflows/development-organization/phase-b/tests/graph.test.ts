@@ -1,4 +1,7 @@
-import { executeWorkItem } from "@/application/execution/index.js";
+import {
+  executeCollaborativeAssignment,
+  executeWorkItem,
+} from "@/application/execution/index.js";
 import { beforeEach, expect, it, vi } from "vitest";
 import {
   prepareAssignmentPlan,
@@ -24,6 +27,7 @@ vi.mock("@/application/planning/index.js", () => ({
 }));
 
 vi.mock("@/application/execution/index.js", () => ({
+  executeCollaborativeAssignment: vi.fn(),
   executeWorkItem: vi
     .fn()
     .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
@@ -37,6 +41,7 @@ vi.mock("@/application/governance/index.js", async () => ({
   ).executionDelegationSchema,
   getApprovedDecision: vi.fn(),
   getPreparedAssignmentPlan: vi.fn(),
+  getAssignmentExecutionResults: () => [],
   verifyExecutionHandoff: vi.fn(),
 }));
 vi.mock("@/application/governance/records/execution-decomposition.js", () => ({
@@ -554,9 +559,13 @@ const combinedPlan = {
   ],
 };
 
-it.each(["prepared", "denied"] as const)(
-  "coordinates combined Planning when Assignment Preparation is %s",
-  async (status) => {
+it.each([
+  ["prepared", false],
+  ["prepared", true],
+  ["denied", true],
+] as const)(
+  "coordinates combined Planning when Assignment Planning is %s and execution requested is %s",
+  async (status, requested) => {
     const assignmentResult =
       status === "prepared"
         ? { status, plan: combinedPlan }
@@ -569,12 +578,33 @@ it.each(["prepared", "denied"] as const)(
     vi.mocked(executeWorkItemPlanning).mockResolvedValueOnce(
       completedPlan("ready")
     );
+    const shouldExecute = requested && status === "prepared";
+    vi.mocked(getPreparedAssignmentPlan).mockReturnValueOnce({
+      plan: combinedPlan,
+      workItems: combinedItems,
+      specialistSources: [],
+    });
+    vi.mocked(executeCollaborativeAssignment).mockResolvedValueOnce({
+      status: "read-completed",
+      invocationId: "invocation",
+      resultDigest: "digest",
+    });
     const selectWorkItemIds = vi.fn(() => combinedItems.map(({ id }) => id));
     const agent = vi.fn();
     const result = await createPhaseBGraph({
       agent: async () => ({ type: "propose", workItems: combinedItems }),
       execution: {
         workItem: { workItemId: "ready", readPaths: [], timeoutMs: 1000 },
+        ...(requested && {
+          assignment: {
+            contexts: {
+              ready: {
+                readScopes: [{ kind: "file", path: "README.md" }],
+                timeoutMs: 1000,
+              },
+            },
+          },
+        }),
       },
       planning: {
         assignment: { agent },
@@ -600,7 +630,20 @@ it.each(["prepared", "denied"] as const)(
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
     expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-    expect(getPreparedAssignmentPlan).not.toHaveBeenCalled();
+    expect(getPreparedAssignmentPlan).toHaveBeenCalledTimes(
+      shouldExecute ? 1 : 0
+    );
+    expect(executeCollaborativeAssignment).toHaveBeenCalledTimes(
+      shouldExecute ? 1 : 0
+    );
+    if (shouldExecute) {
+      expect(result.assignmentExecutionResult).toMatchObject({
+        status: "pending",
+        results: [{ assignmentId: "ready", status: "read-completed" }],
+      });
+    } else {
+      expect(result.assignmentExecutionResult).toBeUndefined();
+    }
     expect(result.pendingPlanningIds).toBeUndefined();
     expect(result.planningResults).toEqual([]);
     if (status === "prepared") {

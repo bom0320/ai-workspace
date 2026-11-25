@@ -2,6 +2,7 @@ export {
   selectGoalMentionedPaths,
   parsePackageScripts,
   isInternalInspectionComponent,
+  isInspectablePath,
   isUnambiguousRepositoryPath,
   isRepositoryRelativePath,
 } from "./discovery.js";

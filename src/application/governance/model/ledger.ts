@@ -251,6 +251,9 @@ export const governanceLedgerSchema = z
                   id: record.id,
                   binding: record.binding,
                   decision: record.result.decision,
+                  ...(record.result.contextDigest && {
+                    contextDigest: record.result.contextDigest,
+                  }),
                 })))
         )
           context.addIssue({

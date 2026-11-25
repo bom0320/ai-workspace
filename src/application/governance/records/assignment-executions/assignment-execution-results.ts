@@ -2,7 +2,6 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   resolveAssignmentExecution,
   bindAssignmentReadExecution,
-  resolvePredecessorResults,
 } from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
 import { resolveApprovedDecision } from "../../approval/features/direction-review/flow/approved-decision.js";
 import {
@@ -70,7 +69,7 @@ export function getAssignmentExecutionResults(
       workItemId: string;
       invocationId: string;
     } & (
-      | { status: "completed"; resultDigest: string }
+      | { status: "read-completed"; resultDigest: string }
       | {
           status: "failed";
           failure: AssignmentExecutionFailureStage;
@@ -115,7 +114,7 @@ export function getAssignmentExecutionResults(
         throw new AssignmentExecutionError("handoff");
       return [
         {
-          status: "completed" as const,
+          status: "read-completed" as const,
           assignmentId: assignment.id,
           workItemId: assignment.workItemId,
           invocationId: record.id,
@@ -141,21 +140,8 @@ export function getWorkerAssignmentPlanningContext(
     );
     if (assignment?.repositoryAccessCeiling !== "write" || !workItem)
       throw new AssignmentExecutionError("authority");
-    const results = resolvePredecessorResults(
-      context,
-      workItem.dependsOn,
-      assignment.dependsOn
-    );
-    const priorResults = JSON.stringify(results);
-    if (Buffer.byteLength(priorResults) > 64 * 1024)
-      throw new AssignmentExecutionError("validation");
-    return {
-      assignment,
-      workItem,
-      priorResults:
-        results.predecessors.length || results.workItemPredecessors.length
-          ? priorResults
-          : undefined,
-    };
+    if (workItem.dependsOn.length || assignment.dependsOn.length)
+      throw new AssignmentExecutionError("dependency");
+    return { assignment, workItem, priorResults: undefined };
   });
 }

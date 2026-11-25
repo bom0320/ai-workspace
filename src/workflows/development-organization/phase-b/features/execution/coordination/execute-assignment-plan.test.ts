@@ -23,7 +23,7 @@ function deferred<T>() {
 function fixture(
   dependencies: Record<string, string[]>,
   assignments: Array<
-    [id: string, workItemId: string, dependsOn?: string[], kind?: "worker"]
+    [id: string, workItemId: string, dependsOn?: string[], ceiling?: "write"]
   >
 ) {
   const subject = {
@@ -35,14 +35,14 @@ function fixture(
       snapshot: { repositoryRoot: "/repo", commitSha: "sha" },
       selectedWorkItemIds: Object.keys(dependencies),
       assignments: assignments.map(
-        ([id, workItemId, dependsOn = [], kind]): PhaseBAssignment => ({
+        ([id, workItemId, dependsOn = [], ceiling]): PhaseBAssignment => ({
           id,
           workItemId,
           dependsOn,
           objective: id,
           deliverable: id,
           specialistId: "approved",
-          repositoryAccessCeiling: kind === "worker" ? "write" : "read",
+          repositoryAccessCeiling: ceiling ?? "read",
         })
       ),
     },
@@ -71,10 +71,7 @@ function fixture(
   );
   return {
     started,
-    run: (
-      contexts: string[],
-      planning?: Parameters<typeof executeAssignmentPlan>[4]
-    ) =>
+    run: (contexts: string[]) =>
       executeAssignmentPlan(
         {} as Parameters<typeof executeAssignmentPlan>[0],
         "plan",
@@ -90,13 +87,14 @@ function fixture(
               },
             ])
           ),
-        },
-        planning
+        }
       ),
     complete: (id: string) =>
-      gates
-        .get(id)!
-        .resolve({ status: "completed", invocationId: id, resultDigest: id }),
+      gates.get(id)!.resolve({
+        status: "read-completed",
+        invocationId: id,
+        resultDigest: id,
+      }),
     fail: (id: string) =>
       gates.get(id)!.resolve({
         status: "failed",
@@ -122,55 +120,42 @@ it("fills slots when Assignment results arrive and holds dependent Work Items", 
   complete("a2");
   await vi.waitFor(() => expect(started).toEqual(["a1", "a2", "b"]));
   complete("a1");
-  await vi.waitFor(() => expect(started.at(-1)).toBe("a3"));
-  complete("a3");
   complete("b");
   expect(await result).toMatchObject({ status: "pending" });
   const outcome = await result;
   if (outcome.failure === "plan") throw new Error("Plan rejected");
+  expect(
+    outcome.pendingAssignments.map(({ assignmentId }) => assignmentId)
+  ).toEqual(["a3", "c", "d"]);
   expect(outcome.results.map(({ assignmentId }) => assignmentId)).toEqual([
     "a2",
     "a1",
-    "a3",
     "b",
   ]);
 });
 
-it("shares capacity with draft planning and continues independent execution after failure", async () => {
-  const fixtureRun = fixture({ A: [], B: [], C: ["A"] }, [
+it("runs both access ceilings but leaves dependent and unconfigured Assignments pending", async () => {
+  const { run, started, complete } = fixture({ A: [], B: [], C: ["A"] }, [
     ["a", "A"],
-    ["b", "B", [], "worker"],
+    ["b", "B", [], "write"],
+    ["missing", "B"],
     ["c", "C"],
   ]);
-  const draft = deferred<boolean>();
-  const plan = vi.fn(() => draft.promise);
-  const result = fixtureRun.run(["a", "c"], { run: plan });
-  expect(fixtureRun.started).toEqual(["a"]);
-  expect(plan).toHaveBeenCalledExactlyOnceWith("B", "b");
-  fixtureRun.fail("a");
-  draft.resolve(true);
+  const result = run(["a", "b", "c"]);
+  expect(started).toEqual(["a", "b"]);
+  complete("b");
+  complete("a");
   expect(await result).toMatchObject({
-    status: "failed",
-    pendingAssignments: [{ assignmentId: "b" }, { assignmentId: "c" }],
+    status: "pending",
+    results: expect.arrayContaining([
+      expect.objectContaining({ assignmentId: "b", status: "read-completed" }),
+      expect.objectContaining({ assignmentId: "a", status: "read-completed" }),
+    ]),
+    pendingAssignments: [
+      { assignmentId: "missing", reason: "context-required" },
+      { assignmentId: "c", reason: "dependency-pending" },
+    ],
   });
-});
-
-it("starts independent drafts together and retains failures arriving out of order", async () => {
-  const fixtureRun = fixture({ A: [], B: [] }, [
-    ["a", "A", [], "worker"],
-    ["b", "B", [], "worker"],
-  ]);
-  const a = deferred<boolean>();
-  const b = deferred<boolean>();
-  const plan = vi.fn((id: string) => (id === "A" ? a.promise : b.promise));
-  const result = fixtureRun.run([], { run: plan });
-  expect(plan.mock.calls).toEqual([
-    ["A", "a"],
-    ["B", "b"],
-  ]);
-  b.resolve(false);
-  a.resolve(true);
-  expect(await result).toMatchObject({ failedPlanningWorkItemIds: ["B"] });
 });
 
 it("keeps an independent execution running when a predecessor fails", async () => {

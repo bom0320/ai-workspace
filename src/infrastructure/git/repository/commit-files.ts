@@ -5,17 +5,27 @@ export type CommitFile = { path: string; mode: string; size: number | null };
 // Literal commit identity only. No revision expressions or pathspec filtering.
 export function listRepositoryFilesAtCommit(
   repositoryRoot: string,
-  commitSha: string
+  commitSha: string,
+  options?: { timeoutMs: number; ignoreReplaceObjects: boolean }
 ): CommitFile[] {
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commitSha)) {
     throw new Error("Snapshot must identify a full commit SHA.");
   }
   const output = execFileSync(
     "git",
-    ["ls-tree", "-r", "-l", "-z", "--full-tree", commitSha],
+    [
+      ...(options?.ignoreReplaceObjects ? ["--no-replace-objects"] : []),
+      "ls-tree",
+      "-r",
+      "-l",
+      "-z",
+      "--full-tree",
+      commitSha,
+    ],
     {
       cwd: repositoryRoot,
       stdio: "pipe",
+      timeout: options?.timeoutMs,
       maxBuffer: 8 * 1024 * 1024,
     }
   );

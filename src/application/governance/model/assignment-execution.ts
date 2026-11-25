@@ -122,7 +122,11 @@ export const assignmentExecutionRecordSchema = z
       .strict()
       .optional(),
     result: z
-      .object({ decision: agentDecisionSchema, digest })
+      .object({
+        decision: agentDecisionSchema,
+        contextDigest: digest.optional(),
+        digest,
+      })
       .strict()
       .optional(),
   })

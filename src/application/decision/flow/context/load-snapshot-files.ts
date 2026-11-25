@@ -6,7 +6,8 @@ import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 
 export function loadSnapshotFiles(
   snapshot: RepositorySnapshot,
-  paths: string[]
+  paths: string[],
+  options?: Parameters<typeof readRepositoryFileAtCommit>[3]
 ): InspectedFile[] {
   for (const path of paths) {
     if (!isRepositoryRelativePath(path)) {
@@ -20,7 +21,8 @@ export function loadSnapshotFiles(
     content: readRepositoryFileAtCommit(
       snapshot.repositoryRoot,
       snapshot.commitSha,
-      path
+      path,
+      ...(options ? [options] : [])
     ),
   }));
 }

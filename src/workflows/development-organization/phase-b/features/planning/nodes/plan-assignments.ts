@@ -4,10 +4,9 @@ import {
 } from "@/application/planning/index.js";
 import type { PhaseBState } from "../../../state.js";
 
-export function createPrepareAssignmentsNode(
+export function createPlanAssignmentsNode(
   agent: AssignmentPlanAgent | undefined,
   hasDetailedPlanning: boolean,
-  assignmentExecutionRequested: boolean,
   executionWorkItemId?: string
 ) {
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
@@ -29,20 +28,11 @@ export function createPrepareAssignmentsNode(
     );
     const result: Partial<PhaseBState> = { assignmentPlanResult };
     if (assignmentPlanResult.status !== "prepared") return result;
-    const reason =
-      "Assignment execution requires Phase-scoped Assignment Authorization.";
-    if (assignmentExecutionRequested)
-      result.assignmentExecutionResult = {
-        status: "denied",
-        failure: "unsupported",
-        planId: assignmentPlanResult.plan.id,
-        reason,
-      };
     if (executionWorkItemId !== undefined)
       result.executionPreparationResult = {
         status: "blocked",
         workItemId: executionWorkItemId,
-        reason,
+        reason: "Direct Work Item execution requires Assignment Authorization.",
       };
     if (hasDetailedPlanning)
       result.deferredDetailedPlanningIds = [

@@ -1,31 +1,15 @@
 import type { ContextAccessPolicy } from "@/contracts/repository/context-access-policy.js";
-import { isContextPathAllowed } from "@/services/repository-inspection/index.js";
-import type { CommitFile } from "@/infrastructure/git/index.js";
 import {
-  isInternalInspectionComponent,
-  isUnambiguousRepositoryPath,
+  isContextPathAllowed,
+  isInspectablePath,
 } from "@/services/repository-inspection/index.js";
+import type { CommitFile } from "@/infrastructure/git/index.js";
 
 import type { StaffingContextState } from "../../model/state.js";
 import type {
   StaffingContext,
   StaffingInspectionLimits,
 } from "../../protocol/context.js";
-
-export function isInspectablePath(path: string): boolean {
-  return (
-    isUnambiguousRepositoryPath(path) &&
-    !path
-      .split("/")
-      .some(
-        (part) =>
-          isInternalInspectionComponent(part.toLowerCase()) ||
-          [".aws", ".ssh", ".codex", ".agents"].includes(part.toLowerCase()) ||
-          /^\.env(?:\.|$)/i.test(part) ||
-          /\.(?:pem|key|p12|pfx)$/i.test(part)
-      )
-  );
-}
 
 export function byteLength(context: StaffingContext): number {
   return Buffer.byteLength(JSON.stringify(context), "utf8");

@@ -2,8 +2,8 @@ import type { CollaborativeExecutionOptions } from "./features/execution/coordin
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
 import type { AssignmentPlanAgent } from "@/application/planning/index.js";
-import { createPrepareAssignmentsNode } from "./features/planning/nodes/prepare-assignments.js";
-import { createInitializePlanningNode } from "./features/planning/nodes/initialize-planning.js";
+import { createPlanAssignmentsNode } from "./features/planning/nodes/plan-assignments.js";
+import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";
 import {
   createSelectWorkItemsNode,
   type SelectWorkItemIds,
@@ -56,20 +56,22 @@ export function createPhaseBGraph({
       createRunWorkDecompositionNode(decompositionOptions)
     )
     .addNode("select-work-items", createSelectWorkItemsNode(selectWorkItemIds))
-    .addNode("initialize-planning", createInitializePlanningNode(false))
     .addNode(
-      "prepare-assignments",
-      createPrepareAssignmentsNode(
+      "plan-assignments",
+      createPlanAssignmentsNode(
         assignment?.agent,
         !!detailed,
-        !!assignmentExecution,
         workItemExecution?.workItemId
       )
+    )
+    .addNode(
+      "execute-assignments",
+      createExecuteAssignmentsNode(assignmentExecution)
     )
     .addNode("block-detailed-planning", (state) => ({
       deferredDetailedPlanningIds: state.selectedWorkItemIds ?? [],
       detailedPlanningBlockedReason:
-        "Phase B Detailed Planning requires a claimed Assignment Read execution and an authorized Context provider.",
+        "Phase B Detailed Planning requires a claimed Assignment Read context and Assignment-bound planning authorization.",
       ...createBlockedWorkItemExecutionNode(workItemExecution)(),
     }))
     .addNode(
@@ -92,13 +94,12 @@ export function createPhaseBGraph({
         : END,
     ["select-work-items", "block-work-item-execution", END]
   );
-  graph.addEdge("select-work-items", "initialize-planning");
   graph.addConditionalEdges(
-    "initialize-planning",
+    "select-work-items",
     (state) => {
       if (!state.selectedWorkItemIds?.length)
         return workItemExecution ? "block-work-item-execution" : END;
-      if (assignment) return "prepare-assignments";
+      if (assignment) return "plan-assignments";
       return detailed
         ? "block-detailed-planning"
         : workItemExecution
@@ -106,14 +107,22 @@ export function createPhaseBGraph({
           : END;
     },
     [
-      "prepare-assignments",
+      "plan-assignments",
       "block-detailed-planning",
       "block-work-item-execution",
       END,
     ]
   );
   graph.addEdge("block-detailed-planning", END);
-  graph.addEdge("prepare-assignments", END);
+  graph.addConditionalEdges(
+    "plan-assignments",
+    (state) =>
+      assignmentExecution && state.assignmentPlanResult?.status === "prepared"
+        ? "execute-assignments"
+        : END,
+    ["execute-assignments", END]
+  );
+  graph.addEdge("execute-assignments", END);
   graph.addEdge("block-work-item-execution", END);
 
   // 3. Compile Graph

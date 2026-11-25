@@ -20,8 +20,7 @@ export function resolveAssignmentExecution(
 ) {
   return resolveAssignmentBinding(
     resolvePreparedAssignmentPlan(ledger, handoff, request.planId),
-    request,
-    new Set()
+    request
   );
 }
 
@@ -29,8 +28,7 @@ type PlanContext = ReturnType<typeof resolvePreparedAssignmentPlan>;
 
 function resolveAssignmentBinding(
   context: PlanContext,
-  request: AssignmentExecutionRequest,
-  verified: Set<string>
+  request: AssignmentExecutionRequest
 ) {
   const { plan, delegation, policy, snapshot } = context;
 
@@ -63,20 +61,16 @@ function resolveAssignmentBinding(
   )
     throw new AssignmentExecutionError("authority");
 
-  const { predecessors, workItemPredecessors } = resolvePredecessorResults(
-    context,
-    workItem.dependsOn,
-    assignment.dependsOn,
-    verified
-  );
-  return {
-    ...context,
-    assignment,
-    workItem,
-    specialist,
-    predecessors,
-    workItemPredecessors,
-  };
+  return { ...context, assignment, workItem, specialist };
+}
+
+export function assertAssignmentReadDependencies({
+  workItem,
+  assignment,
+}: ReturnType<typeof resolveAssignmentExecution>) {
+  // Read execution results cannot satisfy Assignment or Work Item dependencies.
+  if (workItem.dependsOn.length || assignment.dependsOn.length)
+    throw new AssignmentExecutionError("dependency");
 }
 
 export function bindAssignmentReadExecution(
@@ -96,74 +90,4 @@ export function bindAssignmentReadExecution(
     expiresAt: context.delegation.grant.expiresAt,
   });
   return { execution, binding: governanceDigest({ request, execution }) };
-}
-
-type ExecutionRecord = NonNullable<
-  PlanContext["entry"]["assignmentExecutions"]
->[number];
-
-function verifiedAssignmentResult(
-  context: PlanContext,
-  assignmentId: string,
-  verified: Set<string>
-): ExecutionRecord & { result: NonNullable<ExecutionRecord["result"]> } {
-  const record = context.entry.assignmentExecutions?.find(
-    (item) =>
-      item.request.planId === context.plan.id &&
-      item.request.assignmentId === assignmentId &&
-      item.delegationId === context.delegation.id
-  );
-  if (!record?.claimedAt || !record.result || record.failure)
-    throw new AssignmentExecutionError("dependency");
-  const { result } = record;
-  if (!verified.has(record.id)) {
-    const resolved = resolveAssignmentBinding(
-      context,
-      record.request,
-      verified
-    );
-    const { binding } = bindAssignmentReadExecution(
-      resolved,
-      record.request,
-      record.id
-    );
-    if (
-      binding !== record.binding ||
-      governanceDigest({
-        id: record.id,
-        binding,
-        decision: result.decision,
-      }) !== result.digest
-    )
-      throw new AssignmentExecutionError("handoff");
-    verified.add(record.id);
-  }
-  return { ...record, result };
-}
-
-export function resolvePredecessorResults(
-  context: PlanContext,
-  dependsOn: readonly string[],
-  assignmentDependencies: readonly string[],
-  verified = new Set<string>()
-) {
-  if (dependsOn.length) throw new AssignmentExecutionError("dependency");
-  const workItemPredecessors: {
-    workItemId: string;
-    results: {
-      assignmentId: string;
-      invocationId: string;
-      digest: string;
-      decision: NonNullable<ExecutionRecord["result"]>["decision"];
-    }[];
-  }[] = [];
-  const predecessors = assignmentDependencies.map((assignmentId) => {
-    const record = verifiedAssignmentResult(context, assignmentId, verified);
-    return {
-      assignmentId,
-      invocationId: record.id,
-      decision: record.result.decision,
-    };
-  });
-  return { predecessors, workItemPredecessors };
 }

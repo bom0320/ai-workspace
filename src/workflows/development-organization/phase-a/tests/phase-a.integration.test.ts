@@ -8,7 +8,6 @@ import {
   createPhaseBGraph,
   type PhaseBGraphOptions,
 } from "../../phase-b/index.js";
-import { executeWorkItemPlanning } from "../../phase-b/features/planning/execution/execute-work-item-planning.js";
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
 import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
@@ -1715,7 +1714,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     };
 
     const handoff = approved.phaseACompletion;
-    let planningResults;
+    let planningResults: import("../../phase-b/state.js").PhaseBState["planningResults"];
     let executionPreparationResult;
     let workerExecutionResult;
     let readOnlyExecutionResult;
@@ -1762,25 +1761,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         throw new Error(JSON.stringify(decomposition));
       registerExecutionDecomposition(decomposition);
       planningResults = [];
-      for (const workItem of decomposition.workItems) {
-        const recordSource = beginWorkItemExecutionSource(
-          decomposition,
-          workItem,
-          root
-        );
-        const result = await executeWorkItemPlanning({
-          ...planning.detailed!,
-          phaseB: { approvedDecisionId: decision.id, workItem },
-        });
-        planningResults.push({
-          workItemId: workItem.id,
-          result,
-          executionSourceId:
-            result.status === "completed"
-              ? recordSource?.(result.task)
-              : undefined,
-        });
-      }
     }
     return {
       planningResults,
@@ -1979,6 +1959,152 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     ).toThrow();
   });
 
+  it.each([
+    "read",
+    "write",
+    "bad-evidence",
+    "drift",
+    "expired",
+    "policy-change",
+    "save-failure",
+  ] as const)(
+    "runs a requested Phase B Specialist read with %s",
+    async (mode) => {
+      let suppliedDirection: string | undefined;
+      const specialistCalls: string[][] = [];
+      const started = Date.now();
+      const before = () => readFileSync(join(root, "README.md"), "utf8");
+      const {
+        assignmentExecutionResult,
+        assignmentPlanResult,
+        handoff,
+        planningResults,
+      } = await planExecutionItems(true, 2, [], "README.md", {
+        codexMode: true,
+        assignmentWithDetailed: true,
+        assignmentAgent: async ({ specialists }) =>
+          ["review", "dependent"].map((id) => ({
+            id,
+            workItemId: "first",
+            specialistId: specialists[0].id,
+            objective: "Inspect the supplied README",
+            deliverable: "Scoped findings",
+            repositoryAccessCeiling: mode === "write" ? "write" : "read",
+            dependsOn: id === "dependent" ? ["review"] : [],
+          })),
+        collaborativeExecution: {
+          contexts: Object.fromEntries(
+            ["review", "dependent"].map((id) => [
+              id,
+              {
+                readScopes: [{ kind: "file", path: "README.md" }],
+                timeoutMs: 5000,
+              },
+            ])
+          ),
+        },
+        beforePhaseB(direction) {
+          suppliedDirection = direction;
+          const command = vi.mocked(processRuntime.runCommand);
+          const previous = command.getMockImplementation()!;
+          command.mockImplementation(async (name, args, options) => {
+            if (name !== "codex") return previous(name, args, options);
+            specialistCalls.push(args);
+            if (mode === "drift")
+              writeFileSync(join(root, "README.md"), "Snapshot drift");
+            if (mode === "expired")
+              vi.spyOn(Date, "now").mockReturnValue(started + 60_000);
+            if (mode === "policy-change") configureExecutionPolicy(null);
+            if (mode === "save-failure")
+              vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
+                throw new Error("Unable to persist read result");
+              });
+            expect(options.cwd).not.toBe(root);
+            return {
+              stdout: JSON.stringify({
+                recommendation: "Review complete",
+                evidence: [
+                  {
+                    path:
+                      mode === "bad-evidence"
+                        ? "docs-extra/other.md"
+                        : "README.md",
+                    lineStart: 1,
+                    description: "Relevant text",
+                  },
+                ],
+                risks: [],
+                uncertainty: [],
+              }),
+              stderr: "",
+              exitCode: 0,
+              timedOut: false,
+            };
+          });
+        },
+      });
+      expect(specialistCalls).toHaveLength(1);
+      expect(specialistCalls[0]).toContain("read-only");
+      expect(specialistCalls[0].join(" ")).toContain("shell_tool=false");
+      const prompt = specialistCalls[0].at(-1)!;
+      expect(JSON.parse(prompt.split("SpecialistContext:\n")[1])).toMatchObject(
+        {
+          approvedDirection: suppliedDirection,
+          workItem: { id: "first", deliverable: "Revised README.md" },
+          assignmentObjective: "Inspect the supplied README",
+          assignmentDeliverable: "Scoped findings",
+          predecessorResults: [],
+          files: [{ path: "README.md", content: "Original content\n" }],
+          repositoryFiles: [{ path: "README.md", size: 17 }],
+        }
+      );
+      if (mode === "drift")
+        writeFileSync(join(root, "README.md"), "Original content\n");
+      if (mode === "expired") vi.mocked(Date.now).mockRestore();
+      const failures = {
+        "bad-evidence": "validation",
+        drift: "snapshot",
+        expired: "claim",
+        "policy-change": "handoff",
+        "save-failure": "handoff",
+      } as const;
+      const failure =
+        mode === "read" || mode === "write" ? undefined : failures[mode];
+      const expected = failure
+        ? { status: "failed", failure, failureRecorded: true }
+        : { status: "read-completed" };
+      expect(assignmentExecutionResult).toMatchObject({
+        status: failure ? "failed" : "pending",
+        results: [{ assignmentId: "review", ...expected }],
+        pendingAssignments: [
+          { assignmentId: "dependent", reason: "dependency-pending" },
+        ],
+      });
+      if (
+        handoff?.status !== "completed" ||
+        assignmentPlanResult?.status !== "prepared"
+      )
+        throw new Error("Expected prepared Plan and Handoff");
+      if (mode === "policy-change") {
+        expect(() =>
+          governance.getAssignmentExecutionResults(
+            handoff,
+            assignmentPlanResult.plan.id
+          )
+        ).toThrow();
+      } else {
+        expect(
+          governance.getAssignmentExecutionResults(
+            handoff,
+            assignmentPlanResult.plan.id
+          )
+        ).toMatchObject([{ assignmentId: "review", ...expected }]);
+      }
+      expect(planningResults).toEqual([]);
+      expect(before()).toBe("Original content\n");
+    }
+  );
+
   it.each(["assignment-only", "dependent", "independent"] as const)(
     "prepares approved Specialists with read and write ceilings in %s Planning",
     async (mode) => {
@@ -2038,14 +2164,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         specialistCount: 2,
         codexMode: true,
         assignmentWithDetailed: mode !== "assignment-only",
-        collaborativeExecution: {
-          contexts: {
-            implement: {
-              readScopes: [{ kind: "file", path: "README.md" }],
-              timeoutMs: 5000,
-            },
-          },
-        },
         execution: {
           workItemId: "first",
           readPaths: ["README.md"],
@@ -2072,10 +2190,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(deferredDetailedPlanningIds).toEqual(
         mode === "assignment-only" ? undefined : ["first"]
       );
-      expect(assignmentExecutionResult).toMatchObject({
-        status: "denied",
-        failure: "unsupported",
-      });
+      expect(assignmentExecutionResult).toBeUndefined();
       const readRequest = {
         planId: prepared.plan.id,
         access: "read",
@@ -2211,9 +2326,21 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "Invalid Assignment execution record"
       );
       writeFileSync(ledgerPath, validLedger);
-      expect(governance.claimAssignmentExecution(handoff, permit)).toEqual(
-        permit
-      );
+      expect(() =>
+        governance.consumeAssignmentReadContext(handoff, permit)
+      ).toThrow("claim");
+      const claimed = governance.claimAssignmentExecution(handoff, permit);
+      expect(claimed).toEqual(permit);
+      expect(() =>
+        governance.consumeAssignmentReadContext(handoff, { ...claimed })
+      ).toThrow("claim");
+      const session = governance.consumeAssignmentReadContext(handoff, claimed);
+      expect(session.context.files).toEqual([
+        { path: "README.md", content: "Original content\n" },
+      ]);
+      expect(() =>
+        governance.consumeAssignmentReadContext(handoff, claimed)
+      ).toThrow("claim");
       expect(() =>
         governance.claimAssignmentExecution(handoff, permit)
       ).toThrow("claim");

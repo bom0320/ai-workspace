@@ -1,5 +1,6 @@
 import {
   isContextPathAllowed,
+  isInspectablePath,
   validateContextAccessPolicy,
 } from "@/services/repository-inspection/index.js";
 import { readRepositoryFileAtCommit } from "@/infrastructure/git/index.js";
@@ -14,10 +15,7 @@ import {
 import { realpathSync } from "node:fs";
 import type { StaffingDraft } from "../../protocol/ceo.js";
 import type { StaffingLoopOptions } from "../orchestration/run-staffing-loop.js";
-import {
-  isInspectablePath,
-  requireFile,
-} from "../inspection/context-policy.js";
+import { requireFile } from "../inspection/context-policy.js";
 
 export type RunStaffingOptions = Pick<
   StaffingLoopOptions,

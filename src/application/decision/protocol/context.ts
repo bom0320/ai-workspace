@@ -11,6 +11,7 @@ export type SpecialistContext = {
 };
 
 export type CollaborativeSpecialistContext = SpecialistContext & {
+  repositoryFiles?: { path: string; size: number }[];
   assignmentObjective: string;
   approvedDirection: string;
   workItem: {

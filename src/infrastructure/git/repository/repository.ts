@@ -13,16 +13,23 @@ export function getRepositoryHead(repositoryRoot: string): string {
 export function readRepositoryFileAtCommit(
   repositoryRoot: string,
   commitSha: string,
-  path: string
+  path: string,
+  options?: { timeoutMs: number; ignoreReplaceObjects: boolean }
 ): string {
   let content: Buffer;
   try {
     content = execFileSync(
       "git",
-      ["cat-file", "blob", `${commitSha}:${path}`],
+      [
+        ...(options?.ignoreReplaceObjects ? ["--no-replace-objects"] : []),
+        "cat-file",
+        "blob",
+        `${commitSha}:${path}`,
+      ],
       {
         cwd: repositoryRoot,
         stdio: "pipe",
+        timeout: options?.timeoutMs,
       }
     );
   } catch (cause) {

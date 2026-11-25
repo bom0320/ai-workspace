@@ -1,11 +1,8 @@
-import { realpathSync } from "node:fs";
-import { getApprovedDecision } from "@/application/governance/index.js";
 import type { ExecutionDelegationRequest } from "@/application/governance/index.js";
-import {
-  planTask,
-  type PlanTaskOptions,
+import type {
+  PlanTaskOptions,
+  PlanningResult,
 } from "@/application/planning/index.js";
-import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import { z } from "zod";
 
 import {
@@ -19,40 +16,14 @@ export const phaseBPlanningInputSchema = workDecompositionInputSchema.extend({
 
 export type PhaseBPlanningInput = z.infer<typeof phaseBPlanningInputSchema>;
 
-export async function executeWorkItemPlanning({
-  phaseB,
-  repositoryPath,
-  limits,
-  planner,
-  executionCeiling,
-  predecessorResults,
-}: Pick<PlanTaskOptions, "repositoryPath" | "limits" | "planner"> & {
-  phaseB: PhaseBPlanningInput;
-  executionCeiling?: ExecutionDelegationRequest;
-  predecessorResults?: string;
-}) {
-  const { approvedDecisionId, workItem } =
-    phaseBPlanningInputSchema.parse(phaseB);
-  const { context, review, snapshot } = getApprovedDecision(approvedDecisionId);
-  const repositoryRoot = resolveRepositoryRoot(repositoryPath);
-  if (realpathSync(repositoryRoot) !== realpathSync(snapshot.repositoryRoot)) {
-    throw new Error(
-      "Planning repository does not match the Approved Decision."
-    );
+export async function executeWorkItemPlanning(
+  _options: Pick<PlanTaskOptions, "repositoryPath" | "limits" | "planner"> & {
+    phaseB: PhaseBPlanningInput;
+    executionCeiling?: ExecutionDelegationRequest;
+    predecessorResults?: string;
   }
-  return planTask({
-    goal: context.goal,
-    repositoryPath: repositoryRoot,
-    limits,
-    planner,
-    detail: {
-      objective: workItem.objective,
-      deliverable: workItem.deliverable,
-      direction: review.proposal.direction.text,
-      ...(predecessorResults && { predecessorResults }),
-      ...(executionCeiling && {
-        executionCeiling: JSON.stringify(executionCeiling),
-      }),
-    },
-  });
+): Promise<PlanningResult> {
+  throw new Error(
+    "Phase B Detailed Planning requires Assignment-bound authorization."
+  );
 }

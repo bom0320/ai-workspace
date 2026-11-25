@@ -17,10 +17,10 @@ const state = {
   planningResults: [],
 } satisfies Partial<PhaseBState>;
 
-it("returns only the selected IDs, in selection order without duplicates", () => {
+it("preserves selection order, removes duplicates, and starts with fresh Planning results", () => {
   expect(
     createSelectWorkItemsNode(() => ["second", "first", "second"])(state)
-  ).toEqual({ selectedWorkItemIds: ["second", "first"] });
+  ).toEqual({ selectedWorkItemIds: ["second", "first"], planningResults: [] });
 });
 
 it("rejects IDs outside the current decomposition", () => {

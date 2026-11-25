@@ -68,3 +68,18 @@ export function isUnambiguousRepositoryPath(path: string): boolean {
       .every((segment) => segment !== "" && segment !== "." && segment !== "..")
   );
 }
+
+export function isInspectablePath(path: string): boolean {
+  return (
+    isUnambiguousRepositoryPath(path) &&
+    !path
+      .split("/")
+      .some(
+        (part) =>
+          isInternalInspectionComponent(part.toLowerCase()) ||
+          [".aws", ".ssh", ".codex", ".agents"].includes(part.toLowerCase()) ||
+          /^\.env(?:\.|$)/i.test(part) ||
+          /\.(?:pem|key|p12|pfx)$/i.test(part)
+      )
+  );
+}

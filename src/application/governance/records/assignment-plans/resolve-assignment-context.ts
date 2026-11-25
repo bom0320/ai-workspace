@@ -22,6 +22,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     snapshot,
     delegation,
     policy,
+    policyBinding,
   } = resolveExecutionHandoff(ledger, handoff);
   if (Date.parse(delegation.grant.expiresAt) <= Date.now())
     throw new Error(
@@ -95,10 +96,10 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     approvedDirection,
     delegation,
     policy,
+    policyBinding,
     decision,
     snapshot,
     sources,
-    approvedSources,
     staffingBinding,
     repositoryAccessCeilings,
   };

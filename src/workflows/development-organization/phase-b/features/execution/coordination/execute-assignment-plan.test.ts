@@ -84,7 +84,10 @@ function fixture(
           contexts: Object.fromEntries(
             contexts.map((id) => [
               id,
-              { readPaths: ["README.md"], timeoutMs: 1000 },
+              {
+                readScopes: [{ kind: "file", path: "README.md" }],
+                timeoutMs: 1000,
+              },
             ])
           ),
         },

@@ -63,6 +63,7 @@ export const phaseBState = new StateSchema({
   selectedWorkItemIds: z.array(z.string()).optional(),
   // A record of held work, with no automatic resumption.
   deferredDetailedPlanningIds: z.array(z.string()).optional(),
+  detailedPlanningBlockedReason: z.string().optional(),
   pendingPlanningIds: z.array(z.string()).optional(),
   planningResults: z
     .array(

@@ -25,13 +25,18 @@ export {
   registerAssignmentPlan,
 } from "./records/assignment-plans/assignment-plan-records.js";
 
-export { AssignmentExecutionError } from "./model/assignment-execution.js";
+export {
+  AssignmentExecutionError,
+  assignmentExecutionRequestSchema,
+  authorizedAssignmentExecutionSchema,
+  type AssignmentExecutionRequest,
+  type AuthorizedAssignmentExecution,
+} from "./model/assignment-execution.js";
 export {
   reserveAssignmentExecution,
   claimAssignmentExecution,
 } from "./authorization/features/assignment-execution/flow/authorize-assignment-execution.js";
 export {
-  recordAssignmentResult,
   recordAssignmentFailure,
   getAssignmentExecutionResults,
   getWorkerAssignmentPlanningContext,

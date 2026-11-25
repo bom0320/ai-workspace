@@ -1,11 +1,7 @@
-import {
-  agentDecisionSchema,
-  loadSnapshotFiles,
-  validateDecisionEvidence,
-} from "@/application/decision/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   resolveAssignmentExecution,
+  bindAssignmentReadExecution,
   resolvePredecessorResults,
 } from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
 import { resolveApprovedDecision } from "../../approval/features/direction-review/flow/approved-decision.js";
@@ -17,56 +13,6 @@ import {
 import { withGovernanceLedger } from "../governance-transaction.js";
 import { resolvePreparedAssignmentPlan } from "../assignment-plans/assignment-plan-records.js";
 import type { Handoff } from "../assignment-plans/resolve-assignment-context.js";
-
-export function recordAssignmentResult(
-  handoff: Handoff,
-  planId: string,
-  id: string,
-  input: unknown
-) {
-  return withGovernanceLedger((ledger, save) => {
-    const { entry } = resolvePreparedAssignmentPlan(ledger, handoff, planId);
-    const record = entry.assignmentExecutions?.find(
-      (value) => value.id === id && value.request.planId === planId
-    );
-    if (!record?.claimedAt || record.result || record.failure)
-      throw new AssignmentExecutionError("handoff");
-    const context = resolveAssignmentExecution(ledger, handoff, record.request);
-    if (
-      record.binding !== context.binding ||
-      record.delegationId !== context.delegation.id
-    )
-      throw new AssignmentExecutionError("handoff");
-    if (Date.now() >= Date.parse(record.claimedAt) + record.request.timeoutMs)
-      throw new AssignmentExecutionError("validation");
-    const decision = agentDecisionSchema.parse(input);
-    if (
-      decision.specialistId !== context.specialist.id ||
-      !decision.evidence.length
-    )
-      throw new AssignmentExecutionError("validation");
-    try {
-      validateDecisionEvidence(
-        {
-          goal: context.goal,
-          repositoryCommitSha: context.snapshot.commitSha,
-          files: loadSnapshotFiles(context.snapshot, record.request.readPaths),
-        },
-        decision
-      );
-    } catch {
-      throw new AssignmentExecutionError("validation");
-    }
-    if (Buffer.byteLength(JSON.stringify(decision)) > 64 * 1024)
-      throw new AssignmentExecutionError("validation");
-    record.result = {
-      decision,
-      digest: governanceDigest({ id, binding: record.binding, decision }),
-    };
-    save();
-    return { invocationId: id, resultDigest: record.result.digest };
-  });
-}
 
 // Terminal failure history uses the historical approval and reservation. It must
 // still be writable when a current policy or Snapshot check caused the failure.
@@ -154,10 +100,16 @@ export function getAssignmentExecutionResults(
         ];
       }
       if (!record.result) return [];
-      const { assignment, binding } = resolveAssignmentExecution(
+      const context = resolveAssignmentExecution(
         ledger,
         handoff,
         record.request
+      );
+      const { assignment } = context;
+      const { binding } = bindAssignmentReadExecution(
+        context,
+        record.request,
+        record.id
       );
       if (binding !== record.binding)
         throw new AssignmentExecutionError("handoff");

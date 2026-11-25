@@ -340,17 +340,13 @@ it.each([
     selected: [client, docs],
   },
 ])(
-  "plans explicitly selected items for $name in selection order",
+  "preserves selection for $name and defers all planning without Claim",
   async ({ items, selected }) => {
     const agent = vi
       .fn()
       .mockResolvedValue({ type: "propose", workItems: items });
     const selectWorkItemIds = vi.fn(() => selected.map(({ id }) => id));
     const planner = vi.fn();
-    vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
-      completedPlan(phaseB.workItem.id)
-    );
-
     const result = await createPhaseBGraph({
       agent,
       planning: {
@@ -358,30 +354,21 @@ it.each([
         selectWorkItemIds,
       },
     }).invoke(input);
-
     expect(selectWorkItemIds).toHaveBeenCalledExactlyOnceWith(items);
-    expect(vi.mocked(executeWorkItemPlanning).mock.calls).toEqual(
-      selected.map((workItem) => [
-        {
-          ...planningOptions,
-          planner,
-          executionCeiling: handoff.executionDelegation.grant,
-          phaseB: { ...decompositionInput, workItem },
-        },
-      ])
-    );
     expect(result.workDecompositionResult).toEqual({
       ...decompositionInput,
       status: "proposed",
       workItems: items,
     });
-    expect(result.planningResults).toEqual(
-      selected.map(({ id }) => ({
-        workItemId: id,
-        result: completedPlan(id),
-      }))
+    expect(result.deferredDetailedPlanningIds).toEqual(
+      selected.map(({ id }) => id)
     );
-    expect(result.pendingPlanningIds).toEqual([]);
+    expect(result.detailedPlanningBlockedReason).toContain(
+      "claimed Assignment Read"
+    );
+    expect(result.planningResults).toEqual([]);
+    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+    expect(planner).not.toHaveBeenCalled();
   }
 );
 
@@ -402,7 +389,7 @@ it("validates all selected IDs before planning any Work Item", async () => {
   expect(executeWorkItemPlanning).not.toHaveBeenCalled();
 });
 
-it("plans each selected ID once", async () => {
+it("defers each selected ID once", async () => {
   const agent = vi
     .fn()
     .mockResolvedValue({ type: "propose", workItems: [feedback, docs] });
@@ -416,49 +403,13 @@ it("plans each selected ID once", async () => {
       selectWorkItemIds: () => [feedback.id, feedback.id],
     },
   }).invoke(input);
-  expect(executeWorkItemPlanning).toHaveBeenCalledOnce();
-  expect(result.planningResults?.map(({ workItemId }) => workItemId)).toEqual([
-    feedback.id,
-  ]);
-});
-
-it("keeps prior results and stops at the first failed PlanningResult", async () => {
-  const agent = vi
-    .fn()
-    .mockResolvedValue({ type: "propose", workItems: [api, client, docs] });
-  const failed = {
-    status: "failed",
-    reason: "Planning round limit reached.",
-    rounds: 2,
-    state: planningState,
-  } satisfies PlanningResult;
-  vi.mocked(executeWorkItemPlanning)
-    .mockResolvedValueOnce(completedPlan(api.id))
-    .mockResolvedValueOnce(failed);
-  const result = await createPhaseBGraph({
-    agent,
-    execution: {
-      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
-    },
-    planning: {
-      detailed: planningOptions,
-      selectWorkItemIds: () => [api.id, client.id, docs.id],
-    },
-  }).invoke(input);
-  expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
-  expect(result.planningResults).toEqual([
-    {
-      workItemId: api.id,
-      result: completedPlan(api.id),
-    },
-    { workItemId: client.id, result: failed },
-  ]);
-  expect(executeWorkItem).not.toHaveBeenCalled();
-  expect(result.executionPreparationResult?.status).toBe("blocked");
+  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+  expect(result.deferredDetailedPlanningIds).toEqual([feedback.id]);
+  expect(result.planningResults).toEqual([]);
 });
 
 it.each(["docs", "missing", "client"])(
-  "denies direct execution for %s and preserves all completed drafts",
+  "denies direct execution for %s and leaves Detailed Planning deferred",
   async (workItemId) => {
     const items = [api, client, docs];
     vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
@@ -472,9 +423,11 @@ it.each(["docs", "missing", "client"])(
         selectWorkItemIds: () => items.map(({ id }) => id),
       },
     }).invoke(input);
-    expect(result.planningResults).toEqual(
-      items.map(({ id }) => ({ workItemId: id, result: completedPlan(id) }))
+    expect(result.planningResults).toEqual([]);
+    expect(result.deferredDetailedPlanningIds).toEqual(
+      items.map(({ id }) => id)
     );
+    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
     expect(result.executionPreparationResult).toMatchObject({
@@ -527,7 +480,7 @@ it("skips Planning for an empty selection", async () => {
   }).invoke(input);
   expect(executeWorkItemPlanning).not.toHaveBeenCalled();
   expect(result.selectedWorkItemIds).toEqual([]);
-  expect(result.pendingPlanningIds).toEqual([]);
+  expect(result.pendingPlanningIds).toBeUndefined();
   expect(result.planningResults).toEqual([]);
 });
 
@@ -552,13 +505,9 @@ it("takes the selection and prior results only from the current Graph run", asyn
   };
   const first = await graph.invoke(suppliedState);
   const second = await graph.invoke(input);
-  expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
-  expect(first.planningResults).toEqual([
-    {
-      workItemId: feedback.id,
-      result: completedPlan(feedback.id),
-    },
-  ]);
+  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+  expect(first.planningResults).toEqual([]);
+  expect(first.deferredDetailedPlanningIds).toEqual([feedback.id]);
   expect(second).toEqual(first);
 });
 

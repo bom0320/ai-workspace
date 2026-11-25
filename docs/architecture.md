@@ -268,7 +268,7 @@ Phase B에서는 승인된 방향을 개발 업무로 분해하고 여러 전문
 
 | 항목 | 확정된 결정 | 현재 구현 상태 |
 | --- | --- | --- |
-| Workflow Runtime | LangGraph.js 채택 | Phase A가 Staffing / Approval을 직접 조정하고 명시적 실행 대상에서 Specialist Decisions / Comparison, Synthesis 및 Human Direction Governance를 연결. Staffing CLI는 Phase A의 staffing-approval을 사용. Phase B Graph는 Work Decomposition, 선택적 Detailed Planning 초안과 Assignment Plan 준비를 지원하며 Organization Graph는 미구현 |
+| Workflow Runtime | LangGraph.js 채택 | Phase A가 Staffing / Approval을 직접 조정하고 명시적 실행 대상에서 Specialist Decisions / Comparison, Synthesis 및 Human Direction Governance를 연결. Staffing CLI는 Phase A의 staffing-approval을 사용. Phase B Graph는 Work Decomposition, Assignment Plan 준비와 상세 계획 보류 상태를 지원하며 Organization Graph는 미구현 |
 | Agent Execution Runtime | 기존 Codex 기반 실행 우선 재사용 | v0–v3 integration 및 v4 CEO Staffing Adapter 구현; 전체 조직 실행 연결은 Planned |
 | Domain / Governance | AI Workspace Harness 소유 | 기존 의미를 보존하고 v4 정책·계약은 단계적으로 설계 |
 | Framework Integration / Verification | v4 구현 단계에서 통합·E2E 검증 | 별도 채택 평가 checkpoint / 선행 Runtime Spike 없음 |
@@ -383,7 +383,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |
 | Human — Final Authority | Goal / Constraints, Staffing Approval, Governance Approve / Override / Reject, Task Approval, Change Review, Apply / Commit / Push | 각 승인은 독립된 대상과 의미를 가지며 다른 권한의 포괄 승인이 아님 |
 
-Phase B Work Item은 목표·산출물·의존성과 선택적 근거·추천 역할을 정의한다. Specialist의 업무 책임과 접근 상한은 Assignment에 둔다. Phase B는 Specialist 중심 Assignment Plan을 등록하며 직접 Work Item 실행을 차단한다. 기존 읽기 전용 협업과 지연 상세 계획의 기반은 보존하며 새 Plan의 실행은 Phase-scoped Authorization까지 차단한다. Specialist가 구현을 소유하는 Phase B 목표는 기존 Planning·Execution Application과 Codex Worker를 재사용하며, Capability와 이번 실행의 Authority를 구분한다. 변경 근거와 완료 기준은 [Phase B Step 5.3](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)에 둔다.
+Phase B Work Item은 목표·산출물·의존성과 선택적 근거·추천 역할을 정의한다. Specialist의 업무 책임과 접근 상한은 Assignment에 둔다. Phase B는 Specialist 중심 Assignment Plan을 등록하며 직접 Work Item 실행을 차단한다. 기존 읽기 전용 협업과 지연 상세 계획의 기반은 보존하며 개별 Read Reservation·Claim은 Governance에서 검증한다. 파일 Context 접근과 새 Plan의 실행은 후속 접근 경계까지 차단한다. Specialist가 구현을 소유하는 Phase B 목표는 기존 Planning·Execution Application과 Codex Worker를 재사용하며, Capability와 이번 실행의 Authority를 구분한다. 변경 근거와 완료 기준은 [Phase B Step 5.3](workflow-architecture.md#phase-b-step-53--multi-specialist-capability--governed-execution)에 둔다.
 
 ### 통합 시 지켜야 할 invariant
 

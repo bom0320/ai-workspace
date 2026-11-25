@@ -7,6 +7,8 @@ import {
 } from "../../../../approval/features/system-policy/model/execution-system-policy.js";
 import {
   AssignmentExecutionError,
+  assignmentDelegationBinding,
+  authorizedAssignmentReadExecutionSchema,
   type AssignmentExecutionRequest,
 } from "../../../../model/assignment-execution.js";
 import type { GovernanceLedger } from "../../../../model/ledger.js";
@@ -35,32 +37,24 @@ function resolveAssignmentBinding(
   const assignment = plan.assignments.find(
     ({ id }) => id === request.assignmentId
   );
-  if (assignment?.repositoryAccessCeiling !== "read")
+  if (
+    !assignment ||
+    (request.access === "write" &&
+      assignment.repositoryAccessCeiling !== "write")
+  )
     throw new AssignmentExecutionError("authority");
+  if (request.access === "write")
+    throw new AssignmentExecutionError("unsupported");
   const { specialistId } = assignment;
   const specialist = context.specialistSources.find(
-    ({ definition }) => definition.id === specialistId
-  )?.definition;
-  const approvedRegistration = context.approvedSources.find(
     ({ definition }) => definition.id === specialistId
   )?.definition;
   const workItem = context.decomposition.workItems.find(
     ({ id }) => id === assignment.workItemId
   );
-  if (
-    !specialist ||
-    !approvedRegistration ||
-    !workItem ||
-    !context.approvedDirection?.trim()
-  )
+  if (!specialist || !workItem || !context.approvedDirection?.trim())
     throw new AssignmentExecutionError("authority");
-  const requested = {
-    readScopes: request.readPaths.map((path) => ({
-      kind: "file" as const,
-      path,
-    })),
-    writeScopes: [],
-  };
+  const requested = { readScopes: request.readScopes, writeScopes: [] };
   if (
     !isExecutionScopeContained(requested, executionScopes(delegation.grant)) ||
     !isExecutionScopeContained(requested, executionScopes(policy)) ||
@@ -75,25 +69,6 @@ function resolveAssignmentBinding(
     assignment.dependsOn,
     verified
   );
-  const binding = governanceDigest({
-    request,
-    delegation,
-    snapshot,
-    assignment,
-    specialist: approvedRegistration,
-    predecessors,
-    ...(workItemPredecessors.length && {
-      workItemPredecessors: workItemPredecessors.map(
-        ({ workItemId, results }) => ({
-          workItemId,
-          results: results.map(({ invocationId, digest }) => ({
-            invocationId,
-            digest,
-          })),
-        })
-      ),
-    }),
-  });
   return {
     ...context,
     assignment,
@@ -101,8 +76,26 @@ function resolveAssignmentBinding(
     specialist,
     predecessors,
     workItemPredecessors,
-    binding,
   };
+}
+
+export function bindAssignmentReadExecution(
+  context: ReturnType<typeof resolveAssignmentExecution>,
+  request: Extract<AssignmentExecutionRequest, { access: "read" }>,
+  id: string
+) {
+  const execution = authorizedAssignmentReadExecutionSchema.parse({
+    ...request,
+    id,
+    specialistId: context.specialist.id,
+    authority: { repositoryAccess: "read", shellExecution: false },
+    snapshot: context.snapshot,
+    delegationId: context.delegation.id,
+    delegationBinding: assignmentDelegationBinding(context.delegation),
+    policyBinding: context.policyBinding,
+    expiresAt: context.delegation.grant.expiresAt,
+  });
+  return { execution, binding: governanceDigest({ request, execution }) };
 }
 
 type ExecutionRecord = NonNullable<
@@ -124,10 +117,15 @@ function verifiedAssignmentResult(
     throw new AssignmentExecutionError("dependency");
   const { result } = record;
   if (!verified.has(record.id)) {
-    const { binding } = resolveAssignmentBinding(
+    const resolved = resolveAssignmentBinding(
       context,
       record.request,
       verified
+    );
+    const { binding } = bindAssignmentReadExecution(
+      resolved,
+      record.request,
+      record.id
     );
     if (
       binding !== record.binding ||

@@ -1,82 +1,27 @@
-import { ZodError } from "zod";
-import { runCollaborativeSpecialist } from "@/application/decision/index.js";
-import {
+import type {
   AssignmentExecutionError,
+  AssignmentExecutionRequest,
   reserveAssignmentExecution,
-  claimAssignmentExecution,
-  recordAssignmentResult,
-  recordAssignmentFailure,
 } from "@/application/governance/index.js";
-import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
-import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
 
 type Handoff = Parameters<typeof reserveAssignmentExecution>[0];
+type Failure = AssignmentExecutionError["failure"];
 
-export async function executeCollaborativeAssignment(
-  handoff: Handoff,
-  request: {
-    planId: string;
-    assignmentId: string;
-    readPaths: string[];
-    timeoutMs: number;
-  }
-) {
-  let stage: "authority" | "claim" | "execution" | "handoff" = "authority";
-  let id: string | undefined;
-  try {
-    if (
-      checkReadOnlyRuntime({
-        repositoryPath: handoff.executionDelegation.repositoryRoot,
-        timeoutMs: request.timeoutMs,
-      }).status === "blocked"
-    )
-      return { status: "denied" as const, failure: "runtime" as const };
-    id = reserveAssignmentExecution(handoff, request);
-    stage = "claim";
-    const claimed = claimAssignmentExecution(handoff, request.planId, id);
-    const timeoutMs = Math.min(
-      claimed.timeoutMs,
-      claimed.expiresAt - Date.now()
-    );
-    if (timeoutMs < 1) throw new AssignmentExecutionError("claim");
-    stage = "execution";
-    const decision = await runCollaborativeSpecialist(
-      claimed.specialist,
-      claimed.context,
-      // Phase B does not yet issue runtime authority. The closed gate in
-      // Governance prevents reaching this runtime with a missing grant.
-      undefined,
-      { timeoutMs }
-    );
-    stage = "handoff";
-    return {
-      status: "completed" as const,
-      ...recordAssignmentResult(handoff, request.planId, id, decision),
-    };
-  } catch (error) {
-    const failure =
-      error instanceof AssignmentExecutionError
-        ? error.failure
-        : error instanceof RepositorySnapshotMismatchError
-          ? "snapshot"
-          : stage !== "authority" &&
-              (error instanceof ZodError ||
-                (error instanceof Error && error.cause instanceof SyntaxError))
-            ? "validation"
-            : stage;
-    if (!id) return { status: "denied" as const, failure };
-    let failureRecorded = false;
-    try {
-      recordAssignmentFailure(handoff, request.planId, id, failure);
-      failureRecorded = true;
-    } catch {
-      // The original rejection remains observable even if persistence fails.
+type CollaborativeAssignmentOutcome =
+  | { status: "denied"; failure: Failure }
+  | {
+      status: "failed";
+      failure: Failure;
+      invocationId: string;
+      failureRecorded: boolean;
     }
-    return {
-      status: "failed" as const,
-      failure,
-      invocationId: id,
-      failureRecorded,
-    };
-  }
+  | { status: "completed"; invocationId: string; resultDigest: string };
+
+// Governance issues metadata-only permits. The execution entry point remains
+// closed until an authorized Context provider can consume a Claim.
+export async function executeCollaborativeAssignment(
+  _handoff: Handoff,
+  _request: Extract<AssignmentExecutionRequest, { access: "read" }>
+): Promise<CollaborativeAssignmentOutcome> {
+  return { status: "denied", failure: "unsupported" };
 }

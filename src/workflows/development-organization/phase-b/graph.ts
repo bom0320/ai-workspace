@@ -4,7 +4,6 @@ import type { RunWorkDecompositionOptions } from "@/application/work-decompositi
 import type { AssignmentPlanAgent } from "@/application/planning/index.js";
 import { createPrepareAssignmentsNode } from "./features/planning/nodes/prepare-assignments.js";
 import { createInitializePlanningNode } from "./features/planning/nodes/initialize-planning.js";
-import { createPlanWorkItemNode } from "./features/planning/nodes/plan-work-item.js";
 import {
   createSelectWorkItemsNode,
   type SelectWorkItemIds,
@@ -50,8 +49,6 @@ export function createPhaseBGraph({
   const { assignment: assignmentExecution, workItem: workItemExecution } =
     execution ?? {};
 
-  const planWorkItem = createPlanWorkItemNode(detailed, "work-item-draft");
-
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
     .addNode(
@@ -59,10 +56,7 @@ export function createPhaseBGraph({
       createRunWorkDecompositionNode(decompositionOptions)
     )
     .addNode("select-work-items", createSelectWorkItemsNode(selectWorkItemIds))
-    .addNode(
-      "initialize-planning",
-      createInitializePlanningNode(!assignment && !!detailed)
-    )
+    .addNode("initialize-planning", createInitializePlanningNode(false))
     .addNode(
       "prepare-assignments",
       createPrepareAssignmentsNode(
@@ -72,7 +66,12 @@ export function createPhaseBGraph({
         workItemExecution?.workItemId
       )
     )
-    .addNode("plan-work-item", (state) => planWorkItem(state))
+    .addNode("block-detailed-planning", (state) => ({
+      deferredDetailedPlanningIds: state.selectedWorkItemIds ?? [],
+      detailedPlanningBlockedReason:
+        "Phase B Detailed Planning requires a claimed Assignment Read execution and an authorized Context provider.",
+      ...createBlockedWorkItemExecutionNode(workItemExecution)(),
+    }))
     .addNode(
       "block-work-item-execution",
       createBlockedWorkItemExecutionNode(workItemExecution)
@@ -100,23 +99,20 @@ export function createPhaseBGraph({
       if (!state.selectedWorkItemIds?.length)
         return workItemExecution ? "block-work-item-execution" : END;
       if (assignment) return "prepare-assignments";
-      return detailed ? "plan-work-item" : END;
+      return detailed
+        ? "block-detailed-planning"
+        : workItemExecution
+          ? "block-work-item-execution"
+          : END;
     },
-    ["prepare-assignments", "plan-work-item", "block-work-item-execution", END]
+    [
+      "prepare-assignments",
+      "block-detailed-planning",
+      "block-work-item-execution",
+      END,
+    ]
   );
-  graph.addConditionalEdges(
-    "plan-work-item",
-    (state) => {
-      const latest = state.planningResults?.at(-1);
-      if (latest?.result.status !== "completed")
-        return workItemExecution ? "block-work-item-execution" : END;
-      if (state.pendingPlanningIds?.length) return "plan-work-item";
-      return workItemExecution && !assignment
-        ? "block-work-item-execution"
-        : END;
-    },
-    ["plan-work-item", "block-work-item-execution", END]
-  );
+  graph.addEdge("block-detailed-planning", END);
   graph.addEdge("prepare-assignments", END);
   graph.addEdge("block-work-item-execution", END);
 

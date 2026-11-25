@@ -1,4 +1,7 @@
-import { assignmentExecutionRecordSchema } from "./assignment-execution.js";
+import {
+  assignmentDelegationBinding,
+  assignmentExecutionRecordSchema,
+} from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
@@ -22,7 +25,11 @@ import { approvalRecordSchema } from "../approval/features/proposal-management/m
 import { humanConfirmationEvidenceSchema as confirmation } from "../approval/shared/model/confirmation.js";
 import { executionDelegationSchema } from "../approval/features/execution-delegation/model/execution-delegation.js";
 import { hasValidExecutionDelegationRecords } from "../approval/features/execution-delegation/validation/validate-execution-delegation-records.js";
-import { recordedExecutionPolicySchema } from "../approval/features/system-policy/model/execution-system-policy.js";
+import {
+  executionScopes,
+  isExecutionScopeContained,
+  recordedExecutionPolicySchema,
+} from "../approval/features/system-policy/model/execution-system-policy.js";
 import { hasValidExecutionPolicyRecords } from "../approval/features/system-policy/flow/validation/execution-policy-configuration.js";
 import {
   executionDecompositionSchema,
@@ -135,6 +142,7 @@ export const governanceLedgerSchema = z
         planIds.add(id);
       }
       const assignmentKeys = new Set<string>();
+      const workItemPlans = new Map<string, string>();
       const executionCounts = new Map<string, number>();
       for (const reservation of entry.executionReservations ?? [])
         executionCounts.set(
@@ -154,24 +162,79 @@ export const governanceLedgerSchema = z
         const delegation = entry.executionDelegations?.find(
           ({ id }) => id === record.delegationId
         );
+        const policyRecord = entry.executionPolicies?.find(
+          ({ version }) => version === delegation?.grant.policyVersion
+        );
+        const policy = policyRecord?.policy;
+        const { execution, request } = record;
         const count = (executionCounts.get(record.delegationId) ?? 0) + 1;
         const key = JSON.stringify([
-          record.request.planId,
-          record.request.assignmentId,
+          request.planId,
+          request.assignmentId,
+          request.access,
         ]);
+        const workKey = JSON.stringify([
+          record.delegationId,
+          assignment?.workItemId,
+        ]);
+        const competing = workItemPlans.get(workKey);
+        const scope = { readScopes: request.readScopes, writeScopes: [] };
         if (
           executionIds.has(record.id) ||
           assignmentKeys.has(key) ||
+          (competing !== undefined && competing !== request.planId) ||
+          entry.executionReservations?.some(
+            ({ sourceId, delegationId }) =>
+              delegationId === record.delegationId &&
+              entry.workItemExecutionSources?.some(
+                (source) =>
+                  source.id === sourceId &&
+                  source.workItemId === assignment?.workItemId
+              )
+          ) ||
           !delegation ||
+          !policy ||
           !decomposition ||
+          !plan ||
+          !assignment ||
           delegation.approvedDecisionId !== decomposition.approvedDecisionId ||
-          assignment?.repositoryAccessCeiling !== "read" ||
-          count > delegation.grant.budget.maxExecutions ||
+          execution.specialistId !== assignment.specialistId ||
+          execution.id !== record.id ||
+          execution.planId !== request.planId ||
+          execution.assignmentId !== request.assignmentId ||
+          execution.timeoutMs !== request.timeoutMs ||
+          execution.delegationId !== record.delegationId ||
+          execution.delegationBinding !==
+            assignmentDelegationBinding(delegation) ||
+          execution.policyBinding !== policyRecord.binding ||
+          execution.expiresAt !== delegation.grant.expiresAt ||
+          governanceDigest(execution.snapshot) !==
+            governanceDigest(plan.snapshot) ||
+          governanceDigest(execution.readScopes) !==
+            governanceDigest(request.readScopes) ||
+          record.binding !== governanceDigest({ request, execution }) ||
+          !isExecutionScopeContained(scope, executionScopes(policy)) ||
+          !isExecutionScopeContained(
+            scope,
+            executionScopes(delegation.grant)
+          ) ||
+          request.timeoutMs >
+            Math.min(
+              policy.budget.maxTimeoutMs,
+              delegation.grant.budget.maxTimeoutMs
+            ) ||
+          count >
+            Math.min(
+              policy.budget.maxExecutions,
+              delegation.grant.budget.maxExecutions
+            ) ||
           record.reservedAt < delegation.issuedAt ||
-          record.reservedAt >= delegation.grant.expiresAt ||
+          Date.parse(record.reservedAt) + request.timeoutMs >
+            Date.parse(execution.expiresAt) ||
           (record.claimedAt &&
             (record.claimedAt < record.reservedAt ||
-              record.claimedAt >= delegation.grant.expiresAt)) ||
+              Date.parse(record.claimedAt) + request.timeoutMs >
+                Date.parse(execution.expiresAt))) ||
           (record.failure &&
             (record.result ||
               record.failure.digest !==
@@ -196,6 +259,7 @@ export const governanceLedgerSchema = z
           });
         executionIds.add(record.id);
         assignmentKeys.add(key);
+        workItemPlans.set(workKey, request.planId);
         executionCounts.set(record.delegationId, count);
       }
       if (!hasValidExecutionReservations(entry, key, executionIds))

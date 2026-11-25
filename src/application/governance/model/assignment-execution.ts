@@ -1,22 +1,90 @@
 import { z } from "zod";
 import { agentDecisionSchema } from "@/application/decision/index.js";
-import { executionBoundsSchema } from "../approval/features/system-policy/model/execution-system-policy.js";
+import { governanceDigest } from "@/services/governance-records/index.js";
+import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
+import { specialistAuthoritySchema } from "@/contracts/specialist/authority.js";
+import {
+  executionBoundsSchema,
+  scopedExecutionBoundsSchema,
+} from "../approval/features/system-policy/model/execution-system-policy.js";
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().min(1);
-export const assignmentExecutionRequestSchema = executionBoundsSchema
-  .pick({ readPaths: true })
-  .extend({
-    planId: digest,
-    assignmentId: id,
-    timeoutMs: executionBoundsSchema.shape.budget.shape.maxTimeoutMs,
-  })
-  .strict()
-  .refine(({ readPaths }) => readPaths.length > 0);
+const requestFields = {
+  planId: digest,
+  assignmentId: id,
+  timeoutMs: executionBoundsSchema.shape.budget.shape.maxTimeoutMs,
+};
 
+const readScopes = scopedExecutionBoundsSchema.shape.readScopes.refine(
+  (scopes) => scopes.length > 0,
+  "At least one Repository read scope is required."
+);
+export const assignmentReadRequestSchema = z.strictObject({
+  ...requestFields,
+  access: z.literal("read"),
+  readScopes,
+});
+export const assignmentWriteRequestSchema = z.strictObject({
+  ...requestFields,
+  access: z.literal("write"),
+  taskContractBinding: digest,
+  readPaths: executionBoundsSchema.shape.readPaths,
+});
+export const assignmentExecutionRequestSchema = z.discriminatedUnion("access", [
+  assignmentReadRequestSchema,
+  assignmentWriteRequestSchema,
+]);
 export type AssignmentExecutionRequest = z.infer<
   typeof assignmentExecutionRequestSchema
 >;
+
+const authorizationFields = {
+  ...requestFields,
+  id,
+  specialistId: id,
+  snapshot: repositorySnapshotSchema,
+  delegationId: id,
+  delegationBinding: digest,
+  policyBinding: digest,
+  expiresAt: z.iso.datetime(),
+};
+export const authorizedAssignmentReadExecutionSchema = z.strictObject({
+  ...authorizationFields,
+  access: z.literal("read"),
+  readScopes,
+  authority: specialistAuthoritySchema.extend({
+    repositoryAccess: z.literal("read"),
+    shellExecution: z.literal(false),
+  }),
+});
+export const authorizedAssignmentExecutionSchema = z.discriminatedUnion(
+  "access",
+  [
+    authorizedAssignmentReadExecutionSchema,
+    assignmentWriteRequestSchema.extend({
+      ...authorizationFields,
+      authority: specialistAuthoritySchema.extend({
+        repositoryAccess: z.literal("write"),
+      }),
+      writePaths: executionBoundsSchema.shape.writePaths.refine(
+        (paths) => paths.length > 0
+      ),
+      verification: executionBoundsSchema.shape.shellCommands,
+      workerMode: executionBoundsSchema.shape.workerMode.unwrap(),
+    }),
+  ]
+);
+export type AuthorizedAssignmentExecution = z.infer<
+  typeof authorizedAssignmentExecutionSchema
+>;
+
+// Revocation and supersession change status without rewriting historical grants.
+export function assignmentDelegationBinding<T extends { status: string }>(
+  delegation: T
+) {
+  return governanceDigest({ ...delegation, status: "active" });
+}
 
 export const assignmentExecutionFailureStageSchema = z.enum([
   "authority",
@@ -44,7 +112,8 @@ export const assignmentExecutionRecordSchema = z
   .object({
     id,
     delegationId: id,
-    request: assignmentExecutionRequestSchema,
+    request: assignmentReadRequestSchema,
+    execution: authorizedAssignmentReadExecutionSchema,
     binding: digest,
     reservedAt: z.iso.datetime(),
     claimedAt: z.iso.datetime().optional(),

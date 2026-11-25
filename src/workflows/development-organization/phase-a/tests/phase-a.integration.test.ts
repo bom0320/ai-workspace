@@ -2040,7 +2040,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         assignmentWithDetailed: mode !== "assignment-only",
         collaborativeExecution: {
           contexts: {
-            implement: { readPaths: ["README.md"], timeoutMs: 5000 },
+            implement: {
+              readScopes: [{ kind: "file", path: "README.md" }],
+              timeoutMs: 5000,
+            },
           },
         },
         execution: {
@@ -2073,17 +2076,147 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         status: "denied",
         failure: "unsupported",
       });
+      const readRequest = {
+        planId: prepared.plan.id,
+        access: "read",
+        readScopes: [{ kind: "file", path: "README.md" }],
+        timeoutMs: 5000,
+      };
+      const [reviewAssignment] = prepared.plan.assignments;
+      const request = { ...readRequest, assignmentId: reviewAssignment.id };
       expect(() =>
         governance.reserveAssignmentExecution(handoff, {
-          planId: prepared.plan.id,
-          assignmentId: "implement",
-          readPaths: ["README.md"],
+          ...request,
+          specialistId: "forged",
+        })
+      ).toThrow();
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          ...request,
+          readScopes: [{ kind: "file", path: "docs-extra/other.md" }],
+        })
+      ).toThrow("authority");
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          access: "write",
+          planId: request.planId,
+          assignmentId: request.assignmentId,
           timeoutMs: 5000,
+          readPaths: [],
+          taskContractBinding: "a".repeat(64),
+        })
+      ).toThrow("authority");
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          access: "write",
+          planId: request.planId,
+          assignmentId: "implement",
+          timeoutMs: 5000,
+          readPaths: [],
+          taskContractBinding: "a".repeat(64),
         })
       ).toThrow("unsupported");
+      const ledgerPath = join(home, ".ai-workspace-governance", "records.json");
+      const before = readFileSync(ledgerPath, "utf8");
+      vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
+        throw new Error("disk failure");
+      });
       expect(() =>
-        governance.claimAssignmentExecution(handoff, prepared.plan.id, "unused")
-      ).toThrow("unsupported");
+        governance.reserveAssignmentExecution(handoff, request)
+      ).toThrow("disk failure");
+      expect(readFileSync(ledgerPath, "utf8")).toBe(before);
+
+      const permit = governance.reserveAssignmentExecution(
+        handoff,
+        mode === "independent"
+          ? { ...readRequest, assignmentId: "implement" }
+          : request
+      );
+      expect(permit).toMatchObject({
+        access: "read",
+        authority: { repositoryAccess: "read", shellExecution: false },
+        specialistId: reviewAssignment.specialistId,
+      });
+      expect(permit).not.toHaveProperty("files");
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          ...readRequest,
+          assignmentId: permit.assignmentId,
+        })
+      ).toThrow("duplicate");
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          ...readRequest,
+          assignmentId: prepared.plan.assignments[1].id,
+        })
+      ).toThrow("budget");
+      expect(() =>
+        governance.claimAssignmentExecution(handoff, {
+          ...permit,
+          specialistId: "forged",
+        })
+      ).toThrow("claim");
+      const competing = governance.registerAssignmentPlan(
+        handoff,
+        { status: "proposed", approvedDecisionId: decision.id, workItems },
+        prepared.plan.assignments.map((item) => ({
+          ...item,
+          objective: item.objective + " expanded",
+        })),
+        prepared.plan.selectedWorkItemIds
+      );
+      expect(competing.id).not.toBe(permit.planId);
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          ...request,
+          planId: competing.id,
+        })
+      ).toThrow("duplicate");
+      writeFileSync(join(root, "README.md"), "Snapshot drift");
+      expect(() =>
+        governance.claimAssignmentExecution(handoff, permit)
+      ).toThrow();
+      writeFileSync(join(root, "README.md"), "Original content\n");
+      const clock = vi
+        .spyOn(Date, "now")
+        .mockReturnValue(Date.parse(permit.expiresAt));
+      expect(() =>
+        governance.claimAssignmentExecution(handoff, permit)
+      ).toThrow();
+      clock.mockRestore();
+      if (mode === "dependent") {
+        configureExecutionPolicy(null);
+        expect(() =>
+          governance.claimAssignmentExecution(handoff, permit)
+        ).toThrow();
+        expect(
+          governance.getApprovedDecision(handoff.decision.id).decision
+        ).toEqual(handoff.decision);
+        return;
+      }
+      const validLedger = readFileSync(ledgerPath, "utf8");
+      withGovernanceRecords((raw, save) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        const record = Object.values(ledger.repositories)[0]
+          .assignmentExecutions![0];
+        record.execution.policyBinding = "0".repeat(64);
+        record.binding = governanceDigest({
+          request: record.request,
+          execution: record.execution,
+        });
+        save(ledger);
+      });
+      expect(() => governance.getApprovedDecision(handoff.decision.id)).toThrow(
+        "Invalid Assignment execution record"
+      );
+      writeFileSync(ledgerPath, validLedger);
+      expect(governance.claimAssignmentExecution(handoff, permit)).toEqual(
+        permit
+      );
+      expect(() =>
+        governance.claimAssignmentExecution(handoff, permit)
+      ).toThrow("claim");
       expect(
         withGovernanceRecords((raw) =>
           Object.values(
@@ -2142,8 +2275,39 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ...args
     );
     const target = args[3] ?? "README.md";
+    if (!planningResults?.length) {
+      const workItem = workItems[0];
+      const task = {
+        id: "legacy-fixture",
+        goalId: "goal",
+        objective: workItem.objective,
+        targetRepository: options.goal.targetRepository,
+        allowedPaths: [target],
+        forbiddenPaths: [],
+        constraints: options.goal.constraints ?? [],
+        acceptanceCriteria: ["Review"],
+        verification: args[2] ?? ["git diff --check"],
+      };
+      const executionSourceId = beginWorkItemExecutionSource(
+        { status: "proposed", approvedDecisionId: decision.id, workItems },
+        workItem,
+        root
+      )?.(task);
+      expect(executionSourceId).toBeDefined();
+      return [
+        {
+          approvedDecisionId: decision.id,
+          executionSourceId: executionSourceId!,
+          repositoryPath: root,
+          workItem,
+          task,
+          readPaths: [target],
+          timeoutMs: 5000,
+        },
+      ];
+    }
     expect(planningResults).toHaveLength(3);
-    return planningResults!.map(({ workItemId, result, executionSourceId }) => {
+    return planningResults.map(({ workItemId, result, executionSourceId }) => {
       if (result.status !== "completed")
         throw new Error(JSON.stringify(result));
       const workItem = workItems.find(({ id }) => id === workItemId)!;
@@ -2432,23 +2596,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   });
 
   it.each([false, true])(
-    "preserves Detailed Planning drafts without publishing execution sources (Fast Path %s)",
+    "blocks Detailed Planning without an Assignment Read Claim (Fast Path %s)",
     async (fastPath) => {
-      const { planningResults } = await planExecutionItems(
-        true,
-        1,
-        ["git diff --check"],
-        "README.md",
-        { fastPath }
-      );
-      expect(planningResults).toHaveLength(3);
-      for (const plan of planningResults!) {
-        expect(plan.result).toMatchObject({
-          status: "completed",
-          ...(fastPath && { rounds: 0 }),
+      const { planningResults, deferredDetailedPlanningIds } =
+        await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
+          fastPath,
         });
-        expect(plan.executionSourceId).toBeUndefined();
-      }
+      expect(planningResults).toEqual([]);
+      expect(deferredDetailedPlanningIds).toEqual(["first", "second", "third"]);
       withGovernanceRecords((raw) => {
         const ledger =
           raw as import("@/application/governance/model/ledger.js").GovernanceLedger;

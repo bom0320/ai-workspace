@@ -1,3 +1,4 @@
+import type { AssignmentExecutionRequest } from "@/application/governance/index.js";
 import { executeCollaborativeAssignment } from "@/application/execution/index.js";
 import {
   getPreparedAssignmentPlan,
@@ -7,7 +8,13 @@ import type { PhaseBHandoff } from "../../../../contracts/phase-handoff.js";
 
 export type CollaborativeExecutionOptions = {
   maxConcurrentRuns?: number;
-  contexts: Record<string, { readPaths: string[]; timeoutMs: number }>;
+  contexts: Record<
+    string,
+    Pick<
+      Extract<AssignmentExecutionRequest, { access: "read" }>,
+      "readScopes" | "timeoutMs"
+    >
+  >;
 };
 
 export async function executeAssignmentPlan(
@@ -142,7 +149,8 @@ export async function executeAssignmentPlan(
         executeCollaborativeAssignment(handoff, {
           planId,
           assignmentId: next.id,
-          readPaths: context.readPaths,
+          access: "read",
+          readScopes: context.readScopes,
           timeoutMs: context.timeoutMs,
         }).then((result) => ({
           kind: "execution",

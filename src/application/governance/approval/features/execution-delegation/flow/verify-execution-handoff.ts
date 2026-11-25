@@ -58,6 +58,7 @@ export function resolveExecutionHandoff(
     snapshot,
     delegation,
     policy: policy.policy,
+    policyBinding: policy.binding,
   };
 }
 

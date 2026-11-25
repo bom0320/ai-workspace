@@ -222,7 +222,7 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 **Step 5.3.1-R Work Item 책임.** Work Item은 승인 방향에서 도출한 목표·산출물·선행 관계 및 선택적인 분리 근거·추천 역할을 정의한다. CEO는 승인 방향, Human 제약 및 위임 상한을 고려해 업무와 완료 경계를 분해한다. Work Item에는 실행 유형이나 접근 상한이 없다. Assignment가 개별 Specialist의 목표·산출물·접근 상한을 정의하고, 별도의 Authorization이 실제 권한을 결정한다. Worker는 승인된 구현에 사용하는 내부 Runtime이다.
 
-이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. `planning.detailed`는 초안을 생성할 수 있으며 Graph에서 Execution Source를 발급하지 않는다. Assignment Plan에 대한 실행은 Step 5.3.2까지 차단한다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
+이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B `planning.detailed`는 승인된 Context 제공 경계가 준비될 때까지 보류하며 Graph에서 Execution Source를 발급하지 않는다. Assignment Plan에 대한 실행은 Step 5.3.2까지 차단한다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
 
 이전 `workType`을 포함한 Decomposition은 strict Ledger Schema에서 거부한다. Digest 재발급, 레코드 수정 또는 초기화는 수행하지 않는다. 같은 Ledger 파일이 호환되지 않는 기록을 포함하면 그 파일을 사용하는 다른 Governance 조회도 실패할 수 있다.
 
@@ -233,7 +233,7 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 `planningResults`를 한 번 초기화하고, Detailed Planning 단독 경로에만 초기 대기열을 구성한다.
 상세 계획 반복은 초기화 노드를 다시 거치지 않으며 기존 결과에 추가한다.
 `planning.assignment`만 설정하면 별도 노드가 검증된 Assignment Plan을 준비하고 종료한다.
-`planning.detailed`만 설정하면 기존 Planner를 호출해 초안을 기록한다. `execution.workItem` 요청은 차단 상태를 기록한다.
+`planning.detailed`만 설정하면 선택한 업무와 상세 계획 차단 사유를 기록하며 Planner를 호출하지 않는다. `execution.workItem` 요청은 차단 상태를 기록한다.
 
 **Step 5.3.1 계약 교체.** Assignment Planning은 선택된 Work Item과 승인된 Specialist 후보, 정책과 위임의 공통 접근 상한을 받는다. 각 Assignment는 `specialistId`와 `repositoryAccessCeiling`을 가진다. 선택한 모든 Work Item을 배정한다. 하나의 Work Item에 read만, write만, 또는 두 상한을 혼합해 배정할 수 있다. read/write는 업무 범위의 상한이며 실제 수정·Shell·Runtime 권한은 별도 승인에서 결정한다.
 
@@ -265,6 +265,12 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 **Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/staffing/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/decision/specialist/codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
 
 **5.3.2.1 Identity와 Authority 분리.** 공통 `SpecialistDefinition`에는 ID·역할·기본 전문 업무를 둔다. `SpecialistAuthority`는 정책과 개별 실행 계약이 사용하는 공통 권한 표현이다. Phase A의 정책 등록과 Invocation은 기존처럼 Identity와 읽기 전용 Authority를 함께 저장·검증한다. Claim 후에는 둘을 분리해 Decision Runtime에 전달하며 Runtime은 권한 누락, 쓰기 또는 Shell 허용을 거부한다. Phase B는 승인 당시의 평면 정책 등록 항목으로 기존 Staffing Binding을 재현한 뒤 Identity만 복원한다. 이 단계에서 Phase B 읽기·수정 권한 발급은 연결하지 않는다.
+
+**5.3.2.2 Assignment Authorization.** Governance는 엄격히 분리된 `access: "read"`와 `access: "write"` 요청을 받는다. 읽기는 `readScopes`를 정책과 위임의 읽기 범위에 각각 대조하고, 담당자는 저장된 Plan에서 복원한다. read·write 상한을 가진 Assignment 모두 동일한 읽기 정책을 적용한다. Write 요청은 `taskContractBinding`을 요구하며 실제 권한 발급은 신뢰된 TaskContract 계약을 연결할 때까지 차단한다.
+
+Read Reservation은 공통 SpecialistAuthority의 read·Shell 비활성화와 승인 Snapshot, 위임·정책 Binding, 범위·시간을 포함한 Permit을 저장하고 예산을 한 번 소비한다. 같은 Plan·Assignment·접근 종류의 중복 예약을 거부하며, 같은 위임의 동일 Work Item은 실행을 예약한 Plan에 고정된다. Claim은 제출된 Permit과 저장된 Digest, 현재 정책·위임·Snapshot 및 남은 시간을 검증하고 사용 시각을 한 번 기록한다. 과거 기록은 저장 당시 정책으로 검증한다. 신규 실행 레코드 형식과 호환되지 않는 기존 Assignment 실행 기록은 자동 변환하지 않는다.
+
+Permit과 Claim은 범위 메타데이터만 반환한다. 파일 조회·조사 라운드·상세 계획 Context와 Specialist Runtime은 5.3.2.3의 실제 접근 경계가 연결될 때까지 차단한다. Claim은 실행 성공이나 Assignment 완료를 뜻하지 않는다.
 
 **현재 재사용 기반.** Step 5.2.2의 읽기 전용 협업은 승인 방향과 선행 결과를 전달하며, 공유 동시성 한도에서 Specialist 실행과 Worker Assignment의 지연 상세 계획을 진행한다. 5.3.1은 Specialist와 접근 상한으로 Assignment를 표현하며 Worker Executor를 제거했다. 저장된 Plan은 Decomposition·Staffing Binding 및 Snapshot에 연결되고, 기존 Assignment Reservation·Claim과 성공 결과 기록은 후속 실행 계약을 위한 기반으로 남아 있다. Worker Assignment의 초안은 Plan·Assignment 식별자를 포함하지만 실행 권한을 부여하지 않는다. 기존 단일 Work Item 실행은 Codex Worktree, Scope 검사, 승인된 Verification, Evidence와 Artifact 보존을 제공한다. Assignment 수정 실행과 다중 Worktree 통합은 Planned다.
 

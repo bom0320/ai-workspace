@@ -1,10 +1,10 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { expect, it, vi } from "vitest";
-import { resolveExecutionHandoff } from "../../approval/features/execution-delegation/flow/verify-execution-handoff.js";
+import { resolveExecutionHandoff } from "../../approval/features/phase-handoff/verify-execution-handoff.js";
 import { prepareAssignmentContext } from "./prepare-assignment-context.js";
 
 vi.mock(
-  "../../approval/features/execution-delegation/flow/verify-execution-handoff.js",
+  "../../approval/features/phase-handoff/verify-execution-handoff.js",
   () => ({
     resolveExecutionHandoff: vi.fn(),
   })

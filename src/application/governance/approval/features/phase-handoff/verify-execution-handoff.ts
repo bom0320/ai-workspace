@@ -4,20 +4,20 @@ import type {
 } from "@/application/synthesis/index.js";
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 
-import type { GovernanceLedger } from "../../../../model/ledger.js";
+import type { GovernanceLedger } from "../../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import {
   resolveGovernanceRepository,
   withGovernanceLedger,
-} from "../../../../records/governance-transaction.js";
-import { resolveApprovedDecision } from "../../direction-review/flow/approved-decision.js";
-import type { ApprovedDecision } from "../../direction-review/model/result.js";
-import type { ExecutionDelegation } from "../model/execution-delegation.js";
+} from "../../../records/governance-transaction.js";
+import { resolveApprovedDecision } from "../direction-review/flow/approved-decision.js";
+import type { ApprovedDecision } from "../direction-review/model/result.js";
+import type { ExecutionDelegation } from "../execution-delegation/model/execution-delegation.js";
 import {
   currentPolicyForExecutionGrant,
   executionDelegationId,
-} from "../validation/validate-execution-delegation-records.js";
+} from "../execution-delegation/validation/validate-execution-delegation-records.js";
 
 type ExecutionHandoffApproval = {
   decision: ApprovedDecision;

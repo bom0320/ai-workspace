@@ -19,7 +19,7 @@ import {
   executionDelegationDraftSchema,
   executionDelegationProposalSchema,
   type ExecutionDelegationProposal,
-} from "../model/proposal.js";
+} from "../model/execution-delegation-proposal.js";
 import { currentPolicyForExecutionGrant } from "../validation/validate-execution-delegation-records.js";
 
 type ProposalContext = {

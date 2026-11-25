@@ -6,7 +6,7 @@ import {
 } from "@/application/synthesis/index.js";
 import { humanConfirmationEvidenceSchema } from "../../../shared/model/confirmation.js";
 import { directionActionSchema } from "./action.js";
-import { executionDelegationProposalSchema } from "../../execution-delegation/model/proposal.js";
+import { executionDelegationProposalSchema } from "../../execution-delegation/model/execution-delegation-proposal.js";
 
 const text = z.string().trim().min(1);
 // Read-only compatibility for ledgers written before Context-at-review storage.

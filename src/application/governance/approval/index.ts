@@ -58,7 +58,7 @@ export {
   verifyExecutionHandoff,
   verifyPhaseBHandoff,
   type VerifiedPhaseBContext,
-} from "./features/execution-delegation/flow/verify-execution-handoff.js";
+} from "./features/phase-handoff/verify-execution-handoff.js";
 export {
   proposeExecutionDelegation,
   type ExecutionDelegationProposalAgent,
@@ -66,7 +66,7 @@ export {
 export {
   executionDelegationProposalSchema,
   type ExecutionDelegationProposal,
-} from "./features/execution-delegation/model/proposal.js";
+} from "./features/execution-delegation/model/execution-delegation-proposal.js";
 export { approveExecutionDelegation } from "./features/execution-delegation/flow/approve-execution-delegation.js";
 export {
   executionDelegationSchema,

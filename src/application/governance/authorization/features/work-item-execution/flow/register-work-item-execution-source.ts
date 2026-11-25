@@ -13,7 +13,7 @@ import {
   withGovernanceLedger,
 } from "../../../../records/governance-transaction.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";
-import { resolveExecutionHandoff } from "../../../../approval/features/execution-delegation/flow/verify-execution-handoff.js";
+import { resolveExecutionHandoff } from "../../../../approval/features/phase-handoff/verify-execution-handoff.js";
 import { validateTaskExecutionContract } from "./validation/validate-task-execution-contract.js";
 
 type Proposal = Extract<WorkDecompositionResult, { status: "proposed" }>;

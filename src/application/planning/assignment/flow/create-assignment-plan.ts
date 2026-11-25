@@ -28,7 +28,7 @@ function denied(failure: keyof typeof failureReasons) {
   };
 }
 
-export async function prepareAssignmentPlan(
+export async function createAssignmentPlan(
   handoff: Parameters<typeof registerAssignmentPlan>[0],
   proposal: Parameters<typeof registerAssignmentPlan>[1],
   selectedIds: readonly string[],

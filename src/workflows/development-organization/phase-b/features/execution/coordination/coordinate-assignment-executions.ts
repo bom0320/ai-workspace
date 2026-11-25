@@ -1,12 +1,12 @@
 import type { AssignmentExecutionRequest } from "@/application/governance/index.js";
-import { executeCollaborativeAssignment } from "@/application/execution/index.js";
+import { executeAssignmentRead } from "@/application/execution/index.js";
 import {
   getPreparedAssignmentPlan,
   getAssignmentExecutionResults,
 } from "@/application/governance/index.js";
 import type { PhaseBHandoff } from "../../../../contracts/phase-handoff.js";
 
-export type CollaborativeExecutionOptions = {
+export type AssignmentExecutionOptions = {
   maxConcurrentRuns?: number;
   contexts: Record<
     string,
@@ -17,11 +17,11 @@ export type CollaborativeExecutionOptions = {
   >;
 };
 
-export async function executeAssignmentPlan(
+export async function coordinateAssignmentExecutions(
   handoff: PhaseBHandoff,
   planId: string,
   selectedWorkItemIds: readonly string[],
-  { contexts, maxConcurrentRuns = 1 }: CollaborativeExecutionOptions
+  { contexts, maxConcurrentRuns = 1 }: AssignmentExecutionOptions
 ) {
   if (!Number.isSafeInteger(maxConcurrentRuns) || maxConcurrentRuns < 1)
     throw new RangeError("maxConcurrentRuns must be a positive safe integer.");
@@ -46,7 +46,7 @@ export async function executeAssignmentPlan(
     return { status: "denied" as const, failure: "plan" as const, planId };
   }
 
-  const results: (Awaited<ReturnType<typeof executeCollaborativeAssignment>> & {
+  const results: (Awaited<ReturnType<typeof executeAssignmentRead>> & {
     assignmentId: string;
     workItemId: string;
   })[] = [...recorded];
@@ -91,7 +91,7 @@ export async function executeAssignmentPlan(
       } = eligible[cursor++]!;
       running.set(
         assignmentId,
-        executeCollaborativeAssignment(handoff, {
+        executeAssignmentRead(handoff, {
           planId,
           assignmentId,
           access: "read",

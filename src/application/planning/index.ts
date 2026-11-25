@@ -13,6 +13,6 @@ export type {
 } from "./detailed/protocol/planner.js";
 export type { InspectRequest } from "./detailed/protocol/inspection.js";
 export {
-  prepareAssignmentPlan,
+  createAssignmentPlan,
   type AssignmentPlanAgent,
-} from "./assignment/flow/prepare-assignment-plan.js";
+} from "./assignment/flow/create-assignment-plan.js";

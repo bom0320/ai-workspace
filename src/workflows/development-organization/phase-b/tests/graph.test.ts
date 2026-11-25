@@ -1,12 +1,9 @@
 import {
-  executeCollaborativeAssignment,
+  executeAssignmentRead,
   executeWorkItem,
 } from "@/application/execution/index.js";
 import { beforeEach, expect, it, vi } from "vitest";
-import {
-  prepareAssignmentPlan,
-  type PlanningResult,
-} from "@/application/planning/index.js";
+import { createAssignmentPlan } from "@/application/planning/index.js";
 import {
   getApprovedDecision,
   getPreparedAssignmentPlan,
@@ -15,7 +12,6 @@ import {
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
 import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runCommand } from "@/infrastructure/process/index.js";
-import { executeWorkItemPlanning } from "../features/planning/execution/execute-work-item-planning.js";
 import {
   createPhaseBGraph,
   type PhaseBGraphOptions,
@@ -23,11 +19,11 @@ import {
 } from "../index.js";
 
 vi.mock("@/application/planning/index.js", () => ({
-  prepareAssignmentPlan: vi.fn(),
+  createAssignmentPlan: vi.fn(),
 }));
 
 vi.mock("@/application/execution/index.js", () => ({
-  executeCollaborativeAssignment: vi.fn(),
+  executeAssignmentRead: vi.fn(),
   executeWorkItem: vi
     .fn()
     .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
@@ -56,9 +52,6 @@ vi.mock(
     beginValidatedWorkItemExecutionSource: vi.fn(),
   })
 );
-vi.mock("../features/planning/execution/execute-work-item-planning.js", () => ({
-  executeWorkItemPlanning: vi.fn(),
-}));
 vi.mock("@/infrastructure/process/index.js", () => ({
   runCommand: vi.fn(),
 }));
@@ -176,7 +169,6 @@ const workItems = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(executeWorkItemPlanning).mockReset();
   vi.mocked(beginValidatedWorkItemExecutionSource).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
   vi.mocked(verifyExecutionHandoff).mockReturnValue({
@@ -189,7 +181,10 @@ async function invoke(options: PhaseBGraphOptions) {
   const result = await createPhaseBGraph(options).invoke(input);
   expect(runWorkDecomposition).toHaveBeenCalledExactlyOnceWith(
     decompositionInput,
-    { ...options, executionDelegationGrant: handoff.executionDelegation.grant }
+    {
+      ...options.workDecomposition,
+      executionDelegationGrant: handoff.executionDelegation.grant,
+    }
   );
   expect(getApprovedDecision).toHaveBeenCalledExactlyOnceWith(
     decompositionInput.approvedDecisionId
@@ -199,7 +194,7 @@ async function invoke(options: PhaseBGraphOptions) {
 
 it("returns the proposed result from one Application call", async () => {
   const agent = vi.fn().mockResolvedValue({ type: "propose", workItems });
-  expect(await invoke({ agent })).toEqual({
+  expect(await invoke({ workDecomposition: { agent } })).toEqual({
     ...input,
     ...accepted,
     workDecompositionResult: {
@@ -223,7 +218,7 @@ it("preserves escalation and ends the graph", async () => {
     reason: "Human judgment needed",
     questions,
   });
-  expect(await invoke({ agent })).toEqual({
+  expect(await invoke({ workDecomposition: { agent } })).toEqual({
     ...input,
     ...accepted,
     workDecompositionResult: {
@@ -239,7 +234,7 @@ it("preserves invalid approval failure and ends before calling the agent", async
     throw new Error("ApprovedDecision is unavailable.");
   });
   const agent = vi.fn();
-  expect(await invoke({ agent })).toEqual({
+  expect(await invoke({ workDecomposition: { agent } })).toEqual({
     ...input,
     ...accepted,
     workDecompositionResult: {
@@ -253,7 +248,7 @@ it("preserves invalid approval failure and ends before calling the agent", async
 
 it("preserves agent execution failure and ends without retry", async () => {
   const agent = vi.fn().mockRejectedValue(new Error("Agent unavailable"));
-  expect(await invoke({ agent })).toEqual({
+  expect(await invoke({ workDecomposition: { agent } })).toEqual({
     ...input,
     ...accepted,
     workDecompositionResult: {
@@ -275,7 +270,7 @@ it("passes timeout to the default Codex adapter without storing it in State", as
     exitCode: 0,
     timedOut: false,
   });
-  expect(await invoke({ timeoutMs: 3210 })).toEqual({
+  expect(await invoke({ workDecomposition: { timeoutMs: 3210 } })).toEqual({
     ...input,
     ...accepted,
     workDecompositionResult: {
@@ -291,20 +286,6 @@ it("passes timeout to the default Codex adapter without storing it in State", as
   );
 });
 
-const planningOptions = {
-  repositoryPath: approval.snapshot.repositoryRoot,
-  limits: { maxRounds: 2, maxFilesPerRequest: 2, maxTotalFiles: 2 },
-};
-const planningState = {
-  goal: approval.context.goal,
-  repository: {
-    repositoryRoot: planningOptions.repositoryPath,
-    repositoryName: "repo",
-    fileTree: ["task.ts"],
-    packageScripts: {},
-  },
-  inspectedFiles: [],
-};
 const feedback = { ...workItems[0], dependsOn: [] };
 const docs = { ...feedback, id: "docs", objective: "Update documentation" };
 const api = { ...feedback, id: "api", objective: "Update API behavior" };
@@ -314,25 +295,6 @@ const client = {
   objective: "Integrate API",
   dependsOn: [api.id],
 };
-
-function completedPlan(id: string): PlanningResult {
-  return {
-    status: "completed",
-    state: planningState,
-    rounds: 1,
-    task: {
-      id: `task-${id}`,
-      goalId: "goal-1",
-      objective: id,
-      targetRepository: "repo",
-      allowedPaths: ["task.ts"],
-      forbiddenPaths: [],
-      constraints: [],
-      acceptanceCriteria: [],
-      verification: [],
-    },
-  };
-}
 
 it.each([
   { name: "Single Work", items: [feedback], selected: [feedback] },
@@ -348,175 +310,133 @@ it.each([
     selected: [client, docs],
   },
 ])(
-  "preserves selection for $name and defers all planning without Claim",
+  "selects Work Items for $name without starting Assignment Planning",
   async ({ items, selected }) => {
-    const agent = vi
-      .fn()
-      .mockResolvedValue({ type: "propose", workItems: items });
     const selectWorkItemIds = vi.fn(() => selected.map(({ id }) => id));
-    const planner = vi.fn();
     const result = await createPhaseBGraph({
-      agent,
-      planning: {
-        detailed: { ...planningOptions, planner },
-        selectWorkItemIds,
+      workDecomposition: {
+        agent: async () => ({ type: "propose", workItems: items }),
       },
+      selectWorkItemIds,
     }).invoke(input);
     expect(selectWorkItemIds).toHaveBeenCalledExactlyOnceWith(items);
-    expect(result.workDecompositionResult).toEqual({
-      ...decompositionInput,
-      status: "proposed",
-      workItems: items,
-    });
-    expect(result.deferredDetailedPlanningIds).toEqual(
-      selected.map(({ id }) => id)
-    );
-    expect(result.detailedPlanningBlockedReason).toContain(
-      "claimed Assignment Read"
-    );
-    expect(result.planningResults).toEqual([]);
-    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-    expect(planner).not.toHaveBeenCalled();
+    expect(result.selectedWorkItemIds).toEqual(selected.map(({ id }) => id));
+    expect(createAssignmentPlan).not.toHaveBeenCalled();
   }
 );
 
-it("validates all selected IDs before planning any Work Item", async () => {
-  const agent = vi
-    .fn()
-    .mockResolvedValue({ type: "propose", workItems: [feedback] });
-  const graph = createPhaseBGraph({
-    agent,
-    planning: {
-      detailed: planningOptions,
-      selectWorkItemIds: () => [feedback.id, "unknown"],
+it.each([
+  { planning: { detailed: {} } },
+  { execution: { workItem: { workItemId: "api" } } },
+  {
+    workDecomposition: {
+      executionDelegationGrant: handoff.executionDelegation.grant,
     },
-  });
-  await expect(graph.invoke(input)).rejects.toThrow(
-    "Planning selection contains an unknown Work Item ID."
-  );
-  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-});
-
-it("defers each selected ID once", async () => {
-  const agent = vi
-    .fn()
-    .mockResolvedValue({ type: "propose", workItems: [feedback, docs] });
-  vi.mocked(executeWorkItemPlanning).mockResolvedValue(
-    completedPlan(feedback.id)
-  );
-  const result = await createPhaseBGraph({
-    agent,
-    planning: {
-      detailed: planningOptions,
-      selectWorkItemIds: () => [feedback.id, feedback.id],
-    },
-  }).invoke(input);
-  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-  expect(result.deferredDetailedPlanningIds).toEqual([feedback.id]);
-  expect(result.planningResults).toEqual([]);
-});
-
-it.each(["docs", "missing", "client"])(
-  "denies direct execution for %s and leaves Detailed Planning deferred",
-  async (workItemId) => {
-    const items = [api, client, docs];
-    vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
-      completedPlan(phaseB.workItem.id)
+  },
+  { assignmentExecution: { contexts: {}, workItem: { workItemId: "api" } } },
+])(
+  "rejects unsupported options before calling Governance or running work",
+  (options) => {
+    expect(() => createPhaseBGraph(options as PhaseBGraphOptions)).toThrow(
+      "Unsupported Phase B Graph options"
     );
-    const result = await createPhaseBGraph({
-      agent: async () => ({ type: "propose", workItems: items }),
-      execution: { workItem: { workItemId, readPaths: [], timeoutMs: 1000 } },
-      planning: {
-        detailed: planningOptions,
-        selectWorkItemIds: () => items.map(({ id }) => id),
-      },
-    }).invoke(input);
-    expect(result.planningResults).toEqual([]);
-    expect(result.deferredDetailedPlanningIds).toEqual(
-      items.map(({ id }) => id)
-    );
-    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+    expect(verifyExecutionHandoff).not.toHaveBeenCalled();
+    expect(createAssignmentPlan).not.toHaveBeenCalled();
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
-    expect(result.executionPreparationResult).toMatchObject({
-      workItemId,
-      status: "blocked",
-    });
+    expect(executeAssignmentRead).not.toHaveBeenCalled();
   }
 );
 
-it("denies direct execution with no Assignment Plan or Detailed Planning", async () => {
-  const result = await createPhaseBGraph({
-    agent: async () => ({ type: "propose", workItems: [api] }),
-    execution: {
-      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
-    },
-  }).invoke(input);
-  expect(result.executionPreparationResult).toMatchObject({
-    workItemId: api.id,
-    status: "blocked",
-  });
-  expect(executeWorkItem).not.toHaveBeenCalled();
+it("requires selection and a planning agent for an execution request", () => {
+  expect(() => createPhaseBGraph({ assignmentPlanning: vi.fn() })).toThrow(
+    "requires Work Item selection"
+  );
+  expect(() =>
+    createPhaseBGraph({ assignmentExecution: { contexts: {} } })
+  ).toThrow("requires Assignment Planning");
 });
 
 it.each([
   { type: "escalate", reason: "Need clarification", questions: ["Which API?"] },
   { type: "propose", workItems: [] },
 ])(
-  "leaves Planning untouched when decomposition is not proposed",
+  "skips selection and assignment when decomposition is not proposed",
   async (action) => {
-    const agent = vi.fn().mockResolvedValue(action);
     const selectWorkItemIds = vi.fn(() => [feedback.id]);
     const result = await createPhaseBGraph({
-      agent,
-      planning: { detailed: planningOptions, selectWorkItemIds },
+      workDecomposition: { agent: async () => action },
+      selectWorkItemIds,
+      assignmentPlanning: vi.fn(),
+      assignmentExecution: { contexts: {} },
     }).invoke(input);
     expect(result.workDecompositionResult?.status).not.toBe("proposed");
-    expect(result.planningResults).toBeUndefined();
     expect(selectWorkItemIds).not.toHaveBeenCalled();
-    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
+    expect(createAssignmentPlan).not.toHaveBeenCalled();
+    expect(executeAssignmentRead).not.toHaveBeenCalled();
   }
 );
 
-it("skips Planning for an empty selection", async () => {
-  const agent = vi
-    .fn()
-    .mockResolvedValue({ type: "propose", workItems: [feedback] });
+it("stops before selection when Handoff verification is denied", async () => {
+  vi.mocked(verifyExecutionHandoff).mockImplementationOnce(() => {
+    throw new Error("denied");
+  });
+  const selectWorkItemIds = vi.fn();
   const result = await createPhaseBGraph({
-    agent,
-    planning: { detailed: planningOptions, selectWorkItemIds: () => [] },
+    selectWorkItemIds,
+    assignmentPlanning: vi.fn(),
+    assignmentExecution: { contexts: {} },
   }).invoke(input);
-  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-  expect(result.selectedWorkItemIds).toEqual([]);
-  expect(result.pendingPlanningIds).toBeUndefined();
-  expect(result.planningResults).toEqual([]);
+  expect(result.handoffResult?.status).toBe("denied");
+  expect(runWorkDecomposition).not.toHaveBeenCalled();
+  expect(selectWorkItemIds).not.toHaveBeenCalled();
+  expect(executeAssignmentRead).not.toHaveBeenCalled();
 });
 
-it("takes the selection and prior results only from the current Graph run", async () => {
-  const agent = vi
-    .fn()
-    .mockResolvedValue({ type: "propose", workItems: [feedback, docs] });
+it("validates all selected IDs before Assignment Planning", async () => {
   const graph = createPhaseBGraph({
-    agent,
-    planning: {
-      detailed: planningOptions,
-      selectWorkItemIds: () => [feedback.id],
+    workDecomposition: {
+      agent: async () => ({ type: "propose", workItems: [feedback] }),
     },
+    selectWorkItemIds: () => [feedback.id, "unknown"],
+    assignmentPlanning: vi.fn(),
   });
-  vi.mocked(executeWorkItemPlanning).mockResolvedValue(
-    completedPlan(feedback.id)
+  await expect(graph.invoke(input)).rejects.toThrow(
+    "Planning selection contains an unknown Work Item ID."
   );
+  expect(createAssignmentPlan).not.toHaveBeenCalled();
+});
+
+it("skips Assignment Planning and Execution for an empty selection", async () => {
+  const result = await createPhaseBGraph({
+    workDecomposition: {
+      agent: async () => ({ type: "propose", workItems: [feedback] }),
+    },
+    selectWorkItemIds: () => [],
+    assignmentPlanning: vi.fn(),
+    assignmentExecution: { contexts: {} },
+  }).invoke(input);
+  expect(result.selectedWorkItemIds).toEqual([]);
+  expect(createAssignmentPlan).not.toHaveBeenCalled();
+  expect(executeAssignmentRead).not.toHaveBeenCalled();
+});
+
+it("takes the selection and Plan only from the current Graph run", async () => {
+  const graph = createPhaseBGraph({
+    workDecomposition: {
+      agent: async () => ({ type: "propose", workItems: [feedback, docs] }),
+    },
+    selectWorkItemIds: () => [feedback.id, feedback.id],
+  });
   const suppliedState = {
     ...input,
-    pendingPlanningIds: [docs.id],
-    planningResults: [{ workItemId: docs.id, result: completedPlan(docs.id) }],
+    selectedWorkItemIds: [docs.id],
+    assignmentPlanResult: { status: "prepared", plan: { id: "forged" } },
   };
   const first = await graph.invoke(suppliedState);
-  const second = await graph.invoke(input);
-  expect(executeWorkItemPlanning).not.toHaveBeenCalled();
-  expect(first.planningResults).toEqual([]);
-  expect(first.deferredDetailedPlanningIds).toEqual([feedback.id]);
-  expect(second).toEqual(first);
+  expect(first.selectedWorkItemIds).toEqual([feedback.id]);
+  expect(first.assignmentPlanResult).toBeUndefined();
+  expect(await graph.invoke(input)).toEqual(first);
 });
 
 const combinedItems = [
@@ -567,7 +487,7 @@ it.each([
   ["prepared", true],
   ["denied", true],
 ] as const)(
-  "coordinates combined Planning when Assignment Planning is %s and execution requested is %s",
+  "coordinates Assignments when Assignment Planning is %s and execution requested is %s",
   async (status, requested) => {
     const assignmentResult =
       status === "prepared"
@@ -577,17 +497,14 @@ it.each([
             failure: "provenance" as const,
             reason: "Approval unavailable",
           };
-    vi.mocked(prepareAssignmentPlan).mockResolvedValueOnce(assignmentResult);
-    vi.mocked(executeWorkItemPlanning).mockResolvedValueOnce(
-      completedPlan("ready")
-    );
+    vi.mocked(createAssignmentPlan).mockResolvedValueOnce(assignmentResult);
     const shouldExecute = requested && status === "prepared";
     vi.mocked(getPreparedAssignmentPlan).mockReturnValueOnce({
       plan: combinedPlan,
       workItems: combinedItems,
       specialistSources: [],
     });
-    vi.mocked(executeCollaborativeAssignment).mockResolvedValueOnce({
+    vi.mocked(executeAssignmentRead).mockResolvedValueOnce({
       status: "read-completed",
       invocationId: "invocation",
       resultDigest: "digest",
@@ -595,25 +512,21 @@ it.each([
     const selectWorkItemIds = vi.fn(() => combinedItems.map(({ id }) => id));
     const agent = vi.fn();
     const result = await createPhaseBGraph({
-      agent: async () => ({ type: "propose", workItems: combinedItems }),
-      execution: {
-        workItem: { workItemId: "ready", readPaths: [], timeoutMs: 1000 },
-        ...(requested && {
-          assignment: {
-            contexts: {
-              ready: {
-                readScopes: [{ kind: "file", path: "README.md" }],
-                timeoutMs: 1000,
-              },
+      workDecomposition: {
+        agent: async () => ({ type: "propose", workItems: combinedItems }),
+      },
+      selectWorkItemIds,
+      assignmentPlanning: agent,
+      ...(requested && {
+        assignmentExecution: {
+          contexts: {
+            ready: {
+              readScopes: [{ kind: "file", path: "README.md" }],
+              timeoutMs: 1000,
             },
           },
-        }),
-      },
-      planning: {
-        assignment: { agent },
-        detailed: planningOptions,
-        selectWorkItemIds,
-      },
+        },
+      }),
     }).invoke(input);
 
     expect(selectWorkItemIds).toHaveBeenCalledOnce();
@@ -623,7 +536,7 @@ it.each([
       "analysis",
       "without-worker",
     ]);
-    expect(prepareAssignmentPlan).toHaveBeenCalledExactlyOnceWith(
+    expect(createAssignmentPlan).toHaveBeenCalledExactlyOnceWith(
       handoff,
       result.workDecompositionResult,
       result.selectedWorkItemIds,
@@ -632,13 +545,10 @@ it.each([
     expect(result.assignmentPlanResult).toEqual(assignmentResult);
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
-    expect(executeWorkItemPlanning).not.toHaveBeenCalled();
     expect(getPreparedAssignmentPlan).toHaveBeenCalledTimes(
       shouldExecute ? 1 : 0
     );
-    expect(executeCollaborativeAssignment).toHaveBeenCalledTimes(
-      shouldExecute ? 1 : 0
-    );
+    expect(executeAssignmentRead).toHaveBeenCalledTimes(shouldExecute ? 1 : 0);
     if (shouldExecute) {
       expect(result.assignmentExecutionResult).toMatchObject({
         status: "pending",
@@ -646,22 +556,6 @@ it.each([
       });
     } else {
       expect(result.assignmentExecutionResult).toBeUndefined();
-    }
-    expect(result.pendingPlanningIds).toBeUndefined();
-    expect(result.planningResults).toEqual([]);
-    if (status === "prepared") {
-      expect(result.executionPreparationResult).toMatchObject({
-        status: "blocked",
-        workItemId: "ready",
-      });
-      expect(result.deferredDetailedPlanningIds).toEqual([
-        "ready",
-        "awaiting",
-        "analysis",
-        "without-worker",
-      ]);
-    } else {
-      expect(result.executionPreparationResult).toBeUndefined();
     }
   }
 );

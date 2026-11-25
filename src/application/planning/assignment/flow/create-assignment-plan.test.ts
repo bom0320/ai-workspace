@@ -4,7 +4,7 @@ import {
   getAssignmentPlanContext,
   registerAssignmentPlan,
 } from "@/application/governance/index.js";
-import { prepareAssignmentPlan } from "./prepare-assignment-plan.js";
+import { createAssignmentPlan } from "./create-assignment-plan.js";
 
 vi.mock("@/application/governance/index.js", () => ({
   AssignmentRegistrationError: class extends Error {
@@ -16,7 +16,7 @@ vi.mock("@/application/governance/index.js", () => ({
   registerAssignmentPlan: vi.fn(),
 }));
 
-const handoff = {} as Parameters<typeof prepareAssignmentPlan>[0];
+const handoff = {} as Parameters<typeof createAssignmentPlan>[0];
 const workItem = {
   id: "work",
   objective: "Analyze",
@@ -49,19 +49,14 @@ beforeEach(() => {
 
 it("classifies agent failures without exposing internal detail", async () => {
   const agent = vi.fn().mockRejectedValue(new Error("/private/repository"));
-  const result = await prepareAssignmentPlan(
-    handoff,
-    proposal,
-    ["work"],
-    agent
-  );
+  const result = await createAssignmentPlan(handoff, proposal, ["work"], agent);
   expect(result).toMatchObject({ status: "denied", failure: "agent" });
   expect(JSON.stringify(result)).not.toContain("/private/repository");
   expect(registerAssignmentPlan).not.toHaveBeenCalled();
 });
 
 it("rejects invalid proposals before registration", async () => {
-  const result = await prepareAssignmentPlan(
+  const result = await createAssignmentPlan(
     handoff,
     proposal,
     ["work"],
@@ -77,7 +72,7 @@ it("does not call the agent when the current approval cannot be resolved", async
   });
   const agent = vi.fn();
   await expect(
-    prepareAssignmentPlan(handoff, proposal, ["work"], agent)
+    createAssignmentPlan(handoff, proposal, ["work"], agent)
   ).resolves.toMatchObject({ status: "denied", failure: "provenance" });
   expect(agent).not.toHaveBeenCalled();
 });
@@ -88,7 +83,7 @@ it.each(["provenance", "proposal", "ledger"] as const)(
     vi.mocked(registerAssignmentPlan).mockImplementation(() => {
       throw new AssignmentRegistrationError(failure);
     });
-    const result = await prepareAssignmentPlan(
+    const result = await createAssignmentPlan(
       handoff,
       proposal,
       ["work"],
@@ -101,7 +96,7 @@ it.each(["provenance", "proposal", "ledger"] as const)(
 
 it("rejects an unknown Specialist before writing the Plan", async () => {
   await expect(
-    prepareAssignmentPlan(handoff, proposal, ["work"], async () => [
+    createAssignmentPlan(handoff, proposal, ["work"], async () => [
       { ...assignment, specialistId: "invented" },
     ])
   ).resolves.toMatchObject({ status: "denied", failure: "proposal" });

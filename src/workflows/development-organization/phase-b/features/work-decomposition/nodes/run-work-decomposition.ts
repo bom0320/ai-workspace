@@ -22,8 +22,6 @@ export function createRunWorkDecompositionNode(
             "Phase B requires a current joint Direction and Execution Delegation approval.",
         },
         workDecompositionResult: undefined,
-        pendingPlanningIds: undefined,
-        planningResults: undefined,
       };
     }
     const workDecompositionResult = await runWorkDecomposition(

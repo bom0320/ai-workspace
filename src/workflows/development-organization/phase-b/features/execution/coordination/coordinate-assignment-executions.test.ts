@@ -1,11 +1,11 @@
 import { expect, it, vi } from "vitest";
-import { executeCollaborativeAssignment } from "@/application/execution/index.js";
+import { executeAssignmentRead } from "@/application/execution/index.js";
 import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
 import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
-import { executeAssignmentPlan } from "./execute-assignment-plan.js";
+import { coordinateAssignmentExecutions } from "./coordinate-assignment-executions.js";
 
 vi.mock("@/application/execution/index.js", () => ({
-  executeCollaborativeAssignment: vi.fn(),
+  executeAssignmentRead: vi.fn(),
 }));
 vi.mock("@/application/governance/index.js", () => ({
   getPreparedAssignmentPlan: vi.fn(),
@@ -59,11 +59,11 @@ function fixture(
   const gates = new Map(
     assignments.map(([id]) => [
       id,
-      deferred<Awaited<ReturnType<typeof executeCollaborativeAssignment>>>(),
+      deferred<Awaited<ReturnType<typeof executeAssignmentRead>>>(),
     ])
   );
   const started: string[] = [];
-  vi.mocked(executeCollaborativeAssignment).mockImplementation(
+  vi.mocked(executeAssignmentRead).mockImplementation(
     async (_, { assignmentId }) => {
       started.push(assignmentId);
       return gates.get(assignmentId)!.promise;
@@ -72,8 +72,8 @@ function fixture(
   return {
     started,
     run: (contexts: string[]) =>
-      executeAssignmentPlan(
-        {} as Parameters<typeof executeAssignmentPlan>[0],
+      coordinateAssignmentExecutions(
+        {} as Parameters<typeof coordinateAssignmentExecutions>[0],
         "plan",
         Object.keys(dependencies),
         {

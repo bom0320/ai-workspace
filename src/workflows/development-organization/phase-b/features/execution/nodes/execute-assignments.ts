@@ -1,11 +1,11 @@
 import type { PhaseBState } from "../../../state.js";
 import {
-  executeAssignmentPlan,
-  type CollaborativeExecutionOptions,
-} from "../coordination/execute-assignment-plan.js";
+  coordinateAssignmentExecutions,
+  type AssignmentExecutionOptions,
+} from "../coordination/coordinate-assignment-executions.js";
 
 export function createExecuteAssignmentsNode(
-  options?: CollaborativeExecutionOptions
+  options?: AssignmentExecutionOptions
 ) {
   const configured = options && structuredClone(options);
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
@@ -17,7 +17,7 @@ export function createExecuteAssignmentsNode(
       assignmentPlanResult?.status !== "prepared"
     )
       return {};
-    const assignmentExecutionResult = await executeAssignmentPlan(
+    const assignmentExecutionResult = await coordinateAssignmentExecutions(
       handoffResult.handoff,
       assignmentPlanResult.plan.id,
       selectedWorkItemIds,

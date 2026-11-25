@@ -13,7 +13,7 @@ import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
 
 type Handoff = Parameters<typeof reserveAssignmentExecution>[0];
 
-export async function executeCollaborativeAssignment(
+export async function executeAssignmentRead(
   handoff: Handoff,
   request: Extract<AssignmentExecutionRequest, { access: "read" }>
 ) {

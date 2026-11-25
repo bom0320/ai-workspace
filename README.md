@@ -9,9 +9,9 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
 현재 다음 흐름이 구현되어 있다.
 
 - **v0 — Safe Execution**: isolated Git worktree, Scope, Verification, Evidence와 binary patch 보존 기반을 구현했다.
-  실행 기반은 Phase B에서 재사용하며 Review, Delivery, Cleanup 모듈은 별도로 유지한다.
+  기존 실행 기반과 Review, Delivery, Cleanup 모듈은 후속 Assignment 수정 실행에 재사용할 수 있다.
 - **v1 — Goal-to-Task Planning**: 자연어 Goal을 repository inspection과 Adaptive Planning으로
-  TaskContract로 변환한다. 독립 CLI는 계획을 표시하며 Worker 실행은 Phase B에서 수행한다.
+  TaskContract로 변환한다. 독립 CLI는 계획을 표시한다.
 - **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
   Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
 - **v3 — Structured Decision Comparison**: 독립 AgentDecision을 Concern 단위로 비교해
@@ -33,8 +33,7 @@ CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffin
 Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
 동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
 CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
-CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B는 승인된 Work Item
-하나의 상세 계획과 실행을 지원한다. 전체 조직 운영과 Delivery 연결은 후속 범위다.
+CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B는 승인된 방향을 업무로 분해하고 Specialist 배정을 등록하며, 명시적으로 요청한 Assignment 읽기 실행을 지원한다. Assignment 상세 계획, Repository 수정 및 Delivery 연결은 후속 범위다.
 
 목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
 CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
@@ -98,9 +97,7 @@ Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄�
 pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 ```
 
-Worker 실행은 Phase B에서 선택된 Work Item에 한해 제공된다. 독립 `execute` 명령과 위치 인자를
-사용한 Plan & Execute는 종료 코드 1과 함께 안내를 출력한다. Phase B는 승인된 Snapshot에서
-detached worktree를 만들고 원본 Repository에 변경사항을 자동으로 적용하지 않는다.
+독립 `execute` 명령과 위치 인자를 사용한 Plan & Execute는 종료 코드 1과 함께 안내를 출력한다. 현재 Phase B의 Assignment 실행은 승인 Snapshot의 Context를 읽기 전용으로 제공한다.
 
 ## v4 현재 진입점
 
@@ -232,8 +229,7 @@ Harness 자체 비용은 작았다. Worker 시간 감소 전체를 Fast Path만�
 
 ## Review와 Post-Execution Delivery
 
-Phase B 실행 종료 후에는 workspace가 유지된다. 기존 Review·Delivery·Cleanup 모듈은 보존되며,
-Phase B Graph의 자동 후속 단계로는 연결되어 있지 않다. Review 모듈은 workspace path,
+기존 Git Worktree 실행 기반은 검토를 위해 workspace를 유지한다. Review·Delivery·Cleanup은 현재 Phase B Graph에 연결되지 않았다. Review 모듈은 workspace path,
 changed paths, 실제 diff, patch artifact 위치, 존재하는 Worker Result를 표시한다.
 `Continue / Abort`로 확인 완료 여부를 받고, Continue 및 Execution / Verification 성공과
 patch 보존이 확인된 경우에만 Delivery를 진행한다.
@@ -267,10 +263,10 @@ chore: ...
 ### Phase B 실행 흐름
 
 ```text
-Phase A Handoff → Work Decomposition → Planning → Execution Source
-→ executeWorkItem → Runtime 확인 → Governance Authorization
-→ 승인 Snapshot Worktree → Codex → Scope → Verification → Evidence
-→ Phase B State
+Phase A Handoff → Work Decomposition → Work Item Selection → Specialist 배정
+→ Assignment Plan 등록 → 선택적 Assignment 읽기 실행
+→ Governance Authorization / Reservation / Claim → 승인된 Snapshot Context
+→ Specialist 읽기 실행 → Evidence 검증 → Phase B State
 ```
 
 ## TaskContract 예시
@@ -293,15 +289,14 @@ Phase A Handoff → Work Decomposition → Planning → Execution Source
 지원한다. glob, 정규식, directory prefix는 지원하지 않는다. 예를 들어 `src/`는
 `src/cli/cli.ts`를 허용하지 않는다.
 
-Phase B에서 독립 Verification으로 지원하는 명령은 승인된 `git diff --check`다.
+기존 Worker 실행에서 독립 Verification의 예로 승인된 `git diff --check`를 사용한다.
 범위 검사는 파일 쓰기를 사전에 차단하는 기능이 아니다. Worker와 Verification 실행
 후 시작 commit 대비 실제 변경 경로를 수집해 위반을 탐지한다. 위반한 변경도 결과
 patch에는 남을 수 있으므로 사람이 반드시 검토해야 한다.
 
 ## Execution 실행 결과
 
-결과 위치는 Phase B의 `workerExecutionResult.result.artifacts.directory`에서 확인한다.
-실행 산출물은 Repository 밖의 임시 루트 아래에 보존된다.
+Phase B 읽기 실행의 결과 참조는 `assignmentExecutionResult`에 기록된다. 기존 Worker 실행 기반은 실행 결과의 `artifacts.directory`가 가리키는 Repository 밖의 임시 루트에 산출물을 보존한다.
 
 ```text
 ai-workspace-governed-runs-*/run-*/
@@ -343,7 +338,7 @@ CLI에서도 명시적 Apply 승인 없이는 적용하지 않는다. patch는 W
 
 ## Timeout
 
-- Phase B Worker와 Verification은 승인된 실행 timeout과 위임 만료 시점까지 남은 시간 중 짧은 값을 공유한다.
+- Phase B 읽기 실행에는 Claim의 남은 시간과 위임 만료 시점이 적용된다.
 - Codex Specialist 및 Comparator 기본 timeout은 각각 15분이다.
 
 ## 실행의 판단 범위와 제한

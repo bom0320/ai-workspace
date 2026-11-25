@@ -212,27 +212,17 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 - **Multi-Work Planning:** Work Item의 선행 관계와 상세 계획에 필요한 정보를 확인한다. 필요한 설계 정보가 충분하면 선행 업무 실행 전에도 상세 계획을 수립할 수 있다.
 - **공통 Detailed Planning:** 개별 Work Item의 계획 기능을 두 경우에 재사용한다. 모든 `TaskContract`를 최초 Planning 시점에 일괄 생성할 필요는 없다.
 
-**계약 교체 전 R5.1 / R5.2 구현 범위.** 기존 v1 `planTask({ goal, repositoryPath, limits, planner? })` 호출과 Fast Path를 유지한다. Phase B Planning 기능은 `executeWorkItemPlanning({ phaseB: { approvedDecisionId, workItem }, repositoryPath, limits, planner? })`로 선택한 Repository 변경 업무 하나를 계획한다. 입력은 기존 Work Item Schema를 재사용하며 Goal과 승인 Proposal은 Governance에서 복원한다. 형식 오류, 승인 복원 실패, Repository 불일치는 Planning 시작 전에 호출 오류로 전달된다.
-
-Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 확인한 뒤 기존 Working Tree 조사와 Planning Application을 실행한다. Phase B Planning 기능은 원본 Goal / Constraints와 승인 방향의 텍스트, Work Item의 Objective·Deliverable만 상세 계획 입력으로 구성한다. Planning Application은 일반화된 `detail`과 실제 Repository Context로 계획을 수립하며, 승인 참조와 Work Item 계약은 Workflow 기능에서 소유한다. Phase B Fast Path는 조사된 단일 Markdown/TXT 파일의 전체 Repository 상대 경로를 기준으로 Work Item Objective와 Deliverable이 지원되는 오타 교정 표현과 일치하는지 확인한다. 승인 방향도 해당 파일의 오타 교정을 명시해야 하며, 원본 Goal은 같은 교정 작업 또는 지원되는 문서 개선 목표여야 한다. 원본 Constraints는 호환되는 것으로 정의된 표현만 허용한다. 복합 요구사항이나 해석이 필요한 입력은 Planning Loop로 전달한다. TaskDraft의 최종화에는 기존 ID 발급과 원본 Human Goal Constraints 병합을 사용한다. 이 경로는 Work Item의 실행 자격이나 선행 업무 완료를 판단하지 않는다. 현재 Repository와 승인 Snapshot의 commit 차이에 대한 정책은 후속 과제다.
-
-**계약 교체 전 R5.3 / R5.4 구현 범위.** `createPhaseBGraph({ planning: { selectWorkItemIds, detailed: { repositoryPath, limits, planner? } } })`의 선택 콜백은 `proposed`에서만 호출한다. 콜백이 명시한 업무 ID가 제안에 모두 있는지 확인한 뒤, 첫 선택 순서로 중복 없이 `executeWorkItemPlanning()`을 호출한다. 알 수 없는 ID는 상세 계획 시작 전에 입력 오류로 전달한다. Graph는 업무별 `PlanningResult`를 기록하고, 결과가 `failed`이거나 선택이 소진되면 종료한다. Detailed Planning 호출에서 예외가 발생하면 Graph 호출도 거부된다.
-
-선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약은 후속 범위다.
+**계약 교체 전 R5 구현 범위.** Phase B는 선택한 Work Item의 Objective·Deliverable과 승인 방향을 기존 Planner에 연결해 업무별 상세 계획을 만들었다. Work Item 단위 상세 계획 진입점은 제거했다. 독립 v1의 `planTask({ goal, repositoryPath, limits, planner? })`, Fast Path 및 Planner Loop는 후속 Assignment 상세 계획에서 재사용할 수 있다.
 
 **Step 5.3.1-R Work Item 책임.** Work Item은 승인 방향에서 도출한 목표·산출물·선행 관계 및 선택적인 분리 근거·추천 역할을 정의한다. CEO는 승인 방향, Human 제약 및 위임 범위를 고려해 업무와 완료 경계를 분해한다. Work Item에는 실행 유형이나 접근 상한이 없다. Assignment가 개별 Specialist의 목표·산출물·접근 상한을 정의하고, 별도의 Authorization이 실제 권한을 결정한다. Worker는 승인된 구현에 사용하는 내부 Runtime이다.
 
-이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B `planning.detailed`와 직접 호출은 Assignment에 결합된 상세 계획 권한이 준비될 때까지 차단한다. Graph는 Execution Source를 발급하지 않는다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
+이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B Graph는 구형 Work Item 단위 상세 계획 및 직접 실행 옵션을 입력 단계에서 거부한다. Graph는 Execution Source를 발급하지 않는다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
 
 이전 `workType`을 포함한 Decomposition은 strict Ledger Schema에서 거부한다. Digest 재발급, 레코드 수정 또는 초기화는 수행하지 않는다. 같은 Ledger 파일이 호환되지 않는 기록을 포함하면 그 파일을 사용하는 다른 Governance 조회도 실패할 수 있다.
 
 **후속 검증.** 기존 Step 4.3의 직접 실행 통합 사례는 새 경로의 거부·무예약·무실행, 초안 보존 및 구형 Ledger 거부 사례로 교체했다. Assignment Authorization과 Runtime이 연결되면 유효한 Reservation과 Budget·중복 제어, 저장 실패의 원자성, 권한 만료·철회·Snapshot drift, 승인된 Context와 Evidence, Worker Scope·Verification·Timeout·Artifact, 검증된 결과에 따른 선행 Work Item 진행을 새 진입점에서 검증한다.
 
-**Phase B Planning Coordination.** `planning.selectWorkItemIds`로 Work Item을 한 번 선택한다.
-선택 노드는 `selectedWorkItemIds`를 기록하고 빈 선택을 포함해 새 Planning 실행의
-`planningResults`를 한 번 초기화한다. `initialize-planning` 노드는 제거했다.
-`planning.assignment`의 `plan-assignments` 노드는 검증된 Assignment Plan을 등록한다.
-`planning.detailed`만 설정하면 선택한 업무와 상세 계획 차단 사유를 기록하며 Planner를 호출하지 않는다. `execution.workItem` 요청은 차단 상태를 기록한다.
+**Phase B Planning과 Execution.** `workDecomposition`은 Agent와 Timeout 설정을 받고, `selectWorkItemIds`는 검증된 제안에서 업무를 선택한다. 선택이 비어 있지 않고 `assignmentPlanning` Agent가 설정됐으면 `assign-specialists`가 `createAssignmentPlan()`을 호출해 배정 계획을 검증·등록한다. `assignmentExecution`을 설정한 경우에만 등록 성공 후 `execute-assignments`가 `coordinateAssignmentExecutions()`를 호출한다. Coordinator는 검증된 Plan에서 실행 대상을 선택하고, 공유 동시성 한도에서 `executeAssignmentRead()`를 호출한다.
 
 **Step 5.3.1 계약 교체.** Assignment Planning은 선택된 Work Item과 승인된 Specialist 후보, 정책과 위임의 공통 접근 상한을 받는다. 각 Assignment는 `specialistId`와 `repositoryAccessCeiling`을 가진다. 선택한 모든 Work Item을 배정한다. 하나의 Work Item에 read만, write만, 또는 두 상한을 혼합해 배정할 수 있다. read/write는 업무 범위의 상한이며 실제 수정·Shell·Runtime 권한은 별도 승인에서 결정한다.
 
@@ -240,10 +230,10 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 Governance는 등록과 조회에서 승인 출처·Decomposition·Snapshot을 재검증한다. Plan ID는 Decomposition과 Staffing Binding, Snapshot, `selectedWorkItemIds`, Assignment 목록을 함께 해시한다. 기존 `executor` 형식의 Plan이 있는 Ledger는 로드에 실패하며 자동 변환·삭제·초기화는 없다. 독립 단일 Work Item 실행은 Plan이 배정된 업무를 우회 실행할 수 없다.
 
-계획만 요청하면 Plan 준비에서 종료한다. 준비 성공 후 `execution.assignment` 옵션이 있으면 `execute-assignments`를 호출한다. 같이 요청한 상세 계획은 보류한다.
+계획만 요청하면 등록 결과를 반환한다. 실행 옵션에는 Assignment ID별 읽기 범위와 Timeout, 선택적 동시성 한도를 설정한다.
 
-**Step 5.2.2 Specialist 협업 실행 기반 (계약 교체 전).** `execution.assignment.contexts`에 Assignment ID별
-`readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 실행한다. `execution.assignment.maxConcurrentRuns`는 Specialist 실행과 이미 준비된 Detailed Planning 초안의 공유 동시성 한도이며 기본값은 1이다. 각 호출이 끝날 때 선행 조건과 빈 슬롯을 다시 확인한다. Worker Assignment의 상세 계획은 검증된 선행 결과가 모두 준비됐을 때 시작하며, 결과에는 Plan ID와 Assignment ID가 포함된다. 이 결과는 실행 권한이 없는 초안이다. 실행 시 저장된
+**Step 5.2.2 Specialist 협업 실행 기반 (계약 교체 전).** 실행 설정에 Assignment ID별
+`readPaths`와 `timeoutMs`를 제공하면 준비된 Plan을 기준으로 Specialist를 실행한다. 동시성 설정은 Specialist 실행과 이미 준비된 Detailed Planning 초안의 공유 동시성 한도이며 기본값은 1이다. 각 호출이 끝날 때 선행 조건과 빈 슬롯을 다시 확인한다. Worker Assignment의 상세 계획은 검증된 선행 결과가 모두 준비됐을 때 시작하며, 결과에는 Plan ID와 Assignment ID가 포함된다. 이 결과는 실행 권한이 없는 초안이다. 실행 시 저장된
 Plan과 현재 Phase B 위임을 확인하고, 위임 예산을 기존 Work Item 예약과 합산한다. 별도 Assignment 예약을
 기록한 뒤 Claim 시 권한·선행 결과를 다시 검증한다. 후속 Specialist는 검증된 선행 판단을 Repository 파일과
 구분된 참고 자료로 받는다. 같은 Work Item의 선행 판단과 선행 Work Item의 판단은 별도 필드로 전달하며, Claim에서 Context 전체 크기를 검사한다. 결과는 Snapshot 및 승인 입력에 연결된 예약에 저장하며 Graph에는 식별자와 Digest를
@@ -329,7 +319,7 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 즉시 실행용 `authorizeExecutionForRun(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `authorized`와 검증된 실행 입력을 반환한다. 성공 상태는 실행 권한의 사용 확정을 뜻한다. 검증된 Runtime이 확보되면 Worker 시작 직전에 이 API를 호출하고, 반환된 기준 commit과 권한 범위를 사용한다. 과거 예약과 Digest는 변경 없이 보존하며, 미사용 예약도 예산과 동일 Work Item 중복 제한에 포함한다. 과거 Permit을 소비하는 분리 API는 제거되었다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
-**현재 실행 경계:** `execution.workItem`과 직접 Work Item Authorization은 차단된다. 기존 Codex Worker와 공통 Worktree·Scope·Verification·Evidence·Artifact Pipeline은 후속 Assignment 실행에 재사용할 기반이다. 이전 Codex 모드는 정책과 Human 위임에 모두 명시된 경우에만 실행할 수 있었다. Step 5.3.2에서 Assignment 읽기 실행을 연결했으며 쓰기 실행은 TaskContract Binding과 구현 Runtime 권한 강제를 기다린다.
+**현재 실행 경계:** Graph에서 직접 Work Item 실행 요청을 거부하며 기존 Work Item Authorization의 차단도 유지된다. 기존 Codex Worker와 공통 Worktree·Scope·Verification·Evidence·Artifact Pipeline은 후속 Assignment 실행에 재사용할 기반이다. 이전 Codex 모드는 정책과 Human 위임에 모두 명시된 경우에만 실행할 수 있었다. Step 5.3.2에서 Assignment 읽기 실행을 연결했으며 쓰기 실행은 TaskContract Binding과 구현 Runtime 권한 강제를 기다린다.
 
 `codex-worktree`는 Codex가 승인 Commit에 고정된 Worktree에서 파일을 탐색·수정하고 일반 개발 명령을 실행하는 권한이다. 승인 요청은 Worktree 밖의 읽기 노출 가능성과 사후 검사 한계를 명시한다. 이 모드는 `workspace-write`, 승인 승격 금지, 도구 네트워크 비활성화 및 임시 쓰기 루트 제외를 설정한다. Worktree에는 외부 의존성을 연결하지 않는다. Codex 자체의 모델 통신과 시스템 설정은 신뢰 경계에 남으며, Worktree는 파일별 읽기 제한이나 모든 프로세스 부작용의 격리를 보장하지 않는다. `task.allowedPaths`와 `task.forbiddenPaths`는 최종 변경의 사후 검사에 사용하며, 일시적인 쓰기나 외부 부작용을 되돌릴 수 없다.
 
@@ -405,7 +395,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 실행 준비가 검증되면 `executionSourceId`를, 완료 후 검증이나 등록이 실패하면 `executionBlockedReason`을 포함한다. 공개 입력은 Phase A의 성공 결과인 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `handoff`, `handoffResult`, `workDecompositionResult`, `selectedWorkItemIds`, `assignmentPlanResult`, `assignmentExecutionResult`를 소유한다. 공개 입력은 Phase A의 성공 결과인 `PhaseBHandoff`를 받는다. Assignment Plan과 실행 권한의 신뢰 근거는 Governance Ledger에서 확인한다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 

@@ -13,14 +13,12 @@ const state = {
       dependsOn: [],
     })),
   },
-  pendingPlanningIds: ["first"],
-  planningResults: [],
 } satisfies Partial<PhaseBState>;
 
-it("preserves selection order, removes duplicates, and starts with fresh Planning results", () => {
+it("preserves selection order, removes duplicates", () => {
   expect(
     createSelectWorkItemsNode(() => ["second", "first", "second"])(state)
-  ).toEqual({ selectedWorkItemIds: ["second", "first"], planningResults: [] });
+  ).toEqual({ selectedWorkItemIds: ["second", "first"] });
 });
 
 it("rejects IDs outside the current decomposition", () => {

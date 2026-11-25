@@ -52,7 +52,7 @@ export function resolveExecutionHandoff(
   return {
     entry,
     analysisSources,
-    approvedDirection: review.proposal.direction.text,
+    synthesisProposal: review.proposal,
     decision,
     context,
     snapshot,

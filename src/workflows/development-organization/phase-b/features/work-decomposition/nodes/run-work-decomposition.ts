@@ -4,7 +4,7 @@ import {
 } from "@/application/work-decomposition/index.js";
 import type { PhaseBState } from "../../../state.js";
 import { verifyExecutionHandoff } from "@/application/governance/index.js";
-import { registerExecutionDecomposition } from "@/application/governance/records/execution-decomposition.js";
+import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
 import { phaseACompletedSchema } from "../../../../contracts/phase-handoff.js";
 
 export function createRunWorkDecompositionNode(
@@ -31,7 +31,7 @@ export function createRunWorkDecompositionNode(
       { ...options, executionCeiling: verified.executionDelegation.grant }
     );
     if (workDecompositionResult.status === "proposed")
-      registerExecutionDecomposition(workDecompositionResult);
+      registerWorkDecomposition(workDecompositionResult);
     return {
       workDecompositionResult,
       handoffResult: {

@@ -1,7 +1,7 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { expect, it, vi } from "vitest";
 import { resolveExecutionHandoff } from "../../approval/features/execution-delegation/flow/verify-execution-handoff.js";
-import { resolvePlanContext } from "./resolve-assignment-context.js";
+import { prepareAssignmentContext } from "./prepare-assignment-context.js";
 
 vi.mock(
   "../../approval/features/execution-delegation/flow/verify-execution-handoff.js",
@@ -67,9 +67,9 @@ function setup({
     policy,
   } as ReturnType<typeof resolveExecutionHandoff>);
   return () =>
-    resolvePlanContext(
-      {} as Parameters<typeof resolvePlanContext>[0],
-      {} as Parameters<typeof resolvePlanContext>[1]
+    prepareAssignmentContext(
+      {} as Parameters<typeof prepareAssignmentContext>[0],
+      {} as Parameters<typeof prepareAssignmentContext>[1]
     );
 }
 

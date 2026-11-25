@@ -18,7 +18,7 @@ export {
 } from "./model/authority.js";
 export * from "./approval/index.js";
 export * from "./authorization/index.js";
-export { getAssignmentPlanContext } from "./records/assignment-plans/resolve-assignment-context.js";
+export { getAssignmentPlanContext } from "./records/assignment-plans/prepare-assignment-context.js";
 export {
   AssignmentRegistrationError,
   getPreparedAssignmentPlan,

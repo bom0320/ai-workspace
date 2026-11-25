@@ -44,9 +44,12 @@ vi.mock("@/application/governance/index.js", async () => ({
   getAssignmentExecutionResults: () => [],
   verifyExecutionHandoff: vi.fn(),
 }));
-vi.mock("@/application/governance/records/execution-decomposition.js", () => ({
-  registerExecutionDecomposition: vi.fn(),
-}));
+vi.mock(
+  "@/application/governance/records/work-decomposition-records.js",
+  () => ({
+    registerWorkDecomposition: vi.fn(),
+  })
+);
 vi.mock(
   "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
   () => ({

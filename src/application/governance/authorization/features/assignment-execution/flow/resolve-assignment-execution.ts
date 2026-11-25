@@ -1,6 +1,6 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { resolvePreparedAssignmentPlan } from "../../../../records/assignment-plans/assignment-plan-records.js";
-import type { Handoff } from "../../../../records/assignment-plans/resolve-assignment-context.js";
+import type { Handoff } from "../../../../records/assignment-plans/prepare-assignment-context.js";
 import {
   executionScopes,
   isExecutionScopeContained,
@@ -50,7 +50,11 @@ function resolveAssignmentBinding(
   const workItem = context.decomposition.workItems.find(
     ({ id }) => id === assignment.workItemId
   );
-  if (!specialist || !workItem || !context.approvedDirection?.trim())
+  if (
+    !specialist ||
+    !workItem ||
+    !context.synthesisProposal.direction.text.trim()
+  )
     throw new AssignmentExecutionError("authority");
   const requested = { readScopes: request.readScopes, writeScopes: [] };
   if (

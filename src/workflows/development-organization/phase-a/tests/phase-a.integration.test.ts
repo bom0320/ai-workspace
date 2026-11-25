@@ -1,3 +1,5 @@
+import { prepareAssignmentContext } from "@/application/governance/records/assignment-plans/prepare-assignment-context.js";
+import { withGovernanceLedger } from "@/application/governance/records/governance-transaction.js";
 import { executeReadOnlyWorkItem } from "@/application/execution/index.js";
 import * as governanceRecords from "@/services/governance-records/index.js";
 import * as filesystem from "node:fs";
@@ -11,7 +13,7 @@ import {
 import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
 import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
-import { registerExecutionDecomposition } from "@/application/governance/records/execution-decomposition.js";
+import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import {
@@ -1759,7 +1761,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       );
       if (decomposition.status !== "proposed")
         throw new Error(JSON.stringify(decomposition));
-      registerExecutionDecomposition(decomposition);
+      registerWorkDecomposition(decomposition);
       planningResults = [];
     }
     return {
@@ -1811,6 +1813,22 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     )
       throw new Error(JSON.stringify(assignmentPlanResult));
     const { plan } = assignmentPlanResult;
+    const approval = governance.getApprovedDecision(handoff.decision.id);
+    const preparedContext = withGovernanceLedger((ledger) =>
+      prepareAssignmentContext(ledger, handoff)
+    );
+    expect(preparedContext.context).toEqual(approval.context);
+    expect(preparedContext.synthesisProposal).toEqual(approval.review.proposal);
+    expect(preparedContext.analysisSources).toHaveLength(
+      approval.context.decisions.length
+    );
+    expect(preparedContext.staffingBinding).toBe(plan.staffingBinding);
+    expect(Object.keys(assignmentAgent.mock.calls[0][0]).sort()).toEqual([
+      "repositoryAccessCeilings",
+      "specialists",
+      "workItems",
+    ]);
+
     expect(planningResults).toEqual([]);
     const persisted = governance.getPreparedAssignmentPlan(handoff, plan.id);
     expect(persisted.plan).toEqual(plan);

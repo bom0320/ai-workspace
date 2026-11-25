@@ -19,8 +19,8 @@ const maxContextBytes = 64 * 1024;
 export function loadAssignmentReadContext(
   {
     snapshot,
-    goal,
-    approvedDirection,
+    context: { goal },
+    synthesisProposal,
     workItem,
     assignment,
   }: ReturnType<typeof resolveAssignmentExecution>,
@@ -59,7 +59,7 @@ export function loadAssignmentReadContext(
 
   const context: CollaborativeSpecialistContext = {
     goal,
-    approvedDirection,
+    approvedDirection: synthesisProposal.direction.text,
     workItem: {
       id: workItem.id,
       objective: workItem.objective,

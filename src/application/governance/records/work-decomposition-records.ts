@@ -14,7 +14,7 @@ function decompositionSubject(proposal: Proposal, approvalBinding: string) {
   };
 }
 
-export function findRegisteredDecomposition(
+export function findRegisteredWorkDecomposition(
   entry: RepositoryGovernance,
   proposal: Proposal,
   approvalBinding: string
@@ -27,9 +27,9 @@ export function findRegisteredDecomposition(
   );
 }
 
-// Internal Phase B writers. A planning-only run may complete without a
-// recorded execution source; authorization never falls back to graph output.
-export function registerExecutionDecomposition(proposal: Proposal): void {
+// Phase B can return a decomposition when registration is unavailable.
+// Assignment Plan registration and authorization still require the stored record.
+export function registerWorkDecomposition(proposal: Proposal): void {
   try {
     withGovernanceLedger((ledger, save) => {
       const { entry, decision } = resolveApprovedDecision(
@@ -51,6 +51,6 @@ export function registerExecutionDecomposition(proposal: Proposal): void {
       save();
     });
   } catch {
-    // Unavailable provenance leaves the output eligible for planning only.
+    // Keep the decomposition output available to the workflow.
   }
 }

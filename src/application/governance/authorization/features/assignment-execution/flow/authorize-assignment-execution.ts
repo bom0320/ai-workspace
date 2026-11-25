@@ -14,7 +14,7 @@ import {
 } from "../../../../model/assignment-execution.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import { resolvePreparedAssignmentPlan } from "../../../../records/assignment-plans/assignment-plan-records.js";
-import type { Handoff } from "../../../../records/assignment-plans/resolve-assignment-context.js";
+import type { Handoff } from "../../../../records/assignment-plans/prepare-assignment-context.js";
 import {
   assertAssignmentReadDependencies,
   bindAssignmentReadExecution,

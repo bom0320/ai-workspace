@@ -1,4 +1,4 @@
-import { findRegisteredDecomposition } from "../../../../records/execution-decomposition.js";
+import { findRegisteredWorkDecomposition } from "../../../../records/work-decomposition-records.js";
 import type {
   WorkDecompositionResult,
   WorkItem,
@@ -24,7 +24,7 @@ function matchWorkItem(
   workItem: WorkItem,
   approvalBinding: string
 ) {
-  const decomposition = findRegisteredDecomposition(
+  const decomposition = findRegisteredWorkDecomposition(
     entry,
     proposal,
     approvalBinding

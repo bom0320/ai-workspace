@@ -23,8 +23,8 @@ vi.mock("@/services/repository-snapshot/index.js", () => ({
 const snapshot = { repositoryRoot: "/repo", commitSha: "a".repeat(40) };
 const source = {
   snapshot,
-  goal: { objective: "Review", targetRepository: "repo" },
-  approvedDirection: "Approved review",
+  context: { goal: { objective: "Review", targetRepository: "repo" } },
+  synthesisProposal: { direction: { text: "Approved review" } },
   workItem: { id: "review", objective: "Review", deliverable: "Notes" },
   assignment: { objective: "Inspect", deliverable: "Findings" },
 } as Parameters<typeof loadAssignmentReadContext>[0];
@@ -107,7 +107,16 @@ it("checks actual serialized bytes and stops before loading more files after exp
   const scopes = [{ kind: "directory" as const, path: "docs" }];
   expect(() =>
     loadAssignmentReadContext(
-      { ...source, approvedDirection: "é".repeat(32768) },
+      {
+        ...source,
+        synthesisProposal: {
+          ...source.synthesisProposal,
+          direction: {
+            ...source.synthesisProposal.direction,
+            text: "é".repeat(32768),
+          },
+        },
+      },
       scopes,
       () => 1000
     )

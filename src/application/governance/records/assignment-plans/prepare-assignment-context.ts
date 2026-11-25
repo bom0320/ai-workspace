@@ -7,23 +7,18 @@ import { resolveExecutionHandoff } from "../../approval/features/execution-deleg
 import { executionScopes } from "../../approval/features/system-policy/model/execution-system-policy.js";
 import type { GovernanceLedger } from "../../model/ledger.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
-import { findRegisteredDecomposition } from "../execution-decomposition.js";
+import { findRegisteredWorkDecomposition } from "../work-decomposition-records.js";
 
 export type Handoff = Parameters<typeof resolveExecutionHandoff>[1];
 export type Proposal = Extract<WorkDecompositionResult, { status: "proposed" }>;
 
-export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
-  const {
-    entry,
-    decision,
-    context,
-    analysisSources,
-    approvedDirection,
-    snapshot,
-    delegation,
-    policy,
-    policyBinding,
-  } = resolveExecutionHandoff(ledger, handoff);
+export function prepareAssignmentContext(
+  ledger: GovernanceLedger,
+  handoff: Handoff
+) {
+  const handoffContext = resolveExecutionHandoff(ledger, handoff);
+  const { entry, analysisSources, snapshot, delegation, policy } =
+    handoffContext;
   if (Date.parse(delegation.grant.expiresAt) <= Date.now())
     throw new Error(
       "Assignment Plan requires an unexpired Execution Delegation."
@@ -91,14 +86,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
   )
     repositoryAccessCeilings.push("write");
   return {
-    entry,
-    goal: context.goal,
-    approvedDirection,
-    delegation,
-    policy,
-    policyBinding,
-    decision,
-    snapshot,
+    ...handoffContext,
     sources,
     staffingBinding,
     repositoryAccessCeilings,
@@ -110,8 +98,8 @@ export function resolveProposalContext(
   handoff: Handoff,
   proposal: Proposal
 ) {
-  const context = resolvePlanContext(ledger, handoff);
-  const decomposition = findRegisteredDecomposition(
+  const context = prepareAssignmentContext(ledger, handoff);
+  const decomposition = findRegisteredWorkDecomposition(
     context.entry,
     proposal,
     governanceDigest(context.decision)

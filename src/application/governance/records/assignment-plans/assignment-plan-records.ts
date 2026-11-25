@@ -9,11 +9,11 @@ import { validateAssignmentProposal } from "@/contracts/assignment/validate-assi
 import type { AssignmentPlan } from "../../model/assignment-plan.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import {
-  resolvePlanContext,
+  prepareAssignmentContext,
   resolveProposalContext,
   type Handoff,
   type Proposal,
-} from "./resolve-assignment-context.js";
+} from "./prepare-assignment-context.js";
 
 export class AssignmentRegistrationError extends Error {
   constructor(public readonly failure: "provenance" | "proposal" | "ledger") {
@@ -78,7 +78,7 @@ export function resolvePreparedAssignmentPlan(
   handoff: Handoff,
   id: string
 ) {
-  const context = resolvePlanContext(ledger, handoff);
+  const context = prepareAssignmentContext(ledger, handoff);
   const { entry, decision } = context;
   const plan = entry.assignmentPlans?.find((record) => record.id === id);
   const decomposition = entry.executionDecompositions?.find(

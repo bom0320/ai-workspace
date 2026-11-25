@@ -965,6 +965,17 @@ Lock 충돌 시 대기/자동 재시도는 없으며 fail closed한다. 저장 �
 예약을 자동 취소하지 않는다.
 
 Governance 공통 model/ledger.ts와 records/governance-transaction.ts는 Approval·Authorization이 공유한다.
+
+`application/governance/records/`는 도메인 기록을 등록하고 조회할 때 저장된 출처와 Binding을 확인한다. Human 승인과 위임은 Approval이 관리하며, 개별 실행의 허용 여부와 Reservation·Claim은 Authorization이 결정한다. Ledger Schema는 `model/`이 정의하고 물리적 저장·Lock·서명 검증은 `services/governance-records/`가 담당한다.
+
+| Records 위치 | 관리하는 기록과 조회 책임 |
+| --- | --- |
+| `analysis/` | 최초 분석과 Refinement의 출처 및 누적 예산, Claim에 결합된 Decision Digest와 Refinement 요청 |
+| `assignment-plans/assignment-plan-records.ts` | 등록과 재조회에서 선택 범위, 배정 규칙, 저장 Binding을 함께 검증 |
+| `assignment-plans/prepare-assignment-context.ts` | 승인된 Handoff에서 Specialist 출처와 배정 가능 범위를 복원하고 Planning에 전달할 입력을 선별 |
+| `assignment-executions/assignment-execution-results.ts` | 실패 기록과 읽기 결과 조회. 성공 조회는 기존 Authorization의 Binding 검증을 재사용하며 성공 기록은 일회성 Claim에 결합된 완료 경로에서 저장 |
+| `work-decomposition-records.ts` | 분해 결과를 ApprovedDecision에 결합해 등록하고 동일 Binding으로 조회 |
+| `governance-transaction.ts` | 서비스 Lock 내 Ledger 파싱·저장과 Repository 경로 분리 확인 |
 Ledger는 각 Repository에 선택적인 reservations 배열을 추가한다. 과거 기록의 필드 누락을 빈 사용량으로
 읽되 Schema default나 읽기 시 재저장은 하지 않는다. 새 예약 저장 시에만 배열을 추가하며 이전 승인 기록은
 그대로 유지한다. 서비스의 HMAC·UID/권한·Lock·atomic rename 구현은 바꾸지 않았다.

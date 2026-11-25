@@ -11,7 +11,7 @@ import {
 } from "../../model/assignment-execution.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import { resolvePreparedAssignmentPlan } from "../assignment-plans/assignment-plan-records.js";
-import type { Handoff } from "../assignment-plans/resolve-assignment-context.js";
+import type { Handoff } from "../assignment-plans/prepare-assignment-context.js";
 
 // Terminal failure history uses the historical approval and reservation. It must
 // still be writable when a current policy or Snapshot check caused the failure.

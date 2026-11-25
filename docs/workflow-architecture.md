@@ -309,6 +309,8 @@ Work Item Coordination / Integration
 
 Phase B는 같은 구조의 `PhaseBHandoff`를 받고 분해 전에 `verifyExecutionHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. 분해와 상세 계획에는 승인 방향과 위임 상한을 전달한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
 
+Governance 내부의 `resolveExecutionHandoff()`는 원본 `SynthesisContext`와 검증된 `SynthesisProposal` 전체를 함께 복원한다. `prepareAssignmentContext()`는 그 정보를 보존한 채 Specialist 출처, Staffing Binding, 배정 가능한 접근 상한을 추가한다. Assignment Planning Agent에는 선택한 Work Item, Specialist 후보, 접근 상한을 전달한다. 읽기 실행의 Context 구성에서는 기존 Goal과 Proposal의 승인 방향을 선택해 사용한다. [Assignment Context 준비](../src/application/governance/records/assignment-plans/prepare-assignment-context.ts)
+
 독립 `independent-direction-review` 대상과 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 
 **Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임은 읽기·쓰기 각각에 File / Directory Scope를 지정하며, 명시된 검증 명령과 실행 횟수·시간 상한을 포함한다. R4의 PathScope 구조와 경로 경계 기반 포함 규칙을 사용한다. 기존 `readPaths`·`writePaths` 기록은 저장 형태를 보존하며 정확한 File Scope로 해석한다. Directory 권한에는 명시적 승인이 필요하다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.

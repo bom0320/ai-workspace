@@ -10,7 +10,7 @@ import {
   CodexWorkDecompositionError,
   runCodexCEOWorkDecomposition,
 } from "../ceo/codex-ceo.js";
-import { validateDependencies } from "@/contracts/validate-dependencies.js";
+import { validateDependencies } from "@/contracts/shared/validate-dependencies.js";
 
 export const workDecompositionInputSchema = z
   .object({ approvedDecisionId: z.string().trim().min(1) })

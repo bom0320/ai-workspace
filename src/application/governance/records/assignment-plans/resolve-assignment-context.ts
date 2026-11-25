@@ -1,4 +1,4 @@
-import type { PhaseBAssignment } from "@/contracts/phase-b-assignment.js";
+import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";

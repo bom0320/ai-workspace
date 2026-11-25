@@ -1,9 +1,5 @@
 import { expect, it } from "vitest";
-import {
-  phaseBAssignmentSchema,
-  validateAssignmentProposal,
-  selectAssignmentWorkItems,
-} from "./phase-b-assignment.js";
+import { validateAssignmentProposal } from "./validate-assignment-proposal.js";
 
 const assignment = {
   id: "analyze",
@@ -15,40 +11,14 @@ const assignment = {
   dependsOn: [],
 };
 
-it("accepts read and write ceilings", () => {
-  expect(phaseBAssignmentSchema.parse(assignment)).toEqual(assignment);
-  expect(
-    phaseBAssignmentSchema.safeParse({
-      ...assignment,
-      repositoryAccessCeiling: "write",
-    }).success
-  ).toBe(true);
-});
-
-it.each([
-  { id: "" },
-  { workItemId: "" },
-  { dependsOn: ["other", "other"] },
-  { role: "Administrator" },
-  { shellExecution: true },
-  { objective: " " },
-  { deliverable: "" },
-  { repositoryAccessCeiling: "unknown" },
-  { executor: { kind: "worker", mode: "unknown" } },
-])("rejects invalid fields and authority overrides %j", (override) => {
-  expect(
-    phaseBAssignmentSchema.safeParse({ ...assignment, ...override }).success
-  ).toBe(false);
-});
-
 it("keeps Assignment dependencies within the same Work Item", () => {
-  const first = phaseBAssignmentSchema.parse(assignment);
-  const second = phaseBAssignmentSchema.parse({
+  const first = assignment;
+  const second = {
     ...assignment,
     id: "second",
     workItemId: "other",
     dependsOn: [first.id],
-  });
+  };
   expect(
     validateAssignmentProposal(
       [first, second],
@@ -58,20 +28,7 @@ it("keeps Assignment dependencies within the same Work Item", () => {
 });
 
 it("requires complete selection and accepts read, write, or mixed assignments", () => {
-  const workItems = [{ id: "review" }, { id: "implement" }, { id: "untyped" }];
-  expect(
-    selectAssignmentWorkItems(workItems, ["review", "review"])
-  ).toBeUndefined();
-  expect(
-    selectAssignmentWorkItems(workItems, ["review", "missing"])
-  ).toBeUndefined();
-  expect(selectAssignmentWorkItems(workItems, ["untyped"])).toEqual([
-    { id: "untyped" },
-  ]);
-  const selected = selectAssignmentWorkItems(workItems, [
-    "review",
-    "implement",
-  ])!;
+  const selected = [{ id: "review" }, { id: "implement" }];
   const writer = {
     ...assignment,
     id: "write",

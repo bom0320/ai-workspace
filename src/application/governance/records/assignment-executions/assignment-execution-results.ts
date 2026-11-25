@@ -124,24 +124,3 @@ export function getAssignmentExecutionResults(
     });
   });
 }
-
-export function getWorkerAssignmentPlanningContext(
-  handoff: Handoff,
-  planId: string,
-  assignmentId: string
-) {
-  return withGovernanceLedger((ledger) => {
-    const context = resolvePreparedAssignmentPlan(ledger, handoff, planId);
-    const assignment = context.plan.assignments.find(
-      ({ id }) => id === assignmentId
-    );
-    const workItem = context.decomposition.workItems.find(
-      ({ id }) => id === assignment?.workItemId
-    );
-    if (assignment?.repositoryAccessCeiling !== "write" || !workItem)
-      throw new AssignmentExecutionError("authority");
-    if (workItem.dependsOn.length || assignment.dependsOn.length)
-      throw new AssignmentExecutionError("dependency");
-    return { assignment, workItem, priorResults: undefined };
-  });
-}

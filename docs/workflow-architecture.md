@@ -236,6 +236,8 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 **Step 5.3.1 계약 교체.** Assignment Planning은 선택된 Work Item과 승인된 Specialist 후보, 정책과 위임의 공통 접근 상한을 받는다. 각 Assignment는 `specialistId`와 `repositoryAccessCeiling`을 가진다. 선택한 모든 Work Item을 배정한다. 하나의 Work Item에 read만, write만, 또는 두 상한을 혼합해 배정할 수 있다. read/write는 업무 범위의 상한이며 실제 수정·Shell·Runtime 권한은 별도 승인에서 결정한다.
 
+[Assignment Schema](../src/contracts/assignment/phase-b-assignment.ts)는 구조를 정의한다. [선택 범위 확인](../src/contracts/assignment/select-assignment-work-items.ts)과 [관계 검증](../src/contracts/assignment/validate-assignment-proposal.ts)은 Planning과 Governance가 공유한다. Work Decomposition과 Assignment는 [공통 의존성 검증](../src/contracts/shared/validate-dependencies.ts)을 사용한다. 승인 출처와 정책·위임에서 허용하는 배정 범위는 Governance가 결정한다.
+
 Governance는 등록과 조회에서 승인 출처·Decomposition·Snapshot을 재검증한다. Plan ID는 Decomposition과 Staffing Binding, Snapshot, `selectedWorkItemIds`, Assignment 목록을 함께 해시한다. 기존 `executor` 형식의 Plan이 있는 Ledger는 로드에 실패하며 자동 변환·삭제·초기화는 없다. 독립 단일 Work Item 실행은 Plan이 배정된 업무를 우회 실행할 수 없다.
 
 계획만 요청하면 Plan 준비에서 종료한다. 준비 성공 후 `execution.assignment` 옵션이 있으면 `execute-assignments`를 호출한다. 같이 요청한 상세 계획은 보류한다.

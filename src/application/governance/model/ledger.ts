@@ -4,10 +4,8 @@ import {
 } from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import {
-  selectAssignmentWorkItems,
-  validateAssignmentProposal,
-} from "@/contracts/phase-b-assignment.js";
+import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
 import { approvedDecisionSchema } from "../approval/features/direction-review/model/result.js";
 import {
   directionAnalysisSchema,

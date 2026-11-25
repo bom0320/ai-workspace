@@ -40,5 +40,4 @@ export {
 export {
   recordAssignmentFailure,
   getAssignmentExecutionResults,
-  getWorkerAssignmentPlanningContext,
 } from "./records/assignment-executions/assignment-execution-results.js";

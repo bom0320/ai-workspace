@@ -2,10 +2,10 @@ import type { GovernanceLedger } from "../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   phaseBAssignmentsSchema,
-  selectAssignmentWorkItems,
-  validateAssignmentProposal,
   type PhaseBAssignment,
-} from "@/contracts/phase-b-assignment.js";
+} from "@/contracts/assignment/phase-b-assignment.js";
+import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
 import type { AssignmentPlan } from "../../model/assignment-plan.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import {

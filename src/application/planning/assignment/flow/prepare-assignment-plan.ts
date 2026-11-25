@@ -3,11 +3,9 @@ import {
   getAssignmentPlanContext,
   registerAssignmentPlan,
 } from "@/application/governance/index.js";
-import {
-  phaseBAssignmentsSchema,
-  selectAssignmentWorkItems,
-  validateAssignmentProposal,
-} from "@/contracts/phase-b-assignment.js";
+import { phaseBAssignmentsSchema } from "@/contracts/assignment/phase-b-assignment.js";
+import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
 
 export type AssignmentPlanAgent = (
   context: ReturnType<typeof getAssignmentPlanContext>

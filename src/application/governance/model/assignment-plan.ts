@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { phaseBAssignmentsSchema } from "@/contracts/phase-b-assignment.js";
+import { phaseBAssignmentsSchema } from "@/contracts/assignment/phase-b-assignment.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);

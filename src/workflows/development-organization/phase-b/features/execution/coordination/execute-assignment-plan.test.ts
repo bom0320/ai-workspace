@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { executeCollaborativeAssignment } from "@/application/execution/index.js";
 import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
-import type { PhaseBAssignment } from "@/contracts/phase-b-assignment.js";
+import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
 import { executeAssignmentPlan } from "./execute-assignment-plan.js";
 
 vi.mock("@/application/execution/index.js", () => ({

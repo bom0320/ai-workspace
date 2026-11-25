@@ -8,9 +8,9 @@ import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import type { PlanningResult } from "@/application/planning/index.js";
 import { workDecompositionResultSchema } from "@/application/work-decomposition/index.js";
-import { phaseACompletedSchema } from "../contracts/phase-handoff.js";
+import { phaseBHandoffSchema } from "../contracts/phase-handoff.js";
 
-export const phaseBInput = new StateSchema({ handoff: phaseACompletedSchema });
+export const phaseBInput = new StateSchema({ handoff: phaseBHandoffSchema });
 
 export const phaseBState = new StateSchema({
   ...phaseBInput.fields,
@@ -19,7 +19,7 @@ export const phaseBState = new StateSchema({
       z
         .object({
           status: z.literal("accepted"),
-          handoff: phaseACompletedSchema,
+          handoff: phaseBHandoffSchema,
         })
         .strict(),
       z.object({ status: z.literal("denied"), reason: z.string() }).strict(),

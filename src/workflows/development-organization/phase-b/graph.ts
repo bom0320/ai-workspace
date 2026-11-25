@@ -19,12 +19,12 @@ import {
 
 type DetailedPlanningOptions = Omit<
   Parameters<typeof executeWorkItemPlanning>[0],
-  "phaseB" | "executionCeiling" | "predecessorResults"
+  "phaseB" | "executionDelegationGrant" | "predecessorResults"
 >;
 
 export type PhaseBGraphOptions = Omit<
   RunWorkDecompositionOptions,
-  "executionCeiling"
+  "executionDelegationGrant"
 > & {
   planning?: {
     selectWorkItemIds: SelectWorkItemIds;

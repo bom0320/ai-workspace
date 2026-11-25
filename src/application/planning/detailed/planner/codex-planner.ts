@@ -17,9 +17,9 @@ export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
   return async (state, limits) => {
     const input = createPlannerContext(state, limits);
     const prompt = [
-      ...(input.detail?.executionCeiling
+      ...(input.detail?.executionDelegationGrant
         ? [
-            "Plan changes and verification within the approved executionCeiling. Select exact files and only supported verification commands; the plan grants no authority.",
+            "Plan changes and verification within the approved detail.executionDelegationGrant. Select exact files and only supported verification commands; the plan grants no authority.",
           ]
         : []),
       "You are a planning-only software agent.",

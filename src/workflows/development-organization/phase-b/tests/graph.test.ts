@@ -189,7 +189,7 @@ async function invoke(options: PhaseBGraphOptions) {
   const result = await createPhaseBGraph(options).invoke(input);
   expect(runWorkDecomposition).toHaveBeenCalledExactlyOnceWith(
     decompositionInput,
-    { ...options, executionCeiling: handoff.executionDelegation.grant }
+    { ...options, executionDelegationGrant: handoff.executionDelegation.grant }
   );
   expect(getApprovedDecision).toHaveBeenCalledExactlyOnceWith(
     decompositionInput.approvedDecisionId
@@ -211,7 +211,7 @@ it("returns the proposed result from one Application call", async () => {
   expect(agent).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       goal: approval.context.goal,
-      executionCeiling: handoff.executionDelegation.grant,
+      executionDelegationGrant: handoff.executionDelegation.grant,
     })
   );
 });

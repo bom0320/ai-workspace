@@ -14,9 +14,9 @@ export async function runCodexCEOWorkDecomposition(
   timeoutMs = 15 * 60 * 1000
 ): Promise<unknown> {
   const prompt = [
-    ...(context.executionCeiling
+    ...(context.executionDelegationGrant
       ? [
-          "Keep proposed work within the supplied executionCeiling. Escalate if the approved direction needs capabilities outside it.",
+          "Keep proposed work within the supplied executionDelegationGrant. Escalate if the approved direction needs capabilities outside it.",
         ]
       : []),
     "You are the CEO Work Decomposition agent. Turn the approved Synthesis Proposal direction into independently deliverable and verifiable work while preserving the original Human Goal and Constraints.",

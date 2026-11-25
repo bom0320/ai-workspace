@@ -192,9 +192,9 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 독립 업무와 의존 업무는 한 계획에 섞일 수 있다. 세 형태는 Work Item 수와 의존 관계에서 파악하므로 별도 Workflow 모드나 분류용 `type` 필드가 필요하지 않다.
 
-**현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID만 전달한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
+**현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID를 전달한다. Phase B Graph가 승인 위임을 전달한 경우 `executionDelegationGrant`도 포함한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
 
-**현재 Graph 계약:** Graph 입력은 `{ handoff: PhaseBHandoff }`다. Work Decomposition Node는 승인 쌍을 Ledger에서 다시 검증한 뒤 승인 방향과 위임 상한을 Application에 전달한다. 검증 실패 시 `handoffResult`에 거부를 기록하고 종료한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
+**현재 Graph 계약:** Graph 입력은 `{ handoff: PhaseBHandoff }`다. Work Decomposition Node는 승인 쌍을 Ledger에서 다시 검증한 뒤 승인된 `ExecutionDelegation.grant`를 `executionDelegationGrant`로 Application에 전달한다. 검증 실패 시 `handoffResult`에 거부를 기록하고 종료한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
 
 #### Work Item / Specialist Assignment / TaskContract
 
@@ -220,7 +220,7 @@ Phase B에서는 승인 기록이 가리키는 Repository와 요청 경로를 �
 
 선행 관계는 기존 `dependsOn`으로 표현한다. 별도 의존성 분류 결과나 Ready / Waiting 상태를 추가하지 않는다. 의존 업무도 설계 정보가 충분하면 상세 계획을 수립할 수 있으며, 계획 완료는 실행·검증 완료와 구분한다. 검증된 선행 산출물로 Planning을 재개하는 계약은 후속 범위다.
 
-**Step 5.3.1-R Work Item 책임.** Work Item은 승인 방향에서 도출한 목표·산출물·선행 관계 및 선택적인 분리 근거·추천 역할을 정의한다. CEO는 승인 방향, Human 제약 및 위임 상한을 고려해 업무와 완료 경계를 분해한다. Work Item에는 실행 유형이나 접근 상한이 없다. Assignment가 개별 Specialist의 목표·산출물·접근 상한을 정의하고, 별도의 Authorization이 실제 권한을 결정한다. Worker는 승인된 구현에 사용하는 내부 Runtime이다.
+**Step 5.3.1-R Work Item 책임.** Work Item은 승인 방향에서 도출한 목표·산출물·선행 관계 및 선택적인 분리 근거·추천 역할을 정의한다. CEO는 승인 방향, Human 제약 및 위임 범위를 고려해 업무와 완료 경계를 분해한다. Work Item에는 실행 유형이나 접근 상한이 없다. Assignment가 개별 Specialist의 목표·산출물·접근 상한을 정의하고, 별도의 Authorization이 실제 권한을 결정한다. Worker는 승인된 구현에 사용하는 내부 Runtime이다.
 
 이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B `planning.detailed`와 직접 호출은 Assignment에 결합된 상세 계획 권한이 준비될 때까지 차단한다. Graph는 Execution Source를 발급하지 않는다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
 
@@ -307,7 +307,7 @@ Work Item Coordination / Integration
 
 정상 Phase A의 `human-direction-governance` 대상은 현재 정책에 맞는 CEO 위임 제안과 한 번의 Human 동시 승인을 요구한다. 방향과 정확한 위임 범위를 승인하고 Ledger 검증을 통과하면 `phaseACompletion`에 `{ status: "completed", decision, executionDelegation }`을 기록한다. 인간은 정책 범위에서 제안을 수정할 수 있으며 실제 수정된 Grant가 확인 바인딩에 들어간다. Revision은 Synthesis와 위임 제안을 다시 생성한다. 제안 실패 시 분석과 Synthesis 결과는 보존한다.
 
-Phase B는 같은 구조의 `PhaseBHandoff`를 받고 분해 전에 `verifyExecutionHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. 분해와 상세 계획에는 승인 방향과 위임 상한을 전달한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
+`phaseACompletionSchema`는 Phase A의 전체 종료 결과를 표현하며, 성공 분기에는 `phaseBHandoffSchema`를 사용한다. Phase B는 이 성공 결과를 `PhaseBHandoff`로 받고 분해 전에 `verifyExecutionHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. Work Decomposition에는 승인 방향과 `executionDelegationGrant`를 전달한다. Detailed Planning 입력의 같은 필드는 직렬화된 Grant를 받으며, Phase B의 직접 상세 계획 경로는 차단 상태다. `ExecutionDelegation`은 Human 위임 기록 전체를 가리킨다. `repositoryAccessCeiling`은 Assignment의 Repository 접근 상한이며, 개별 실행의 Authority는 별도로 발급한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
 
 Governance 내부의 `resolveExecutionHandoff()`는 원본 `SynthesisContext`와 검증된 `SynthesisProposal` 전체를 함께 복원한다. `prepareAssignmentContext()`는 그 정보를 보존한 채 Specialist 출처, Staffing Binding, 배정 가능한 접근 상한을 추가한다. Assignment Planning Agent에는 선택한 Work Item, Specialist 후보, 접근 상한을 전달한다. 읽기 실행의 Context 구성에서는 기존 Goal과 Proposal의 승인 방향을 선택해 사용한다. [Assignment Context 준비](../src/application/governance/records/assignment-plans/prepare-assignment-context.ts)
 
@@ -405,7 +405,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 실행 준비가 검증되면 `executionSourceId`를, 완료 후 검증이나 등록이 실패하면 `executionBlockedReason`을 포함한다. 공개 입력은 Phase A 완료 계약과 같은 구조의 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `handoff`, 검증 결과인 `handoffResult`, `workDecompositionResult`, 남은 선택 ID인 `pendingPlanningIds`, 업무 ID와 결과를 연결한 `planningResults`를 소유한다. 계획 결과는 실행 준비가 검증되면 `executionSourceId`를, 완료 후 검증이나 등록이 실패하면 `executionBlockedReason`을 포함한다. 공개 입력은 Phase A의 성공 결과인 `PhaseBHandoff`를 받는다. Phase A 내부 State와 실행 옵션은 포함하지 않는다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 

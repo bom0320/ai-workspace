@@ -5,7 +5,7 @@ import {
 import type { PhaseBState } from "../../../state.js";
 import { verifyExecutionHandoff } from "@/application/governance/index.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
-import { phaseACompletedSchema } from "../../../../contracts/phase-handoff.js";
+import { phaseBHandoffSchema } from "../../../../contracts/phase-handoff.js";
 
 export function createRunWorkDecompositionNode(
   options: RunWorkDecompositionOptions
@@ -13,7 +13,7 @@ export function createRunWorkDecompositionNode(
   return async ({ handoff }: PhaseBState): Promise<Partial<PhaseBState>> => {
     let verified: ReturnType<typeof verifyExecutionHandoff>;
     try {
-      verified = verifyExecutionHandoff(phaseACompletedSchema.parse(handoff));
+      verified = verifyExecutionHandoff(phaseBHandoffSchema.parse(handoff));
     } catch {
       return {
         handoffResult: {
@@ -28,7 +28,10 @@ export function createRunWorkDecompositionNode(
     }
     const workDecompositionResult = await runWorkDecomposition(
       { approvedDecisionId: verified.decision.id },
-      { ...options, executionCeiling: verified.executionDelegation.grant }
+      {
+        ...options,
+        executionDelegationGrant: verified.executionDelegation.grant,
+      }
     );
     if (workDecompositionResult.status === "proposed")
       registerWorkDecomposition(workDecompositionResult);

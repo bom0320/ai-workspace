@@ -291,14 +291,31 @@ describe("runWorkDecomposition", () => {
       exitCode: 0,
       timedOut: false,
     });
+    const executionDelegationGrant = {
+      readScopes: [{ kind: "file" as const, path: "task.ts" }],
+      writeScopes: [],
+      shellCommands: [],
+      budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
+      policyVersion: 1,
+      expiresAt: "2099-01-01T00:00:00Z",
+    };
     expect(
-      await runWorkDecomposition(input, { timeoutMs: 1234 })
+      await runWorkDecomposition(input, {
+        timeoutMs: 1234,
+        executionDelegationGrant,
+      })
     ).toMatchObject({ status: "proposed" });
     expect(command).toHaveBeenCalledOnce();
     const [executable, args, options] = command.mock.calls[0];
     expect(executable).toBe("codex");
     expect(args).toContain("read-only");
     expect(args?.at(-1)).toContain(JSON.stringify(approved.review.proposal));
+    const prompt = args?.at(-1) ?? "";
+    expect(prompt).toContain("within the supplied executionDelegationGrant");
+    expect(
+      JSON.parse(prompt.split("WorkDecompositionContext:\n")[1])
+        .executionDelegationGrant
+    ).toEqual(executionDelegationGrant);
     expect(args?.at(-1)).toContain('Optional fields are "rationale"');
     expect(args?.at(-1)).toContain("Do not use rationale to repeat dependsOn");
     expect(args?.at(-1)).not.toContain(approved.decision.reviewBinding);

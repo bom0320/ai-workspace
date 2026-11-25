@@ -14,7 +14,7 @@ export type WorkDecompositionContext = Pick<
 > & {
   proposal: SynthesisProposal;
   snapshot: RepositorySnapshot;
-  executionCeiling?: ExecutionDelegationRequest;
+  executionDelegationGrant?: ExecutionDelegationRequest;
   approvalSource: {
     approvedDecisionId: string;
     reviewId: string;

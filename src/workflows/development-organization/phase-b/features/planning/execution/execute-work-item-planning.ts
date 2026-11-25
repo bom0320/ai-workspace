@@ -19,7 +19,7 @@ export type PhaseBPlanningInput = z.infer<typeof phaseBPlanningInputSchema>;
 export async function executeWorkItemPlanning(
   _options: Pick<PlanTaskOptions, "repositoryPath" | "limits" | "planner"> & {
     phaseB: PhaseBPlanningInput;
-    executionCeiling?: ExecutionDelegationRequest;
+    executionDelegationGrant?: ExecutionDelegationRequest;
     predecessorResults?: string;
   }
 ): Promise<PlanningResult> {

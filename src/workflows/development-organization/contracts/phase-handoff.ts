@@ -4,18 +4,17 @@ import {
   executionDelegationSchema,
 } from "@/application/governance/index.js";
 
-export const phaseACompletedSchema = z
+export const phaseBHandoffSchema = z
   .object({
     status: z.literal("completed"),
     decision: approvedDecisionSchema,
     executionDelegation: executionDelegationSchema,
   })
   .strict();
-export type PhaseACompleted = z.infer<typeof phaseACompletedSchema>;
-export type PhaseBHandoff = PhaseACompleted;
+export type PhaseBHandoff = z.infer<typeof phaseBHandoffSchema>;
 
 export const phaseACompletionSchema = z.discriminatedUnion("status", [
-  phaseACompletedSchema,
+  phaseBHandoffSchema,
   z
     .object({
       status: z.enum(["incomplete", "blocked", "denied", "rejected"]),

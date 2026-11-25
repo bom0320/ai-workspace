@@ -17,7 +17,7 @@ export const detailedPlanningInputSchema = z
     objective: planningText,
     deliverable: planningText,
     direction: planningText,
-    executionCeiling: planningText.optional(),
+    executionDelegationGrant: planningText.optional(),
     predecessorResults: planningText.optional(),
   })
   .strict();

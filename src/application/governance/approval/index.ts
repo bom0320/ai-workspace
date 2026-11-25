@@ -57,6 +57,7 @@ export { getExecutionDelegation } from "./features/execution-delegation/flow/get
 export {
   verifyExecutionHandoff,
   verifyPhaseBHandoff,
+  type VerifiedPhaseBContext,
 } from "./features/execution-delegation/flow/verify-execution-handoff.js";
 export {
   proposeExecutionDelegation,

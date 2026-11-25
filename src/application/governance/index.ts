@@ -36,6 +36,7 @@ export {
   reserveAssignmentExecution,
   claimAssignmentExecution,
   consumeAssignmentReadContext,
+  type AssignmentReadSession,
 } from "./authorization/features/assignment-execution/flow/authorize-assignment-execution.js";
 export {
   recordAssignmentFailure,

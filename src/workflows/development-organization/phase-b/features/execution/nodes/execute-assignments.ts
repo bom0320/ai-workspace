@@ -1,3 +1,4 @@
+import type { AssignmentExecutionInput } from "../../../data-flow/assignment-execution/input.js";
 import type { PhaseBState } from "../../../state.js";
 import {
   coordinateAssignmentExecutions,
@@ -22,8 +23,13 @@ export function createExecuteAssignmentsNode(
       assignmentPlanResult?.status !== "prepared"
     )
       return {};
+    const input: AssignmentExecutionInput = {
+      handoff,
+      plan: assignmentPlanResult.plan,
+      selectedWorkItemIds,
+    };
     const assignmentExecutionResult = await coordinateAssignmentExecutions(
-      { handoff, plan: assignmentPlanResult.plan, selectedWorkItemIds },
+      input,
       configured
     );
     return { assignmentExecutionResult };

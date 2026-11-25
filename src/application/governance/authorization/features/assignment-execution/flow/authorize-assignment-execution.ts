@@ -245,3 +245,8 @@ export function consumeAssignmentReadContext(
     },
   };
 }
+
+// This session stays in the process that consumed the Claim.
+export type AssignmentReadSession = ReturnType<
+  typeof consumeAssignmentReadContext
+>;

@@ -1,3 +1,5 @@
+import type { WorkDecompositionInput } from "../../../data-flow/work-decomposition/input.js";
+import type { HandoffOutput } from "../../../data-flow/handoff/output.js";
 import {
   decomposeApprovedWork,
   type RunWorkDecompositionOptions,
@@ -5,15 +7,18 @@ import {
 import type { PhaseBState } from "../../../state.js";
 import { verifyPhaseBHandoff } from "@/application/governance/index.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
-import { phaseBHandoffSchema } from "@/application/data-flow/phase-b/handoff/input.js";
+import { phaseBHandoffSchema } from "../../../data-flow/handoff/input.js";
 
 export function createRunWorkDecompositionNode(
   options: RunWorkDecompositionOptions
 ) {
   return async ({ handoff }: PhaseBState): Promise<Partial<PhaseBState>> => {
-    let verified: ReturnType<typeof verifyPhaseBHandoff>;
+    let handoffOutput: HandoffOutput;
     try {
-      verified = verifyPhaseBHandoff(phaseBHandoffSchema.parse(handoff));
+      handoffOutput = {
+        handoff,
+        approved: verifyPhaseBHandoff(phaseBHandoffSchema.parse(handoff)),
+      };
     } catch {
       return {
         handoffResult: {
@@ -24,21 +29,18 @@ export function createRunWorkDecompositionNode(
         workDecompositionResult: undefined,
       };
     }
-    const workDecompositionResult = await decomposeApprovedWork(
-      {
-        handoff,
-        approved: verified,
-        executionDelegationGrant: handoff.executionDelegation.grant,
-      },
-      options
-    );
+    const input: WorkDecompositionInput = {
+      ...handoffOutput,
+      executionDelegationGrant: handoff.executionDelegation.grant,
+    };
+    const workDecompositionResult = await decomposeApprovedWork(input, options);
     if (workDecompositionResult.status === "proposed")
       registerWorkDecomposition(workDecompositionResult);
     return {
       workDecompositionResult,
       handoffResult: {
         status: "accepted",
-        approved: verified,
+        approved: handoffOutput.approved,
       },
     };
   };

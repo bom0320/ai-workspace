@@ -1,7 +1,9 @@
-import type { WorkDecompositionInput as ApprovedWorkDecompositionInput } from "@/application/data-flow/phase-b/work-decomposition/input.js";
-import type { WorkDecompositionOutput } from "@/application/data-flow/phase-b/work-decomposition/output.js";
 import { z } from "zod";
-import { getApprovedDecision } from "@/application/governance/index.js";
+import {
+  getApprovedDecision,
+  type ApprovedDecision,
+  type VerifiedPhaseBContext,
+} from "@/application/governance/index.js";
 import {
   ceoWorkDecompositionDecisionSchema,
   type CEOWorkDecompositionAgent,
@@ -64,6 +66,15 @@ export async function runWorkDecomposition(
   );
 }
 
+export type ApprovedWorkDecompositionInput = {
+  handoff: { decision: ApprovedDecision };
+  executionDelegationGrant?: WorkDecompositionContext["executionDelegationGrant"];
+  approved: Pick<
+    VerifiedPhaseBContext,
+    "context" | "synthesisProposal" | "snapshot"
+  >;
+};
+
 export async function decomposeApprovedWork(
   {
     handoff: { decision },
@@ -71,7 +82,7 @@ export async function decomposeApprovedWork(
     executionDelegationGrant,
   }: ApprovedWorkDecompositionInput,
   { agent, timeoutMs }: RunWorkDecompositionOptions = {}
-): Promise<WorkDecompositionOutput> {
+): Promise<WorkDecompositionResult> {
   const ceoContext: WorkDecompositionContext = {
     goal: context.goal,
     proposal: synthesisProposal,

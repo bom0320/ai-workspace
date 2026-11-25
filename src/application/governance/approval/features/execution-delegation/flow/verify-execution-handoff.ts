@@ -1,4 +1,9 @@
-import type { HandoffOutput } from "@/application/data-flow/phase-b/handoff/output.js";
+import type {
+  SynthesisContext,
+  SynthesisProposal,
+} from "@/application/synthesis/index.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
+
 import type { GovernanceLedger } from "../../../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -17,6 +22,18 @@ import {
 type ExecutionHandoffApproval = {
   decision: ApprovedDecision;
   executionDelegation: ExecutionDelegation;
+};
+
+export type VerifiedPhaseBContext = {
+  context: SynthesisContext;
+  synthesisProposal: SynthesisProposal;
+  snapshot: RepositorySnapshot;
+  analysisSources: {
+    scopeId: string;
+    scopeVersion: number;
+    assignmentId: string;
+    specialistId: string;
+  }[];
 };
 
 // The caller owns the Ledger transaction and the Repository Snapshot check.
@@ -81,7 +98,7 @@ export function verifyExecutionHandoff(input: ExecutionHandoffApproval) {
 
 export function verifyPhaseBHandoff(
   input: ExecutionHandoffApproval
-): HandoffOutput {
+): VerifiedPhaseBContext {
   return withGovernanceLedger((ledger) => {
     const { context, synthesisProposal, snapshot, analysisSources } =
       resolveCurrentHandoff(ledger, input);

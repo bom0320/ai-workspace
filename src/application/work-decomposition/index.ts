@@ -1,6 +1,7 @@
 export {
   runWorkDecomposition,
   decomposeApprovedWork,
+  type ApprovedWorkDecompositionInput,
   workDecompositionInputSchema,
   type RunWorkDecompositionOptions,
   type WorkDecompositionInput,

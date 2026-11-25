@@ -1,15 +1,17 @@
 import type { AssignmentExecutionRequest } from "@/application/governance/index.js";
-import { executeAssignmentRead } from "@/application/execution/index.js";
+import {
+  executeAssignmentRead,
+  type AssignmentReadOutput,
+} from "@/application/execution/index.js";
 import {
   getPreparedAssignmentPlan,
   getAssignmentExecutionResults,
 } from "@/application/governance/index.js";
-import type { AssignmentExecutionInput } from "@/application/data-flow/phase-b/assignment-execution/input.js";
+import type { AssignmentExecutionInput } from "../../../data-flow/assignment-execution/input.js";
 import type {
   AssignmentExecutionOutput,
   AssignmentExecutionStatus,
-  AssignmentReadOutput,
-} from "@/application/data-flow/phase-b/assignment-execution/output.js";
+} from "../../../data-flow/assignment-execution/output.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 
 export type AssignmentExecutionOptions = {

@@ -1,10 +1,10 @@
-import type { HandoffOutput } from "@/application/data-flow/phase-b/handoff/output.js";
-import type { AssignmentPlanningOutput } from "@/application/data-flow/phase-b/assignment-planning/output.js";
-import type { AssignmentExecutionOutput } from "@/application/data-flow/phase-b/assignment-execution/output.js";
+import type { HandoffOutput } from "./data-flow/handoff/output.js";
+import type { AssignmentPlanningOutput } from "./data-flow/assignment-planning/output.js";
+import type { AssignmentExecutionOutput } from "./data-flow/assignment-execution/output.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { workDecompositionResultSchema } from "@/application/work-decomposition/index.js";
-import { phaseBHandoffSchema } from "@/application/data-flow/phase-b/handoff/input.js";
+import { phaseBHandoffSchema } from "./data-flow/handoff/input.js";
 
 export const phaseBInput = new StateSchema({ handoff: phaseBHandoffSchema });
 
@@ -15,7 +15,7 @@ export const phaseBState = new StateSchema({
       z
         .object({
           status: z.literal("accepted"),
-          approved: z.custom<HandoffOutput>(),
+          approved: z.custom<HandoffOutput["approved"]>(),
         })
         .strict(),
       z.object({ status: z.literal("denied"), reason: z.string() }).strict(),

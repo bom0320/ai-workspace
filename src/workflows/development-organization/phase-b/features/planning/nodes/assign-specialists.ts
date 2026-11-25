@@ -1,3 +1,4 @@
+import type { AssignmentPlanningInput } from "../../../data-flow/assignment-planning/input.js";
 import {
   createAssignmentPlan,
   type AssignmentPlanAgent,
@@ -20,10 +21,12 @@ export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {
     )
       return {};
 
-    const assignmentPlanResult = await createAssignmentPlan(
-      { handoff, proposal: workDecompositionResult, selectedWorkItemIds },
-      agent
-    );
+    const input: AssignmentPlanningInput = {
+      handoff,
+      proposal: workDecompositionResult,
+      selectedWorkItemIds,
+    };
+    const assignmentPlanResult = await createAssignmentPlan(input, agent);
     return { assignmentPlanResult };
   };
 }

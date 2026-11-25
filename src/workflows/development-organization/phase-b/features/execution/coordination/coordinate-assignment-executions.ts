@@ -7,12 +7,37 @@ import {
   getPreparedAssignmentPlan,
   getAssignmentExecutionResults,
 } from "@/application/governance/index.js";
-import type { AssignmentExecutionInput } from "../../../data-flow/assignment-execution/input.js";
-import type {
-  AssignmentExecutionOutput,
-  AssignmentExecutionStatus,
-} from "../../../data-flow/assignment-execution/output.js";
+import type { PhaseBHandoff } from "../../../../contracts/phase-handoff.js";
+import type { AssignmentPlanningOutput } from "@/application/planning/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
+
+export type AssignmentExecutionInput = {
+  handoff: PhaseBHandoff;
+  selectedWorkItemIds: readonly string[];
+  plan: Extract<AssignmentPlanningOutput, { status: "prepared" }>["plan"];
+};
+
+export type AssignmentExecutionStatus = "pending" | "denied" | "failed";
+
+export type AssignmentExecutionOutput =
+  | { status: "denied"; failure: "plan"; planId: string }
+  | {
+      status: AssignmentExecutionStatus;
+      planId: string;
+      results: (AssignmentReadOutput & {
+        assignmentId: string;
+        workItemId: string;
+      })[];
+      workItemResults: {
+        workItemId: string;
+        status: AssignmentExecutionStatus;
+      }[];
+      pendingAssignments: {
+        assignmentId: string;
+        workItemId: string;
+        reason: "context-required" | "dependency-pending";
+      }[];
+    };
 
 export type AssignmentExecutionOptions = {
   maxConcurrentRuns?: number;

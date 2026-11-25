@@ -1,3 +1,5 @@
+import type { CreateAssignmentPlanInput } from "../../data-flow/assignment/input.js";
+import type { AssignmentPlanningOutput } from "../../data-flow/assignment/output.js";
 import {
   AssignmentRegistrationError,
   getAssignmentPlanContext,
@@ -6,20 +8,6 @@ import {
 import { phaseBAssignmentsSchema } from "@/contracts/assignment/phase-b-assignment.js";
 import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
 import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
-
-export type CreateAssignmentPlanInput = {
-  handoff: Parameters<typeof registerAssignmentPlan>[0];
-  proposal: Parameters<typeof registerAssignmentPlan>[1];
-  selectedWorkItemIds: readonly string[];
-};
-
-export type AssignmentPlanningOutput =
-  | { status: "prepared"; plan: ReturnType<typeof registerAssignmentPlan> }
-  | {
-      status: "denied";
-      failure: AssignmentRegistrationError["failure"] | "agent";
-      reason: string;
-    };
 
 export type AssignmentPlanAgent = (
   context: ReturnType<typeof getAssignmentPlanContext> & {

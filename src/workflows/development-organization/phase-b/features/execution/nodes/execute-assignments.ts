@@ -1,5 +1,4 @@
-import type { AssignmentExecutionInput } from "../../../data-flow/assignment-execution/input.js";
-import type { PhaseBState } from "../../../state.js";
+import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 import {
   coordinateAssignmentExecutions,
   type AssignmentExecutionOptions,
@@ -9,7 +8,9 @@ export function createExecuteAssignmentsNode(
   options?: AssignmentExecutionOptions
 ) {
   const configured = options && structuredClone(options);
-  return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
+  return async (
+    state: PhaseBNodeInput<"execute-assignments">
+  ): Promise<PhaseBNodeOutput<"execute-assignments">> => {
     const {
       handoff,
       handoffResult,
@@ -23,7 +24,7 @@ export function createExecuteAssignmentsNode(
       assignmentPlanResult?.status !== "prepared"
     )
       return {};
-    const input: AssignmentExecutionInput = {
+    const input = {
       handoff,
       plan: assignmentPlanResult.plan,
       selectedWorkItemIds,

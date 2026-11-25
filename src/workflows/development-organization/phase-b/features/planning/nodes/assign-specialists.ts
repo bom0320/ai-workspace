@@ -1,12 +1,13 @@
-import type { AssignmentPlanningInput } from "../../../data-flow/assignment-planning/input.js";
 import {
   createAssignmentPlan,
   type AssignmentPlanAgent,
 } from "@/application/planning/index.js";
-import type { PhaseBState } from "../../../state.js";
+import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 
 export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {
-  return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
+  return async (
+    state: PhaseBNodeInput<"assign-specialists">
+  ): Promise<PhaseBNodeOutput<"assign-specialists">> => {
     const {
       handoff,
       handoffResult,
@@ -21,7 +22,7 @@ export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {
     )
       return {};
 
-    const input: AssignmentPlanningInput = {
+    const input = {
       handoff,
       proposal: workDecompositionResult,
       selectedWorkItemIds,

@@ -305,11 +305,11 @@ Approval의 `execution-delegation/`은 위임 제안·승인·조회와 위임 �
 
 ### Phase B Data Flow
 
-단계별 Input과 Output은 [Phase B Workflow Data Flow](../src/workflows/development-organization/phase-b/data-flow)에 둔다. 각 Application과 Governance는 자신의 업무 계약을 소유하고, Workflow Node는 이를 조합해 단계 사이의 정보를 전달한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
+[`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition의 `data-flow/`, Planning과 Execution의 `data-flow/assignment/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
 
 | 단계 | Input | Output 및 신뢰 근거 |
 | --- | --- | --- |
-| Handoff | `PhaseBHandoff`의 ApprovedDecision과 ExecutionDelegation | `verifyPhaseBHandoff()`가 Ledger와 Snapshot을 검증하고 승인된 SynthesisContext·SynthesisProposal·Snapshot·분석 출처 ID를 반환한다. `HandoffOutput`은 승인 쌍과 검증된 분석을 함께 연결한다. State는 승인 쌍을 입력에, 추가 분석을 수락 결과에 각각 한 번 보존한다. |
+| Handoff | `PhaseBHandoff`의 ApprovedDecision과 ExecutionDelegation | `verifyPhaseBHandoff()`가 Ledger와 Snapshot을 검증하고 승인된 SynthesisContext·SynthesisProposal·Snapshot·분석 출처 ID를 반환한다. 분해 Node는 승인 쌍과 검증된 분석을 함께 전달한다. State는 승인 쌍을 입력에, 추가 분석을 수락 결과에 각각 한 번 보존한다. |
 | Work Decomposition | 확인된 Handoff와 승인 Context, 위임 Grant | `decomposeApprovedWork()`가 Work Item과 선택적 `sources`를 생성한다. 독립 `runWorkDecomposition()`은 기존 승인 조회를 거쳐 같은 생성 로직을 사용한다. |
 | Assignment Planning | 분해 결과와 선택 ID, 승인 쌍 | `createAssignmentPlan()`은 등록된 분해 Binding을 확인하고 기존 배정 가능 Specialist와 접근 상한을 받아 적용한다. 제안 Agent에는 선택된 Work Item의 `sources` 참조와 기존 배정 정보만 전달한다. |
 | Assignment Execution | 등록된 Plan, 선택 ID, 승인 쌍 및 Assignment별 읽기 요청 | Coordinator가 전달받은 Plan을 Ledger 기록과 대조한다. Claim 이후 canonical Work Item·Assignment와 읽기 Context를 프로세스 내부 Session으로 연결하고 검증된 읽기 결과 참조만 State에 기록한다. |

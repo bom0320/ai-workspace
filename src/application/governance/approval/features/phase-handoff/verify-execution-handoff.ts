@@ -1,9 +1,5 @@
-import type {
-  SynthesisContext,
-  SynthesisProposal,
-} from "@/application/synthesis/index.js";
-import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
-
+import type { ExecutionHandoffApproval } from "../../../data-flow/handoff/input.js";
+import type { VerifiedPhaseBContext } from "../../../data-flow/handoff/output.js";
 import type { GovernanceLedger } from "../../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -12,29 +8,10 @@ import {
   withGovernanceLedger,
 } from "../../../records/governance-transaction.js";
 import { resolveApprovedDecision } from "../direction-review/flow/approved-decision.js";
-import type { ApprovedDecision } from "../direction-review/model/result.js";
-import type { ExecutionDelegation } from "../execution-delegation/model/execution-delegation.js";
 import {
   currentPolicyForExecutionGrant,
   executionDelegationId,
 } from "../execution-delegation/validation/validate-execution-delegation-records.js";
-
-type ExecutionHandoffApproval = {
-  decision: ApprovedDecision;
-  executionDelegation: ExecutionDelegation;
-};
-
-export type VerifiedPhaseBContext = {
-  context: SynthesisContext;
-  synthesisProposal: SynthesisProposal;
-  snapshot: RepositorySnapshot;
-  analysisSources: {
-    scopeId: string;
-    scopeVersion: number;
-    assignmentId: string;
-    specialistId: string;
-  }[];
-};
 
 // The caller owns the Ledger transaction and the Repository Snapshot check.
 export function resolveExecutionHandoff(

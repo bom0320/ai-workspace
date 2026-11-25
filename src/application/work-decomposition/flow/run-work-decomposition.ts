@@ -1,29 +1,20 @@
-import { z } from "zod";
 import {
-  getApprovedDecision,
-  type ApprovedDecision,
-  type VerifiedPhaseBContext,
-} from "@/application/governance/index.js";
+  workDecompositionInputSchema,
+  type ApprovedWorkDecompositionInput,
+} from "../data-flow/input.js";
+import { getApprovedDecision } from "@/application/governance/index.js";
 import {
   ceoWorkDecompositionDecisionSchema,
   type CEOWorkDecompositionAgent,
   type WorkDecompositionContext,
 } from "../protocol/ceo.js";
 import { validateWorkItemSources } from "../model/work.js";
-import type { WorkDecompositionResult } from "../model/result.js";
+import type { WorkDecompositionResult } from "../data-flow/output.js";
 import {
   CodexWorkDecompositionError,
   runCodexCEOWorkDecomposition,
 } from "../ceo/codex-ceo.js";
 import { validateDependencies } from "@/contracts/shared/validate-dependencies.js";
-
-export const workDecompositionInputSchema = z
-  .object({ approvedDecisionId: z.string().trim().min(1) })
-  .strict();
-
-export type WorkDecompositionInput = z.infer<
-  typeof workDecompositionInputSchema
->;
 
 export type RunWorkDecompositionOptions = {
   agent?: CEOWorkDecompositionAgent;
@@ -65,15 +56,6 @@ export async function runWorkDecomposition(
     options
   );
 }
-
-export type ApprovedWorkDecompositionInput = {
-  handoff: { decision: ApprovedDecision };
-  executionDelegationGrant?: WorkDecompositionContext["executionDelegationGrant"];
-  approved: Pick<
-    VerifiedPhaseBContext,
-    "context" | "synthesisProposal" | "snapshot"
-  >;
-};
 
 export async function decomposeApprovedWork(
   {

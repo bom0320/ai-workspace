@@ -1,15 +1,12 @@
 export {
   runWorkDecomposition,
   decomposeApprovedWork,
-  type ApprovedWorkDecompositionInput,
-  workDecompositionInputSchema,
   type RunWorkDecompositionOptions,
-  type WorkDecompositionInput,
 } from "./flow/run-work-decomposition.js";
 export {
   workDecompositionResultSchema,
   type WorkDecompositionResult,
-} from "./model/result.js";
+} from "./data-flow/output.js";
 export {
   workItemSchema,
   validateWorkItemSources,
@@ -19,3 +16,8 @@ export type {
   CEOWorkDecompositionAgent,
   WorkDecompositionContext,
 } from "./protocol/ceo.js";
+export {
+  workDecompositionInputSchema,
+  type ApprovedWorkDecompositionInput,
+  type WorkDecompositionInput,
+} from "./data-flow/input.js";

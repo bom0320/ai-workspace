@@ -2,7 +2,8 @@ import {
   executeAssignmentRead,
   executeWorkItem,
 } from "@/application/execution/index.js";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, expectTypeOf, it, vi } from "vitest";
+import { phaseBDataFlow } from "../data-flow.js";
 import { createAssignmentPlan } from "@/application/planning/index.js";
 import {
   getApprovedDecision,
@@ -193,6 +194,16 @@ async function invoke(options: PhaseBGraphOptions) {
   expect(getApprovedDecision).not.toHaveBeenCalled();
   return result;
 }
+
+it("declares data flow for exactly the registered Phase B nodes", () => {
+  const graph = createPhaseBGraph();
+  expectTypeOf<keyof typeof phaseBDataFlow>().toEqualTypeOf<
+    Exclude<keyof typeof graph.builder.nodes, "__start__" | "__end__">
+  >();
+  expect(Object.keys(phaseBDataFlow).sort()).toEqual(
+    Object.keys(graph.builder.nodes).sort()
+  );
+});
 
 it("returns the proposed result from one Application call", async () => {
   const agent = vi.fn().mockResolvedValue({ type: "propose", workItems });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { workItemsSchema } from "./work.js";
+import { workItemsSchema } from "../model/work.js";
 
 const text = z.string().trim().min(1);
 

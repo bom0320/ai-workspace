@@ -1,3 +1,5 @@
+export type { ExecutionHandoffApproval } from "./data-flow/handoff/input.js";
+export type { VerifiedPhaseBContext } from "./data-flow/handoff/output.js";
 export {
   approvedOperatingScopeSchema,
   invokeSpecialistRequestSchema,

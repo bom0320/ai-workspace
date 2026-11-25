@@ -1,8 +1,9 @@
+import type { AssignmentReadInput } from "../../../data-flow/assignment/input.js";
+import type { AssignmentReadOutput } from "../../../data-flow/assignment/output.js";
 import { ZodError } from "zod";
 import { runCollaborativeSpecialist } from "@/application/decision/index.js";
 import {
   AssignmentExecutionError,
-  type AssignmentExecutionRequest,
   type AssignmentReadSession,
   reserveAssignmentExecution,
   claimAssignmentExecution,
@@ -11,24 +12,6 @@ import {
 } from "@/application/governance/index.js";
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
 import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
-
-export type AssignmentReadInput = {
-  handoff: Parameters<typeof reserveAssignmentExecution>[0];
-  request: Extract<AssignmentExecutionRequest, { access: "read" }>;
-};
-
-export type AssignmentReadOutput =
-  | { status: "read-completed"; invocationId: string; resultDigest: string }
-  | {
-      status: "denied";
-      failure: AssignmentExecutionError["failure"] | "runtime";
-    }
-  | {
-      status: "failed";
-      failure: AssignmentExecutionError["failure"];
-      invocationId: string;
-      failureRecorded: boolean;
-    };
 
 export async function executeAssignmentRead({
   handoff,

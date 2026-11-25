@@ -1,5 +1,5 @@
 import type { WorkItem } from "@/application/work-decomposition/index.js";
-import type { PhaseBState } from "../../../state.js";
+import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 
 export type SelectWorkItemIds = (
   workItems: readonly WorkItem[]
@@ -8,7 +8,9 @@ export type SelectWorkItemIds = (
 export function createSelectWorkItemsNode(
   selectWorkItemIds: SelectWorkItemIds | undefined
 ) {
-  return (state: Pick<PhaseBState, "workDecompositionResult">) => {
+  return (
+    state: PhaseBNodeInput<"select-work-items">
+  ): PhaseBNodeOutput<"select-work-items"> => {
     const proposal = state.workDecompositionResult;
     if (proposal?.status !== "proposed" || !selectWorkItemIds) return {};
     const validIds = new Set(proposal.workItems.map(({ id }) => id));

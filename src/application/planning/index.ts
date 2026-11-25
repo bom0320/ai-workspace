@@ -15,6 +15,6 @@ export type { InspectRequest } from "./detailed/protocol/inspection.js";
 export {
   createAssignmentPlan,
   type AssignmentPlanAgent,
-  type CreateAssignmentPlanInput,
-  type AssignmentPlanningOutput,
 } from "./assignment/flow/create-assignment-plan.js";
+export type { CreateAssignmentPlanInput } from "./data-flow/assignment/input.js";
+export type { AssignmentPlanningOutput } from "./data-flow/assignment/output.js";

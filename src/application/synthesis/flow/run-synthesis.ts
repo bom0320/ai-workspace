@@ -1,12 +1,10 @@
 import {
   synthesisContextSchema,
   type SynthesisContext,
-} from "../protocol/context.js";
-import {
-  ceoSynthesisDecisionSchema,
-  type CEOSynthesisAgent,
-} from "../protocol/ceo.js";
-import type { SynthesisResult } from "../model/result.js";
+  type RunSynthesisOptions,
+} from "../data-flow/input.js";
+import { ceoSynthesisDecisionSchema } from "../protocol/ceo.js";
+import type { SynthesisResult } from "../data-flow/output.js";
 import {
   runCodexCEOSynthesis,
   CodexSynthesisError,
@@ -16,11 +14,6 @@ import {
   validateOutputReferences,
   validateProposalCoverage,
 } from "./validation/validate-output.js";
-
-export type RunSynthesisOptions = {
-  agent?: CEOSynthesisAgent;
-  timeoutMs?: number;
-};
 
 export async function runSynthesis(
   input: unknown,

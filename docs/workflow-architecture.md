@@ -303,6 +303,12 @@ Governance 내부의 `resolveExecutionHandoff()`는 원본 `SynthesisContext`와
 
 Approval의 `execution-delegation/`은 위임 제안·승인·조회와 위임 기록 검증을 담당한다. 같은 계층의 `phase-handoff/`는 승인 결정과 위임을 복원해 전달된 쌍을 원본 기록 및 현재 정책과 대조한다. Phase A 완료 시에는 `verifyExecutionHandoff()`가 검증된 승인 쌍을 반환하고, Phase B 진입 시에는 `verifyPhaseBHandoff()`가 검증된 분석 Context를 반환한다. 두 함수는 공통 검증과 Snapshot 확인을 사용한다. Assignment 준비와 실행 권한 검증은 각자의 Ledger 트랜잭션에서 `resolveExecutionHandoff()`를 재사용하고 Snapshot을 검사한다.
 
+### Phase A Data Flow
+
+Phase A의 Node는 `PhaseANodeInput`과 `PhaseANodeOutput`을 사용한다. [`phaseADataFlow`](../src/workflows/development-organization/phase-a/data-flow.ts)는 정책 조회가 지우는 이전 결과, Specialist 반복 실행의 진행 정보, Refinement가 이어받는 분석 근거, Synthesis Revision 및 방향 승인 완료 결과를 포함한다. 직접 Staffing 승인이 허용될 때 등록하는 `confirm-staffing-approval`과 `confirm-refinement`도 선언에 포함된다. 실제 등록 조건과 실행 순서는 [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)에서 정의한다.
+
+Staffing, Decision, Comparison, Analysis, Synthesis, Governance, Work Decomposition, Planning, Execution은 Application 최상위의 `data-flow/`에서 업무 계약을 소유한다. Analysis는 Assessment와 Refinement를, Planning은 Assignment Planning과 독립 Detailed Planning을 구분한다. 계약이 기존 도메인 모델이나 AI Protocol을 참조하는 경우 같은 스키마를 재사용한다.
+
 ### Phase B Data Flow
 
 [`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition의 `data-flow/`, Planning과 Execution의 `data-flow/assignment/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)

@@ -968,7 +968,7 @@ Governance 공통 model/ledger.ts와 records/governance-transaction.ts는 Approv
 
 `application/governance/records/`는 도메인 기록을 등록하고 조회할 때 저장된 출처와 Binding을 확인한다. Human 승인과 위임은 Approval이 관리하며, 개별 실행의 허용 여부와 Reservation·Claim은 Authorization이 결정한다. Ledger Schema는 `model/`이 정의하고 물리적 저장·Lock·서명 검증은 `services/governance-records/`가 담당한다.
 
-Phase B의 `graph.ts`는 실행 그래프를, `data-flow.ts`는 Node가 소비·생산하는 State 필드를 선언한다. 각 Application의 최상위 `data-flow/`는 실제 업무의 입력·출력 계약을 소유한다. Application과 Governance는 Workflow 계약을 참조하지 않는다. Governance는 승인과 기록을 재검증하고, Claim에서 소비한 읽기 Session은 프로세스 내부에서 관리한다. [Phase B Data Flow](workflow-architecture.md#phase-b-data-flow)
+Phase A와 Phase B의 `graph.ts`는 실행 순서와 분기를 정의한다. 각 Phase의 `data-flow.ts`는 Node가 소비하고 갱신할 수 있는 State 필드를 선언하며, Node는 그 선언에서 파생한 타입을 사용한다. Application 최상위의 `data-flow/`는 실제 업무 함수의 입출력 계약을 소유한다. 공유 도메인 모델과 AI 메시지 스키마는 기존 계약을 재사용한다. Application과 Governance의 의존성은 공통 계약 계층을 향한다. Governance는 승인과 기록을 재검증하고, Claim에서 소비한 읽기 Session은 프로세스 내부에서 관리한다. [Workflow Data Flow](workflow-architecture.md#phase-a-data-flow)
 
 | Records 위치 | 관리하는 기록과 조회 책임 |
 | --- | --- |

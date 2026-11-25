@@ -6,3 +6,7 @@ export type ComparisonContext = {
   repositoryCommitSha: string;
   decisions: AgentDecision[];
 };
+
+export type CodexComparatorOptions = {
+  timeoutMs?: number;
+};

@@ -1,7 +1,5 @@
-import {
-  authorizedSpecialistInvocationSchema,
-  type InvokeSpecialistRequest,
-} from "../../../../../model/authority.js";
+import { authorizedSpecialistInvocationSchema } from "../../../../../model/authority.js";
+import { type InvokeSpecialistRequest } from "../../../../../data-flow/specialist-invocation/input.js";
 import type { InvocationAttempt } from "../../model/invocation-attempt.js";
 import type { AuthorizationContext } from "../context/resolve-authorization-context.js";
 

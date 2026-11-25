@@ -11,13 +11,15 @@ import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
 import {
   approvedOperatingScopeSchema,
-  invokeSpecialistRequestSchema,
   authorizedSpecialistInvocationSchema,
-  authorityVerdictSchema,
   type ApprovedOperatingScope,
   type AuthorizedSpecialistInvocation,
-  type AuthorityVerdict,
 } from "./authority.js";
+import { invokeSpecialistRequestSchema } from "../data-flow/specialist-invocation/input.js";
+import {
+  authorityVerdictSchema,
+  type AuthorityVerdict,
+} from "../data-flow/specialist-invocation/output.js";
 
 const goal = { objective: "Review the interface", targetRepository: "example" };
 const snapshot = {

@@ -1,11 +1,12 @@
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import {
   approveStaffingProposal,
   type StaffingApprovalResult,
 } from "@/application/governance/index.js";
-import {
-  staffingApprovalEvaluationSchema,
-  type PhaseAState,
-} from "../../../../state.js";
+import { staffingApprovalEvaluationSchema } from "../../../../state.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 
 export type StaffingConfirmationOptions = {
@@ -17,7 +18,9 @@ export type StaffingConfirmationOptions = {
 export function createConfirmStaffingApprovalNode(
   confirmApproval: StaffingConfirmationOptions["confirmApproval"]
 ) {
-  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
+  return async (
+    state: PhaseANodeInput<"confirm-staffing-approval">
+  ): Promise<PhaseANodeOutput<"confirm-staffing-approval">> => {
     // 1. Check Human Confirmation Availability
     if (
       state.staffingResult?.status !== "proposed" ||

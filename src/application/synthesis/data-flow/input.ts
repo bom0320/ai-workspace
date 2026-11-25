@@ -1,3 +1,4 @@
+import type { CEOSynthesisDecision } from "../protocol/ceo.js";
 import { z } from "zod";
 import { staffingAssignmentSchema } from "@/application/staffing/index.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
@@ -46,3 +47,12 @@ export const synthesisContextSchema = z
   .strict();
 
 export type SynthesisContext = z.infer<typeof synthesisContextSchema>;
+
+export type CEOSynthesisAgent = (
+  context: SynthesisContext
+) => Promise<CEOSynthesisDecision>;
+
+export type RunSynthesisOptions = {
+  agent?: CEOSynthesisAgent;
+  timeoutMs?: number;
+};

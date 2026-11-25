@@ -8,7 +8,7 @@ import {
   authorizeExecutionForRun,
   readOnlyExecutionRequestSchema,
 } from "@/application/governance/index.js";
-import type { ReadOnlyExecutionOutcome } from "../../model/result.js";
+import type { ReadOnlyExecutionOutcome } from "../../data-flow/work-item/output.js";
 import { checkReadOnlyRuntime } from "../check-execution-runtime.js";
 
 export async function executeReadOnlyWorkItem(

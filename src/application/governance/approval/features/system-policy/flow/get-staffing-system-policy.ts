@@ -1,10 +1,10 @@
+import type { StaffingSystemPolicyResult } from "../../../../data-flow/system-policy/output.js";
 import {
   resolveGovernanceRepository,
   withGovernanceLedger,
 } from "../../../../records/governance-transaction.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 
-import { type StaffingSystemPolicy } from "../model/policy.js";
 import type { StaffingAssignmentConstraints } from "@/application/staffing/index.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";
 import { readCurrentStaffingDelegation } from "../../human-delegation/flow/validation/delegation-configuration.js";
@@ -12,15 +12,6 @@ import {
   validateSystemConfiguration,
   requireCurrentSystemRecord,
 } from "./validation/system-configuration.js";
-
-export type StaffingSystemPolicyResult =
-  | {
-      status: "ready";
-      configuration: StaffingSystemPolicy;
-      version: number;
-      assignmentConstraints?: StaffingAssignmentConstraints;
-    }
-  | { status: "denied"; reason: string };
 
 // Return a detached configuration under a short authenticated read transaction.
 // The caller must not keep the ledger locked while an Agent or Human responds.

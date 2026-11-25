@@ -9,9 +9,9 @@ import {
 } from "../../../../records/governance-transaction.js";
 import {
   authorizedSpecialistInvocationSchema,
-  invokeSpecialistRequestSchema,
   type AuthorizedSpecialistInvocation,
 } from "../../../../model/authority.js";
+import { invokeSpecialistRequestSchema } from "../../../../data-flow/specialist-invocation/input.js";
 
 // A claim consumes this reservation once; it does not execute or record success.
 export function claimAuthorizedInvocation(

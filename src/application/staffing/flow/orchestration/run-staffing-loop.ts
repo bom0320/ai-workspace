@@ -2,12 +2,9 @@ import { z, ZodError } from "zod";
 
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
-import {
-  CodexCEOError,
-  runCodexCEO,
-  type CodexCEOOptions,
-} from "../../ceo/codex-ceo.js";
-import type { StaffingRunResult } from "../../model/result.js";
+import { CodexCEOError, runCodexCEO } from "../../ceo/codex-ceo.js";
+import type { RunStaffingOptions } from "../../data-flow/input.js";
+import type { StaffingRunResult } from "../../data-flow/output.js";
 import {
   ceoStaffingDecisionSchema,
   type CEOStaffingAgent,
@@ -22,10 +19,7 @@ import {
 
 import type { StaffingContextState } from "../../model/state.js";
 export type StaffingLoopOptions = DiscoverStaffingContextOptions &
-  CodexCEOOptions & {
-    maxRounds: number;
-    agent?: CEOStaffingAgent;
-  };
+  Pick<RunStaffingOptions, "maxRounds" | "timeoutMs" | "agent">;
 
 type StaffingLoopResult =
   | Exclude<StaffingRunResult, { status: "proposed" }>

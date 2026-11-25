@@ -6,7 +6,7 @@ import {
   type ExecutionSystemPolicy,
 } from "../../system-policy/model/execution-system-policy.js";
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
-import type { ApprovedDecision } from "../../direction-review/model/result.js";
+import type { ApprovedDecision } from "../../direction-review/model/approved-decision.js";
 import type { ExecutionDelegationRequest } from "../model/execution-delegation.js";
 
 export function executionDelegationId(approvedDecisionId: string): string {

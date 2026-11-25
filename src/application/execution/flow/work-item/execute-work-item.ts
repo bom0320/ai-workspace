@@ -2,7 +2,7 @@ import {
   authorizeExecutionForRun,
   executionRequestSchema,
 } from "@/application/governance/index.js";
-import type { ExecutionOutcome } from "../../model/result.js";
+import type { ExecutionOutcome } from "../../data-flow/work-item/output.js";
 import { checkGovernedWorkerRuntime } from "../check-execution-runtime.js";
 import { runExecutionPipeline } from "../orchestration/run-execution-pipeline.js";
 

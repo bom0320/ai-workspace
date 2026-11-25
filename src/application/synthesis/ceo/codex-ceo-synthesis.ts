@@ -1,5 +1,5 @@
 import { runContextOnlyCodex } from "@/infrastructure/codex/index.js";
-import type { SynthesisContext } from "../protocol/context.js";
+import type { SynthesisContext } from "../data-flow/input.js";
 
 // Transport failures have controlled categories; raw process output is never a public reason.
 export class CodexSynthesisError extends Error {

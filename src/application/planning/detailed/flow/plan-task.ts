@@ -1,30 +1,19 @@
+import type { PlanTaskOptions } from "../../data-flow/detailed/input.js";
 import { randomUUID } from "node:crypto";
 
-import type { GoalSpec } from "@/contracts/goal.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 
-import type { PlanningLimits } from "../model/limits.js";
-import type { PlanningResult } from "../model/result.js";
+import type { PlanningResult } from "../../data-flow/detailed/output.js";
 import {
   detailedPlanningInputSchema,
-  type DetailedPlanningInput,
   type PlanningState,
 } from "../model/state.js";
 import { createCodexPlanner } from "../planner/codex-planner.js";
 import { inspectRepository } from "./inspection/inspect-repository.js";
 import { inspectInitialFiles } from "./inspection/inspect-initial-files.js";
 import { runPlanningLoop } from "./orchestration/planning-loop.js";
-import type { Planner } from "../protocol/planner.js";
 import { createFastPathTaskDraft } from "./adaptive/create-fast-path-task-draft.js";
 import { buildTaskContract } from "./transformation/build-task-contract.js";
-
-export type PlanTaskOptions = {
-  goal: GoalSpec;
-  repositoryPath: string;
-  limits: PlanningLimits;
-  planner?: Planner;
-  detail?: DetailedPlanningInput;
-};
 
 export async function planTask({
   goal,

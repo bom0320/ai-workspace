@@ -1,26 +1,14 @@
+import type { RunDecisionInput } from "../data-flow/input.js";
+import type { RunDecisionResult } from "../data-flow/output.js";
 import type { SpecialistAuthority } from "@/contracts/specialist/authority.js";
 import { basename } from "node:path";
 
-import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
+import { goalSpecSchema } from "@/contracts/goal.js";
 
-import type { AgentDecision } from "../protocol/decision.js";
-import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import { captureRepositorySnapshot } from "@/services/repository-snapshot/index.js";
 import { loadSnapshotFiles } from "./context/load-snapshot-files.js";
 import { runIndependentDecisions } from "./orchestration/run-independent-decisions.js";
-
-export type RunDecisionInput = {
-  repositoryPath: string;
-  objective: string;
-  filePaths: string[];
-};
-
-export type RunDecisionResult = {
-  goal: GoalSpec;
-  snapshot: RepositorySnapshot;
-  decisions: AgentDecision[];
-};
 
 export async function runDecision({
   repositoryPath,

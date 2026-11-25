@@ -6,7 +6,7 @@ import type { PlanningState } from "../../model/state.js";
 import type { InspectRequest } from "../../protocol/inspection.js";
 import type { Planner, TaskDraft } from "../../protocol/planner.js";
 import type { PlanningLimits } from "../../model/limits.js";
-import type { PlanningResult } from "../../model/result.js";
+import type { PlanningResult } from "../../../data-flow/detailed/output.js";
 import { buildTaskContract } from "../transformation/build-task-contract.js";
 import {
   inspectFiles,

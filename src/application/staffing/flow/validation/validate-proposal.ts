@@ -1,3 +1,4 @@
+import type { RunStaffingOptions } from "../../data-flow/input.js";
 import {
   isContextPathAllowed,
   isInspectablePath,
@@ -16,13 +17,6 @@ import { realpathSync } from "node:fs";
 import type { StaffingDraft } from "../../protocol/ceo.js";
 import type { StaffingLoopOptions } from "../orchestration/run-staffing-loop.js";
 import { requireFile } from "../inspection/context-policy.js";
-
-export type RunStaffingOptions = Pick<
-  StaffingLoopOptions,
-  "goal" | "maxRounds" | "timeoutMs" | "agent" | "assignmentConstraints"
-> & {
-  systemPolicy: StaffingSystemPolicy;
-};
 
 export class ProposalPolicyError extends Error {}
 

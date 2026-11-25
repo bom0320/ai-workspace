@@ -1,10 +1,10 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import { getApprovedStaffingScope } from "@/application/governance/index.js";
 import { validateSpecialistRequestBatch } from "../validation/validate-specialist-request-batch.js";
-import type { PhaseAState } from "../../../state.js";
 
 export function preflightSpecialistDecisionsNode(
-  state: PhaseAState
-): Partial<PhaseAState> {
+  state: PhaseANodeInput<"preflight-specialist-decisions">
+): PhaseANodeOutput<"preflight-specialist-decisions"> {
   // 1. Resolve the Stored Approved Scope
   try {
     if (state.approvalResult?.status !== "approved")

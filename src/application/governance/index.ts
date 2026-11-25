@@ -2,15 +2,19 @@ export type { ExecutionHandoffApproval } from "./data-flow/handoff/input.js";
 export type { VerifiedPhaseBContext } from "./data-flow/handoff/output.js";
 export {
   approvedOperatingScopeSchema,
-  invokeSpecialistRequestSchema,
   authorizedSpecialistInvocationSchema,
-  authorityVerdictSchema,
   type ApprovedAssignment,
   type ApprovedOperatingScope,
-  type InvokeSpecialistRequest,
   type AuthorizedSpecialistInvocation,
-  type AuthorityVerdict,
 } from "./model/authority.js";
+export {
+  invokeSpecialistRequestSchema,
+  type InvokeSpecialistRequest,
+} from "./data-flow/specialist-invocation/input.js";
+export {
+  authorityVerdictSchema,
+  type AuthorityVerdict,
+} from "./data-flow/specialist-invocation/output.js";
 
 export {
   invocationEvaluationContextSchema,

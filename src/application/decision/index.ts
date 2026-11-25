@@ -1,12 +1,12 @@
-export {
-  runDecision,
-  type RunDecisionInput,
-  type RunDecisionResult,
-} from "./flow/run-decision.js";
+export { runDecision } from "./flow/run-decision.js";
+export type {
+  RunDecisionInput,
+  IndependentDecisionInput,
+} from "./data-flow/input.js";
+export { type RunDecisionResult } from "./data-flow/output.js";
 export {
   runIndependentDecisions,
   DecisionValidationError,
-  type IndependentDecisionInput,
 } from "./flow/orchestration/run-independent-decisions.js";
 export type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 export type { AgentDecision, EvidenceReference } from "./protocol/decision.js";

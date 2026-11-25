@@ -23,8 +23,3 @@ export type ComparisonGap = {
   specialistIds: string[];
   reason: string;
 };
-
-export type ComparisonResult = {
-  findings: ComparisonFinding[];
-  gaps: ComparisonGap[];
-};

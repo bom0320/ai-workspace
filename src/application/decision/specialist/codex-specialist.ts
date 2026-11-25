@@ -1,3 +1,8 @@
+import type {
+  CodexSpecialistOptions,
+  SpecialistReadInput,
+  CollaborativeSpecialistReadInput,
+} from "../data-flow/input.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,23 +24,19 @@ import {
   type AgentDecision,
 } from "../protocol/decision.js";
 
-export type CodexSpecialistOptions = {
-  timeoutMs?: number;
-};
-
 export async function runCodexSpecialist(
-  specialist: SpecialistDefinition,
-  context: SpecialistContext,
-  authority: SpecialistAuthority,
+  specialist: SpecialistReadInput["specialist"],
+  context: SpecialistReadInput["context"],
+  authority: SpecialistReadInput["authority"],
   options: CodexSpecialistOptions = {}
 ): Promise<AgentDecision> {
   return runSpecialist(specialist, context, authority, options);
 }
 
 export function runCollaborativeSpecialist(
-  specialist: SpecialistDefinition,
-  context: CollaborativeSpecialistContext,
-  authority: SpecialistAuthority | undefined,
+  specialist: CollaborativeSpecialistReadInput["specialist"],
+  context: CollaborativeSpecialistReadInput["context"],
+  authority: CollaborativeSpecialistReadInput["authority"],
   options: CodexSpecialistOptions = {}
 ) {
   return runSpecialist(specialist, context, authority, options, true);

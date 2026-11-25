@@ -1,6 +1,6 @@
 import type { TaskContract } from "@/contracts/task.js";
 
-import type { PlanningState } from "./state.js";
+import type { PlanningState } from "../../detailed/model/state.js";
 
 export type PlanningResult =
   | {

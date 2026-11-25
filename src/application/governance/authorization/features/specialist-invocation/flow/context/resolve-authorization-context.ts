@@ -1,5 +1,5 @@
 import type { GovernanceLedger } from "../../../../../model/ledger.js";
-import type { InvokeSpecialistRequest } from "../../../../../model/authority.js";
+import type { InvokeSpecialistRequest } from "../../../../../data-flow/specialist-invocation/input.js";
 import {
   validateStoredIssuance,
   requireCurrentSystemPolicy,

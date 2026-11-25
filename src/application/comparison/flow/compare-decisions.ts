@@ -1,9 +1,7 @@
-import {
-  runCodexComparator,
-  type CodexComparatorOptions,
-} from "../comparator/codex-comparator.js";
-import type { ComparisonResult } from "../model/comparison.js";
-import type { ComparisonContext } from "../protocol/context.js";
+import { runCodexComparator } from "../comparator/codex-comparator.js";
+import { type CodexComparatorOptions } from "../data-flow/input.js";
+import type { ComparisonResult } from "../data-flow/output.js";
+import type { ComparisonContext } from "../data-flow/input.js";
 import { validateComparisonReferences } from "./validation/validate-references.js";
 
 export async function compareDecisions(

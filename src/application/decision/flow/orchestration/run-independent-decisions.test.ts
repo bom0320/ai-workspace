@@ -7,10 +7,8 @@ import type { AgentDecision } from "../../protocol/decision.js";
 import { runCodexSpecialist } from "../../specialist/codex-specialist.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import { validateDecisionEvidence } from "../validation/validate-evidence.js";
-import {
-  runIndependentDecisions,
-  type IndependentDecisionInput,
-} from "./run-independent-decisions.js";
+import { runIndependentDecisions } from "./run-independent-decisions.js";
+import { type IndependentDecisionInput } from "../../data-flow/input.js";
 
 vi.mock("../../specialist/codex-specialist.js", () => ({
   runCodexSpecialist: vi.fn(),

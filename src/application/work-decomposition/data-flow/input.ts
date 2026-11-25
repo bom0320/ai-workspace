@@ -3,7 +3,10 @@ import type {
   ApprovedDecision,
   VerifiedPhaseBContext,
 } from "@/application/governance/index.js";
-import type { WorkDecompositionContext } from "../protocol/ceo.js";
+import type {
+  WorkDecompositionContext,
+  CEOWorkDecompositionAgent,
+} from "../protocol/ceo.js";
 
 export const workDecompositionInputSchema = z
   .object({ approvedDecisionId: z.string().trim().min(1) })
@@ -20,4 +23,10 @@ export type ApprovedWorkDecompositionInput = {
     VerifiedPhaseBContext,
     "context" | "synthesisProposal" | "snapshot"
   >;
+};
+
+export type RunWorkDecompositionOptions = {
+  agent?: CEOWorkDecompositionAgent;
+  timeoutMs?: number;
+  executionDelegationGrant?: WorkDecompositionContext["executionDelegationGrant"];
 };

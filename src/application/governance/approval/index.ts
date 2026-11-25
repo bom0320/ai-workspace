@@ -13,12 +13,10 @@ export {
   approvalRecordSchema,
   type ApprovalRecord,
 } from "./features/proposal-management/model/approval.js";
-export { type StaffingApprovalResult } from "./shared/model/result.js";
+export { type StaffingApprovalResult } from "../data-flow/staffing-approval/output.js";
 export { configureStaffingSystemPolicy } from "./features/system-policy/flow/configure-staffing-system-policy.js";
-export {
-  getStaffingSystemPolicy,
-  type StaffingSystemPolicyResult,
-} from "./features/system-policy/flow/get-staffing-system-policy.js";
+export { getStaffingSystemPolicy } from "./features/system-policy/flow/get-staffing-system-policy.js";
+export { type StaffingSystemPolicyResult } from "../data-flow/system-policy/output.js";
 export { configureHumanDelegation } from "./features/human-delegation/flow/configure-human-delegation.js";
 export { approveStaffingProposal } from "./features/proposal-management/flow/approve-staffing-proposal.js";
 export { getApprovedStaffingScope } from "./features/proposal-management/flow/get-approved-staffing-scope.js";
@@ -36,12 +34,14 @@ export {
 } from "./features/direction-review/model/review.js";
 export {
   approvedDecisionSchema,
+  type ApprovedDecision,
+} from "./features/direction-review/model/approved-decision.js";
+export {
   directionGovernanceResultSchema,
   directionConfirmationRequestSchema,
-  type ApprovedDecision,
   type DirectionGovernanceResult,
   type DirectionConfirmationRequest,
-} from "./features/direction-review/model/result.js";
+} from "../data-flow/direction-review/output.js";
 export { getDirectionReview } from "./features/direction-review/flow/review-management.js";
 export {
   prepareDirectionConfirmation,

@@ -31,7 +31,7 @@ vi.mock("@/application/execution/index.js", () => ({
 }));
 vi.mock("@/application/governance/index.js", async () => ({
   approvedDecisionSchema: (
-    await import("@/application/governance/approval/features/direction-review/model/result.js")
+    await import("@/application/governance/approval/features/direction-review/model/approved-decision.js")
   ).approvedDecisionSchema,
   executionDelegationSchema: (
     await import("@/application/governance/approval/features/execution-delegation/model/execution-delegation.js")

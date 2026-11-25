@@ -1,3 +1,4 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import {
   authorizeSpecialistInvocation,
   type AuthorizedSpecialistInvocation,
@@ -6,13 +7,12 @@ import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
 } from "../execution/authorized-specialist-decision.js";
-import type { PhaseAState } from "../../../state.js";
 import { recordAnalysisDecision } from "@/application/governance/records/analysis/record-analysis-decision.js";
 
 export async function executeNextSpecialist(
-  state: PhaseAState,
+  state: PhaseANodeInput<"execute-next-specialist">,
   trackAnalysis = false
-): Promise<Partial<PhaseAState>> {
+): Promise<PhaseANodeOutput<"execute-next-specialist">> {
   // 1. Require Consistent Prepared Progress Before Reserving Budget
   const requests = state.preparedSpecialistRequests;
   const index = state.currentSpecialistIndex;

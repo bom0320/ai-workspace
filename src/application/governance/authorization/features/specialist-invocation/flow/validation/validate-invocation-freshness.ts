@@ -1,10 +1,8 @@
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { validateStoredIssuance } from "../../../../../approval/index.js";
-import type {
-  InvokeSpecialistRequest,
-  AuthorizedSpecialistInvocation,
-} from "../../../../../model/authority.js";
+import type { InvokeSpecialistRequest } from "../../../../../data-flow/specialist-invocation/input.js";
+import type { AuthorizedSpecialistInvocation } from "../../../../../model/authority.js";
 import type { AuthorizationContext } from "../context/resolve-authorization-context.js";
 import { evaluateInvocationRequest } from "./evaluate-invocation.js";
 

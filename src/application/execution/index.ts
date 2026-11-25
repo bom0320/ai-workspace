@@ -4,11 +4,13 @@ export type {
   ExecutionFailure,
   ExecutionFailureStage,
   ExecutionResult,
-  ExecutionOutcome,
   ReadOnlyExecutionResult,
-  ReadOnlyExecutionOutcome,
   ExecutionTelemetry,
 } from "./model/result.js";
+export type {
+  ExecutionOutcome,
+  ReadOnlyExecutionOutcome,
+} from "./data-flow/work-item/output.js";
 export { executeAssignmentRead } from "./flow/work-item/assignment/execute-assignment-read.js";
 export type { AssignmentReadInput } from "./data-flow/assignment/input.js";
 export type { AssignmentReadOutput } from "./data-flow/assignment/output.js";

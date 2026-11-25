@@ -1,21 +1,12 @@
 import { z } from "zod";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { synthesisContextSchema } from "@/application/synthesis/index.js";
-import { directionActionSchema } from "./action.js";
-import { directionReviewSchema } from "./review.js";
-import { executionDelegationSchema } from "../../execution-delegation/model/execution-delegation.js";
+import { directionActionSchema } from "../../approval/features/direction-review/model/action.js";
+import { directionReviewSchema } from "../../approval/features/direction-review/model/review.js";
+import { approvedDecisionSchema } from "../../approval/features/direction-review/model/approved-decision.js";
+import { executionDelegationSchema } from "../../approval/features/execution-delegation/model/execution-delegation.js";
 
 const text = z.string().trim().min(1);
-export const approvedDecisionSchema = z
-  .object({
-    id: text,
-    reviewId: text,
-    reviewBinding: text,
-    approvalRecordId: text,
-  })
-  .strict();
-export type ApprovedDecision = z.infer<typeof approvedDecisionSchema>;
-
 export const directionGovernanceResultSchema = z.discriminatedUnion("status", [
   z
     .object({

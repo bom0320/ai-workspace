@@ -1,11 +1,14 @@
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import { interrupt } from "@langchain/langgraph";
 import { directionActionSchema } from "@/application/governance/index.js";
-import type { PhaseAState } from "../../../../state.js";
 
 export function humanDirectionReview(
-  state: PhaseAState,
+  state: PhaseANodeInput<"human-direction-review">,
   requireHandoff = false
-): Partial<PhaseAState> {
+): PhaseANodeOutput<"human-direction-review"> {
   // 1. Interrupt Without Side Effects; This Node Starts Again on Resume
   if (!state.directionReview)
     return {

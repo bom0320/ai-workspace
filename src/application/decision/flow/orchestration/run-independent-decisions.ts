@@ -1,15 +1,13 @@
-import type { SpecialistAuthority } from "@/contracts/specialist/authority.js";
+import type {
+  IndependentDecisionInput,
+  IndependentDecisionOptions,
+} from "../../data-flow/input.js";
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
-import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type { SpecialistContext } from "../../protocol/context.js";
 import type { AgentDecision } from "../../protocol/decision.js";
-import {
-  runCodexSpecialist,
-  type CodexSpecialistOptions,
-} from "../../specialist/codex-specialist.js";
+import { runCodexSpecialist } from "../../specialist/codex-specialist.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import { validateDecisionEvidence } from "../validation/validate-evidence.js";
 
@@ -20,18 +18,11 @@ export class DecisionValidationError extends Error {
   }
 }
 
-export type IndependentDecisionInput = {
-  specialist: SpecialistDefinition;
-  authority: SpecialistAuthority;
-  assignmentObjective?: string;
-  files: InspectedFile[];
-};
-
 export async function runIndependentDecisions(
   snapshot: RepositorySnapshot,
   goal: GoalSpec,
   inputs: IndependentDecisionInput[],
-  options: CodexSpecialistOptions & { classifyValidationErrors?: boolean } = {}
+  options: IndependentDecisionOptions = {}
 ): Promise<AgentDecision[]> {
   const specialistIds = new Set<string>();
   for (const { specialist } of inputs) {

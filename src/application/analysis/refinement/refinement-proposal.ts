@@ -1,32 +1,24 @@
+import type {
+  BuildRefinementProposalInput,
+  NormalizeRefinementChangesInput,
+} from "../data-flow/refinement/input.js";
+import type { AssignmentChange } from "../data-flow/refinement/output.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
-import type { GoalSpec } from "@/contracts/goal.js";
-import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
-import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
 import {
   buildStaffingProposal,
   staffingDraftSchema,
-  type IntentAnalysis,
-  type StaffingAssignment,
+  type StaffingProposal,
 } from "@/application/staffing/index.js";
-import type { AssessmentResult } from "../assessment/model/assessment.js";
-
-type AssignmentChange = Omit<StaffingAssignment, "assignmentId">;
 
 export function normalizeRefinementChanges(
-  result: Extract<AssessmentResult, { status: "refinement-required" }>,
-  current: Pick<
-    StaffingAssignment,
-    "specialistId" | "objective" | "contextPaths"
-  >[],
-  snapshot: RepositorySnapshot,
-  policy: StaffingSystemPolicy
+  ...[result, current, snapshot, policy]: NormalizeRefinementChangesInput
 ): AssignmentChange[] {
   const bySpecialist = new Map(
     current.map((assignment) => [assignment.specialistId, assignment])
   );
-  const changed = new Map<string, Omit<StaffingAssignment, "assignmentId">>();
+  const changed = new Map<string, AssignmentChange>();
   const operations = new Set<string>();
   const files = result.changes.some((change) => "context" in change)
     ? listRepositoryFilesAtCommit(snapshot.repositoryRoot, snapshot.commitSha)
@@ -78,12 +70,8 @@ export function normalizeRefinementChanges(
 }
 
 export function buildRefinementProposal(
-  assignments: AssignmentChange[],
-  reason: string,
-  intent: IntentAnalysis,
-  goal: GoalSpec,
-  snapshot: RepositorySnapshot
-) {
+  ...[assignments, reason, intent, goal, snapshot]: BuildRefinementProposalInput
+): StaffingProposal {
   const draft = staffingDraftSchema.parse({
     intent: intent,
     assignments,

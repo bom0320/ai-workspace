@@ -1,5 +1,5 @@
 import type { ComparisonPayload } from "../../protocol/comparison.js";
-import type { ComparisonContext } from "../../protocol/context.js";
+import type { ComparisonContext } from "../../data-flow/input.js";
 
 // The payload must already have passed Protocol schema validation.
 export function validateComparisonReferences(

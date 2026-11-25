@@ -1,15 +1,9 @@
 import { z } from "zod";
 import { pathScopeSchema } from "@/contracts/repository/context-access-policy.js";
-import {
-  sourceReferenceSchema,
-  synthesisContextSchema,
-} from "@/application/synthesis/index.js";
+import { sourceReferenceSchema } from "@/application/synthesis/index.js";
 
 const text = z.string().trim().min(1);
 const sources = z.array(sourceReferenceSchema).min(1);
-export const assessmentInputSchema = synthesisContextSchema.omit({
-  revision: true,
-});
 const changeSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -57,15 +51,3 @@ export const assessmentResultSchema = z.discriminatedUnion("status", [
     .strict(),
 ]);
 export type AssessmentResult = z.infer<typeof assessmentResultSchema>;
-export type AssessmentInput = z.infer<typeof assessmentInputSchema>;
-export const assessmentAgentInputSchema = assessmentInputSchema.extend({
-  limits: z
-    .object({
-      remainingInvocations: z.number().int().nonnegative(),
-      remainingRefinements: z.number().int().nonnegative(),
-    })
-    .strict(),
-});
-export type AssessmentAgentInput = z.infer<typeof assessmentAgentInputSchema>;
-export type AssessmentLimits = AssessmentAgentInput["limits"];
-export type AssessmentAgent = (input: AssessmentAgentInput) => Promise<unknown>;

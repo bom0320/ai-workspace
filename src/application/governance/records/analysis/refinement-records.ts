@@ -1,8 +1,6 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
-import type {
-  ApprovedOperatingScope,
-  InvokeSpecialistRequest,
-} from "../../model/authority.js";
+import type { ApprovedOperatingScope } from "../../model/authority.js";
+import type { InvokeSpecialistRequest } from "../../data-flow/specialist-invocation/input.js";
 import type { RepositoryGovernance } from "../../model/ledger.js";
 import type { AnalysisRefinement } from "../../model/analysis-refinement.js";
 import {

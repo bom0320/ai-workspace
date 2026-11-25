@@ -6,8 +6,8 @@ import type {
   ComparisonPosition,
   ComparisonFinding,
   ComparisonGap,
-  ComparisonResult,
 } from "../model/comparison.js";
+import type { ComparisonResult } from "../data-flow/output.js";
 
 const comparisonRelationSchema = z.enum([
   "agreement",

@@ -1,12 +1,13 @@
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import { approveStaffingProposal } from "@/application/governance/index.js";
-import {
-  staffingApprovalEvaluationSchema,
-  type PhaseAState,
-} from "../../../../state.js";
+import { staffingApprovalEvaluationSchema } from "../../../../state.js";
 
 export function evaluateStaffingApproval(
-  state: PhaseAState
-): Partial<PhaseAState> {
+  state: PhaseANodeInput<"evaluate-staffing-approval">
+): PhaseANodeOutput<"evaluate-staffing-approval"> {
   // 1. Require a Proposed Staffing Result
   if (state.staffingResult?.status !== "proposed")
     throw new Error("Approval evaluation requires a Staffing Proposal.");

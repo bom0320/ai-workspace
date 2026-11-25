@@ -1,6 +1,6 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import { approveRefinementProposal } from "@/application/governance/approval/features/proposal-management/flow/approve-staffing-proposal.js";
 import { prepareAnalysisRefinement } from "@/application/governance/records/analysis/prepare-analysis-refinement.js";
-import type { PhaseAState } from "../../../state.js";
 import {
   beginBatch,
   refinementApproval,
@@ -8,8 +8,8 @@ import {
 } from "./refinement-state.js";
 
 export function prepareRefinementNode(
-  state: PhaseAState
-): Partial<PhaseAState> {
+  state: PhaseANodeInput<"prepare-refinement">
+): PhaseANodeOutput<"prepare-refinement"> {
   try {
     if (
       state.analysisAssessment?.status !== "refinement-required" ||

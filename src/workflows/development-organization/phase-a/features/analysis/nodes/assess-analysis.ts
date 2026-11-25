@@ -1,11 +1,19 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import {
   assessAnalysis,
   type AssessmentAgent,
 } from "@/application/analysis/index.js";
-import type { PhaseAState } from "../../../state.js";
 import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 
-export function assessmentBasis(state: PhaseAState) {
+export function assessmentBasis(
+  state: Pick<
+    PhaseANodeInput<"assess-analysis">,
+    | "specialistDecisionsResult"
+    | "decisionComparisonResult"
+    | "specialistComparisonContext"
+    | "synthesisAssignments"
+  >
+) {
   const {
     specialistDecisionsResult,
     decisionComparisonResult,
@@ -29,7 +37,9 @@ export function assessmentBasis(state: PhaseAState) {
 }
 
 export function createAssessAnalysisNode(agent?: AssessmentAgent) {
-  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
+  return async (
+    state: PhaseANodeInput<"assess-analysis">
+  ): Promise<PhaseANodeOutput<"assess-analysis">> => {
     try {
       const basis = assessmentBasis(state);
       if (state.approvalResult?.status !== "approved")

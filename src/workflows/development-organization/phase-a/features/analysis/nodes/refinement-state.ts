@@ -2,10 +2,20 @@ import type { StaffingProposal } from "@/application/staffing/index.js";
 import type { StaffingApprovalResult } from "@/application/governance/index.js";
 import type { AnalysisRefinement } from "@/application/governance/model/analysis-refinement.js";
 import { projectRefinementRequests } from "@/application/governance/records/analysis/refinement-records.js";
-import type { PhaseAState } from "../../../state.js";
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import { assessmentBasis } from "./assess-analysis.js";
 
-export function refinementBasis(state: PhaseAState) {
+export function refinementBasis(
+  state: Pick<
+    PhaseANodeInput<"prepare-refinement">,
+    | "specialistDecisionsResult"
+    | "decisionComparisonResult"
+    | "specialistComparisonContext"
+    | "synthesisAssignments"
+    | "analysisAssessment"
+    | "analysisRepresentatives"
+  >
+) {
   if (state.analysisAssessment?.status !== "refinement-required")
     throw new Error("Missing refinement assessment.");
   return {
@@ -19,8 +29,10 @@ export function refinementBasis(state: PhaseAState) {
 
 export function beginBatch(
   round: Pick<AnalysisRefinement, "id" | "requests">,
-  assignments: NonNullable<PhaseAState["synthesisAssignments"]>
-): Partial<PhaseAState> {
+  assignments: NonNullable<
+    PhaseANodeOutput<"prepare-refinement">["synthesisAssignments"]
+  >
+): PhaseANodeOutput<"prepare-refinement"> {
   return {
     analysisRefinement: { status: "ready", id: round.id },
     preparedSpecialistRequests: round.requests,
@@ -36,7 +48,7 @@ export function beginBatch(
 export function refinementApproval(
   proposal: StaffingProposal,
   result: StaffingApprovalResult
-): Partial<PhaseAState> {
+): PhaseANodeOutput<"prepare-refinement"> {
   if (result.status === "approved" && proposal.refinement) {
     const { scope } = result;
     return beginBatch(

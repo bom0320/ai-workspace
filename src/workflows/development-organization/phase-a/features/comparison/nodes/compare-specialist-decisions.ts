@@ -1,9 +1,9 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import { compareDecisions } from "@/application/comparison/index.js";
-import type { PhaseAState } from "../../../state.js";
 
 export async function compareSpecialistDecisions(
-  state: PhaseAState
-): Promise<Partial<PhaseAState>> {
+  state: PhaseANodeInput<"compare-specialist-decisions">
+): Promise<PhaseANodeOutput<"compare-specialist-decisions">> {
   try {
     // 1. Require Completed Specialist Decisions
     const result = state.specialistDecisionsResult;

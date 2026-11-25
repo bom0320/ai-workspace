@@ -1,3 +1,4 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 // Narrow internal integration: raw Review registration is not a public Governance API.
 import { registerDirectionReview } from "@/application/governance/approval/features/direction-review/flow/review-management.js";
 import {
@@ -10,7 +11,6 @@ import {
   proposeExecutionDelegation,
   type ExecutionDelegationProposalAgent,
 } from "@/application/governance/index.js";
-import type { PhaseAState } from "../../../state.js";
 import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 
 export function createRunCEOSynthesisNode(
@@ -25,7 +25,9 @@ export function createRunCEOSynthesisNode(
     executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
   } = {}
 ) {
-  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
+  return async (
+    state: PhaseANodeInput<"run-ceo-synthesis">
+  ): Promise<PhaseANodeOutput<"run-ceo-synthesis">> => {
     // 1. Require Completed Decisions and a Successful Comparison Stage
     const decisions = state.specialistDecisionsResult;
     const comparison = state.decisionComparisonResult;
@@ -100,7 +102,7 @@ export function createRunCEOSynthesisNode(
     // Registration is internal and follows the real Application call; State flags
     // or Resume data never select a supplied Proposal for approval.
     try {
-      let directionReview: PhaseAState["directionReview"];
+      let directionReview: PhaseANodeOutput<"run-ceo-synthesis">["directionReview"];
       if (synthesisResult.status === "proposed") {
         if (state.approvalResult?.status !== "approved")
           throw new Error("Approved Scope is unavailable.");

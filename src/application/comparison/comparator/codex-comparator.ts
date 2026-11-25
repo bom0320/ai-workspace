@@ -1,18 +1,15 @@
+import type { CodexComparatorOptions } from "../data-flow/input.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runCommand } from "@/infrastructure/process/index.js";
 
-import type { ComparisonContext } from "../protocol/context.js";
+import type { ComparisonContext } from "../data-flow/input.js";
 import {
   comparisonPayloadSchema,
   type ComparisonPayload,
 } from "../protocol/comparison.js";
-
-export type CodexComparatorOptions = {
-  timeoutMs?: number;
-};
 
 export async function runCodexComparator(
   context: ComparisonContext,

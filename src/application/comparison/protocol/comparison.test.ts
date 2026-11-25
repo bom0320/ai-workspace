@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import type { ComparisonResult } from "../model/comparison.js";
+import type { ComparisonResult } from "../data-flow/output.js";
 import {
   comparisonPayloadSchema,
   type ComparisonPayload,

@@ -1,10 +1,13 @@
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import { getStaffingSystemPolicy } from "@/application/governance/index.js";
-import type { PhaseAState } from "../../../../state.js";
 
 export function loadSystemPolicy(
-  state: PhaseAState,
+  state: PhaseANodeInput<"load-system-policy">,
   includeDelegationConstraints = false
-): Partial<PhaseAState> {
+): PhaseANodeOutput<"load-system-policy"> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
     return {

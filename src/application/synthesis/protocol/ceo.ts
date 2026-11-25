@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { synthesisProposalSchema } from "../model/proposal.js";
-import { synthesisEscalationSchema } from "../model/result.js";
-import type { SynthesisContext } from "./context.js";
+import { synthesisEscalationSchema } from "../model/escalation.js";
 
 export const ceoSynthesisDecisionSchema = z.discriminatedUnion("type", [
   z
@@ -10,6 +9,3 @@ export const ceoSynthesisDecisionSchema = z.discriminatedUnion("type", [
   synthesisEscalationSchema.extend({ type: z.literal("escalate") }),
 ]);
 export type CEOSynthesisDecision = z.infer<typeof ceoSynthesisDecisionSchema>;
-export type CEOSynthesisAgent = (
-  context: SynthesisContext
-) => Promise<CEOSynthesisDecision>;

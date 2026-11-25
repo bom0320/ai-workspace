@@ -15,7 +15,7 @@ import type { DirectionReview } from "../model/review.js";
 import type {
   DirectionConfirmationRequest,
   DirectionGovernanceResult,
-} from "../model/result.js";
+} from "../../../../data-flow/direction-review/output.js";
 import { resolveCurrentReview } from "./context/resolve-review-context.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";
 import {

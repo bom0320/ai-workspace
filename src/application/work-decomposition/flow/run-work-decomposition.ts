@@ -1,11 +1,11 @@
 import {
   workDecompositionInputSchema,
   type ApprovedWorkDecompositionInput,
+  type RunWorkDecompositionOptions,
 } from "../data-flow/input.js";
 import { getApprovedDecision } from "@/application/governance/index.js";
 import {
   ceoWorkDecompositionDecisionSchema,
-  type CEOWorkDecompositionAgent,
   type WorkDecompositionContext,
 } from "../protocol/ceo.js";
 import { validateWorkItemSources } from "../model/work.js";
@@ -15,12 +15,6 @@ import {
   runCodexCEOWorkDecomposition,
 } from "../ceo/codex-ceo.js";
 import { validateDependencies } from "@/contracts/shared/validate-dependencies.js";
-
-export type RunWorkDecompositionOptions = {
-  agent?: CEOWorkDecompositionAgent;
-  timeoutMs?: number;
-  executionDelegationGrant?: WorkDecompositionContext["executionDelegationGrant"];
-};
 
 export async function runWorkDecomposition(
   input: unknown,

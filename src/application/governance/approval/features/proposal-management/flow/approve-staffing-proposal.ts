@@ -1,3 +1,4 @@
+import type { RefinementBasis } from "../../../../data-flow/analysis-refinement/input.js";
 import {
   resolveGovernanceRepository,
   withGovernanceLedger,
@@ -8,10 +9,8 @@ import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
-import {
-  deniedStaffingApproval,
-  type StaffingApprovalResult,
-} from "../../../shared/model/result.js";
+import { deniedStaffingApproval } from "../../../shared/model/result.js";
+import { type StaffingApprovalResult } from "../../../../data-flow/staffing-approval/output.js";
 
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import {
@@ -26,10 +25,6 @@ import {
   verifyAnalysisSources,
 } from "../../../../records/analysis/analysis-provenance.js";
 import { projectRefinementRequests } from "../../../../records/analysis/refinement-records.js";
-import type {
-  AssessmentInput,
-  AssessmentResult,
-} from "@/application/analysis/index.js";
 import { analysisRefinementSchema } from "../../../../model/analysis-refinement.js";
 
 export function approveStaffingProposal(
@@ -38,12 +33,6 @@ export function approveStaffingProposal(
 ): StaffingApprovalResult {
   return approveProposal(input, receipt);
 }
-
-type RefinementBasis = {
-  context: AssessmentInput;
-  invocationIds: string[];
-  assessment: AssessmentResult;
-};
 
 export function approveRefinementProposal(
   input: unknown,

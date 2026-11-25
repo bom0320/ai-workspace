@@ -1,8 +1,8 @@
+import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import {
   runStaffing,
   type RunStaffingOptions,
 } from "@/application/staffing/index.js";
-import type { PhaseAState } from "../../../state.js";
 
 export type StaffingExecutionOptions = Partial<
   Pick<RunStaffingOptions, "maxRounds" | "timeoutMs" | "agent">
@@ -11,7 +11,9 @@ export type StaffingExecutionOptions = Partial<
 // Execution dependencies stay outside serializable State.
 export function createRunStaffingNode(options: StaffingExecutionOptions = {}) {
   const { maxRounds = 4, timeoutMs, agent } = options;
-  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
+  return async (
+    state: PhaseANodeInput<"run-staffing">
+  ): Promise<PhaseANodeOutput<"run-staffing">> => {
     // 1. Require a Ready System Policy
     if (state.policyLookup?.status !== "ready")
       throw new Error("Staffing requires a ready System Policy lookup.");

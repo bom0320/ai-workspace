@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runCodexComparator } from "../comparator/codex-comparator.js";
 import type { ComparisonPayload } from "../protocol/comparison.js";
-import type { ComparisonContext } from "../protocol/context.js";
+import type { ComparisonContext } from "../data-flow/input.js";
 import { compareDecisions } from "./compare-decisions.js";
 import { validateComparisonReferences } from "./validation/validate-references.js";
 

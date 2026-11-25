@@ -2,10 +2,10 @@ import { isUnambiguousRepositoryPath } from "@/services/repository-inspection/in
 
 import {
   approvedOperatingScopeSchema,
-  invokeSpecialistRequestSchema,
   invocationEvaluationContextSchema,
   type InvocationEligibility,
 } from "../../../../../model/authority.js";
+import { invokeSpecialistRequestSchema } from "../../../../../data-flow/specialist-invocation/input.js";
 
 // Validate unique, unambiguous repository-relative paths.
 

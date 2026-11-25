@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { staffingProposalSchema } from "./staffing.js";
+import { staffingProposalSchema } from "../model/staffing.js";
 
 // Proposed means structural/policy checks passed, not semantic compliance with
 // all Human instructions, Human approval, or execution authority.

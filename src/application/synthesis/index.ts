@@ -1,19 +1,19 @@
+export { runSynthesis } from "./flow/run-synthesis.js";
 export {
-  runSynthesis,
+  synthesisContextSchema,
   type RunSynthesisOptions,
-} from "./flow/run-synthesis.js";
-export { synthesisContextSchema } from "./protocol/context.js";
+  type SynthesisContext,
+  type CEOSynthesisAgent,
+} from "./data-flow/input.js";
 export { validateAnalysisReferences } from "./flow/validation/validate-output.js";
 export {
   synthesisProposalSchema,
   sourceReferenceSchema,
 } from "./model/proposal.js";
-export { synthesisResultSchema } from "./model/result.js";
+export {
+  synthesisResultSchema,
+  type SynthesisResult,
+} from "./data-flow/output.js";
 export { ceoSynthesisDecisionSchema } from "./protocol/ceo.js";
-export type { SynthesisContext } from "./protocol/context.js";
 export type { SynthesisProposal, SourceReference } from "./model/proposal.js";
-export type { SynthesisResult } from "./model/result.js";
-export type {
-  CEOSynthesisDecision,
-  CEOSynthesisAgent,
-} from "./protocol/ceo.js";
+export type { CEOSynthesisDecision } from "./protocol/ceo.js";

@@ -1,17 +1,10 @@
 import { z } from "zod";
+import { synthesisEscalationSchema } from "../model/escalation.js";
 import {
   synthesisProposalSchema,
   synthesisTextSchema,
-  synthesisSourcesSchema,
-} from "./proposal.js";
+} from "../model/proposal.js";
 
-export const synthesisEscalationSchema = z
-  .object({
-    reason: synthesisTextSchema,
-    questions: z.array(synthesisTextSchema).min(1),
-    sources: synthesisSourcesSchema,
-  })
-  .strict();
 export const synthesisResultSchema = z.discriminatedUnion("status", [
   z
     .object({

@@ -19,6 +19,7 @@ import {
   type StaffingRunResult,
 } from "@/application/staffing/index.js";
 import { createPhaseAGraph as createGraph } from "../graph.js";
+import { phaseADataFlow } from "../data-flow.js";
 import { executeNextSpecialist } from "../features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "../features/comparison/nodes/compare-specialist-decisions.js";
 import {
@@ -157,6 +158,19 @@ beforeEach(() => {
   vi.mocked(runStaffing).mockResolvedValue(proposed);
   vi.mocked(approveStaffingProposal).mockReturnValue(required);
 });
+
+it.each([true, false])(
+  "declares data flow for the registered Phase A nodes with direct approval %s",
+  (allowDirectStaffingApproval) => {
+    const graph = createGraph({ allowDirectStaffingApproval });
+    const declared = Object.keys(phaseADataFlow).filter(
+      (node) =>
+        allowDirectStaffingApproval ||
+        (node !== "confirm-staffing-approval" && node !== "confirm-refinement")
+    );
+    expect(declared.sort()).toEqual(Object.keys(graph.builder.nodes).sort());
+  }
+);
 
 describe("Phase A Staffing Approval execution", () => {
   it("registers Phase A Nodes directly and preserves every terminal branch", () => {
@@ -1038,7 +1052,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       stage: "decision",
     });
     expect(result.collectedDecisions).toEqual([]);
-    expect(result.decisionComparisonResult).toBeUndefined();
+    expect(result).not.toHaveProperty("decisionComparisonResult");
     expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
     expect(runAuthorizedSpecialistDecision).not.toHaveBeenCalled();
     expect(compareDecisions).not.toHaveBeenCalled();
@@ -1098,12 +1112,13 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       ...completed.decisions,
       { ...completed.decisions[0], specialistId: "ux" },
     ];
-    const update = await compareSpecialistDecisions({
+    const comparisonState = {
       ...state,
-      specialistDecisionsResult: { status: "completed", decisions },
+      specialistDecisionsResult: { status: "completed" as const, decisions },
       collectedDecisions: [],
       specialistComparisonContext: { goal, repositoryCommitSha: "abc" },
-    });
+    };
+    const update = await compareSpecialistDecisions(comparisonState);
     expect(update.decisionComparisonResult?.status).toBe("completed");
     expect(compareDecisions).toHaveBeenCalledExactlyOnceWith({
       goal,

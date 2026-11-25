@@ -44,19 +44,6 @@ export const approvedOperatingScopeSchema = z
   })
   .strict();
 
-// 2. Invocation Request
-// CEO selects an approved Assignment and Context subset.
-// Specialist identity, objective, and authority cannot be overridden.
-
-export const invokeSpecialistRequestSchema = z
-  .object({
-    scopeId: nonEmptyString,
-    scopeVersion: positiveInteger,
-    assignmentId: nonEmptyString,
-    requestedContextPaths: z.array(nonEmptyString).min(1),
-  })
-  .strict();
-
 // 3. Invocation Eligibility
 // Evaluates a request against the approved Scope and Harness facts.
 // Eligibility does not grant authority or reserve execution budget.
@@ -104,40 +91,11 @@ export const authorizedSpecialistInvocationSchema = z
   })
   .strict();
 
-// 5. Authorization Verdict
-// Represents the Harness authorization result.
-// Only an allowed verdict contains an Authorized Invocation.
-
-export const authorityVerdictSchema = z.discriminatedUnion("status", [
-  z
-    .object({
-      status: z.literal("allowed"),
-      invocation: authorizedSpecialistInvocationSchema,
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("approval-required"),
-      reason: nonEmptyString,
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("denied"),
-      reason: nonEmptyString,
-    })
-    .strict(),
-]);
-
 // Inferred Types
 
 export type ApprovedAssignment = z.infer<typeof approvedAssignmentSchema>;
 export type ApprovedOperatingScope = z.infer<
   typeof approvedOperatingScopeSchema
->;
-
-export type InvokeSpecialistRequest = z.infer<
-  typeof invokeSpecialistRequestSchema
 >;
 
 export type InvocationEvaluationContext = z.infer<
@@ -148,4 +106,3 @@ export type InvocationEligibility = z.infer<typeof invocationEligibilitySchema>;
 export type AuthorizedSpecialistInvocation = z.infer<
   typeof authorizedSpecialistInvocationSchema
 >;
-export type AuthorityVerdict = z.infer<typeof authorityVerdictSchema>;

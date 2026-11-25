@@ -1,3 +1,7 @@
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import {
   prepareDirectionConfirmation,
   finalizeDirectionReview,
@@ -5,7 +9,6 @@ import {
   type DirectionConfirmationRequest,
 } from "@/application/governance/index.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
-import type { PhaseAState } from "../../../../state.js";
 
 export type DirectionConfirmationOptions = {
   confirmDirection?: (
@@ -17,7 +20,9 @@ export function createFinalizeDirectionReviewNode(
   confirm?: DirectionConfirmationOptions["confirmDirection"],
   requireHandoff = false
 ) {
-  return async (state: PhaseAState): Promise<Partial<PhaseAState>> => {
+  return async (
+    state: PhaseANodeInput<"finalize-direction-review">
+  ): Promise<PhaseANodeOutput<"finalize-direction-review">> => {
     if (
       requireHandoff &&
       state.directionAction?.action === "approve" &&

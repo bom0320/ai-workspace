@@ -2,12 +2,16 @@ import { validateAnalysisReferences } from "@/application/synthesis/index.js";
 import { assessWithCodex } from "../ceo/assess-with-codex.js";
 import {
   assessmentAgentInputSchema,
+  type AssessmentAgent,
+} from "../protocol/assessment.js";
+import {
   assessmentResultSchema,
+  type AssessmentResult,
+} from "../../data-flow/assessment/output.js";
+import {
   type AssessmentInput,
   type AssessmentLimits,
-  type AssessmentAgent,
-  type AssessmentResult,
-} from "../model/assessment.js";
+} from "../../data-flow/assessment/input.js";
 
 export async function assessAnalysis(
   input: AssessmentInput,

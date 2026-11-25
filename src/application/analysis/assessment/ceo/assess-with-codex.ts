@@ -1,5 +1,5 @@
 import { runContextOnlyCodex } from "@/infrastructure/codex/index.js";
-import type { AssessmentAgentInput } from "../model/assessment.js";
+import type { AssessmentAgentInput } from "../protocol/assessment.js";
 
 export async function assessWithCodex(
   input: AssessmentAgentInput

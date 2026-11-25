@@ -1,9 +1,7 @@
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import {
-  deniedStaffingApproval,
-  type StaffingApprovalResult,
-} from "../../../shared/model/result.js";
+import { deniedStaffingApproval } from "../../../shared/model/result.js";
+import { type StaffingApprovalResult } from "../../../../data-flow/staffing-approval/output.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import { validateSystemConfiguration } from "./validation/system-configuration.js";

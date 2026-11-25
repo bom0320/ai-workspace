@@ -1,7 +1,5 @@
-import {
-  deniedStaffingApproval,
-  type StaffingApprovalResult,
-} from "../../../shared/model/result.js";
+import { deniedStaffingApproval } from "../../../shared/model/result.js";
+import { type StaffingApprovalResult } from "../../../../data-flow/staffing-approval/output.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import { validateStoredIssuance } from "./validation/staffing-issuance.js";
 

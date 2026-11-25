@@ -8,7 +8,7 @@ import { runCommand } from "@/infrastructure/process/index.js";
 
 import { validateComparisonReferences } from "../flow/validation/validate-references.js";
 import { comparisonPayloadSchema } from "../protocol/comparison.js";
-import type { ComparisonContext } from "../protocol/context.js";
+import type { ComparisonContext } from "../data-flow/input.js";
 import { runCodexComparator } from "./codex-comparator.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));

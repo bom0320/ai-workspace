@@ -4,7 +4,7 @@ import {
   comparisonPayloadSchema,
   type ComparisonPayload,
 } from "../../protocol/comparison.js";
-import type { ComparisonContext } from "../../protocol/context.js";
+import type { ComparisonContext } from "../../data-flow/input.js";
 import { validateComparisonReferences } from "./validate-references.js";
 
 const context: ComparisonContext = {

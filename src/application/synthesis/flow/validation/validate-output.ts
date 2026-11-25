@@ -1,4 +1,4 @@
-import type { SynthesisContext } from "../../protocol/context.js";
+import type { SynthesisContext } from "../../data-flow/input.js";
 import type { CEOSynthesisDecision } from "../../protocol/ceo.js";
 import type {
   SourceReference,

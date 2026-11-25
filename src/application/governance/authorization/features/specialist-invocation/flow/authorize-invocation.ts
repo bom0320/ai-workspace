@@ -1,8 +1,6 @@
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
-import {
-  invokeSpecialistRequestSchema,
-  type AuthorityVerdict,
-} from "../../../../model/authority.js";
+import { invokeSpecialistRequestSchema } from "../../../../data-flow/specialist-invocation/input.js";
+import { type AuthorityVerdict } from "../../../../data-flow/specialist-invocation/output.js";
 import {
   createInvocationAttempt,
   assertTrustedInvocationAttempt,

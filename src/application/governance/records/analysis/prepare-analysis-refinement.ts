@@ -1,10 +1,10 @@
+import type { AnalysisRefinementPreparationResult } from "../../data-flow/analysis-refinement/output.js";
 import { randomUUID } from "node:crypto";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   normalizeRefinementChanges,
   buildRefinementProposal,
 } from "@/application/analysis/index.js";
-import type { StaffingProposal } from "@/application/staffing/index.js";
 import type {
   AssessmentInput,
   AssessmentResult,
@@ -16,10 +16,7 @@ import {
   assertRefinementAvailable,
   verifyAnalysisSources,
 } from "./analysis-provenance.js";
-import {
-  analysisRefinementSchema,
-  type AnalysisRefinement,
-} from "../../model/analysis-refinement.js";
+import { analysisRefinementSchema } from "../../model/analysis-refinement.js";
 
 // Internal integration used only with a verified Assessment on the Phase A path.
 export function prepareAnalysisRefinement(
@@ -27,9 +24,7 @@ export function prepareAnalysisRefinement(
   basis: AssessmentInput,
   invocationIds: string[],
   result: Extract<AssessmentResult, { status: "refinement-required" }>
-):
-  | { status: "ready"; round: AnalysisRefinement }
-  | { status: "proposal-required"; proposal: StaffingProposal } {
+): AnalysisRefinementPreparationResult {
   return withGovernanceLedger((ledger, save) => {
     const entry = Object.values(ledger.repositories).find((repository) =>
       repository.issuances.some(({ scope }) => scope.id === rootScopeId)

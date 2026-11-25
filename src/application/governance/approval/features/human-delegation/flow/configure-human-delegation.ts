@@ -10,10 +10,8 @@ import {
   humanDelegationPolicyInputSchema,
   recordedHumanDelegationPolicySchema,
 } from "../model/policy.js";
-import {
-  deniedStaffingApproval,
-  type StaffingApprovalResult,
-} from "../../../shared/model/result.js";
+import { deniedStaffingApproval } from "../../../shared/model/result.js";
+import { type StaffingApprovalResult } from "../../../../data-flow/staffing-approval/output.js";
 
 import { consumeCurrentHumanConfirmation } from "../../../shared/validation/approval-input.js";
 import { validateDelegationConfiguration } from "./validation/delegation-configuration.js";

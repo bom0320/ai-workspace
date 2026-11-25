@@ -1,5 +1,5 @@
 import { validateComparisonReferences } from "@/application/comparison/index.js";
-import type { SynthesisContext } from "../../protocol/context.js";
+import type { SynthesisContext } from "../../data-flow/input.js";
 
 export function validateSynthesisContext(context: SynthesisContext): void {
   const assignmentIds = new Set(context.assignments.map((a) => a.assignmentId));

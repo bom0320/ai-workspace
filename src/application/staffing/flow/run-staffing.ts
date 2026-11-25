@@ -2,7 +2,7 @@ import { assertContextBudget } from "./inspection/context-policy.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 
 import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
-import type { StaffingRunResult } from "../model/result.js";
+import type { StaffingRunResult } from "../data-flow/output.js";
 import { staffingDraftSchema } from "../protocol/ceo.js";
 import {
   runStaffingLoop,
@@ -13,10 +13,9 @@ import {
   prepareProposalInput,
   validateProposal,
   ProposalPolicyError,
-  type RunStaffingOptions,
 } from "./validation/validate-proposal.js";
 
-export type { RunStaffingOptions } from "./validation/validate-proposal.js";
+import type { RunStaffingOptions } from "../data-flow/input.js";
 
 export async function runStaffing(
   options: RunStaffingOptions

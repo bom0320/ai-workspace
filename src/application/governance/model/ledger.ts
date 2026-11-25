@@ -6,7 +6,7 @@ import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
 import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
-import { approvedDecisionSchema } from "../approval/features/direction-review/model/result.js";
+import { approvedDecisionSchema } from "../approval/features/direction-review/model/approved-decision.js";
 import {
   directionAnalysisSchema,
   directionReviewSchema,

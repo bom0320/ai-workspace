@@ -43,18 +43,6 @@ export type ExecutionResult = {
   retainedWorkspace?: string;
 };
 
-export type ExecutionOutcome =
-  | { status: "executed"; workItemId: string; result: ExecutionResult }
-  | {
-      status: "blocked" | "approval-required" | "denied";
-      workItemId?: string;
-      reason: string;
-    };
-
 export type ReadOnlyExecutionResult =
   | { passed: true; decision: AgentDecision; snapshot: RepositorySnapshot }
   | { passed: false; failure: "execution" | "validation"; reason: string };
-
-export type ReadOnlyExecutionOutcome =
-  | { status: "executed"; workItemId: string; result: ReadOnlyExecutionResult }
-  | Exclude<ExecutionOutcome, { status: "executed" }>;

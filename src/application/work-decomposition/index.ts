@@ -1,7 +1,6 @@
 export {
   runWorkDecomposition,
   decomposeApprovedWork,
-  type RunWorkDecompositionOptions,
 } from "./flow/run-work-decomposition.js";
 export {
   workDecompositionResultSchema,
@@ -20,4 +19,5 @@ export {
   workDecompositionInputSchema,
   type ApprovedWorkDecompositionInput,
   type WorkDecompositionInput,
+  type RunWorkDecompositionOptions,
 } from "./data-flow/input.js";

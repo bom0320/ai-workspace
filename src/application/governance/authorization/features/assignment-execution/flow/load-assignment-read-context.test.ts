@@ -66,6 +66,59 @@ it("provides metadata and blobs only for regular files inside approved directori
   expect(assertRepositoryMatchesSnapshot).toHaveBeenCalledWith(snapshot);
 });
 
+it("shares only cited evidence locations for files already provided by the Claim", () => {
+  const cited = {
+    ...source,
+    context: {
+      ...source.context,
+      decisions: [
+        {
+          specialistId: "reviewer",
+          recommendation: "Do not transfer this recommendation",
+          risks: [],
+          uncertainty: [],
+          evidence: [
+            {
+              path: "docs/allowed.md",
+              lineStart: 1,
+              description: "Prior analysis text",
+            },
+            {
+              path: "private.md",
+              lineStart: 1,
+              description: "Private analysis text",
+            },
+          ],
+        },
+      ],
+    },
+    workItem: {
+      ...source.workItem,
+      sources: [
+        { kind: "evidence" as const, specialistId: "reviewer", index: 0 },
+        { kind: "evidence" as const, specialistId: "reviewer", index: 1 },
+        { kind: "recommendation" as const, specialistId: "reviewer" },
+      ],
+    },
+  };
+  vi.mocked(listRepositoryFilesAtCommit).mockReturnValue([
+    blob("docs/allowed.md"),
+    blob("private.md"),
+  ]);
+  const result = loadAssignmentReadContext(
+    cited,
+    [{ kind: "directory", path: "docs" }],
+    () => 1000
+  );
+  expect(result.analysisEvidence).toEqual([
+    { path: "docs/allowed.md", lineStart: 1 },
+  ]);
+  expect(JSON.stringify(result)).not.toMatch(
+    /private\.md|Prior analysis text|Private analysis text|Do not transfer/
+  );
+  expect(loadSnapshotFiles).toHaveBeenCalledOnce();
+});
+
 it.each(["docs/.env", "docs/link", "docs/missing"])(
   "rejects an explicit scope for %s before opening a blob",
   (path) => {

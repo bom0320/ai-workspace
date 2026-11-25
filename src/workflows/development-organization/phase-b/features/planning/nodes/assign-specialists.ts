@@ -6,8 +6,12 @@ import type { PhaseBState } from "../../../state.js";
 
 export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
-    const { handoffResult, workDecompositionResult, selectedWorkItemIds } =
-      state;
+    const {
+      handoff,
+      handoffResult,
+      workDecompositionResult,
+      selectedWorkItemIds,
+    } = state;
     if (
       !agent ||
       handoffResult?.status !== "accepted" ||
@@ -17,9 +21,7 @@ export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {
       return {};
 
     const assignmentPlanResult = await createAssignmentPlan(
-      handoffResult.handoff,
-      workDecompositionResult,
-      selectedWorkItemIds,
+      { handoff, proposal: workDecompositionResult, selectedWorkItemIds },
       agent
     );
     return { assignmentPlanResult };

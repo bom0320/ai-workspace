@@ -176,6 +176,54 @@ describe("runWorkDecomposition", () => {
   });
 
   it.each([
+    [{ kind: "evidence", specialistId: "ux", index: 0 }, true],
+    [{ kind: "evidence", specialistId: "ux", index: 1 }, false],
+    [{ kind: "recommendation", specialistId: "unapproved" }, false],
+    [{ kind: "finding", index: 0 }, false],
+  ] as const)(
+    "checks Work Item source %j against approved analysis",
+    async (source, valid) => {
+      const workItem = { ...work("feedback"), sources: [source] };
+      const result = await runWorkDecomposition(input, {
+        agent: async () => ({ type: "propose", workItems: [workItem] }),
+      });
+      expect(result).toMatchObject(
+        valid
+          ? { status: "proposed", workItems: [workItem] }
+          : { status: "failed", failure: "invalid-output" }
+      );
+    }
+  );
+
+  it("rejects a source when the Specialist ID matches multiple approved decisions", async () => {
+    lookup.mockReturnValueOnce({
+      ...approved,
+      context: {
+        ...approved.context,
+        decisions: [
+          approved.context.decisions[0],
+          approved.context.decisions[0],
+        ],
+      },
+    });
+    const result = await runWorkDecomposition(input, {
+      agent: async () => ({
+        type: "propose",
+        workItems: [
+          {
+            ...work("feedback"),
+            sources: [{ kind: "recommendation", specialistId: "ux" }],
+          },
+        ],
+      }),
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      failure: "invalid-output",
+    });
+  });
+
+  it.each([
     {
       name: "duplicate ID",
       items: [work("same"), work(" same ")],

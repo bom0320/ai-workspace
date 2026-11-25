@@ -1,19 +1,19 @@
 import {
-  runWorkDecomposition,
+  decomposeApprovedWork,
   type RunWorkDecompositionOptions,
 } from "@/application/work-decomposition/index.js";
 import type { PhaseBState } from "../../../state.js";
-import { verifyExecutionHandoff } from "@/application/governance/index.js";
+import { verifyPhaseBHandoff } from "@/application/governance/index.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
-import { phaseBHandoffSchema } from "../../../../contracts/phase-handoff.js";
+import { phaseBHandoffSchema } from "@/application/data-flow/phase-b/handoff/input.js";
 
 export function createRunWorkDecompositionNode(
   options: RunWorkDecompositionOptions
 ) {
   return async ({ handoff }: PhaseBState): Promise<Partial<PhaseBState>> => {
-    let verified: ReturnType<typeof verifyExecutionHandoff>;
+    let verified: ReturnType<typeof verifyPhaseBHandoff>;
     try {
-      verified = verifyExecutionHandoff(phaseBHandoffSchema.parse(handoff));
+      verified = verifyPhaseBHandoff(phaseBHandoffSchema.parse(handoff));
     } catch {
       return {
         handoffResult: {
@@ -24,12 +24,13 @@ export function createRunWorkDecompositionNode(
         workDecompositionResult: undefined,
       };
     }
-    const workDecompositionResult = await runWorkDecomposition(
-      { approvedDecisionId: verified.decision.id },
+    const workDecompositionResult = await decomposeApprovedWork(
       {
-        ...options,
-        executionDelegationGrant: verified.executionDelegation.grant,
-      }
+        handoff,
+        approved: verified,
+        executionDelegationGrant: handoff.executionDelegation.grant,
+      },
+      options
     );
     if (workDecompositionResult.status === "proposed")
       registerWorkDecomposition(workDecompositionResult);
@@ -37,7 +38,7 @@ export function createRunWorkDecompositionNode(
       workDecompositionResult,
       handoffResult: {
         status: "accepted",
-        handoff: { status: "completed", ...verified },
+        approved: verified,
       },
     };
   };

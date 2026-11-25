@@ -1,5 +1,6 @@
 export {
   runWorkDecomposition,
+  decomposeApprovedWork,
   workDecompositionInputSchema,
   type RunWorkDecompositionOptions,
   type WorkDecompositionInput,
@@ -8,7 +9,11 @@ export {
   workDecompositionResultSchema,
   type WorkDecompositionResult,
 } from "./model/result.js";
-export { workItemSchema, type WorkItem } from "./model/work.js";
+export {
+  workItemSchema,
+  validateWorkItemSources,
+  type WorkItem,
+} from "./model/work.js";
 export type {
   CEOWorkDecompositionAgent,
   WorkDecompositionContext,

@@ -11,6 +11,10 @@ export type SpecialistContext = {
 };
 
 export type CollaborativeSpecialistContext = SpecialistContext & {
+  analysisEvidence?: Pick<
+    AgentDecision["evidence"][number],
+    "path" | "lineStart" | "lineEnd"
+  >[];
   repositoryFiles?: { path: string; size: number }[];
   assignmentObjective: string;
   approvedDirection: string;

@@ -26,7 +26,7 @@ export function resolveAssignmentExecution(
 
 type PlanContext = ReturnType<typeof resolvePreparedAssignmentPlan>;
 
-function resolveAssignmentBinding(
+export function resolveAssignmentBinding(
   context: PlanContext,
   request: AssignmentExecutionRequest
 ) {
@@ -36,6 +36,7 @@ function resolveAssignmentBinding(
     ({ id }) => id === request.assignmentId
   );
   if (
+    plan.id !== request.planId ||
     !assignment ||
     (request.access === "write" &&
       assignment.repositoryAccessCeiling !== "write")

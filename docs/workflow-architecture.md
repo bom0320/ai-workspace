@@ -297,9 +297,24 @@ Work Item Coordination / Integration
 
 정상 Phase A의 `human-direction-governance` 대상은 현재 정책에 맞는 CEO 위임 제안과 한 번의 Human 동시 승인을 요구한다. 방향과 정확한 위임 범위를 승인하고 Ledger 검증을 통과하면 `phaseACompletion`에 `{ status: "completed", decision, executionDelegation }`을 기록한다. 인간은 정책 범위에서 제안을 수정할 수 있으며 실제 수정된 Grant가 확인 바인딩에 들어간다. Revision은 Synthesis와 위임 제안을 다시 생성한다. 제안 실패 시 분석과 Synthesis 결과는 보존한다.
 
-`phaseACompletionSchema`는 Phase A의 전체 종료 결과를 표현하며, 성공 분기에는 `phaseBHandoffSchema`를 사용한다. Phase B는 이 성공 결과를 `PhaseBHandoff`로 받고 분해 전에 `verifyExecutionHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. Work Decomposition에는 승인 방향과 `executionDelegationGrant`를 전달한다. Detailed Planning 입력의 같은 필드는 직렬화된 Grant를 받으며, Phase B의 직접 상세 계획 경로는 차단 상태다. `ExecutionDelegation`은 Human 위임 기록 전체를 가리킨다. `repositoryAccessCeiling`은 Assignment의 Repository 접근 상한이며, 개별 실행의 Authority는 별도로 발급한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
+`phaseACompletionSchema`는 Phase A의 전체 종료 결과를 표현하며, 성공 분기에는 `phaseBHandoffSchema`를 사용한다. Phase B는 이 성공 결과를 `PhaseBHandoff`로 받고 분해 전에 `verifyPhaseBHandoff()`를 호출한다. 검증은 Ledger의 실제 Human 승인, 해당 Review의 제안, Decision과 활성 위임의 연결, 현재 정책·만료 시점 및 승인된 깨끗한 Repository Snapshot을 확인한다. Work Decomposition에는 승인 방향과 `executionDelegationGrant`를 전달한다. Detailed Planning 입력의 같은 필드는 직렬화된 Grant를 받으며, Phase B의 직접 상세 계획 경로는 차단 상태다. `ExecutionDelegation`은 Human 위임 기록 전체를 가리킨다. `repositoryAccessCeiling`은 Assignment의 Repository 접근 상한이며, 개별 실행의 Authority는 별도로 발급한다. 업무별 Authorization, Reservation, Claim은 별도로 실행 적격성을 검증한다. [Governance Handoff 검증](../src/application/governance/approval/features/execution-delegation/flow/verify-execution-handoff.ts)
 
 Governance 내부의 `resolveExecutionHandoff()`는 원본 `SynthesisContext`와 검증된 `SynthesisProposal` 전체를 함께 복원한다. `prepareAssignmentContext()`는 그 정보를 보존한 채 Specialist 출처, Staffing Binding, 배정 가능한 접근 상한을 추가한다. Assignment Planning Agent에는 선택한 Work Item, Specialist 후보, 접근 상한을 전달한다. 읽기 실행의 Context 구성에서는 기존 Goal과 Proposal의 승인 방향을 선택해 사용한다. [Assignment Context 준비](../src/application/governance/records/assignment-plans/prepare-assignment-context.ts)
+
+### Phase B Data Flow
+
+단계별 Input과 Output은 [Application Data Flow](../src/application/data-flow/phase-b)에 둔다. Governance와 Application이 소유한 기존 계약을 사용하며 Workflow Node는 각 단계의 입력을 구성한다.
+
+| 단계 | Input | Output 및 신뢰 근거 |
+| --- | --- | --- |
+| Handoff | `PhaseBHandoff`의 ApprovedDecision과 ExecutionDelegation | `verifyPhaseBHandoff()`가 Ledger와 Snapshot을 검증하고 승인된 SynthesisContext·SynthesisProposal·Snapshot·분석 출처 ID를 반환한다. 승인 쌍은 입력 State에 한 번 보존한다. |
+| Work Decomposition | 확인된 Handoff와 승인 Context, 위임 Grant | `decomposeApprovedWork()`가 Work Item과 선택적 `sources`를 생성한다. 독립 `runWorkDecomposition()`은 기존 승인 조회를 거쳐 같은 생성 로직을 사용한다. |
+| Assignment Planning | 분해 결과와 선택 ID, 승인 쌍 | `createAssignmentPlan()`은 등록된 분해 Binding을 확인하고 기존 배정 가능 Specialist와 접근 상한을 받아 적용한다. 제안 Agent에는 선택된 Work Item의 `sources` 참조와 기존 배정 정보만 전달한다. |
+| Assignment Execution | 등록된 Plan, 선택 ID, 승인 쌍 및 Assignment별 읽기 요청 | Coordinator가 전달받은 Plan을 Ledger 기록과 대조한다. Claim 이후 canonical Work Item·Assignment와 읽기 Context를 프로세스 내부 Session으로 연결하고 검증된 읽기 결과 참조만 State에 기록한다. |
+
+`sources`의 Specialist ID와 배열 Index는 승인된 분석을 참조한다. 분해 결과를 받을 때와 Ledger에 등록할 때 참조를 검증한다. 근거가 없으면 생략할 수 있다. 읽기 실행에는 인용된 Evidence 중 Claim으로 로딩한 파일의 경로와 행 위치만 포함한다. 이전 분석의 자유 서술은 전달하지 않으며, 참조가 읽기 범위나 실행 권한을 추가하지 않는다. 기존 기록에는 이 필드가 없어도 읽을 수 있다. 새 필드가 포함된 기록은 이를 모르는 이전 버전의 strict Schema에서 거부될 수 있다.
+
+후속 Task Detailing은 Assignment Read Session의 canonical Work Item·Assignment 및 승인된 Context를 입력으로 사용한다. 추가 조사는 별도의 승인과 수명 경계가 필요하다. 이 단계의 계약과 Runtime은 해당 기능이 연결될 때 정의한다.
 
 독립 `independent-direction-review` 대상과 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 

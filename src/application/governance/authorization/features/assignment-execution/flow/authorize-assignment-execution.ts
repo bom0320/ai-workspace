@@ -19,6 +19,7 @@ import {
   assertAssignmentReadDependencies,
   bindAssignmentReadExecution,
   resolveAssignmentExecution,
+  resolveAssignmentBinding,
 } from "./resolve-assignment-execution.js";
 
 export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
@@ -103,19 +104,19 @@ const unusedClaims = new WeakMap<object, string>();
 export function claimAssignmentExecution(handoff: Handoff, input: unknown) {
   const execution = authorizedAssignmentReadExecutionSchema.parse(input);
   const claimed = withGovernanceLedger((ledger, save) => {
-    const { entry } = resolvePreparedAssignmentPlan(
+    const prepared = resolvePreparedAssignmentPlan(
       ledger,
       handoff,
       execution.planId
     );
-    const record = entry.assignmentExecutions?.find(
+    const record = prepared.entry.assignmentExecutions?.find(
       (value) =>
         value.id === execution.id && value.request.planId === execution.planId
     );
     if (!record || record.claimedAt || record.failure)
       throw new AssignmentExecutionError("claim");
 
-    const context = resolveAssignmentExecution(ledger, handoff, record.request);
+    const context = resolveAssignmentBinding(prepared, record.request);
     assertAssignmentReadDependencies(context);
     const current = bindAssignmentReadExecution(
       context,
@@ -156,12 +157,12 @@ export function consumeAssignmentReadContext(
       Math.min(permit.timeoutMs, 5000),
       "read-only"
     );
-    const { entry } = resolvePreparedAssignmentPlan(
+    const prepared = resolvePreparedAssignmentPlan(
       ledger,
       trustedHandoff,
       permit.planId
     );
-    const record = entry.assignmentExecutions?.find(
+    const record = prepared.entry.assignmentExecutions?.find(
       ({ id }) => id === permit.id
     );
     if (!record?.claimedAt || record.failure || record.result)
@@ -176,11 +177,7 @@ export function consumeAssignmentReadContext(
       return time;
     };
     remainingTime();
-    const resolved = resolveAssignmentExecution(
-      ledger,
-      trustedHandoff,
-      record.request
-    );
+    const resolved = resolveAssignmentBinding(prepared, record.request);
     assertAssignmentReadDependencies(resolved);
     const { binding } = bindAssignmentReadExecution(
       resolved,
@@ -196,20 +193,29 @@ export function consumeAssignmentReadContext(
     return { record, resolved, deadlineMs, remainingTime };
   };
 
-  const { context, specialist, deadlineMs } = withGovernanceLedger((ledger) => {
-    const { resolved, deadlineMs, remainingTime } = resolveLiveClaim(ledger);
-    const context = loadAssignmentReadContext(
-      resolved,
-      permit.readScopes,
-      remainingTime
-    );
-    return { context, specialist: resolved.specialist, deadlineMs };
-  });
+  const { context, specialist, workItem, assignment, deadlineMs } =
+    withGovernanceLedger((ledger) => {
+      const { resolved, deadlineMs, remainingTime } = resolveLiveClaim(ledger);
+      const context = loadAssignmentReadContext(
+        resolved,
+        permit.readScopes,
+        remainingTime
+      );
+      return {
+        context,
+        specialist: resolved.specialist,
+        workItem: resolved.workItem,
+        assignment: resolved.assignment,
+        deadlineMs,
+      };
+    });
   const contextDigest = governanceDigest(context);
   let finalized = false;
   return {
     context: structuredClone(context),
     specialist,
+    workItem,
+    assignment,
     authority: permit.authority,
     deadlineMs,
     recordResult(input: unknown) {

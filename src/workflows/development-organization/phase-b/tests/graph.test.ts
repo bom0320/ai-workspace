@@ -7,9 +7,9 @@ import { createAssignmentPlan } from "@/application/planning/index.js";
 import {
   getApprovedDecision,
   getPreparedAssignmentPlan,
-  verifyExecutionHandoff,
+  verifyPhaseBHandoff,
 } from "@/application/governance/index.js";
-import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
+import { decomposeApprovedWork } from "@/application/work-decomposition/index.js";
 import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import {
@@ -38,7 +38,7 @@ vi.mock("@/application/governance/index.js", async () => ({
   getApprovedDecision: vi.fn(),
   getPreparedAssignmentPlan: vi.fn(),
   getAssignmentExecutionResults: () => [],
-  verifyExecutionHandoff: vi.fn(),
+  verifyPhaseBHandoff: vi.fn(),
 }));
 vi.mock(
   "@/application/governance/records/work-decomposition-records.js",
@@ -62,7 +62,7 @@ vi.mock("@/application/work-decomposition/index.js", async (importOriginal) => {
     >();
   return {
     ...actual,
-    runWorkDecomposition: vi.fn(actual.runWorkDecomposition),
+    decomposeApprovedWork: vi.fn(actual.decomposeApprovedWork),
   };
 });
 
@@ -156,7 +156,13 @@ const handoff: PhaseBHandoff = {
   },
 };
 const input = { handoff };
-const accepted = { handoffResult: { status: "accepted", handoff } };
+const approved = {
+  context: approval.context,
+  synthesisProposal: approval.review.proposal,
+  snapshot: approval.snapshot,
+  analysisSources: [],
+};
+const accepted = { handoffResult: { status: "accepted", approved } };
 
 const workItems = [
   {
@@ -171,24 +177,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(beginValidatedWorkItemExecutionSource).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
-  vi.mocked(verifyExecutionHandoff).mockReturnValue({
-    decision: handoff.decision,
-    executionDelegation: handoff.executionDelegation,
-  });
+  vi.mocked(verifyPhaseBHandoff).mockReturnValue(approved);
 });
 
 async function invoke(options: PhaseBGraphOptions) {
   const result = await createPhaseBGraph(options).invoke(input);
-  expect(runWorkDecomposition).toHaveBeenCalledExactlyOnceWith(
-    decompositionInput,
+  expect(decomposeApprovedWork).toHaveBeenCalledExactlyOnceWith(
     {
-      ...options.workDecomposition,
+      handoff,
+      approved,
       executionDelegationGrant: handoff.executionDelegation.grant,
-    }
+    },
+    options.workDecomposition ?? {}
   );
-  expect(getApprovedDecision).toHaveBeenCalledExactlyOnceWith(
-    decompositionInput.approvedDecisionId
-  );
+  expect(getApprovedDecision).not.toHaveBeenCalled();
   return result;
 }
 
@@ -227,23 +229,6 @@ it("preserves escalation and ends the graph", async () => {
       questions,
     },
   });
-});
-
-it("preserves invalid approval failure and ends before calling the agent", async () => {
-  vi.mocked(getApprovedDecision).mockImplementationOnce(() => {
-    throw new Error("ApprovedDecision is unavailable.");
-  });
-  const agent = vi.fn();
-  expect(await invoke({ workDecomposition: { agent } })).toEqual({
-    ...input,
-    ...accepted,
-    workDecompositionResult: {
-      status: "failed",
-      failure: "invalid-input",
-      reason: "Approved Decision could not be restored for Work Decomposition.",
-    },
-  });
-  expect(agent).not.toHaveBeenCalled();
 });
 
 it("preserves agent execution failure and ends without retry", async () => {
@@ -340,7 +325,7 @@ it.each([
     expect(() => createPhaseBGraph(options as PhaseBGraphOptions)).toThrow(
       "Unsupported Phase B Graph options"
     );
-    expect(verifyExecutionHandoff).not.toHaveBeenCalled();
+    expect(verifyPhaseBHandoff).not.toHaveBeenCalled();
     expect(createAssignmentPlan).not.toHaveBeenCalled();
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
@@ -378,7 +363,7 @@ it.each([
 );
 
 it("stops before selection when Handoff verification is denied", async () => {
-  vi.mocked(verifyExecutionHandoff).mockImplementationOnce(() => {
+  vi.mocked(verifyPhaseBHandoff).mockImplementationOnce(() => {
     throw new Error("denied");
   });
   const selectWorkItemIds = vi.fn();
@@ -388,7 +373,7 @@ it("stops before selection when Handoff verification is denied", async () => {
     assignmentExecution: { contexts: {} },
   }).invoke(input);
   expect(result.handoffResult?.status).toBe("denied");
-  expect(runWorkDecomposition).not.toHaveBeenCalled();
+  expect(decomposeApprovedWork).not.toHaveBeenCalled();
   expect(selectWorkItemIds).not.toHaveBeenCalled();
   expect(executeAssignmentRead).not.toHaveBeenCalled();
 });
@@ -537,9 +522,11 @@ it.each([
       "without-worker",
     ]);
     expect(createAssignmentPlan).toHaveBeenCalledExactlyOnceWith(
-      handoff,
-      result.workDecompositionResult,
-      result.selectedWorkItemIds,
+      {
+        handoff,
+        proposal: result.workDecompositionResult,
+        selectedWorkItemIds: result.selectedWorkItemIds,
+      },
       agent
     );
     expect(result.assignmentPlanResult).toEqual(assignmentResult);

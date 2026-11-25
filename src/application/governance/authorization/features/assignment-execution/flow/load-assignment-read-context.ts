@@ -19,7 +19,7 @@ const maxContextBytes = 64 * 1024;
 export function loadAssignmentReadContext(
   {
     snapshot,
-    context: { goal },
+    context: { goal, decisions },
     synthesisProposal,
     workItem,
     assignment,
@@ -82,6 +82,18 @@ export function loadAssignmentReadContext(
       }
     }),
   };
+  // Phase A references cannot expand the Claim or expose other file paths.
+  const suppliedPaths = new Set(context.files.map(({ path }) => path));
+  const analysisEvidence = (workItem.sources ?? []).flatMap((source) => {
+    if (source.kind !== "evidence") return [];
+    const evidence = decisions.find(
+      ({ specialistId }) => specialistId === source.specialistId
+    )?.evidence[source.index];
+    if (!evidence || !suppliedPaths.has(evidence.path)) return [];
+    const { path, lineStart, lineEnd } = evidence;
+    return [{ path, lineStart, lineEnd }];
+  });
+  if (analysisEvidence.length) context.analysisEvidence = analysisEvidence;
   if (Buffer.byteLength(JSON.stringify(context), "utf8") > maxContextBytes)
     throw new AssignmentExecutionError("validation");
   assertRepositoryMatchesSnapshot(snapshot);

@@ -1,4 +1,7 @@
-import type { WorkDecompositionResult } from "@/application/work-decomposition/index.js";
+import {
+  validateWorkItemSources,
+  type WorkDecompositionResult,
+} from "@/application/work-decomposition/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { resolveApprovedDecision } from "../approval/features/direction-review/flow/approved-decision.js";
 import type { RepositoryGovernance } from "../model/ledger.js";
@@ -32,10 +35,11 @@ export function findRegisteredWorkDecomposition(
 export function registerWorkDecomposition(proposal: Proposal): void {
   try {
     withGovernanceLedger((ledger, save) => {
-      const { entry, decision } = resolveApprovedDecision(
+      const { entry, decision, context } = resolveApprovedDecision(
         ledger,
         proposal.approvedDecisionId
       );
+      validateWorkItemSources(context, proposal.workItems);
       const subject = decompositionSubject(
         proposal,
         governanceDigest(decision)

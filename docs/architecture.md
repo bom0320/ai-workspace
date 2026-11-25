@@ -968,6 +968,8 @@ Governance 공통 model/ledger.ts와 records/governance-transaction.ts는 Approv
 
 `application/governance/records/`는 도메인 기록을 등록하고 조회할 때 저장된 출처와 Binding을 확인한다. Human 승인과 위임은 Approval이 관리하며, 개별 실행의 허용 여부와 Reservation·Claim은 Authorization이 결정한다. Ledger Schema는 `model/`이 정의하고 물리적 저장·Lock·서명 검증은 `services/governance-records/`가 담당한다.
 
+Phase B의 단계별 Input·Output은 `application/data-flow/phase-b/`에서 기존 Application 계약을 조합한다. Workflow는 검증된 승인 Context, Work Items, Assignment Plan과 결과 참조를 전달한다. Governance는 기록 Binding과 현재 권한을 재검증하며, Claim에서 소비한 읽기 Session은 프로세스 내부에서 관리한다. [Phase B Data Flow](workflow-architecture.md#phase-b-data-flow)
+
 | Records 위치 | 관리하는 기록과 조회 책임 |
 | --- | --- |
 | `analysis/` | 최초 분석과 Refinement의 출처 및 누적 예산, Claim에 결합된 Decision Digest와 Refinement 요청 |

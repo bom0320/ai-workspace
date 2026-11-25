@@ -4,7 +4,13 @@ import {
   getPreparedAssignmentPlan,
   getAssignmentExecutionResults,
 } from "@/application/governance/index.js";
-import type { PhaseBHandoff } from "../../../../contracts/phase-handoff.js";
+import type { AssignmentExecutionInput } from "@/application/data-flow/phase-b/assignment-execution/input.js";
+import type {
+  AssignmentExecutionOutput,
+  AssignmentExecutionStatus,
+  AssignmentReadOutput,
+} from "@/application/data-flow/phase-b/assignment-execution/output.js";
+import { governanceDigest } from "@/services/governance-records/index.js";
 
 export type AssignmentExecutionOptions = {
   maxConcurrentRuns?: number;
@@ -18,13 +24,16 @@ export type AssignmentExecutionOptions = {
 };
 
 export async function coordinateAssignmentExecutions(
-  handoff: PhaseBHandoff,
-  planId: string,
-  selectedWorkItemIds: readonly string[],
+  {
+    handoff,
+    plan: proposedPlan,
+    selectedWorkItemIds,
+  }: AssignmentExecutionInput,
   { contexts, maxConcurrentRuns = 1 }: AssignmentExecutionOptions
-) {
+): Promise<AssignmentExecutionOutput> {
   if (!Number.isSafeInteger(maxConcurrentRuns) || maxConcurrentRuns < 1)
     throw new RangeError("maxConcurrentRuns must be a positive safe integer.");
+  const planId = proposedPlan.id;
   let plan: ReturnType<typeof getPreparedAssignmentPlan>["plan"];
   let workItems: ReturnType<typeof getPreparedAssignmentPlan>["workItems"];
   let recorded: ReturnType<typeof getAssignmentExecutionResults>;
@@ -32,6 +41,7 @@ export async function coordinateAssignmentExecutions(
     ({ plan, workItems } = getPreparedAssignmentPlan(handoff, planId));
     const selected = new Set(selectedWorkItemIds);
     if (
+      governanceDigest(plan) !== governanceDigest(proposedPlan) ||
       !selected.size ||
       selected.size !== selectedWorkItemIds.length ||
       selectedWorkItemIds.some(
@@ -46,7 +56,7 @@ export async function coordinateAssignmentExecutions(
     return { status: "denied" as const, failure: "plan" as const, planId };
   }
 
-  const results: (Awaited<ReturnType<typeof executeAssignmentRead>> & {
+  const results: (AssignmentReadOutput & {
     assignmentId: string;
     workItemId: string;
   })[] = [...recorded];
@@ -91,12 +101,15 @@ export async function coordinateAssignmentExecutions(
       } = eligible[cursor++]!;
       running.set(
         assignmentId,
-        executeAssignmentRead(handoff, {
-          planId,
-          assignmentId,
-          access: "read",
-          readScopes: context.readScopes,
-          timeoutMs: context.timeoutMs,
+        executeAssignmentRead({
+          handoff,
+          request: {
+            planId,
+            assignmentId,
+            access: "read",
+            readScopes: context.readScopes,
+            timeoutMs: context.timeoutMs,
+          },
         }).then((result) => ({ assignmentId, workItemId, ...result }))
       );
     }
@@ -120,7 +133,9 @@ export async function coordinateAssignmentExecutions(
   };
 }
 
-function aggregateStatus(results: readonly { status: string }[]) {
+function aggregateStatus(
+  results: readonly { status: string }[]
+): AssignmentExecutionStatus {
   if (results.some(({ status }) => status === "failed")) return "failed";
   if (results.some(({ status }) => status === "denied")) return "denied";
   return "pending";

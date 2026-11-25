@@ -1,3 +1,4 @@
+import type { HandoffOutput } from "@/application/data-flow/phase-b/handoff/output.js";
 import type { GovernanceLedger } from "../../../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -62,13 +63,38 @@ export function resolveExecutionHandoff(
   };
 }
 
+function resolveCurrentHandoff(
+  ledger: GovernanceLedger,
+  input: ExecutionHandoffApproval
+) {
+  const verified = resolveExecutionHandoff(ledger, input);
+  assertRepositoryMatchesSnapshot(verified.snapshot);
+  return verified;
+}
+
 export function verifyExecutionHandoff(input: ExecutionHandoffApproval) {
   return withGovernanceLedger((ledger) => {
-    const { decision, delegation, snapshot } = resolveExecutionHandoff(
-      ledger,
-      input
-    );
-    assertRepositoryMatchesSnapshot(snapshot);
+    const { decision, delegation } = resolveCurrentHandoff(ledger, input);
     return structuredClone({ decision, executionDelegation: delegation });
+  });
+}
+
+export function verifyPhaseBHandoff(
+  input: ExecutionHandoffApproval
+): HandoffOutput {
+  return withGovernanceLedger((ledger) => {
+    const { context, synthesisProposal, snapshot, analysisSources } =
+      resolveCurrentHandoff(ledger, input);
+    return structuredClone({
+      context,
+      synthesisProposal,
+      snapshot,
+      analysisSources: analysisSources.map(({ scope, assignment }) => ({
+        scopeId: scope.id,
+        scopeVersion: scope.version,
+        assignmentId: assignment.assignmentId,
+        specialistId: assignment.specialistId,
+      })),
+    });
   });
 }

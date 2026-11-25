@@ -9,7 +9,12 @@ export function createExecuteAssignmentsNode(
 ) {
   const configured = options && structuredClone(options);
   return async (state: PhaseBState): Promise<Partial<PhaseBState>> => {
-    const { handoffResult, assignmentPlanResult, selectedWorkItemIds } = state;
+    const {
+      handoff,
+      handoffResult,
+      assignmentPlanResult,
+      selectedWorkItemIds,
+    } = state;
     if (
       !configured ||
       !selectedWorkItemIds?.length ||
@@ -18,9 +23,7 @@ export function createExecuteAssignmentsNode(
     )
       return {};
     const assignmentExecutionResult = await coordinateAssignmentExecutions(
-      handoffResult.handoff,
-      assignmentPlanResult.plan.id,
-      selectedWorkItemIds,
+      { handoff, plan: assignmentPlanResult.plan, selectedWorkItemIds },
       configured
     );
     return { assignmentExecutionResult };

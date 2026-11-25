@@ -1660,17 +1660,33 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (approved.directionGovernanceResult?.status !== "approved")
       throw new Error(JSON.stringify(approved.directionGovernanceResult));
     const decision = approved.directionGovernanceResult.decision;
-    const workItems = ["first", "second", "third"].map((id) => ({
-      id,
-      objective: fastPath
-        ? `Fix typos in ${target}`
-        : `Revise ${id} wording in ${target}`,
-      deliverable: fastPath
-        ? `Corrected typos in ${target}`
-        : `Revised ${target}`,
-      dependsOn: [],
-    }));
-    const agent = async () => ({ type: "propose", workItems });
+    let workItems: import("@/application/work-decomposition/index.js").WorkItem[] =
+      ["first", "second", "third"].map((id) => ({
+        id,
+        objective: fastPath
+          ? `Fix typos in ${target}`
+          : `Revise ${id} wording in ${target}`,
+        deliverable: fastPath
+          ? `Corrected typos in ${target}`
+          : `Revised ${target}`,
+        dependsOn: [],
+      }));
+    const agent: NonNullable<
+      NonNullable<PhaseBGraphOptions["workDecomposition"]>["agent"]
+    > = async ({ decisions }) => ({
+      type: "propose",
+      workItems: workItems.map((item) => {
+        if (!assignmentAgent || item.id !== "first") return item;
+        const sources = [
+          {
+            kind: "evidence" as const,
+            specialistId: decisions[0].specialistId,
+            index: 0,
+          },
+        ];
+        return { ...item, sources };
+      }),
+    });
     const handoff = approved.phaseACompletion;
     let assignmentPlanResult;
     let assignmentExecutionResult;
@@ -1687,6 +1703,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         assignmentExecution,
       }).invoke({ handoff });
       expect(state.handoffResult?.status).toBe("accepted");
+      if (state.workDecompositionResult?.status !== "proposed")
+        throw new Error(JSON.stringify(state.workDecompositionResult));
+      workItems = state.workDecompositionResult.workItems;
       assignmentPlanResult = state.assignmentPlanResult;
       assignmentExecutionResult = state.assignmentExecutionResult;
     } else {
@@ -1748,6 +1767,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       "workItems",
     ]);
 
+    expect(assignmentAgent.mock.calls[0][0].workItems[0].sources).toEqual([
+      {
+        kind: "evidence",
+        specialistId: approval.context.decisions[0].specialistId,
+        index: 0,
+      },
+    ]);
     const persisted = governance.getPreparedAssignmentPlan(handoff, plan.id);
     expect(persisted.plan).toEqual(plan);
     const { id, ...subject } = plan;
@@ -1825,6 +1851,23 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         ["first"]
       )
     ).toThrow(governance.AssignmentRegistrationError);
+    const forged = {
+      ...proposal,
+      workItems: proposal.workItems.map((item) =>
+        item.id === "first"
+          ? {
+              ...item,
+              sources: [
+                { kind: "evidence" as const, specialistId: "forged", index: 0 },
+              ],
+            }
+          : item
+      ),
+    };
+    registerWorkDecomposition(forged);
+    expect(() => governance.getAssignmentPlanContext(handoff, forged)).toThrow(
+      "registered Work Decomposition"
+    );
     const ledgerPath = join(home, ".ai-workspace-governance", "records.json");
     const original = readFileSync(ledgerPath, "utf8");
     withGovernanceRecords((raw, save) => {

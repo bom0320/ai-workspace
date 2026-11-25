@@ -64,18 +64,23 @@ function fixture(
   );
   const started: string[] = [];
   vi.mocked(executeAssignmentRead).mockImplementation(
-    async (_, { assignmentId }) => {
+    async ({ request: { assignmentId } }) => {
       started.push(assignmentId);
       return gates.get(assignmentId)!.promise;
     }
   );
   return {
     started,
-    run: (contexts: string[]) =>
+    plan: subject.plan,
+    run: (contexts: string[], plan = subject.plan) =>
       coordinateAssignmentExecutions(
-        {} as Parameters<typeof coordinateAssignmentExecutions>[0],
-        "plan",
-        Object.keys(dependencies),
+        {
+          handoff: {} as Parameters<
+            typeof coordinateAssignmentExecutions
+          >[0]["handoff"],
+          plan,
+          selectedWorkItemIds: Object.keys(dependencies),
+        },
         {
           maxConcurrentRuns: 2,
           contexts: Object.fromEntries(
@@ -123,7 +128,7 @@ it("fills slots when Assignment results arrive and holds dependent Work Items", 
   complete("b");
   expect(await result).toMatchObject({ status: "pending" });
   const outcome = await result;
-  if (outcome.failure === "plan") throw new Error("Plan rejected");
+  if ("failure" in outcome) throw new Error("Plan rejected");
   expect(
     outcome.pendingAssignments.map(({ assignmentId }) => assignmentId)
   ).toEqual(["a3", "c", "d"]);
@@ -176,4 +181,20 @@ it("keeps an independent execution running when a predecessor fails", async () =
     ],
   });
   expect(fixtureRun.started).toEqual(["a", "b"]);
+});
+
+it("rejects a changed Plan payload even when its ID is registered", async () => {
+  const { plan, run, started } = fixture({ A: [] }, [["a", "A"]]);
+  const forged = {
+    ...plan,
+    assignments: plan.assignments.map((assignment) => ({
+      ...assignment,
+      objective: "Forged",
+    })),
+  };
+  await expect(run(["a"], forged)).resolves.toMatchObject({
+    status: "denied",
+    failure: "plan",
+  });
+  expect(started).toEqual([]);
 });

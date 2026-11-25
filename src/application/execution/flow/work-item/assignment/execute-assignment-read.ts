@@ -1,3 +1,8 @@
+import type { AssignmentReadInput } from "@/application/data-flow/phase-b/assignment-execution/input.js";
+import type {
+  AssignmentReadSession,
+  AssignmentReadOutput,
+} from "@/application/data-flow/phase-b/assignment-execution/output.js";
 import { ZodError } from "zod";
 import { runCollaborativeSpecialist } from "@/application/decision/index.js";
 import {
@@ -5,18 +10,15 @@ import {
   reserveAssignmentExecution,
   claimAssignmentExecution,
   consumeAssignmentReadContext,
-  type AssignmentExecutionRequest,
   recordAssignmentFailure,
 } from "@/application/governance/index.js";
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
 import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
 
-type Handoff = Parameters<typeof reserveAssignmentExecution>[0];
-
-export async function executeAssignmentRead(
-  handoff: Handoff,
-  request: Extract<AssignmentExecutionRequest, { access: "read" }>
-) {
+export async function executeAssignmentRead({
+  handoff,
+  request,
+}: AssignmentReadInput): Promise<AssignmentReadOutput> {
   let stage: "authority" | "claim" | "execution" | "handoff" = "authority";
   let id: string | undefined;
   try {
@@ -31,7 +33,10 @@ export async function executeAssignmentRead(
     id = permit.id;
     stage = "claim";
     const claimed = claimAssignmentExecution(handoff, permit);
-    const session = consumeAssignmentReadContext(handoff, claimed);
+    const session: AssignmentReadSession = consumeAssignmentReadContext(
+      handoff,
+      claimed
+    );
     const timeoutMs = session.deadlineMs - Date.now();
     if (timeoutMs < 1) throw new AssignmentExecutionError("claim");
     stage = "execution";

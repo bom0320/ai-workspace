@@ -28,6 +28,7 @@ export async function runCodexCEOWorkDecomposition(
     "Use only the supplied context. Do not inspect the Repository, use tools, run commands, modify files, produce TaskContracts, create trusted IDs, or grant approvals or execution authority.",
     "Define each Work Item by its objective, deliverable, dependencies and completion boundary. Leave execution and access decisions to Assignment Planning and Governance.",
     'Return one JSON object without Markdown. Propose format: {"type":"propose","workItems":[{"id":"local-label","objective":"...","deliverable":"...","dependsOn":[]}]}. Optional fields are "rationale" (a non-empty reason for separating this work) and "suggestedRoles" (an array of role descriptions).',
+    "Optionally cite approved analysis in each Work Item as sources. Use {kind:'recommendation',specialistId}, {kind:'evidence'|'risk'|'uncertainty',specialistId,index}, or {kind:'finding'|'gap',index}. Indexes are 0-based. Omit sources if none apply.",
     'If more Human judgment is required, return {"type":"escalate","reason":"...","questions":["..."]}.',
     "WorkDecompositionContext:",
     JSON.stringify(context),

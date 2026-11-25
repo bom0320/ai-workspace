@@ -1,3 +1,5 @@
+import type { AssignmentPlanningOutput } from "@/application/data-flow/phase-b/assignment-planning/output.js";
+import type { AssignmentPlanningInput } from "@/application/data-flow/phase-b/assignment-planning/input.js";
 import {
   AssignmentRegistrationError,
   getAssignmentPlanContext,
@@ -8,7 +10,9 @@ import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignm
 import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
 
 export type AssignmentPlanAgent = (
-  context: ReturnType<typeof getAssignmentPlanContext>
+  context: ReturnType<typeof getAssignmentPlanContext> & {
+    workItems: AssignmentPlanningInput["proposal"]["workItems"];
+  }
 ) => Promise<unknown>;
 
 const failureReasons = {
@@ -29,11 +33,9 @@ function denied(failure: keyof typeof failureReasons) {
 }
 
 export async function createAssignmentPlan(
-  handoff: Parameters<typeof registerAssignmentPlan>[0],
-  proposal: Parameters<typeof registerAssignmentPlan>[1],
-  selectedIds: readonly string[],
+  { handoff, proposal, selectedWorkItemIds }: AssignmentPlanningInput,
   agent: AssignmentPlanAgent
-) {
+): Promise<AssignmentPlanningOutput> {
   let context: ReturnType<typeof getAssignmentPlanContext>;
   try {
     context = getAssignmentPlanContext(handoff, proposal);
@@ -41,8 +43,8 @@ export async function createAssignmentPlan(
     return denied("provenance");
   }
 
-  const selection = [...selectedIds];
-  const workItems = selectAssignmentWorkItems(context.workItems, selection);
+  const selection = [...selectedWorkItemIds];
+  const workItems = selectAssignmentWorkItems(proposal.workItems, selection);
   if (!workItems) return denied("proposal");
 
   let input: unknown;

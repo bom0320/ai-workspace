@@ -126,7 +126,6 @@ export function getAssignmentPlanContext(handoff: Handoff, proposal: Proposal) {
       ])
     );
     return structuredClone({
-      workItems: context.decomposition.workItems,
       specialists: [...specialists.values()],
       repositoryAccessCeilings: context.repositoryAccessCeilings,
     });

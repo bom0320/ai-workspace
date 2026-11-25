@@ -1,3 +1,5 @@
+import type { WorkDecompositionInput as ApprovedWorkDecompositionInput } from "@/application/data-flow/phase-b/work-decomposition/input.js";
+import type { WorkDecompositionOutput } from "@/application/data-flow/phase-b/work-decomposition/output.js";
 import { z } from "zod";
 import { getApprovedDecision } from "@/application/governance/index.js";
 import {
@@ -5,6 +7,7 @@ import {
   type CEOWorkDecompositionAgent,
   type WorkDecompositionContext,
 } from "../protocol/ceo.js";
+import { validateWorkItemSources } from "../model/work.js";
 import type { WorkDecompositionResult } from "../model/result.js";
 import {
   CodexWorkDecompositionError,
@@ -28,11 +31,7 @@ export type RunWorkDecompositionOptions = {
 
 export async function runWorkDecomposition(
   input: unknown,
-  {
-    agent,
-    timeoutMs,
-    executionDelegationGrant,
-  }: RunWorkDecompositionOptions = {}
+  options: RunWorkDecompositionOptions = {}
 ): Promise<WorkDecompositionResult> {
   const parsedInput = workDecompositionInputSchema.safeParse(input);
   if (!parsedInput.success) {
@@ -55,9 +54,27 @@ export async function runWorkDecomposition(
   }
 
   const { context, decision, review, snapshot } = approved;
+  return decomposeApprovedWork(
+    {
+      handoff: { decision },
+      approved: { context, synthesisProposal: review.proposal, snapshot },
+      executionDelegationGrant: options.executionDelegationGrant,
+    },
+    options
+  );
+}
+
+export async function decomposeApprovedWork(
+  {
+    handoff: { decision },
+    approved: { context, synthesisProposal, snapshot },
+    executionDelegationGrant,
+  }: ApprovedWorkDecompositionInput,
+  { agent, timeoutMs }: RunWorkDecompositionOptions = {}
+): Promise<WorkDecompositionOutput> {
   const ceoContext: WorkDecompositionContext = {
     goal: context.goal,
-    proposal: review.proposal,
+    proposal: synthesisProposal,
     decisions: context.decisions,
     comparison: context.comparison,
     snapshot,
@@ -112,6 +129,15 @@ export async function runWorkDecomposition(
   const reason = validateDependencies(action.workItems);
   if (reason)
     return { status: "failed", failure: "invalid-dependencies", reason };
+  try {
+    validateWorkItemSources(context, action.workItems);
+  } catch {
+    return {
+      status: "failed",
+      failure: "invalid-output",
+      reason: "Invalid Work Item analysis source references.",
+    };
+  }
   return {
     status: "proposed",
     approvedDecisionId: decision.id,

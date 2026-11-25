@@ -264,6 +264,8 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 
 **Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/staffing/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/decision/specialist/codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
 
+**5.3.2.1 Identity와 Authority 분리.** 공통 `SpecialistDefinition`에는 ID·역할·기본 전문 업무를 둔다. `SpecialistAuthority`는 정책과 개별 실행 계약이 사용하는 공통 권한 표현이다. Phase A의 정책 등록과 Invocation은 기존처럼 Identity와 읽기 전용 Authority를 함께 저장·검증한다. Claim 후에는 둘을 분리해 Decision Runtime에 전달하며 Runtime은 권한 누락, 쓰기 또는 Shell 허용을 거부한다. Phase B는 승인 당시의 평면 정책 등록 항목으로 기존 Staffing Binding을 재현한 뒤 Identity만 복원한다. 이 단계에서 Phase B 읽기·수정 권한 발급은 연결하지 않는다.
+
 **현재 재사용 기반.** Step 5.2.2의 읽기 전용 협업은 승인 방향과 선행 결과를 전달하며, 공유 동시성 한도에서 Specialist 실행과 Worker Assignment의 지연 상세 계획을 진행한다. 5.3.1은 Specialist와 접근 상한으로 Assignment를 표현하며 Worker Executor를 제거했다. 저장된 Plan은 Decomposition·Staffing Binding 및 Snapshot에 연결되고, 기존 Assignment Reservation·Claim과 성공 결과 기록은 후속 실행 계약을 위한 기반으로 남아 있다. Worker Assignment의 초안은 Plan·Assignment 식별자를 포함하지만 실행 권한을 부여하지 않는다. 기존 단일 Work Item 실행은 Codex Worktree, Scope 검사, 승인된 Verification, Evidence와 Artifact 보존을 제공한다. Assignment 수정 실행과 다중 Worktree 통합은 Planned다.
 
 ```text

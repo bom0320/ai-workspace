@@ -183,9 +183,12 @@ describe("authorizedSpecialistInvocationSchema", () => {
     expectTypeOf<
       AuthorizedSpecialistInvocation["snapshot"]
     >().toEqualTypeOf<RepositorySnapshot>();
-    expectTypeOf<
-      AuthorizedSpecialistInvocation["specialist"]
-    >().toEqualTypeOf<SpecialistDefinition>();
+    expectTypeOf<AuthorizedSpecialistInvocation["specialist"]>().toEqualTypeOf<{
+      id: string;
+      role: string;
+      objective: string;
+      authority: SpecialistAuthority;
+    }>();
     expectTypeOf<AuthorizedSpecialistInvocation["files"]>().toEqualTypeOf<
       InspectedFile[]
     >();

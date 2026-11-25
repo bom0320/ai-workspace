@@ -4,6 +4,10 @@ import { join } from "node:path";
 
 import { runCommand } from "@/infrastructure/process/index.js";
 
+import {
+  specialistAuthoritySchema,
+  type SpecialistAuthority,
+} from "@/contracts/specialist/authority.js";
 import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type {
   CollaborativeSpecialistContext,
@@ -22,28 +26,33 @@ export type CodexSpecialistOptions = {
 export async function runCodexSpecialist(
   specialist: SpecialistDefinition,
   context: SpecialistContext,
+  authority: SpecialistAuthority,
   options: CodexSpecialistOptions = {}
 ): Promise<AgentDecision> {
-  return runSpecialist(specialist, context, options);
+  return runSpecialist(specialist, context, authority, options);
 }
 
 export function runCollaborativeSpecialist(
   specialist: SpecialistDefinition,
   context: CollaborativeSpecialistContext,
-  options: CodexSpecialistOptions
+  authority: SpecialistAuthority | undefined,
+  options: CodexSpecialistOptions = {}
 ) {
-  return runSpecialist(specialist, context, options, true);
+  return runSpecialist(specialist, context, authority, options, true);
 }
 
 async function runSpecialist(
   specialist: SpecialistDefinition,
   context: SpecialistContext | CollaborativeSpecialistContext,
+  authority: SpecialistAuthority | undefined,
   options: CodexSpecialistOptions,
   collaborative = false
 ): Promise<AgentDecision> {
+  const parsedAuthority = specialistAuthoritySchema.safeParse(authority);
   if (
-    specialist.authority.repositoryAccess !== "read" ||
-    specialist.authority.shellExecution !== false
+    !parsedAuthority.success ||
+    parsedAuthority.data.repositoryAccess !== "read" ||
+    parsedAuthority.data.shellExecution !== false
   ) {
     throw new Error(
       'Unsupported Codex specialist authority: requires repositoryAccess="read" and shellExecution=false.'

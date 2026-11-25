@@ -39,8 +39,8 @@ const inputs: IndependentDecisionInput[] = [
       id: "frontend",
       role: "Frontend Specialist",
       objective: "Review implementation",
-      authority: { repositoryAccess: "read", shellExecution: false },
     },
+    authority: { repositoryAccess: "read", shellExecution: false },
     files: [{ path: "src/interface.ts", content: "// Implementation" }],
   },
   {
@@ -48,8 +48,8 @@ const inputs: IndependentDecisionInput[] = [
       id: "ux",
       role: "UX Specialist",
       objective: "Review interaction",
-      authority: { repositoryAccess: "read", shellExecution: false },
     },
+    authority: { repositoryAccess: "read", shellExecution: false },
     files: [
       { path: "docs/interaction.md", content: "Interaction specification" },
     ],
@@ -87,6 +87,7 @@ describe("runIndependentDecisions", () => {
     const result = runIndependentDecisions(snapshot, goal, inputs);
     expect(runSpecialistMock).toHaveBeenCalledTimes(1);
     expect(runSpecialistMock.mock.calls[0][0]).toBe(inputs[0].specialist);
+    expect(runSpecialistMock.mock.calls[0][2]).toBe(inputs[0].authority);
     expect(assertSnapshotMock).toHaveBeenCalledTimes(1);
     finishFirst(decisions[0]);
 
@@ -300,7 +301,7 @@ describe("runIndependentDecisions", () => {
     const options = { timeoutMs: 1234 };
     await runIndependentDecisions(snapshot, goal, inputs, options);
     for (const call of runSpecialistMock.mock.calls)
-      expect(call[2]).toBe(options);
+      expect(call[3]).toBe(options);
   });
 
   it("validates each Decision against the exact Context supplied to its Specialist", async () => {
@@ -352,7 +353,7 @@ describe("runIndependentDecisions", () => {
   it("uses empty default options", async () => {
     await runIndependentDecisions(snapshot, goal, inputs);
     for (const call of runSpecialistMock.mock.calls)
-      expect(call[2]).toEqual({});
+      expect(call[3]).toEqual({});
   });
 
   it("returns an empty array without execution when no Specialists are supplied", async () => {

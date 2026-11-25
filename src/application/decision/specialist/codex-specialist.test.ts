@@ -8,7 +8,10 @@ import { runCommand } from "@/infrastructure/process/index.js";
 
 import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type { SpecialistContext } from "../protocol/context.js";
-import { runCodexSpecialist } from "./codex-specialist.js";
+import {
+  runCollaborativeSpecialist,
+  runCodexSpecialist,
+} from "./codex-specialist.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 const runCommandMock = vi.mocked(runCommand);
@@ -16,8 +19,11 @@ const specialist: SpecialistDefinition = {
   id: "reviewer-1",
   role: "Frontend Specialist",
   objective: "Evaluate accessibility risks",
-  authority: { repositoryAccess: "read", shellExecution: false },
 };
+const readOnlyAuthority = {
+  repositoryAccess: "read",
+  shellExecution: false,
+} as const;
 const context: SpecialistContext = {
   goal: {
     objective: "Review the interface",
@@ -61,7 +67,7 @@ afterEach(() => {
 describe("runCodexSpecialist", () => {
   it("supplies role, objective and context without exposing Specialist identity", async () => {
     const before = structuredClone({ specialist, context });
-    await runCodexSpecialist(specialist, context);
+    await runCodexSpecialist(specialist, context, readOnlyAuthority);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
 
     expect(prompt).toContain(
@@ -82,7 +88,7 @@ describe("runCodexSpecialist", () => {
         "Assess keyboard focus behavior in the supplied interface",
     };
     const before = structuredClone({ specialist, assignedContext });
-    await runCodexSpecialist(specialist, assignedContext);
+    await runCodexSpecialist(specialist, assignedContext, readOnlyAuthority);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
 
     expect(prompt).toContain(
@@ -107,7 +113,7 @@ describe("runCodexSpecialist", () => {
   });
 
   it("falls back to the Human Goal and default Specialist role when no Assignment objective is supplied", async () => {
-    await runCodexSpecialist(specialist, context);
+    await runCodexSpecialist(specialist, context, readOnlyAuthority);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
 
     expect(prompt).toContain(
@@ -125,7 +131,7 @@ describe("runCodexSpecialist", () => {
   });
 
   it("states context, independence, evidence and output policies", async () => {
-    await runCodexSpecialist(specialist, context);
+    await runCodexSpecialist(specialist, context, readOnlyAuthority);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
     for (const policy of [
       "decision-only software specialist",
@@ -161,7 +167,9 @@ describe("runCodexSpecialist", () => {
         timedOut: false,
       };
     });
-    await runCodexSpecialist(specialist, context, { timeoutMs: 1234 });
+    await runCodexSpecialist(specialist, context, readOnlyAuthority, {
+      timeoutMs: 1234,
+    });
     const [command, args, options] = runCommandMock.mock.calls[0];
     expect(command).toBe("codex");
     expect(args[0]).toBe("exec");
@@ -208,6 +216,28 @@ describe("runCodexSpecialist", () => {
     expect(options.shell).not.toBe(true);
   });
 
+  it("blocks collaborative runtime when execution authority is missing", async () => {
+    await expect(
+      runCollaborativeSpecialist(
+        specialist,
+        {
+          ...context,
+          assignmentObjective: "Analyze",
+          approvedDirection: "Keep behavior",
+          workItem: {
+            id: "item",
+            objective: "Analyze",
+            deliverable: "Findings",
+          },
+          assignmentDeliverable: "Findings",
+          predecessorResults: [],
+        },
+        undefined
+      )
+    ).rejects.toThrow("Unsupported Codex specialist authority");
+    expect(runCommandMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     { repositoryAccess: "write", shellExecution: false },
     { repositoryAccess: "none", shellExecution: false },
@@ -216,7 +246,7 @@ describe("runCodexSpecialist", () => {
     "rejects unsupported authority before starting Codex: %j",
     async (authority) => {
       await expect(
-        runCodexSpecialist({ ...specialist, authority }, context)
+        runCodexSpecialist(specialist, context, authority)
       ).rejects.toThrow("Unsupported Codex specialist authority");
       expect(runCommandMock).not.toHaveBeenCalled();
     }
@@ -229,7 +259,9 @@ describe("runCodexSpecialist", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await runCodexSpecialist(specialist, context)).toEqual({
+    expect(
+      await runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).toEqual({
       specialistId: specialist.id,
       ...payload,
     });
@@ -249,7 +281,9 @@ describe("runCodexSpecialist", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await runCodexSpecialist(specialist, context)).toEqual({
+    expect(
+      await runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).toEqual({
       specialistId: specialist.id,
       ...output,
     });
@@ -263,7 +297,9 @@ describe("runCodexSpecialist", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await runCodexSpecialist(specialist, context)).toEqual({
+    expect(
+      await runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).toEqual({
       specialistId: specialist.id,
       ...withoutLines,
     });
@@ -278,9 +314,9 @@ describe("runCodexSpecialist", () => {
         exitCode: 0,
         timedOut: false,
       });
-      await expect(runCodexSpecialist(specialist, context)).rejects.toThrow(
-        "Codex specialist returned malformed JSON."
-      );
+      await expect(
+        runCodexSpecialist(specialist, context, readOnlyAuthority)
+      ).rejects.toThrow("Codex specialist returned malformed JSON.");
     }
   );
 
@@ -313,7 +349,7 @@ describe("runCodexSpecialist", () => {
         timedOut: false,
       });
       await expect(
-        runCodexSpecialist(specialist, context)
+        runCodexSpecialist(specialist, context, readOnlyAuthority)
       ).rejects.toBeInstanceOf(ZodError);
     }
   );
@@ -326,7 +362,9 @@ describe("runCodexSpecialist", () => {
       timedOut: true,
     });
     await expect(
-      runCodexSpecialist(specialist, context, { timeoutMs: 42 })
+      runCodexSpecialist(specialist, context, readOnlyAuthority, {
+        timeoutMs: 42,
+      })
     ).rejects.toThrow("Codex specialist timed out after 42 ms.");
   });
 
@@ -337,9 +375,9 @@ describe("runCodexSpecialist", () => {
       exitCode: 1,
       timedOut: false,
     });
-    await expect(runCodexSpecialist(specialist, context)).rejects.toThrow(
-      "Failed to run Codex specialist: Process failed"
-    );
+    await expect(
+      runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).rejects.toThrow("Failed to run Codex specialist: Process failed");
   });
 
   it("reports exit code when stderr is empty", async () => {
@@ -349,9 +387,9 @@ describe("runCodexSpecialist", () => {
       exitCode: 2,
       timedOut: false,
     });
-    await expect(runCodexSpecialist(specialist, context)).rejects.toThrow(
-      "Codex exited with code 2"
-    );
+    await expect(
+      runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).rejects.toThrow("Codex exited with code 2");
   });
 
   it("reports executable failure and retains its cause", async () => {
@@ -363,17 +401,19 @@ describe("runCodexSpecialist", () => {
       timedOut: false,
       error,
     });
-    await expect(runCodexSpecialist(specialist, context)).rejects.toMatchObject(
-      {
-        message: "Failed to run Codex specialist: spawn codex ENOENT",
-        cause: error,
-      }
-    );
+    await expect(
+      runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).rejects.toMatchObject({
+      message: "Failed to run Codex specialist: spawn codex ENOENT",
+      cause: error,
+    });
   });
 
   it("cleans up even if the command runner rejects unexpectedly", async () => {
     const error = new Error("System failure");
     runCommandMock.mockRejectedValue(error);
-    await expect(runCodexSpecialist(specialist, context)).rejects.toBe(error);
+    await expect(
+      runCodexSpecialist(specialist, context, readOnlyAuthority)
+    ).rejects.toBe(error);
   });
 });

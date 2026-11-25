@@ -83,7 +83,6 @@ beforeEach(() => {
         id: "frontend",
         role: "Frontend",
         objective: "Review frontend",
-        authority: { repositoryAccess: "read", shellExecution: false },
       },
     ],
     contextAccessPolicy: {

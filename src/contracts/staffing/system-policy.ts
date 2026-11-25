@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { specialistDefinitionsSchema } from "../specialist/definition.js";
+import {
+  hasUniqueSpecialistIds,
+  specialistDefinitionSchema,
+} from "../specialist/definition.js";
+import { specialistAuthoritySchema } from "../specialist/authority.js";
 import { contextAccessPolicySchema } from "../repository/context-access-policy.js";
 
 const nonnegativeInteger = z.number().int().nonnegative();
@@ -17,14 +21,21 @@ export const staffingInspectionLimitsSchema = z
   })
   .strict();
 
+// Preserve the flat policy entry and its existing signed representation.
+export const staffingSpecialistSchema = specialistDefinitionSchema.extend({
+  authority: specialistAuthoritySchema,
+});
+
 // The single structural source for Repository Staffing operating conditions.
 // Only Governance can establish its Human-approved, versioned provenance.
 export const staffingSystemPolicySchema = z
   .object({
     repositoryRoot: z.string().min(1),
     phase: z.literal("phase-a"),
-    availableSpecialists: specialistDefinitionsSchema
+    availableSpecialists: z
+      .array(staffingSpecialistSchema)
       .min(1)
+      .refine(hasUniqueSpecialistIds, "Duplicate Specialist IDs.")
       .refine(
         (items) =>
           items.every(

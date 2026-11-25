@@ -61,12 +61,14 @@ describe("Authorized single Specialist Decision", () => {
     input.assignmentObjective = "Caller object must not be used after Claim";
     expect(await runAuthorizedSpecialistDecision(input)).toBe(decision);
     expect(claimAuthorizedInvocation).toHaveBeenCalledExactlyOnceWith(input);
+    const { authority, ...definition } = invocation.specialist;
     expect(runIndependentDecisions).toHaveBeenCalledExactlyOnceWith(
       invocation.snapshot,
       invocation.goal,
       [
         {
-          specialist: invocation.specialist,
+          specialist: definition,
+          authority,
           assignmentObjective: invocation.assignmentObjective,
           files: invocation.files,
         },

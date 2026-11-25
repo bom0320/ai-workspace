@@ -54,7 +54,6 @@ describe("Decision shared contract compatibility", () => {
       id: string;
       role: string;
       objective: string;
-      authority: SpecialistAuthority;
     }>();
     expectTypeOf<publicAPI.SpecialistAuthority>().toEqualTypeOf<SpecialistAuthority>();
     expectTypeOf<publicAPI.RepositoryAccess>().toEqualTypeOf<RepositoryAccess>();
@@ -83,9 +82,13 @@ describe("Decision shared contract compatibility", () => {
         id: "unregistered",
         role: "Role",
         objective: "Objective",
-        authority,
       };
       expect(specialistDefinitionSchema.parse(specialist)).toEqual(specialist);
+      expect(specialistAuthoritySchema.parse(authority)).toEqual(authority);
+      expect(
+        specialistDefinitionSchema.safeParse({ ...specialist, authority })
+          .success
+      ).toBe(false);
       expect(
         specialistAuthoritySchema.safeParse({ ...authority, extra: true })
           .success

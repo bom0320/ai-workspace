@@ -1,3 +1,4 @@
+import type { SpecialistAuthority } from "@/contracts/specialist/authority.js";
 import { basename } from "node:path";
 
 import { goalSpecSchema, type GoalSpec } from "@/contracts/goal.js";
@@ -42,18 +43,20 @@ export async function runDecision({
     role: "Frontend Specialist",
     objective:
       "Evaluate frontend implementation structure, correctness, maintainability, and engineering risks.",
-    authority: { repositoryAccess: "read", shellExecution: false },
   };
   const uxSpecialist: SpecialistDefinition = {
     id: "ux",
     role: "UX Specialist",
     objective:
       "Evaluate interaction quality, usability, accessibility, and user experience risks.",
-    authority: { repositoryAccess: "read", shellExecution: false },
+  };
+  const authority: SpecialistAuthority = {
+    repositoryAccess: "read",
+    shellExecution: false,
   };
   const decisions = await runIndependentDecisions(snapshot, goal, [
-    { specialist: frontendSpecialist, files },
-    { specialist: uxSpecialist, files },
+    { specialist: frontendSpecialist, authority, files },
+    { specialist: uxSpecialist, authority, files },
   ]);
   return { goal, snapshot, decisions };
 }

@@ -186,7 +186,9 @@ export function prepareProposalInput(options: RunStaffingOptions) {
   const runOptions: StaffingLoopOptions = {
     goal: captured.goal,
     repositoryPath: systemPolicy.repositoryRoot,
-    availableSpecialists: systemPolicy.availableSpecialists,
+    availableSpecialists: systemPolicy.availableSpecialists.map(
+      ({ id, role, objective }) => ({ id, role, objective })
+    ),
     contextAccessPolicy: systemPolicy.contextAccessPolicy,
     assignmentConstraints: captured.assignmentConstraints,
     maxTotalAnalysisInvocations:

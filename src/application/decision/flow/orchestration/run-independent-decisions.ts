@@ -1,3 +1,4 @@
+import type { SpecialistAuthority } from "@/contracts/specialist/authority.js";
 import type { GoalSpec } from "@/contracts/goal.js";
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
@@ -21,6 +22,7 @@ export class DecisionValidationError extends Error {
 
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;
+  authority: SpecialistAuthority;
   assignmentObjective?: string;
   files: InspectedFile[];
 };
@@ -61,6 +63,7 @@ export async function runIndependentDecisions(
     const decision = await runCodexSpecialist(
       input.specialist,
       context,
+      input.authority,
       options
     );
     try {

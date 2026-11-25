@@ -29,7 +29,7 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     );
   assertRepositoryMatchesSnapshot(snapshot);
 
-  const sources = analysisSources.map(({ scope, assignment }) => {
+  const approvedSources = analysisSources.map(({ scope, assignment }) => {
     const issuance = entry.issuances.find(
       (record) =>
         record.scope.id === scope.id && record.scope.version === scope.version
@@ -55,6 +55,14 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
       definition,
     };
   });
+  // The persisted binding covers the original Phase A policy registration.
+  const staffingBinding = governanceDigest(approvedSources);
+  const sources = approvedSources.map(
+    ({ definition: { id, role, objective }, ...source }) => ({
+      ...source,
+      definition: { id, role, objective },
+    })
+  );
   const definitions = new Map<string, string>();
   for (const { definition } of sources) {
     const digest = governanceDigest(definition);
@@ -90,7 +98,8 @@ export function resolvePlanContext(ledger: GovernanceLedger, handoff: Handoff) {
     decision,
     snapshot,
     sources,
-    staffingBinding: governanceDigest(sources),
+    approvedSources,
+    staffingBinding,
     repositoryAccessCeilings,
   };
 }

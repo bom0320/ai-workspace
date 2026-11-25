@@ -1843,11 +1843,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         id: expect.any(String),
         role: expect.any(String),
         objective: expect.any(String),
-        authority: { repositoryAccess: "read", shellExecution: false },
       },
       assignmentId: expect.any(String),
       approvalRecordId: expect.any(String),
     });
+    expect(persisted.specialistSources[0].definition).not.toHaveProperty(
+      "authority"
+    );
     expect(
       withGovernanceRecords((raw) =>
         Object.values(

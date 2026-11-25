@@ -69,8 +69,8 @@ export async function executeReadOnlyWorkItem(
             role: "Repository analyst",
             objective:
               "Provide an independent analysis supported by the supplied evidence.",
-            authority: { repositoryAccess: "read", shellExecution: false },
           },
+          authority: { repositoryAccess: "read", shellExecution: false },
           files,
           assignmentObjective: JSON.stringify({
             objective: approved.workItem.objective,

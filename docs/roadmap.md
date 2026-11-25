@@ -253,7 +253,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 순서 | 작업 | 목적 및 완료 기준 | 상태 |
 | --- | --- | --- | --- |
 | 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 5.3.1-R에서 Work Item 실행 유형을 제거하고 직접 실행 차단. 구형 계약은 자동 변환 없이 거부 | Implemented |
-| 5.3.2 | Phase-scoped Capability & Authorization | Phase B 능력과 실행 권한을 구분하고 승인·위임·개별 Reservation/Claim을 검증. Phase A 읽기 전용 유지 | Planned |
+| 5.3.2 | Phase-scoped Capability & Authorization | 5.3.2.1 공통 Identity와 Authority 분리 완료. Phase B 개별 실행 계약과 권한 발급은 후속 범위 | Partially Implemented |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 승인 방향·선행 결과로 상세 계획을 수립하고 수정 계약을 정확한 Assignment와 Snapshot에 결합 | Planned |
 | 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |
 | 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |

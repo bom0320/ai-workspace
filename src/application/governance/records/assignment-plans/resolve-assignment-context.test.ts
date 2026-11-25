@@ -1,3 +1,4 @@
+import { governanceDigest } from "@/services/governance-records/index.js";
 import { expect, it, vi } from "vitest";
 import { resolveExecutionHandoff } from "../../approval/features/execution-delegation/flow/verify-execution-handoff.js";
 import { resolvePlanContext } from "./resolve-assignment-context.js";
@@ -40,7 +41,7 @@ function setup({
     entry: {
       issuances: versions.map((version) => ({
         scope: { id: `scope-${version}`, version },
-        approval: { systemPolicyVersion: version },
+        approval: { id: "approval", systemPolicyVersion: version },
       })),
       systems: versions.map((version) => ({
         version,
@@ -55,7 +56,11 @@ function setup({
     },
     analysisSources: versions.map((version) => ({
       scope: { id: `scope-${version}`, version },
-      assignment: { specialistId: specialist.id },
+      assignment: {
+        specialistId: specialist.id,
+        assignmentId: "approved",
+        objective: "Review",
+      },
     })),
     context: { goal: {} },
     delegation: { grant },
@@ -80,4 +85,20 @@ it("rejects different approved definitions for the same Specialist ID", () => {
   expect(setup({ ambiguous: true })).toThrow(
     "Approved Specialist identity is ambiguous."
   );
+});
+
+it("projects the approved identity without changing the original staffing binding", () => {
+  const { sources, staffingBinding } = setup()();
+  const { authority, ...identity } = specialist;
+  const historicalSource = {
+    scopeId: "scope-1",
+    scopeVersion: 1,
+    approvalRecordId: "approval",
+    assignmentId: "approved",
+    assignmentObjective: "Review",
+    definition: specialist,
+  };
+  expect(authority.repositoryAccess).toBe("read");
+  expect(sources).toEqual([{ ...historicalSource, definition: identity }]);
+  expect(staffingBinding).toBe(governanceDigest([historicalSource]));
 });

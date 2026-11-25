@@ -3,7 +3,7 @@ import { z } from "zod";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
-import { specialistDefinitionSchema } from "@/contracts/specialist/definition.js";
+import { staffingSpecialistSchema } from "@/contracts/staffing/system-policy.js";
 
 const nonEmptyString = z.string().min(1);
 const positiveInteger = z.number().int().positive();
@@ -99,7 +99,7 @@ export const authorizedSpecialistInvocationSchema = z
     assignmentObjective: nonEmptyString,
     goal: goalSpecSchema.strict(),
     snapshot: repositorySnapshotSchema,
-    specialist: specialistDefinitionSchema,
+    specialist: staffingSpecialistSchema,
     files: z.array(inspectedFileSchema.strict()).min(1),
   })
   .strict();

@@ -41,10 +41,18 @@ function resolveAssignmentBinding(
   const specialist = context.specialistSources.find(
     ({ definition }) => definition.id === specialistId
   )?.definition;
+  const approvedRegistration = context.approvedSources.find(
+    ({ definition }) => definition.id === specialistId
+  )?.definition;
   const workItem = context.decomposition.workItems.find(
     ({ id }) => id === assignment.workItemId
   );
-  if (!specialist || !workItem || !context.approvedDirection?.trim())
+  if (
+    !specialist ||
+    !approvedRegistration ||
+    !workItem ||
+    !context.approvedDirection?.trim()
+  )
     throw new AssignmentExecutionError("authority");
   const requested = {
     readScopes: request.readPaths.map((path) => ({
@@ -72,7 +80,7 @@ function resolveAssignmentBinding(
     delegation,
     snapshot,
     assignment,
-    specialist,
+    specialist: approvedRegistration,
     predecessors,
     ...(workItemPredecessors.length && {
       workItemPredecessors: workItemPredecessors.map(

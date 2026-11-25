@@ -1,3 +1,4 @@
+import { staffingSystemPolicySchema } from "../staffing/system-policy.js";
 import { describe, expect, it } from "vitest";
 import { specialistDefinitionsSchema } from "./definition.js";
 
@@ -5,7 +6,6 @@ const specialist = {
   id: "frontend",
   role: "Frontend",
   objective: "Analyze UI",
-  authority: { repositoryAccess: "read" as const, shellExecution: false },
 };
 
 describe("Specialist registration list invariant", () => {
@@ -23,16 +23,16 @@ describe("Specialist registration list invariant", () => {
       ])
     ).toThrow("Duplicate Specialist IDs");
   });
-  it("keeps count and Phase A authority policy outside the shared list", () => {
+  it("permits an empty catalog and rejects authority in a definition", () => {
     expect(specialistDefinitionsSchema.parse([])).toEqual([]);
     expect(
-      specialistDefinitionsSchema.parse([
+      specialistDefinitionsSchema.safeParse([
         {
           ...specialist,
           authority: { repositoryAccess: "write", shellExecution: true },
         },
-      ])
-    ).toHaveLength(1);
+      ]).success
+    ).toBe(false);
   });
   it("still validates each definition and rejects unknown fields", () => {
     expect(
@@ -43,4 +43,34 @@ describe("Specialist registration list invariant", () => {
         .success
     ).toBe(false);
   });
+});
+
+it("preserves flat Phase A registrations and rejects missing, write, Shell, and duplicate entries", () => {
+  const list = staffingSystemPolicySchema.shape.availableSpecialists;
+  const registration = {
+    ...specialist,
+    authority: { repositoryAccess: "read", shellExecution: false },
+  };
+  expect(list.parse([registration])).toEqual([registration]);
+  expect(list.safeParse([specialist]).success).toBe(false);
+  expect(
+    list.safeParse([
+      {
+        ...registration,
+        authority: { ...registration.authority, repositoryAccess: "write" },
+      },
+    ]).success
+  ).toBe(false);
+  expect(
+    list.safeParse([
+      {
+        ...registration,
+        authority: { ...registration.authority, shellExecution: true },
+      },
+    ]).success
+  ).toBe(false);
+  expect(
+    list.safeParse([registration, { ...registration, role: "Duplicate" }])
+      .success
+  ).toBe(false);
 });

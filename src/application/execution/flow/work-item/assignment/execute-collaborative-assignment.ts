@@ -43,6 +43,9 @@ export async function executeCollaborativeAssignment(
     const decision = await runCollaborativeSpecialist(
       claimed.specialist,
       claimed.context,
+      // Phase B does not yet issue runtime authority. The closed gate in
+      // Governance prevents reaching this runtime with a missing grant.
+      undefined,
       { timeoutMs }
     );
     stage = "handoff";

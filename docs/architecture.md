@@ -156,8 +156,8 @@ Clean은 기존 `git status --porcelain --untracked-files=all` 기준이므로 i
 Generic checkpoint나 Repository 복사본으로 해석하지 않는다.
 
 contracts/는 Goal / Task를 루트에 유지하고 Repository(snapshot / inspected-file / context-access-policy),
-Specialist(definition / authority), Staffing(system-policy)으로 분류한다. SpecialistDefinition은 Authority를,
-StaffingSystemPolicy는 SpecialistDefinition과 ContextAccessPolicy 및 Inspection Limits를 조합한다.
+Specialist(definition / authority), Staffing(system-policy)으로 분류한다. SpecialistDefinition은 ID·역할·기본 전문 업무를 정의한다.
+StaffingSystemPolicy는 이 정의와 공통 SpecialistAuthority를 기존 평면 등록 항목으로 조합하고 ContextAccessPolicy와 Inspection Limits를 함께 관리한다.
 계약은 Application workflow나 파일 I/O에 의존하지 않는다. TaskContract 파일 읽기·JSON parsing·Schema
 검증을 연결하는 loadTaskContract()는 cli/commands/execute에 두고 기존 오류 전달 의미를 유지한다.
 
@@ -432,7 +432,7 @@ CEO는 판단과 실행 요청을 생성한다. Harness는 승인된 Scope와 Go
   실제 승인·활성·취소·교체 상태를 검증하지 않는다. Lifecycle은 향후 신뢰 가능한 기록에서 관리한다.
 - InvokeSpecialistRequest: scope ID / version, assignment ID와 요청 Context paths만 받는다.
   CEO가 authority / objective를 추가하는 입력은 구조적으로 거부하며 Context 부분집합은 아래 Evaluation에서 검사한다.
-- AuthorizedSpecialistInvocation: invocation ID, 기존 Goal / Snapshot / SpecialistDefinition / InspectedFile[]을
+- AuthorizedSpecialistInvocation: invocation ID, 기존 Goal / Snapshot / Specialist 정책 등록 항목(Identity와 Authority) / InspectedFile[]을
   사용한다. 파일은 후속 enforcement가 승인된 Snapshot에서 구성해야 하며 parse 성공은 실행 권한이 아니다.
 - AuthorityVerdict: allowed는 Invocation을 포함하고 approval-required / denied는 reason을 포함한다.
   Harness의 검증 결과를 표현하는 구조일 뿐 현재 정책 평가로 Verdict를 생성하지 않는다.
@@ -953,7 +953,7 @@ Assignment/Context여도 새 attempt는 다른 호출이다. 객체 복사·직�
 전체에서 중복 예약하지 않는다. 핸들은 프로세스 내 재시도용이며 재시작 후 안정 ID 복원·자동 재개는 지원하지 않는다.
 
 AuthorizedSpecialistInvocation은 invocationId 외에 scopeId / scopeVersion / assignmentId / assignmentObjective를
-포함한다. Goal/Snapshot/Assignment Objective는 저장 Scope, SpecialistDefinition은 현재 승인 System Policy,
+포함한다. Goal/Snapshot/Assignment Objective는 저장 Scope, Specialist 등록 항목과 Authority는 현재 승인 System Policy,
 files는 승인 Commit의 검증된 blob에서 온다. 기본 Specialist objective와 이번 Assignment objective는 별도 필드다.
 CEO가 어느 값도 덮어쓸 수 없으며, 반환된 객체의 구조만으로 이후 실제 실행 권한을 다시 증명할 수는 없다.
 
@@ -978,7 +978,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | 모델 / 개념 | 상태 | 현재 의미 또는 채택 조건 |
 | --- | --- | --- |
 | RepositorySnapshot | Current | contracts/repository/snapshot.ts의 repositoryRoot / commitSha. Application 간 Repository provenance |
-| SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist/definition.ts / specialist/authority.ts. id / role / objective / authority, RepositoryAccess와 shellExecution |
+| SpecialistDefinition / SpecialistAuthority | Current | contracts/specialist/definition.ts / specialist/authority.ts. Definition은 id / role / objective, Authority는 RepositoryAccess와 shellExecution |
 | StaffingContext / SpecialistCandidate / StaffingInspectionLimits | Implemented | application/staffing의 AI-facing Snapshot Context projection과 제한된 inspect use-case. CEO Loop에서 재사용; 승인 / 실행 권한 없음 |
 | SpecialistContext | Current | protocol/context.ts. GoalSpec / repositoryCommitSha / InspectedFile[]와 선택적 assignmentObjective; 기본 역할 objective와 승인 Assignment 목적을 구분 |
 | AgentDecision / EvidenceReference | Current | protocol/decision.ts의 strict Zod schema와 inferred type. recommendation / evidence / risks / uncertainty와 Harness identity, path / optional lines / description |
@@ -1409,10 +1409,10 @@ Worktree 생성/삭제·Diff 크기 제한·임시 자원 cleanup도 각 서비�
 ### 9.2 Schema 조합과 의미 검증의 경계
 
 ```text
-contracts/specialist/authority.ts → specialist/definition.ts
+SpecialistDefinition + SpecialistAuthority → Phase A Staffing 등록 항목
 contracts/repository/context-access-policy.ts: PathScope → ContextAccessPolicy
 SpecialistDefinition → specialistDefinitionsSchema (등록 목록 ID 고유성)
-specialistDefinitionsSchema + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
+Staffing 등록 항목 + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
 GoalSpec + RepositorySnapshot + Intent/Assignment/Budget → StaffingProposal
 StaffingAssignment.omit(assignmentId) → StaffingAssignmentDraft
 StaffingProposal.omit(id, goal, snapshot) + Draft assignments → StaffingDraft → CEOStaffingDecision
@@ -1426,8 +1426,8 @@ Comparison position/finding/gap schemas → ComparisonPayload
 
 Schema의 omit/pick은 구조 재사용이며 발급·승인 근거가 아니다.
 ID 고유성은 `contracts/specialist/definition.ts`의 `specialistDefinitionsSchema.refine()`가 소유한다.
-System Policy는 이를 합성하고 최소 1개 및 Phase A Authority 조건을 추가하므로 Schema와 Policy의 혼합 책임이다.
-반면 SpecialistDefinition 단독으로는 none/read/write를 표현하며 등록의 진위나 특정 runtime에서의 실행 가능성을 증명하지 않는다.
+System Policy 등록 목록은 같은 ID 고유성 규칙, 최소 1개 및 Phase A 읽기 전용 Authority 조건을 적용한다.
+SpecialistAuthority는 접근 수준을 표현하며 실제 발급과 범위 검증은 Governance가 담당한다.
 Decision Payload의 path/line 구조를 파싱한 뒤 Context에 대한 존재·행 범위·순서를 검사하고,
 Comparison의 nonnegative index를 파싱한 뒤 원본 Decision에 대한 범위·중복을 검사한다.
 Staffing Context Schema는 source root나 Authority를 투영하지 않지만, 파일 내용 자체의 신뢰성을 보증하지 않는다.

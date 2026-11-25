@@ -27,8 +27,9 @@ export async function runAuthorizedSpecialistDecision(
   // so propagate it without retrying or re-authorizing this Invocation.
   const { snapshot, goal, specialist, assignmentObjective, files } =
     claim.invocation;
+  const { authority, ...definition } = specialist;
   const [decision] = await runIndependentDecisions(snapshot, goal, [
-    { specialist, assignmentObjective, files },
+    { specialist: definition, authority, assignmentObjective, files },
   ]);
   return decision;
 }

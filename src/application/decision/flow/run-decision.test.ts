@@ -89,16 +89,20 @@ describe("runDecision", () => {
         id: "frontend",
         role: "Frontend Specialist",
         objective: expect.stringContaining("frontend implementation"),
-        authority: { repositoryAccess: "read", shellExecution: false },
       },
       {
         id: "ux",
         role: "UX Specialist",
         objective: expect.stringContaining("interaction quality"),
-        authority: { repositoryAccess: "read", shellExecution: false },
       },
     ]);
-    for (const item of inputs) expect(item.files).toBe(files);
+    for (const item of inputs) {
+      expect(item.files).toBe(files);
+      expect(item.authority).toEqual({
+        repositoryAccess: "read",
+        shellExecution: false,
+      });
+    }
   });
   it("propagates dirty Snapshot errors without loading files or starting decisions", async () => {
     const error = new Error("repository has uncommitted or untracked changes");

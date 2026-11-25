@@ -22,10 +22,7 @@ export type ExecutionRequest = z.infer<typeof executionRequestSchema>;
 
 export const readOnlyExecutionRequestSchema = executionRequestSchema
   .omit({ task: true, workerMode: true })
-  .strict()
-  .refine(({ workItem }) => workItem.workType === "read-only", {
-    message: "An explicit read-only Work Item is required.",
-  });
+  .strict();
 
 export const workItemExecutionRequestSchema = z.union([
   readOnlyExecutionRequestSchema,

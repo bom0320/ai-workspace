@@ -169,11 +169,7 @@ const workItems = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(executeWorkItemPlanning).mockReset();
-  vi.mocked(beginValidatedWorkItemExecutionSource)
-    .mockReset()
-    .mockImplementation((_handoff, _proposal, item) => () => ({
-      executionSourceId: `source-${item.id}`,
-    }));
+  vi.mocked(beginValidatedWorkItemExecutionSource).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
   vi.mocked(verifyExecutionHandoff).mockReturnValue({
     decision: handoff.decision,
@@ -264,7 +260,6 @@ it("preserves agent execution failure and ends without retry", async () => {
 it("passes timeout to the default Codex adapter without storing it in State", async () => {
   const typedWorkItems = workItems.map((item) => ({
     ...item,
-    workType: "repository-modification",
   }));
   vi.mocked(runCommand).mockResolvedValueOnce({
     stdout: JSON.stringify({ type: "propose", workItems: typedWorkItems }),
@@ -384,7 +379,6 @@ it.each([
       selected.map(({ id }) => ({
         workItemId: id,
         result: completedPlan(id),
-        executionSourceId: `source-${id}`,
       }))
     );
     expect(result.pendingPlanningIds).toEqual([]);
@@ -456,95 +450,53 @@ it("keeps prior results and stops at the first failed PlanningResult", async () 
     {
       workItemId: api.id,
       result: completedPlan(api.id),
-      executionSourceId: `source-${api.id}`,
     },
     { workItemId: client.id, result: failed },
   ]);
   expect(executeWorkItem).not.toHaveBeenCalled();
-  expect(result.executionPreparationResult).toBeUndefined();
+  expect(result.executionPreparationResult?.status).toBe("blocked");
 });
 
-it("keeps earlier sources and stops at the first blocked completed plan", async () => {
-  const workItems = [api, client, docs];
-  vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
-    completedPlan(phaseB.workItem.id)
-  );
-  vi.mocked(beginValidatedWorkItemExecutionSource)
-    .mockReturnValueOnce(() => ({ executionSourceId: "first-source" }))
-    .mockReturnValueOnce(() => ({
-      executionBlockedReason: "Unverified source.",
-    }));
-
-  const result = await createPhaseBGraph({
-    agent: async () => ({ type: "propose", workItems }),
-    execution: {
-      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
-    },
-    planning: {
-      detailed: planningOptions,
-      selectWorkItemIds: (items) => items.map(({ id }) => id),
-    },
-  }).invoke(input);
-
-  expect(executeWorkItemPlanning).toHaveBeenCalledTimes(2);
-  expect(beginValidatedWorkItemExecutionSource).toHaveBeenCalledTimes(2);
-  expect(result.pendingPlanningIds).toEqual([docs.id]);
-  expect(result.planningResults).toEqual([
-    {
-      workItemId: api.id,
-      result: completedPlan(api.id),
-      executionSourceId: "first-source",
-    },
-    {
-      workItemId: client.id,
-      result: completedPlan(client.id),
-      executionBlockedReason: "Unverified source.",
-    },
-  ]);
-  expect(executeWorkItem).not.toHaveBeenCalled();
-  expect(result.executionPreparationResult).toBeUndefined();
-});
-
-it.each([
-  { workItemId: "docs", eligible: true },
-  { workItemId: "missing", eligible: false },
-  { workItemId: "client", eligible: false },
-])(
-  "prepares only the explicit Work Item $workItemId",
-  async ({ workItemId, eligible }) => {
+it.each(["docs", "missing", "client"])(
+  "denies direct execution for %s and preserves all completed drafts",
+  async (workItemId) => {
     const items = [api, client, docs];
     vi.mocked(executeWorkItemPlanning).mockImplementation(async ({ phaseB }) =>
       completedPlan(phaseB.workItem.id)
     );
     const result = await createPhaseBGraph({
       agent: async () => ({ type: "propose", workItems: items }),
-      execution: {
-        assignment: { contexts: {} },
-        workItem: { workItemId, readPaths: [], timeoutMs: 1000 },
-      },
+      execution: { workItem: { workItemId, readPaths: [], timeoutMs: 1000 } },
       planning: {
         detailed: planningOptions,
         selectWorkItemIds: () => items.map(({ id }) => id),
       },
     }).invoke(input);
-
-    expect(
-      result.planningResults?.map((plan) => plan.executionSourceId)
-    ).toEqual(items.map((item) => `source-${item.id}`));
+    expect(result.planningResults).toEqual(
+      items.map(({ id }) => ({ workItemId: id, result: completedPlan(id) }))
+    );
+    expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
+    expect(executeWorkItem).not.toHaveBeenCalled();
     expect(result.executionPreparationResult).toMatchObject({
       workItemId,
       status: "blocked",
     });
-    if (eligible)
-      expect(executeWorkItem).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          workItem: docs,
-          executionSourceId: "source-docs",
-        })
-      );
-    else expect(executeWorkItem).not.toHaveBeenCalled();
   }
 );
+
+it("denies direct execution with no Assignment Plan or Detailed Planning", async () => {
+  const result = await createPhaseBGraph({
+    agent: async () => ({ type: "propose", workItems: [api] }),
+    execution: {
+      workItem: { workItemId: api.id, readPaths: [], timeoutMs: 1000 },
+    },
+  }).invoke(input);
+  expect(result.executionPreparationResult).toMatchObject({
+    workItemId: api.id,
+    status: "blocked",
+  });
+  expect(executeWorkItem).not.toHaveBeenCalled();
+});
 
 it.each([
   { type: "escalate", reason: "Need clarification", questions: ["Which API?"] },
@@ -605,7 +557,6 @@ it("takes the selection and prior results only from the current Graph run", asyn
     {
       workItemId: feedback.id,
       result: completedPlan(feedback.id),
-      executionSourceId: `source-${feedback.id}`,
     },
   ]);
   expect(second).toEqual(first);
@@ -615,18 +566,15 @@ const combinedItems = [
   {
     ...workItems[0],
     id: "ready",
-    workType: "repository-modification" as const,
   },
   {
     ...workItems[0],
     id: "awaiting",
-    workType: "repository-modification" as const,
   },
-  { ...workItems[0], id: "analysis", workType: "read-only" as const },
+  { ...workItems[0], id: "analysis" },
   {
     ...workItems[0],
     id: "without-worker",
-    workType: "repository-modification" as const,
   },
 ];
 const combinedPlan = {
@@ -714,6 +662,7 @@ it.each(["prepared", "denied"] as const)(
       expect(result.deferredDetailedPlanningIds).toEqual([
         "ready",
         "awaiting",
+        "analysis",
         "without-worker",
       ]);
     } else {

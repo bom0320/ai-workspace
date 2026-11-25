@@ -1677,11 +1677,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const decision = approved.directionGovernanceResult.decision;
     const workItems = ["first", "second", "third"].map((id) => ({
       id,
-      ...(readOnly
-        ? { workType: "read-only" as const }
-        : assignmentAgent
-          ? { workType: "repository-modification" as const }
-          : {}),
       objective: fastPath
         ? `Fix typos in ${target}`
         : `Revise ${id} wording in ${target}`,
@@ -1768,7 +1763,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       registerExecutionDecomposition(decomposition);
       planningResults = [];
       for (const workItem of decomposition.workItems) {
-        if (workItem.workType === "read-only") continue;
         const recordSource = beginWorkItemExecutionSource(
           decomposition,
           workItem,
@@ -2150,12 +2144,20 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     return planningResults!.map(({ workItemId, result, executionSourceId }) => {
       if (result.status !== "completed")
         throw new Error(JSON.stringify(result));
-      expect(executionSourceId).toMatch(/^[a-f0-9]{64}$/);
+      const workItem = workItems.find(({ id }) => id === workItemId)!;
+      const source =
+        executionSourceId ??
+        beginWorkItemExecutionSource(
+          { status: "proposed", approvedDecisionId: decision.id, workItems },
+          workItem,
+          root
+        )?.(result.task);
+      expect(source).toMatch(/^[a-f0-9]{64}$/);
       return {
         approvedDecisionId: decision.id,
-        executionSourceId: executionSourceId!,
+        executionSourceId: source!,
         repositoryPath: root,
-        workItem: workItems.find(({ id }) => id === workItemId)!,
+        workItem,
         task: result.task,
         readPaths: [target],
         timeoutMs: 5_000,
@@ -2211,419 +2213,51 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     });
   });
 
-  it.each(["legacy", "unapproved-read"] as const)(
-    "denies %s Phase B execution before Worker or reservation",
-    async (mode) => {
-      const {
-        executionPreparationResult,
-        workerExecutionResult,
-        planningResults,
-      } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
-        codexMode: mode === "unapproved-read",
-        execution: {
-          workItemId: "first",
-          readPaths:
-            mode === "legacy" ? ["README.md"] : ["docs-extra/other.md"],
-          timeoutMs: 5000,
-        },
-      });
-      expect(executionPreparationResult?.status).toBe("denied");
-      expect(workerExecutionResult).toBeUndefined();
-      expect(planningResults?.[0].executionSourceId).toBeDefined();
-      expect(processRuntime.runCommand).not.toHaveBeenCalledWith(
-        "codex",
-        expect.arrayContaining(["workspace-write"]),
-        expect.anything()
-      );
-      withGovernanceRecords((raw) => {
-        const ledger =
-          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-        expect(
-          Object.values(ledger.repositories).flatMap(
-            (entry) => entry.executionReservations ?? []
-          )
-        ).toEqual([]);
-      });
-    }
-  );
-
-  it.each([
-    "success",
-    "denied-context",
-    "invalid-evidence",
-    "process-failure",
-    "runtime-blocked",
-  ] as const)(
-    "routes Phase B read-only execution and handles %s",
-    async (mode) => {
-      const specialist = vi.fn();
-      const {
-        readOnlyExecutionResult,
-        workerExecutionResult,
-        executionPreparationResult,
-        planningResults,
-        decision,
-        workItems,
-      } = await planExecutionItems(true, 1, [], "README.md", {
-        readOnly: true,
-        execution: {
-          workItemId: "first",
-          readPaths: [
-            mode === "denied-context" ? "docs-extra/other.md" : "README.md",
-          ],
-          timeoutMs: mode === "runtime-blocked" ? 2_147_483_648 : 5000,
-        },
-        beforePhaseB: () => {
-          vi.mocked(processRuntime.runCommand).mockImplementation(
-            async (name, args, options) => {
-              specialist(name, args, options);
-              expect(name).toBe("codex");
-              expect(args).toContain("read-only");
-              expect(args.join(" ")).toContain(
-                "shell_tool=false,unified_exec=false"
-              );
-              expect(args).toContain('approval_policy="never"');
-              expect(options.timeoutMs).toBeLessThanOrEqual(5000);
-              expect(options.cwd.startsWith(root + "/")).toBe(false);
-              expect(filesystem.readdirSync(options.cwd)).toEqual([]);
-              const context = JSON.parse(
-                args.at(-1)!.split("SpecialistContext:\n")[1]
-              );
-              expect(context.files).toEqual([
-                { path: "README.md", content: "Original content\n" },
-              ]);
-              expect(context.repositoryCommitSha).toBe(
-                git("rev-parse", "HEAD").toString().trim()
-              );
-              return {
-                stdout: JSON.stringify({
-                  recommendation: "Use the existing introduction as evidence.",
-                  evidence: [
-                    {
-                      path:
-                        mode === "invalid-evidence"
-                          ? "docs-extra/other.md"
-                          : "README.md",
-                      description: "Introduction",
-                    },
-                  ],
-                  risks: [],
-                  uncertainty: [],
-                }),
-                stderr: "",
-                exitCode: mode === "process-failure" ? 1 : 0,
-                timedOut: false,
-              };
-            }
-          );
-        },
-      });
-      expect(workerExecutionResult).toBeUndefined();
-      expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
-        "Original content\n"
-      );
-      const [plan] = planningResults!;
-      expect(plan.executionSourceId).toBeDefined();
-      expect(plan.result).toEqual({ status: "read-only" });
-      const recordedSource = withGovernanceRecords((raw) =>
-        Object.values(
-          (
-            raw as import("@/application/governance/model/ledger.js").GovernanceLedger
-          ).repositories
-        )
-          .flatMap((entry) => entry.workItemExecutionSources ?? [])
-          .find(({ id }) => id === plan.executionSourceId)
-      );
-      expect(recordedSource).toMatchObject({ readOnly: true });
-      expect(recordedSource).not.toHaveProperty("taskDigest");
-      if (mode === "denied-context" || mode === "runtime-blocked") {
-        expect(specialist).not.toHaveBeenCalled();
-        expect(executionPreparationResult).toMatchObject({
-          workItemId: "first",
-          status: mode === "runtime-blocked" ? "blocked" : "denied",
-        });
-        expect(readOnlyExecutionResult).toBeUndefined();
-        expect(
-          withGovernanceRecords((raw) =>
-            Object.values(
-              (
-                raw as import("@/application/governance/model/ledger.js").GovernanceLedger
-              ).repositories
-            ).flatMap((entry) => entry.executionReservations ?? [])
-          )
-        ).toEqual([]);
-        return;
-      }
-      expect(executionPreparationResult).toBeUndefined();
-      expect(specialist).toHaveBeenCalledOnce();
-      expect(readOnlyExecutionResult).toMatchObject({
-        workItemId: "first",
-        result:
-          mode === "success"
-            ? { passed: true, decision: { evidence: [{ path: "README.md" }] } }
-            : {
-                passed: false,
-                failure:
-                  mode === "invalid-evidence" ? "validation" : "execution",
-              },
-      });
-      const request = {
-        approvedDecisionId: decision.id,
-        executionSourceId: plan.executionSourceId,
-        workItem: workItems[0],
-        repositoryPath: root,
-        readPaths: ["README.md"],
-        timeoutMs: 5000,
-      };
-      await expect(executeReadOnlyWorkItem(request)).resolves.toMatchObject({
-        status: "denied",
-      });
-      await expect(
-        executeReadOnlyWorkItem({
-          ...request,
-          executionSourceId: "0".repeat(64),
-        })
-      ).resolves.toMatchObject({ status: "denied" });
-      await expect(
-        executeReadOnlyWorkItem({
-          ...request,
-          workItem: { ...request.workItem, objective: "Forged objective" },
-        })
-      ).resolves.toMatchObject({ status: "denied" });
-      expect(specialist).toHaveBeenCalledOnce();
-    }
-  );
-
-  it.each([
-    "expired",
-    "revoked",
-    "superseded",
-    "snapshot",
-    "legacy-source",
-  ] as const)(
-    "rejects %s read-only authority without consuming a reservation",
-    async (change) => {
-      const { decision, workItems, planningResults } = await planExecutionItems(
-        true,
-        1,
-        [],
-        "README.md",
-        { readOnly: true }
-      );
-      const request = {
-        approvedDecisionId: decision.id,
-        executionSourceId: planningResults![0].executionSourceId!,
-        workItem: workItems[0],
-        repositoryPath: root,
-        readPaths: ["README.md"],
-        timeoutMs: 5000,
-      };
-      expect(governance.checkExecutionEligibility(request).status).toBe(
-        "eligible"
-      );
-      if (change === "expired")
-        vi.spyOn(Date, "now").mockReturnValue(
-          Date.parse(
-            governance.getExecutionDelegation(decision.id)!.grant.expiresAt
-          )
-        );
-      if (change === "revoked") configureExecutionPolicy(null);
-      if (change === "superseded") configureExecutionPolicy();
-      if (change === "snapshot")
-        writeFileSync(join(root, "README.md"), "Drift");
-      if (change === "legacy-source") {
-        request.executionSourceId = withGovernanceRecords((raw, save) => {
-          const ledger =
-            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-          const entry = Object.values(ledger.repositories)[0];
-          const source = entry.workItemExecutionSources!.find(
-            ({ id }) => id === request.executionSourceId
-          )!;
-          const subject = {
-            decompositionBinding: source.decompositionBinding,
-            workItemId: source.workItemId,
-            snapshot: source.snapshot,
-            taskDigest: governanceDigest({
-              id: "legacy",
-              allowedPaths: [],
-              verification: [],
-            }),
-          };
-          const id = governanceDigest(subject);
-          entry.workItemExecutionSources!.push({ id, ...subject });
-          save(ledger);
-          return id;
-        });
-        expect(governance.getApprovedDecision(decision.id).decision).toEqual(
-          decision
-        );
-      }
-      const command = vi.mocked(processRuntime.runCommand);
-      const calls = command.mock.calls.length;
-      const path = join(home, ".ai-workspace-governance", "records.json");
-      const before = readFileSync(path, "utf8");
-      await expect(executeReadOnlyWorkItem(request)).resolves.toMatchObject({
-        status: "denied",
-      });
-      expect(command).toHaveBeenCalledTimes(calls);
-      expect(readFileSync(path, "utf8")).toBe(before);
-    }
-  );
-
-  it("requires a Phase B delegation before running read-only work", async () => {
-    const { decision, workItems } = await planExecutionItems(
-      false,
+  it("blocks both direct execution entry points with valid Work Item provenance and no Assignment Plan", async () => {
+    const [request] = await plannedExecutions(
+      true,
       1,
-      [],
+      ["git diff --check"],
       "README.md",
-      { readOnly: true }
+      { codexMode: true }
     );
+    const { task: _task, ...readRequest } = request;
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    const before = readFileSync(path, "utf8");
     const command = vi.mocked(processRuntime.runCommand);
     const calls = command.mock.calls.length;
-    await expect(
-      executeReadOnlyWorkItem({
-        approvedDecisionId: decision.id,
-        executionSourceId: "a".repeat(64),
-        workItem: workItems[0],
-        repositoryPath: root,
-        readPaths: ["README.md"],
-        timeoutMs: 5000,
-      })
-    ).resolves.toMatchObject({ status: "approval-required" });
+    expect(governance.checkExecutionEligibility(request)).toMatchObject({
+      status: "denied",
+      reason: expect.stringContaining("requires Assignment Authorization"),
+    });
+    expect(governance.authorizeExecutionForRun(request)).toMatchObject({
+      status: "denied",
+    });
+    await expect(executeReadOnlyWorkItem(readRequest)).resolves.toMatchObject({
+      status: "denied",
+    });
     expect(command).toHaveBeenCalledTimes(calls);
+    expect(readFileSync(path, "utf8")).toBe(before);
   });
 
-  it.each(["success", "scope", "verification", "timeout"] as const)(
-    "executes the explicitly approved Codex Worktree mode and handles %s",
-    async (mode) => {
-      const {
-        workerExecutionResult,
-        executionPreparationResult,
-        planningResults,
-        decision,
-        workItems,
-      } = await planExecutionItems(true, 1, ["git diff --check"], "README.md", {
-        codexMode: true,
-        execution: {
-          workItemId: "first",
-          readPaths: ["README.md"],
-          timeoutMs: 5000,
-        },
-        beforePlannerResult: () => {
-          const command = vi.mocked(processRuntime.runCommand);
-          const fallback = command.getMockImplementation()!;
-          command.mockImplementation(async (name, args, options) => {
-            if (name !== "codex" || !args.includes("workspace-write"))
-              return fallback(name, args, options);
-            expect(args).toContain('approval_policy="never"');
-            expect(args).toContain("--ignore-user-config");
-            expect(args.join(" ")).toContain("network_access=false");
-            expect(options.timeoutMs).toBeLessThanOrEqual(5000);
-            withGovernanceRecords((raw) => {
-              const ledger =
-                raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-              const entry = Object.values(ledger.repositories)[0];
-              expect(entry.executionDelegations?.[0].grant.workerMode).toBe(
-                "codex-worktree"
-              );
-              const [record] = entry.executionReservations!;
-              expect(record.claimedAt).toBe(record.reservedAt);
-            });
-            // Stand-in for the Codex process. Git and Harness stages are real.
-            const target =
-              mode === "scope" ? "docs-extra/other.md" : "README.md";
-            writeFileSync(
-              join(options.cwd, target),
-              mode === "verification" ? "Trailing spaces  \n" : "Codex update\n"
-            );
-            return {
-              stdout: "Codex worker output",
-              stderr: "",
-              exitCode: 0,
-              timedOut: mode === "timeout",
-            };
-          });
-        },
+  it("rejects a signed legacy decomposition containing workType without rewriting the Ledger", async () => {
+    const [request] = await plannedExecutions();
+    const path = join(home, ".ai-workspace-governance", "records.json");
+    withGovernanceRecords((raw, save) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const entry = Object.values(ledger.repositories)[0];
+      Object.assign(entry.executionDecompositions![0].workItems[0], {
+        workType: "repository-modification",
       });
-      expect(executionPreparationResult).toBeUndefined();
-      expect(workerExecutionResult?.workItemId).toBe("first");
-      const result = workerExecutionResult?.result;
-      expect(result?.passed, JSON.stringify(result?.failures)).toBe(
-        mode === "success"
-      );
-      const workspace = result?.workspace?.path;
-      const artifacts = result?.artifacts?.directory;
-      expect(workspace).toBeDefined();
-      try {
-        expect(result?.artifacts?.baseCommit).toBe(
-          execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
-            encoding: "utf8",
-          }).trim()
-        );
-        expect(readFileSync(join(root, "README.md"), "utf8")).toBe(
-          "Original content\n"
-        );
-        expect(readFileSync(join(root, "docs-extra", "other.md"), "utf8")).toBe(
-          "Outside scope\n"
-        );
-        expect(
-          JSON.parse(readFileSync(join(artifacts!, "result.json"), "utf8"))
-            .passed
-        ).toBe(result?.passed);
-        expect(
-          readFileSync(join(artifacts!, "changes.patch"), "utf8")
-        ).toContain("diff --git");
-        expect(result?.evidence.changedPaths).toEqual([
-          mode === "scope" ? "docs-extra/other.md" : "README.md",
-        ]);
-        if (mode === "success" || mode === "verification") {
-          expect(result?.evidence.verification?.passed).toBe(
-            mode === "success"
-          );
-          expect(processRuntime.runCommand).toHaveBeenCalledWith(
-            "git",
-            ["diff", "--check", "--no-ext-diff", "--no-textconv"],
-            expect.objectContaining({ shell: false })
-          );
-        } else {
-          expect(result?.evidence.verification).toBeUndefined();
-          expect(result?.failures).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                stage: mode === "scope" ? "scope" : "worker",
-              }),
-            ])
-          );
-        }
-        const [plan] = planningResults!;
-        if (plan.result.status !== "completed")
-          throw new Error("Expected a task.");
-        expect(
-          governance.authorizeExecutionForRun({
-            approvedDecisionId: decision.id,
-            executionSourceId: plan.executionSourceId,
-            task: plan.result.task,
-            workItem: workItems[0],
-            repositoryPath: root,
-            readPaths: ["README.md"],
-            workerMode: "codex-worktree",
-            timeoutMs: 5000,
-          }).status
-        ).toBe("denied");
-      } finally {
-        if (artifacts)
-          rmSync(dirname(artifacts), { recursive: true, force: true });
-        execFileSync("git", [
-          "-C",
-          root,
-          "worktree",
-          "remove",
-          "--force",
-          workspace!,
-        ]);
-      }
-    }
-  );
+      save(ledger);
+    });
+    const before = readFileSync(path, "utf8");
+    expect(() =>
+      governance.getApprovedDecision(request.approvedDecisionId)
+    ).toThrow(/workType/);
+    expect(readFileSync(path, "utf8")).toBe(before);
+  });
 
   function postDelegationInput(
     request: { approvedDecisionId: string },
@@ -2670,7 +2304,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     maxDelegationDurationMs: executionPolicy.maxDelegationDurationMs,
   };
 
-  it("authorizes an existing Direction-only plan after separate Human approval of a directory grant", async () => {
+  it("records a separately approved directory grant without enabling direct Work Item execution", async () => {
     const [request] = await plannedExecutions(
       false,
       1,
@@ -2681,9 +2315,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(
       governance.getExecutionDelegation(request.approvedDecisionId)
     ).toBeUndefined();
-    expect(governance.checkExecutionEligibility(request).status).toBe(
-      "approval-required"
-    );
+    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
     const input = postDelegationInput(request, scopedPolicy);
     const receipt = confirmPostDelegation(input);
     const result = governance.approveExecutionDelegation(input, receipt);
@@ -2714,9 +2346,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         readPaths: ["docs/link.ts"],
       }).status
     ).toBe("denied");
-    expect(governance.authorizeExecutionForRun(request).status).toBe(
-      "authorized"
-    );
+    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
   });
 
   it("denies post-direction grants with invalid scope, input, or confirmation and leaves failed writes atomic", async () => {
@@ -2783,9 +2413,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       governance.approveExecutionDelegation(input, confirmPostDelegation(input))
         .status
     ).toBe("approved");
-    expect(governance.checkExecutionEligibility(request).status).toBe(
-      "eligible"
-    );
+    expect(
+      governance.getExecutionDelegation(request.approvedDecisionId)
+    ).toBeDefined();
     withGovernanceRecords((raw, persist) => {
       const ledger =
         raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
@@ -2794,350 +2424,38 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       )[0].executionDelegations![0].confirmationBinding = "tampered";
       persist(ledger);
     });
-    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
+    expect(() =>
+      governance.getExecutionDelegation(request.approvedDecisionId)
+    ).toThrow();
   });
 
-  it("denies a planned write when an approved directory grant contains only read scope", async () => {
-    const [request] = await plannedExecutions(
-      false,
-      1,
-      ["git diff --check"],
-      "docs/README.md"
-    );
-    const input = postDelegationInput(request, scopedPolicy, {
-      ...scopedPolicy,
-      writeScopes: [],
-    });
-    expect(
-      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
-        .status
-    ).toBe("approved");
-    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
-  });
-
-  it("authorizes each Work Item once with a single atomic Ledger write", async () => {
-    const [first, second, third] = await plannedExecutions(true, 2);
-    const path = join(home, ".ai-workspace-governance", "records.json");
-    const before = readFileSync(path, "utf8");
-    expect(governance.checkExecutionEligibility(first).status).toBe("eligible");
-    expect(readFileSync(path, "utf8")).toBe(before);
-
-    const rename = vi.spyOn(filesystem, "renameSync");
-    const authorized = governance.authorizeExecutionForRun(first);
-    if (authorized.status !== "authorized")
-      throw new Error(JSON.stringify(authorized));
-    expect(
-      governance.executionAuthorizationVerdictSchema.parse(authorized)
-    ).toEqual(authorized);
-    expect(authorized.execution.request).toEqual(first);
-    expect(rename).toHaveBeenCalledOnce();
-    withGovernanceRecords((raw) => {
-      const ledger =
-        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      const records = Object.values(ledger.repositories).flatMap(
-        (entry) => entry.executionReservations ?? []
+  it.each([false, true])(
+    "preserves Detailed Planning drafts without publishing execution sources (Fast Path %s)",
+    async (fastPath) => {
+      const { planningResults } = await planExecutionItems(
+        true,
+        1,
+        ["git diff --check"],
+        "README.md",
+        { fastPath }
       );
-      expect(records).toHaveLength(1);
-      expect(records[0]).toMatchObject({
-        id: authorized.execution.id,
-        requestDigest: governanceDigest(authorized.execution.request),
-        executionDigest: governanceDigest(authorized.execution),
-        claimedAt: records[0].reservedAt,
+      expect(planningResults).toHaveLength(3);
+      for (const plan of planningResults!) {
+        expect(plan.result).toMatchObject({
+          status: "completed",
+          ...(fastPath && { rounds: 0 }),
+        });
+        expect(plan.executionSourceId).toBeUndefined();
+      }
+      withGovernanceRecords((raw) => {
+        const ledger =
+          raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+        const entry = Object.values(ledger.repositories)[0];
+        expect(entry.workItemExecutionSources ?? []).toEqual([]);
+        expect(entry.executionReservations ?? []).toEqual([]);
       });
-    });
-    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
-    expect(
-      governance.authorizeExecutionForRun({ ...first, timeoutMs: 4000 }).status
-    ).toBe("denied");
-    expect(
-      governance.authorizeExecutionForRun(authorized.execution).status
-    ).toBe("denied");
-    expect(governance.authorizeExecutionForRun(second).status).toBe(
-      "authorized"
-    );
-    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
-  });
-
-  it("preserves a legacy unused reservation and counts it against the budget", async () => {
-    const [first, second, third] = await plannedExecutions(true, 2);
-    const oldRequest = {
-      ...first,
-      writePaths: first.task.allowedPaths,
-      shellCommands: first.task.verification,
-    };
-    withGovernanceRecords((raw, persist) => {
-      const ledger =
-        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      const entry = Object.values(ledger.repositories)[0];
-      const delegation = entry.executionDelegations![0];
-      const policy = entry.executionPolicies!.at(-1)!;
-      const snapshot = entry.workItemExecutionSources!.find(
-        ({ id }) => id === first.executionSourceId
-      )!.snapshot;
-      const oldPermit = {
-        id: "legacy-unused-permit",
-        request: oldRequest,
-        snapshot,
-        delegationId: delegation.id,
-        delegationBinding: governanceDigest(delegation),
-        policyVersion: policy.version,
-        policyBinding: policy.binding,
-        expiresAt: delegation.grant.expiresAt,
-      };
-      entry.executionReservations = [
-        {
-          id: oldPermit.id,
-          sourceId: first.executionSourceId,
-          delegationId: delegation.id,
-          requestDigest: governanceDigest(oldRequest),
-          executionDigest: governanceDigest(oldPermit),
-          reservedAt: delegation.issuedAt,
-        },
-      ];
-      persist(ledger);
-    });
-    const path = join(home, ".ai-workspace-governance", "records.json");
-    const before = readFileSync(path, "utf8");
-    expect(governance.authorizeExecutionForRun(oldRequest).status).toBe(
-      "denied"
-    );
-    expect(governance.authorizeExecutionForRun(first).status).toBe("denied");
-    expect(readFileSync(path, "utf8")).toBe(before);
-    expect(governance.authorizeExecutionForRun(second).status).toBe(
-      "authorized"
-    );
-    expect(governance.authorizeExecutionForRun(third).status).toBe("denied");
-    withGovernanceRecords((raw) => {
-      const ledger =
-        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      const [legacy, current] = Object.values(ledger.repositories)[0]
-        .executionReservations!;
-      expect(legacy.id).toBe("legacy-unused-permit");
-      expect(legacy.claimedAt).toBeUndefined();
-      expect(current.claimedAt).toBeDefined();
-    });
-  });
-
-  it("fails closed on an invalid persisted execution reservation", async () => {
-    const [first, second] = await plannedExecutions(true, 2);
-    expect(governance.authorizeExecutionForRun(first).status).toBe(
-      "authorized"
-    );
-    expect(governance.checkExecutionEligibility(second).status).toBe(
-      "eligible"
-    );
-    withGovernanceRecords((raw, persist) => {
-      const ledger =
-        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      const [reservation] = Object.values(ledger.repositories)[0]
-        .executionReservations!;
-      reservation.sourceId = "0".repeat(64);
-      persist(ledger);
-    });
-    const path = join(home, ".ai-workspace-governance", "records.json");
-    const before = readFileSync(path, "utf8");
-    expect(governance.authorizeExecutionForRun(second).status).toBe("denied");
-    expect(readFileSync(path, "utf8")).toBe(before);
-  });
-
-  it("requires a delegation for a valid Direction-only plan", async () => {
-    const [request] = await plannedExecutions(false);
-    expect(governance.checkExecutionEligibility(request).status).toBe(
-      "approval-required"
-    );
-    expect(governance.authorizeExecutionForRun(request).status).toBe(
-      "approval-required"
-    );
-  });
-
-  it.each([
-    "command",
-    "write",
-    "fast-path-write",
-    "expired",
-    "revoked",
-    "policy",
-    "snapshot",
-    "work-item",
-    "save",
-  ] as const)("blocks Execution Source registration on %s", async (failure) => {
-    const target =
-      failure === "write" || failure === "fast-path-write"
-        ? "docs-extra/planned.md"
-        : "README.md";
-    const beforePlannerResult = () => {
-      if (failure === "expired") {
-        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31 * 60_000);
-      }
-      if (failure === "revoked") configureExecutionPolicy(null);
-      if (failure === "policy") configureExecutionPolicy();
-      if (failure === "snapshot")
-        writeFileSync(join(root, "README.md"), "Drift during Planning");
-      if (failure === "work-item") {
-        withGovernanceRecords((raw, persist) => {
-          const ledger =
-            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-          const entry = Object.values(ledger.repositories)[0];
-          const [decomposition] = entry.executionDecompositions!;
-          const { binding: _binding, ...subject } = decomposition;
-          subject.workItems[0].objective = "Different Work Item";
-          entry.executionDecompositions = [
-            {
-              ...subject,
-              binding: governanceDigest(subject),
-            },
-          ];
-          persist(raw);
-        });
-      }
-      if (failure === "save") {
-        vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
-          throw new Error("Execution Source write failed.");
-        });
-      }
-    };
-    const { planningResults } = await planExecutionItems(
-      true,
-      1,
-      failure === "command" ? ["pnpm test"] : ["git diff --check"],
-      target,
-      { beforePlannerResult, fastPath: failure === "fast-path-write" }
-    );
-    expect(planningResults).toHaveLength(1);
-    expect(planningResults![0]).toMatchObject({
-      result: {
-        status: "completed",
-        ...(failure === "fast-path-write" && { rounds: 0 }),
-      },
-      executionBlockedReason:
-        failure === "snapshot"
-          ? "Repository does not match the approved Snapshot."
-          : failure === "work-item"
-            ? "Stored Work Item provenance could not be verified."
-            : failure === "save"
-              ? "Execution Source could not be persisted."
-              : failure === "expired" ||
-                  failure === "revoked" ||
-                  failure === "policy"
-                ? "Current joint execution approval could not be verified."
-                : "TaskContract is incompatible with the approved execution bounds.",
-    });
-    expect(planningResults![0].executionSourceId).toBeUndefined();
-    withGovernanceRecords((raw) => {
-      const ledger =
-        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
-      expect(
-        Object.values(ledger.repositories).flatMap(
-          (entry) => entry.workItemExecutionSources ?? []
-        )
-      ).toEqual([]);
-    });
-  });
-
-  it("registers a Planner task under a joint Directory grant", async () => {
-    const [request] = await plannedExecutions(
-      true,
-      1,
-      ["git diff --check"],
-      "docs/README.md",
-      { directoryScope: true }
-    );
-    expect(governance.checkExecutionEligibility(request).status).toBe(
-      "eligible"
-    );
-  });
-
-  it("registers a valid Fast Path task through the same Governance boundary", async () => {
-    const { planningResults } = await planExecutionItems(
-      true,
-      1,
-      ["git diff --check"],
-      "README.md",
-      { fastPath: true }
-    );
-    expect(planningResults).toHaveLength(3);
-    for (const plan of planningResults!) {
-      expect(plan.result).toMatchObject({ status: "completed", rounds: 0 });
-      expect(plan.executionSourceId).toMatch(/^[a-f0-9]{64}$/);
-    }
-  });
-
-  it("still denies an unsupported command from a legacy Planning-only source", async () => {
-    const [request] = await plannedExecutions(false, 1, ["pnpm test"]);
-    const input = postDelegationInput(request, executionPolicy);
-    expect(
-      governance.approveExecutionDelegation(input, confirmPostDelegation(input))
-        .status
-    ).toBe("approved");
-    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
-  });
-
-  it("denies unbound Work Items, TaskContracts, unsafe scopes, and unsupported shell capabilities", async () => {
-    const [request, second] = await plannedExecutions();
-    const attempts = [
-      { ...request, executionSourceId: second.executionSourceId },
-      { ...request, workItem: { ...request.workItem, deliverable: "Changed" } },
-      { ...request, task: { ...request.task, id: "unbound" } },
-      { ...request, task: { ...request.task, verification: ["pnpm test"] } },
-      { ...request, repositoryPath: home },
-      { ...request, readPaths: ["a.ts"] },
-      { ...request, task: { ...request.task, allowedPaths: ["a.ts"] } },
-      { ...request, timeoutMs: 20_000 },
-    ];
-    for (const attempt of attempts)
-      expect(governance.authorizeExecutionForRun(attempt).status).toBe(
-        "denied"
-      );
-    expect(governance.checkExecutionEligibility(request).status).toBe(
-      "eligible"
-    );
-  });
-
-  it.each(["expired", "revoked", "superseded", "dirty", "head"] as const)(
-    "rechecks %s execution authority before authorization for a run",
-    async (change) => {
-      const [request] = await plannedExecutions();
-      expect(governance.checkExecutionEligibility(request).status).toBe(
-        "eligible"
-      );
-      if (change === "expired") {
-        const delegation = governance.getExecutionDelegation(
-          request.approvedDecisionId
-        )!;
-        vi.spyOn(Date, "now").mockReturnValue(
-          Date.parse(delegation.grant.expiresAt)
-        );
-      }
-      if (change === "revoked") configureExecutionPolicy(null);
-      if (change === "superseded") configureExecutionPolicy();
-      if (change === "dirty" || change === "head")
-        writeFileSync(join(root, "README.md"), "Drift");
-      if (change === "head") {
-        git("add", "README.md");
-        git("commit", "--quiet", "-m", "drift");
-      }
-      const path = join(home, ".ai-workspace-governance", "records.json");
-      const before = readFileSync(path, "utf8");
-      expect(governance.authorizeExecutionForRun(request).status).toBe(
-        "denied"
-      );
-      expect(readFileSync(path, "utf8")).toBe(before);
     }
   );
-
-  it("publishes no execution authorization when Ledger replacement fails", async () => {
-    const [request] = await plannedExecutions();
-    const path = join(home, ".ai-workspace-governance", "records.json");
-    const before = readFileSync(path, "utf8");
-    vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
-      throw new Error("Test disk failure");
-    });
-    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
-    expect(readFileSync(path, "utf8")).toBe(before);
-    expect(governance.authorizeExecutionForRun(request).status).toBe(
-      "authorized"
-    );
-  });
 
   it.each(["legacy", "scoped"] as const)(
     "confirms Direction and its %s Execution Delegation together through Phase A",

@@ -68,12 +68,10 @@ export function resolveExecutionContext(
   const readOnly = !("task" in request);
   if (
     readOnly
-      ? workItem.workType !== "read-only" ||
-        !("readOnly" in source) ||
+      ? !("readOnly" in source) ||
         !readPaths.length ||
         delegation.approvalSource === "post-direction"
-      : workItem.workType === "read-only" ||
-        !("taskDigest" in source) ||
+      : !("taskDigest" in source) ||
         source.taskDigest !== governanceDigest(request.task) ||
         request.task.targetRepository !== context.goal.targetRepository ||
         !(context.goal.constraints ?? []).every((constraint) =>

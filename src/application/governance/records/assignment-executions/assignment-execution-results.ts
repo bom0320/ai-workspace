@@ -187,10 +187,7 @@ export function getWorkerAssignmentPlanningContext(
     const workItem = context.decomposition.workItems.find(
       ({ id }) => id === assignment?.workItemId
     );
-    if (
-      assignment?.repositoryAccessCeiling !== "write" ||
-      workItem?.workType !== "repository-modification"
-    )
+    if (assignment?.repositoryAccessCeiling !== "write" || !workItem)
       throw new AssignmentExecutionError("authority");
     const results = resolvePredecessorResults(
       context,

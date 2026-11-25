@@ -6,7 +6,6 @@ import { resolveDetailedPlanningReadiness } from "./resolve-detailed-planning-re
 function workItem(id: string, overrides: Partial<WorkItem> = {}): WorkItem {
   return {
     id,
-    workType: "repository-modification",
     objective: "Update the repository",
     deliverable: "Patch",
     dependsOn: [],
@@ -53,13 +52,13 @@ it("preserves selection order and defers Work Item and Worker dependencies", () 
   });
 });
 
-it("excludes read-only and untyped items, and defers modification work without exactly one Worker", () => {
+it("only considers assignments with a write ceiling in the dormant draft readiness helper", () => {
   expect(
     resolveDetailedPlanningReadiness(
       ["read-only", "legacy", "multiple", "missing"],
       [
-        workItem("read-only", { workType: "read-only" }),
-        workItem("legacy", { workType: undefined }),
+        workItem("read-only"),
+        workItem("legacy"),
         workItem("multiple"),
         workItem("missing"),
       ],
@@ -67,6 +66,6 @@ it("excludes read-only and untyped items, and defers modification work without e
     )
   ).toEqual({
     readyWorkItemIds: [],
-    deferredWorkItemIds: ["multiple", "missing"],
+    deferredWorkItemIds: ["multiple"],
   });
 });

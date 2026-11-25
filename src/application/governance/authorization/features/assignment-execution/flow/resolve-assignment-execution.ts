@@ -141,29 +141,16 @@ export function resolvePredecessorResults(
   assignmentDependencies: readonly string[],
   verified = new Set<string>()
 ) {
-  // Only read-only Work Items have a complete result contract in this path.
-  const workItemPredecessors = dependsOn.map((workItemId) => {
-    const predecessor = context.decomposition.workItems.find(
-      ({ id }) => id === workItemId
-    );
-    const assignments = context.plan.assignments.filter(
-      (item) => item.workItemId === workItemId
-    );
-    if (predecessor?.workType !== "read-only" || !assignments.length)
-      throw new AssignmentExecutionError("dependency");
-    return {
-      workItemId,
-      results: assignments.map(({ id }) => {
-        const record = verifiedAssignmentResult(context, id, verified);
-        return {
-          assignmentId: id,
-          invocationId: record.id,
-          digest: record.result.digest,
-          decision: record.result.decision,
-        };
-      }),
-    };
-  });
+  if (dependsOn.length) throw new AssignmentExecutionError("dependency");
+  const workItemPredecessors: {
+    workItemId: string;
+    results: {
+      assignmentId: string;
+      invocationId: string;
+      digest: string;
+      decision: NonNullable<ExecutionRecord["result"]>["decision"];
+    }[];
+  }[] = [];
   const predecessors = assignmentDependencies.map((assignmentId) => {
     const record = verifiedAssignmentResult(context, assignmentId, verified);
     return {

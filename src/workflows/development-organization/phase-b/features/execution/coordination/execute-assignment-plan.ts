@@ -80,31 +80,11 @@ export async function executeAssignmentPlan(
   const selectedWorkItems = selectedWorkItemIds.map((id) =>
     workItems.find((item) => item.id === id)!
   );
-  const assignmentsByWorkItem = new Map(
-    selectedWorkItems.map(({ id }) => [
-      id,
-      plan.assignments.filter((assignment) => assignment.workItemId === id),
-    ])
-  );
-  const completedWorkItems = new Set<string>();
-  function refreshCompletedWorkItems() {
-    for (const { id, workType } of selectedWorkItems) {
-      const assignments = assignmentsByWorkItem.get(id)!;
-      if (
-        workType === "read-only" &&
-        assignments.length &&
-        assignments.every((assignment) => completed.has(assignment.id))
-      )
-        completedWorkItems.add(id);
-    }
-  }
-  refreshCompletedWorkItems();
+  // No verified Work Item result contract exists for the new Assignment model yet.
   for (;;) {
     while (running.size < maxConcurrentRuns) {
       const next = selectedWorkItems
-        .filter(({ dependsOn }) =>
-          dependsOn.every((id) => completedWorkItems.has(id))
-        )
+        .filter(({ dependsOn }) => dependsOn.length === 0)
         .map(({ id: workItemId }) =>
           pending.find(
             (assignment) =>
@@ -122,11 +102,8 @@ export async function executeAssignmentPlan(
             !attemptedWorkerPlans.has(id) &&
             !planningFailures.has(workItemId) &&
             dependsOn.every((dependency) => completed.has(dependency)) &&
-            workItems
-              .find((item) => item.id === workItemId)
-              ?.dependsOn.every((dependency) =>
-                completedWorkItems.has(dependency)
-              )
+            workItems.find((item) => item.id === workItemId)?.dependsOn
+              .length === 0
         );
         if (!worker || !detailedPlanning) break;
         const { id: assignmentId, workItemId } = worker;
@@ -194,7 +171,6 @@ export async function executeAssignmentPlan(
     pending = pending.filter(({ id }) => id !== assignmentId);
     if (result.status === "completed") {
       completed.add(assignmentId);
-      refreshCompletedWorkItems();
     }
   }
   const workItemResults = selectedWorkItems.map(({ id }) => {
@@ -205,7 +181,7 @@ export async function executeAssignmentPlan(
       workItemId: id,
       status: planningFailures.has(id)
         ? ("failed" as const)
-        : aggregateStatus(assignmentResults, !completedWorkItems.has(id)),
+        : aggregateStatus(assignmentResults, true),
     };
   });
   return {

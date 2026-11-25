@@ -265,11 +265,11 @@ describe("runWorkDecomposition", () => {
     });
   });
 
-  it("rejects an untyped Work Item from the default CEO", async () => {
+  it("rejects the removed execution type from the default CEO", async () => {
     command.mockResolvedValue({
       stdout: JSON.stringify({
         type: "propose",
-        workItems: [work("task-entry")],
+        workItems: [{ ...work("task-entry"), workType: "read-only" }],
       }),
       stderr: "",
       exitCode: 0,
@@ -285,9 +285,7 @@ describe("runWorkDecomposition", () => {
     command.mockResolvedValue({
       stdout: JSON.stringify({
         type: "propose",
-        workItems: [
-          { ...work("task-entry"), workType: "repository-modification" },
-        ],
+        workItems: [work("task-entry")],
       }),
       stderr: "",
       exitCode: 0,
@@ -304,6 +302,7 @@ describe("runWorkDecomposition", () => {
     expect(args?.at(-1)).toContain('Optional fields are "rationale"');
     expect(args?.at(-1)).toContain("Do not use rationale to repeat dependsOn");
     expect(args?.at(-1)).not.toContain(approved.decision.reviewBinding);
+    expect(args?.at(-1)).not.toContain("workType");
     expect(options?.timeoutMs).toBe(1234);
   });
 

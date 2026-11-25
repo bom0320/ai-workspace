@@ -4,7 +4,6 @@ import {
 } from "@/application/governance/index.js";
 import { executeWorkItemPlanning } from "../execution/execute-work-item-planning.js";
 import type { PhaseBState } from "../../../state.js";
-import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
 
 export function createPlanWorkItemNode(
   options:
@@ -13,7 +12,7 @@ export function createPlanWorkItemNode(
         "phaseB" | "predecessorResults"
       >
     | undefined,
-  mode: "draft" | "execution-source"
+  mode: "assignment-draft" | "work-item-draft"
 ) {
   return async (
     state: PhaseBState,
@@ -35,7 +34,7 @@ export function createPlanWorkItemNode(
       throw new Error("Detailed Planning requires an accepted Handoff.");
     let workerContext:
       ReturnType<typeof getWorkerAssignmentPlanningContext> | undefined;
-    if (mode === "draft") {
+    if (mode === "assignment-draft") {
       if (state.assignmentPlanResult?.status !== "prepared")
         throw new Error(
           "Detailed Planning draft requires a prepared Assignment Plan."
@@ -55,41 +54,23 @@ export function createPlanWorkItemNode(
         getPreparedAssignmentPlan(handoff.handoff, planId);
       }
     }
-    const recordSource =
-      mode === "execution-source"
-        ? beginValidatedWorkItemExecutionSource(
-            handoff.handoff,
-            proposal,
-            workItem,
-            repositoryPath
-          )
-        : undefined;
-    const result =
-      workItem.workType === "read-only"
-        ? { status: "read-only" as const }
-        : await executeWorkItemPlanning({
-            repositoryPath,
-            limits,
-            planner,
-            predecessorResults: workerContext?.priorResults,
-            executionCeiling: handoff.handoff.executionDelegation.grant,
-            phaseB: {
-              approvedDecisionId: proposal.approvedDecisionId,
-              workItem: workerContext
-                ? {
-                    ...workerContext.workItem,
-                    objective: workerContext.assignment.objective,
-                    deliverable: workerContext.assignment.deliverable,
-                  }
-                : workItem,
-            },
-          });
-    const readiness =
-      result.status === "read-only"
-        ? recordSource?.()
-        : result.status === "completed"
-          ? recordSource?.(result.task)
-          : {};
+    const result = await executeWorkItemPlanning({
+      repositoryPath,
+      limits,
+      planner,
+      predecessorResults: workerContext?.priorResults,
+      executionCeiling: handoff.handoff.executionDelegation.grant,
+      phaseB: {
+        approvedDecisionId: proposal.approvedDecisionId,
+        workItem: workerContext
+          ? {
+              ...workerContext.workItem,
+              objective: workerContext.assignment.objective,
+              deliverable: workerContext.assignment.deliverable,
+            }
+          : workItem,
+      },
+    });
     return {
       pendingPlanningIds,
       planningResults: [
@@ -102,7 +83,6 @@ export function createPlanWorkItemNode(
               assignmentPlanId: state.assignmentPlanResult.plan.id,
             }),
           result,
-          ...readiness,
         },
       ],
     };

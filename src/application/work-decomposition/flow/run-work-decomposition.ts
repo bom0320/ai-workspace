@@ -105,13 +105,6 @@ export async function runWorkDecomposition(
     };
   }
 
-  if (!agent && action.workItems.some(({ workType }) => workType === undefined))
-    return {
-      status: "failed",
-      failure: "invalid-output",
-      reason: "Every CEO Work Item must declare its execution type.",
-    };
-
   const reason = validateDependencies(action.workItems);
   if (reason)
     return { status: "failed", failure: "invalid-dependencies", reason };

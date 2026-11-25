@@ -52,27 +52,22 @@ it("keeps Assignment dependencies within the same Work Item", () => {
   expect(
     validateAssignmentProposal(
       [first, second],
-      [
-        { id: "review", workType: "read-only" },
-        { id: "other", workType: "repository-modification" },
-      ]
+      [{ id: "review" }, { id: "other" }]
     )
   ).toBe("Assignment dependencies must belong to the same Work Item.");
 });
 
-it("requires a complete selection and a writer for each modification", () => {
-  const workItems = [
-    { id: "review", workType: "read-only" as const },
-    { id: "implement", workType: "repository-modification" as const },
-    { id: "untyped" },
-  ];
+it("requires complete selection and accepts read, write, or mixed assignments", () => {
+  const workItems = [{ id: "review" }, { id: "implement" }, { id: "untyped" }];
   expect(
     selectAssignmentWorkItems(workItems, ["review", "review"])
   ).toBeUndefined();
   expect(
     selectAssignmentWorkItems(workItems, ["review", "missing"])
   ).toBeUndefined();
-  expect(selectAssignmentWorkItems(workItems, ["untyped"])).toBeUndefined();
+  expect(selectAssignmentWorkItems(workItems, ["untyped"])).toEqual([
+    { id: "untyped" },
+  ]);
   const selected = selectAssignmentWorkItems(workItems, [
     "review",
     "implement",
@@ -91,7 +86,7 @@ it("requires a complete selection and a writer for each modification", () => {
       [assignment, { ...writer, repositoryAccessCeiling: "read" }],
       selected
     )
-  ).toMatch(/write Assignment/);
+  ).toBeUndefined();
   expect(
     validateAssignmentProposal(
       [
@@ -110,3 +105,19 @@ it("requires a complete selection and a writer for each modification", () => {
     })
   ).toMatch(/access ceiling/);
 });
+
+it.each([["read"], ["write"], ["read", "write"]] as const)(
+  "accepts a Work Item with ceilings %j",
+  (...ceilings) => {
+    expect(
+      validateAssignmentProposal(
+        ceilings.map((repositoryAccessCeiling, index) => ({
+          ...assignment,
+          id: `assignment-${index}`,
+          repositoryAccessCeiling,
+        })),
+        [{ id: assignment.workItemId }]
+      )
+    ).toBeUndefined();
+  }
+);

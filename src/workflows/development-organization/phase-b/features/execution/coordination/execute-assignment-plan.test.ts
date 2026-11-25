@@ -27,7 +27,13 @@ function fixture(
   >
 ) {
   const subject = {
+    specialistSources: [],
     plan: {
+      id: "plan",
+      decompositionBinding: "decomposition",
+      staffingBinding: "staffing",
+      snapshot: { repositoryRoot: "/repo", commitSha: "sha" },
+      selectedWorkItemIds: Object.keys(dependencies),
       assignments: assignments.map(
         ([id, workItemId, dependsOn = [], kind]): PhaseBAssignment => ({
           id,
@@ -45,11 +51,6 @@ function fixture(
       dependsOn,
       objective: id,
       deliverable: id,
-      workType: assignments.some(
-        ([, workItemId, , kind]) => workItemId === id && kind === "worker"
-      )
-        ? "repository-modification"
-        : "read-only",
     })),
   };
   vi.mocked(getPreparedAssignmentPlan).mockReturnValue(
@@ -103,7 +104,7 @@ function fixture(
   };
 }
 
-it("fills slots as each result arrives and waits for every dependency", async () => {
+it("fills slots when Assignment results arrive and holds dependent Work Items", async () => {
   const fixtureRun = fixture({ A: [], B: [], C: ["A"], D: ["A", "B"] }, [
     ["a1", "A"],
     ["a2", "A"],
@@ -120,21 +121,15 @@ it("fills slots as each result arrives and waits for every dependency", async ()
   complete("a1");
   await vi.waitFor(() => expect(started.at(-1)).toBe("a3"));
   complete("a3");
-  await vi.waitFor(() => expect(started.at(-1)).toBe("c"));
-  complete("c");
   complete("b");
-  await vi.waitFor(() => expect(started.at(-1)).toBe("d"));
-  complete("d");
-  expect(await result).toMatchObject({ status: "completed" });
+  expect(await result).toMatchObject({ status: "pending" });
   const outcome = await result;
   if (outcome.failure === "plan") throw new Error("Plan rejected");
   expect(outcome.results.map(({ assignmentId }) => assignmentId)).toEqual([
     "a2",
     "a1",
     "a3",
-    "c",
     "b",
-    "d",
   ]);
 });
 
@@ -188,7 +183,7 @@ it("keeps an independent execution running when a predecessor fails", async () =
   expect(await result).toMatchObject({
     workItemResults: [
       { workItemId: "A", status: "failed" },
-      { workItemId: "B", status: "completed" },
+      { workItemId: "B", status: "pending" },
       { workItemId: "C", status: "pending" },
     ],
   });

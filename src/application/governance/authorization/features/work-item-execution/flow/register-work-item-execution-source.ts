@@ -51,7 +51,7 @@ export function beginWorkItemExecutionSource(
       );
       const approvalBinding = governanceDigest(decision);
       const match = matchWorkItem(entry, proposal, workItem, approvalBinding);
-      if (!match || match.item.workType === "read-only") return;
+      if (!match) return;
       const { binding, item } = match;
       const root = resolveGovernanceRepository(repositoryPath);
       if (root !== snapshot.repositoryRoot) return;
@@ -150,29 +150,19 @@ export function beginValidatedWorkItemExecutionSource(
         assertRepositoryMatchesSnapshot(snapshot);
         if (!submission) return;
 
-        let contract: { taskDigest: string } | { readOnly: true };
-        if (match.item.workType === "read-only") {
-          if (submission.task !== undefined)
-            return {
-              executionBlockedReason:
-                "Read-only execution does not accept a TaskContract.",
-            };
-          contract = { readOnly: true };
-        } else {
-          reason =
-            "TaskContract is incompatible with the approved execution bounds.";
-          const task = taskContractSchema.strict().parse(submission.task);
-          if (
-            task.targetRepository !== context.goal.targetRepository ||
-            !(context.goal.constraints ?? []).every((constraint) =>
-              task.constraints.includes(constraint)
-            )
+        reason =
+          "TaskContract is incompatible with the approved execution bounds.";
+        const task = taskContractSchema.strict().parse(submission.task);
+        if (
+          task.targetRepository !== context.goal.targetRepository ||
+          !(context.goal.constraints ?? []).every((constraint) =>
+            task.constraints.includes(constraint)
           )
-            return { executionBlockedReason: reason };
-          validateTaskExecutionContract(task, delegation.grant);
-          validateTaskExecutionContract(task, policy);
-          contract = { taskDigest: governanceDigest(task) };
-        }
+        )
+          return { executionBlockedReason: reason };
+        validateTaskExecutionContract(task, delegation.grant);
+        validateTaskExecutionContract(task, policy);
+        const contract = { taskDigest: governanceDigest(task) };
         if (Date.now() >= Date.parse(delegation.grant.expiresAt))
           return {
             executionBlockedReason:
@@ -196,10 +186,7 @@ export function beginValidatedWorkItemExecutionSource(
     }
   }
 
-  // Modification planning may read the Repository before submission.
-  // Read-only submits immediately, so validate it only at registration.
-  const blocked =
-    workItem.workType === "read-only" ? undefined : validateAndRecord();
+  const blocked = validateAndRecord();
   return (task) =>
     blocked ??
     validateAndRecord({ task }) ?? {

@@ -14,7 +14,7 @@ import { createRunWorkDecompositionNode } from "./features/work-decomposition/no
 import { phaseBInput, phaseBState } from "./state.js";
 
 import {
-  createExecuteWorkItemNode,
+  createBlockedWorkItemExecutionNode,
   type PhaseBExecutionOptions,
 } from "./features/execution/nodes/execute-work-item.js";
 
@@ -50,7 +50,7 @@ export function createPhaseBGraph({
   const { assignment: assignmentExecution, workItem: workItemExecution } =
     execution ?? {};
 
-  const planWorkItem = createPlanWorkItemNode(detailed, "execution-source");
+  const planWorkItem = createPlanWorkItemNode(detailed, "work-item-draft");
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph({ state: phaseBState, input: phaseBInput })
@@ -74,8 +74,8 @@ export function createPhaseBGraph({
     )
     .addNode("plan-work-item", (state) => planWorkItem(state))
     .addNode(
-      "execute-work-item",
-      createExecuteWorkItemNode(detailed?.repositoryPath, workItemExecution)
+      "block-work-item-execution",
+      createBlockedWorkItemExecutionNode(workItemExecution)
     );
 
   // 2. Connect Execution Edges
@@ -83,43 +83,42 @@ export function createPhaseBGraph({
   graph.addConditionalEdges(
     "run-work-decomposition",
     (state) =>
-      (assignment || detailed) &&
-      selectWorkItemIds &&
       state.handoffResult?.status === "accepted" &&
       state.workDecompositionResult?.status === "proposed"
-        ? "select-work-items"
+        ? (assignment || detailed) && selectWorkItemIds
+          ? "select-work-items"
+          : workItemExecution
+            ? "block-work-item-execution"
+            : END
         : END,
-    ["select-work-items", END]
+    ["select-work-items", "block-work-item-execution", END]
   );
   graph.addEdge("select-work-items", "initialize-planning");
   graph.addConditionalEdges(
     "initialize-planning",
     (state) => {
-      if (!state.selectedWorkItemIds?.length) return END;
+      if (!state.selectedWorkItemIds?.length)
+        return workItemExecution ? "block-work-item-execution" : END;
       if (assignment) return "prepare-assignments";
       return detailed ? "plan-work-item" : END;
     },
-    ["prepare-assignments", "plan-work-item", END]
+    ["prepare-assignments", "plan-work-item", "block-work-item-execution", END]
   );
   graph.addConditionalEdges(
     "plan-work-item",
     (state) => {
       const latest = state.planningResults?.at(-1);
-      if (
-        !latest ||
-        (latest.result.status !== "completed" &&
-          latest.result.status !== "read-only") ||
-        (!assignment && !latest.executionSourceId) ||
-        latest.executionBlockedReason
-      )
-        return END;
+      if (latest?.result.status !== "completed")
+        return workItemExecution ? "block-work-item-execution" : END;
       if (state.pendingPlanningIds?.length) return "plan-work-item";
-      return workItemExecution && !assignment ? "execute-work-item" : END;
+      return workItemExecution && !assignment
+        ? "block-work-item-execution"
+        : END;
     },
-    ["plan-work-item", "execute-work-item", END]
+    ["plan-work-item", "block-work-item-execution", END]
   );
   graph.addEdge("prepare-assignments", END);
-  graph.addEdge("execute-work-item", END);
+  graph.addEdge("block-work-item-execution", END);
 
   // 3. Compile Graph
   return graph

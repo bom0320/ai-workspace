@@ -38,8 +38,7 @@ export function hasValidExecutionReservations(
     if (
       governanceDigest(subject) !== id ||
       governanceDigest(subject.snapshot.repositoryRoot) !== repositoryKey ||
-      !item ||
-      ("readOnly" in subject && item.workType !== "read-only")
+      !item
     )
       return false;
   }

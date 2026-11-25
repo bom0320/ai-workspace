@@ -10,11 +10,7 @@ export async function executeWorkItem(
   input: unknown
 ): Promise<ExecutionOutcome> {
   const parsed = executionRequestSchema.safeParse(input);
-  if (
-    !parsed.success ||
-    parsed.data.workItem.workType === "read-only" ||
-    !parsed.data.task.allowedPaths.length
-  )
+  if (!parsed.success || !parsed.data.task.allowedPaths.length)
     return { status: "denied", reason: "Invalid execution request." };
 
   const request = { ...parsed.data, workerMode: "codex-worktree" as const };

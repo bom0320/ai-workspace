@@ -61,7 +61,6 @@ const readOnlyRequest = {
   executionSourceId: "a".repeat(64),
   workItem: {
     id: "work",
-    workType: "read-only",
     objective: "Analyze",
     deliverable: "Findings",
     dependsOn: [],
@@ -70,14 +69,14 @@ const readOnlyRequest = {
   timeoutMs: 1000,
 };
 
-it("accepts only an explicitly typed, taskless read-only request", () => {
+it("parses the taskless request without a Work Item execution type and rejects legacy fields", () => {
   expect(readOnlyExecutionRequestSchema.parse(readOnlyRequest)).toEqual(
     readOnlyRequest
   );
   expect(
     readOnlyExecutionRequestSchema.safeParse({
       ...readOnlyRequest,
-      workItem: { ...readOnlyRequest.workItem, workType: undefined },
+      workItem: { ...readOnlyRequest.workItem, workType: "read-only" },
     }).success
   ).toBe(false);
 });

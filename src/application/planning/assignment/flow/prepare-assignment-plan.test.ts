@@ -19,7 +19,6 @@ vi.mock("@/application/governance/index.js", () => ({
 const handoff = {} as Parameters<typeof prepareAssignmentPlan>[0];
 const workItem = {
   id: "work",
-  workType: "read-only" as const,
   objective: "Analyze",
   deliverable: "Findings",
   dependsOn: [],

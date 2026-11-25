@@ -8,11 +8,21 @@ import {
 import { resolveExecutionContext } from "./context/resolve-execution-context.js";
 import { assertExecutionReservationAvailable } from "./validation/assert-execution-reservation-available.js";
 
+// Work Items no longer identify an execution subject. Assignment authorization
+// must be used once the phase-scoped contract is available.
+const directWorkItemExecutionEnabled = false;
+const directExecutionDenied = {
+  status: "denied",
+  reason:
+    "Direct Work Item execution is disabled. Phase B requires Assignment Authorization.",
+} as const;
+
 export function checkExecutionEligibility(
   input: unknown
 ):
   | { status: "eligible" }
   | Exclude<ExecutionAuthorizationVerdict, { status: "authorized" }> {
+  if (!directWorkItemExecutionEnabled) return directExecutionDenied;
   try {
     const request = workItemExecutionRequestSchema.parse(input);
     return withGovernanceLedger((ledger) => {
@@ -38,6 +48,7 @@ export function checkExecutionEligibility(
 export function authorizeExecutionForRun(
   input: unknown
 ): ExecutionAuthorizationVerdict {
+  if (!directWorkItemExecutionEnabled) return directExecutionDenied;
   try {
     return withGovernanceLedger((ledger, save) => {
       const request = workItemExecutionRequestSchema.parse(input);

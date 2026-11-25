@@ -20,7 +20,6 @@ export type PhaseBAssignment = z.infer<typeof phaseBAssignmentSchema>;
 
 type AssignmentWorkItem = {
   id: string;
-  workType?: "read-only" | "repository-modification";
 };
 
 export function selectAssignmentWorkItems<T extends AssignmentWorkItem>(
@@ -32,8 +31,7 @@ export function selectAssignmentWorkItems<T extends AssignmentWorkItem>(
   if (
     !items.length ||
     selected.size !== selectedIds.length ||
-    items.length !== selected.size ||
-    items.some(({ workType }) => !workType)
+    items.length !== selected.size
   )
     return undefined;
   return items;
@@ -53,23 +51,16 @@ export function validateAssignmentProposal(
   const byId = new Map(
     assignments.map((assignment) => [assignment.id, assignment])
   );
-  const workTypes = new Map(
-    workItems.map(({ id, workType }) => [id, workType])
-  );
+  const selectedIds = new Set(workItems.map(({ id }) => id));
   const covered = new Set<string>();
-  const writable = new Set<string>();
   for (const {
     workItemId,
     specialistId,
     repositoryAccessCeiling,
     dependsOn,
   } of assignments) {
-    const workType = workTypes.get(workItemId);
-    if (
-      workType !== "repository-modification" &&
-      !(workType === "read-only" && repositoryAccessCeiling === "read")
-    )
-      return "Assignment or Work Item is outside preparation bounds.";
+    if (!selectedIds.has(workItemId))
+      return "Assignment Work Item is outside the selected scope.";
     if (
       bounds &&
       (!bounds.specialistIds.includes(specialistId) ||
@@ -81,15 +72,7 @@ export function validateAssignmentProposal(
     if (dependsOn.some((id) => byId.get(id)?.workItemId !== workItemId))
       return "Assignment dependencies must belong to the same Work Item.";
     covered.add(workItemId);
-    if (repositoryAccessCeiling === "write") writable.add(workItemId);
   }
   if (workItems.some(({ id }) => !covered.has(id)))
     return "Every selected Work Item requires an Assignment.";
-  if (
-    workItems.some(
-      ({ id, workType }) =>
-        workType === "repository-modification" && !writable.has(id)
-    )
-  )
-    return "Every Repository modification Work Item requires a write Assignment.";
 }

@@ -6,8 +6,6 @@ export const workItemSchema = z
   .object({
     // IDs are local labels for this proposal's dependency references.
     id: text,
-    // Selects the single execution route supported today. Older proposals may omit it.
-    workType: z.enum(["read-only", "repository-modification"]).optional(),
     objective: text,
     deliverable: text,
     dependsOn: z.array(text),

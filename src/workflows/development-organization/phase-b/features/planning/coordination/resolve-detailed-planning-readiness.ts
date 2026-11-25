@@ -10,11 +10,12 @@ export function resolveDetailedPlanningReadiness(
   const deferredWorkItemIds: string[] = [];
   for (const id of selectedWorkItemIds) {
     const item = workItems.find((workItem) => workItem.id === id);
-    if (item?.workType !== "repository-modification") continue;
+    if (!item) continue;
     const workers = assignments.filter(
       ({ workItemId, repositoryAccessCeiling }) =>
         workItemId === id && repositoryAccessCeiling === "write"
     );
+    if (!workers.length) continue;
     if (
       !item.dependsOn.length &&
       workers.length === 1 &&

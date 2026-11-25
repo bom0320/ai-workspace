@@ -234,7 +234,7 @@ Step 8의 입력은 Step 7.2의 `ApprovedDecision`이다. 기존 Governance 조�
 | 1 | 8 | CEO Work Decomposition | 승인된 방향에서 하나 이상의 Work Item과 선행 의존성을 구성하고 Phase B Graph에서 실행 | Graph Integrated |
 | 2 | 8 | Work Decomposition Contract | Input / Output, 제안 내부 Work Item ID, Dependency 검증 | Application Implemented |
 | 3 | 9 / R5 | R5 — Phase B Planning Coordination & Detailed Planning | 개별 Detailed Planning 재사용, Phase B Graph에서 명시적 업무 선택·반복·결과 기록 | R5.1–R5.4 Implemented |
-| 4 | 10 | Work Execution Contract | 기존 단일 업무 권한과 Specialist 협업 실행 사용 가능. Specialist 구현 Assignment 권한 계약은 Step 5.3에서 확장 | Partially Implemented |
+| 4 | 10 | Work Execution Contract | Work Item은 목표·산출물·의존성만 정의. 직접 실행은 차단되며 Assignment 권한은 Step 5.3.2에서 연결 | Partially Implemented |
 | 5 | 10 | Multi-Specialist Capability & Governed Execution | Specialist가 배정된 개발 업무와 결과를 소유하고 기존 Codex Worktree Runtime을 재사용 | Planned |
 | 6 | 11 | Verification & Review | 산출물·Evidence·Acceptance Criteria와 실패 검증 | Planned |
 | 7 | 11 | CEO Progress Evaluation | Continue / Rework / Reassign / Escalate / Complete 및 재계획 검토 | Planned |
@@ -252,7 +252,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 
 | 순서 | 작업 | 목적 및 완료 기준 | 상태 |
 | --- | --- | --- | --- |
-| 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 과거 Plan은 자동 변환 없이 거부 | Implemented |
+| 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 5.3.1-R에서 Work Item 실행 유형을 제거하고 직접 실행 차단. 구형 계약은 자동 변환 없이 거부 | Implemented |
 | 5.3.2 | Phase-scoped Capability & Authorization | Phase B 능력과 실행 권한을 구분하고 승인·위임·개별 Reservation/Claim을 검증. Phase A 읽기 전용 유지 | Planned |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 승인 방향·선행 결과로 상세 계획을 수립하고 수정 계약을 정확한 Assignment와 Snapshot에 결합 | Planned |
 | 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |

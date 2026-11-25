@@ -15,16 +15,6 @@ export function assertExecutionReservationAvailable(
       .map(({ id }) => id)
   );
   if (
-    entry.assignmentPlans?.some(
-      (plan) =>
-        plan.decompositionBinding === source.decompositionBinding &&
-        plan.selectedWorkItemIds.includes(source.workItemId)
-    )
-  )
-    throw new Error(
-      "Work Item has an Assignment Plan and requires Assignment Authorization."
-    );
-  if (
     [...reservations, ...(entry.assignmentExecutions ?? [])].filter(
       ({ delegationId }) => delegationId === evaluated.execution.delegationId
     ).length >= maxExecutions ||

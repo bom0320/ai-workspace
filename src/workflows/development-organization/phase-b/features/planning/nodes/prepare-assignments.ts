@@ -45,13 +45,9 @@ export function createPrepareAssignmentsNode(
         reason,
       };
     if (hasDetailedPlanning)
-      result.deferredDetailedPlanningIds = workDecompositionResult.workItems
-        .filter(
-          ({ id, workType }) =>
-            selectedWorkItemIds.includes(id) &&
-            workType === "repository-modification"
-        )
-        .map(({ id }) => id);
+      result.deferredDetailedPlanningIds = [
+        ...assignmentPlanResult.plan.selectedWorkItemIds,
+      ];
     return result;
   };
 }

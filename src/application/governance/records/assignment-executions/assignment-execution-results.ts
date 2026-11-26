@@ -202,7 +202,6 @@ export function getAssignmentExecutionResults(
           },
         ];
       }
-      if (!record.result) return [];
       const context = resolveAssignmentExecution(
         ledger,
         handoff,
@@ -216,6 +215,14 @@ export function getAssignmentExecutionResults(
       );
       if (binding !== record.binding)
         throw new AssignmentExecutionError("handoff");
+      const identity = {
+        assignmentId: assignment.id,
+        workItemId: assignment.workItemId,
+        invocationId: record.id,
+      };
+      // A Read Reservation already consumes budget and cannot be retried as new.
+      if (!record.result)
+        return [{ ...identity, status: "denied", failure: "duplicate" }];
       return [
         {
           ...("status" in record.result
@@ -227,9 +234,7 @@ export function getAssignmentExecutionResults(
                 taskContractBinding: record.result.taskContractBinding,
               }
             : { status: "read-completed" as const }),
-          assignmentId: assignment.id,
-          workItemId: assignment.workItemId,
-          invocationId: record.id,
+          ...identity,
           resultDigest: record.result.digest,
         },
       ];

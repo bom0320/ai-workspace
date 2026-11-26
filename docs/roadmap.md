@@ -253,7 +253,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 5.3.2 | Phase-scoped Capability & Authorization | Identity·Authority 분리, Read Reservation·Claim, 제한된 Snapshot Context 조회, Specialist 읽기 실행 및 결과 기록. Write 권한 발급은 5.3.3의 Binding에 의존 | Implemented (Read) |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 새 Write Assignment의 승인된 Read Session에서 구현 지시를 상세화하고 TaskContract를 Assignment 및 Snapshot에 결합 | Implemented (Task Prepared) |
 | 5.3.4 | Specialist Implementation Runtime | Specialist Execution이 Write Claim을 확보하고 Task Execution이 Worktree·검증·Artifact를 처리해 개별 결과를 저장 | Implemented |
-| 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |
+| 5.3.5 | Assignment Result & Execution Coordination | 검증된 Assignment 결과를 Work Item별로 대조해 실행 완료 상태를 집계. 통합과 의존성 해제는 후속 범위 | Implemented |
 | 5.3.6 | Multi-Worktree Integration | 출처·범위·충돌 확인 후 격리된 통합 결과를 재검증하고 원본 보호 | Planned |
 | 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |
 

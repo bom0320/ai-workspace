@@ -223,7 +223,7 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 
 #### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
 
-**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3 Task Detailing Implemented, 5.3.4 Implementation Runtime Implemented, 5.3.5–5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
+**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3 Task Detailing Implemented, 5.3.4 Implementation Runtime Implemented, 5.3.5 Execution Coordination Implemented, 5.3.6–5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
 
 | 개념 | 소유권과 의미 |
 | --- | --- |
@@ -335,6 +335,16 @@ Worker는 승인 Commit의 격리 Worktree에서 구조화된 계약을 그대�
 `codex-worktree`의 workspace-write Sandbox는 파일별 접근 범위를 강제하지 않는다. Harness는 승인된 정확한 경로를 별도로 검증하고 실행 직전과 결과 기록 시 권한을 재검증한다. 이 경계는 실행 중 철회를 즉시 감지하거나 모든 부수 효과를 되돌리지 못한다. 원본 Working Tree에 Apply·Commit·Push를 수행하지 않는다.
 
 Phase A의 `directionApproval: "direction-only"`와 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
+
+**5.3.5 Assignment Result & Execution Coordination.** Coordinator는 검증된 실행 참조를 단일 `results` 배열에
+모은다. 각 참조의 `workItemId`와 `assignmentId`를 등록 Plan과 대조하고, Work Item별 상태는 `workItemResults`에
+기록한다. 필수 Assignment 전부에 해당하는 결과가 있어야 `execution-completed`가 된다. 읽기에는
+`read-completed`, 수정에는 `write-completed`가 필요하다. 미실행 또는 `task-prepared`는 대기이고
+실패가 거부보다 우선한다. 미완료 예약이나 Claim은 기존 중복 거부 결과로 복원해 재실행을 피한다.
+
+후속 Assignment Integration은 `planId`, Work Item별 실행 상태, `results`의 Invocation·Digest·Artifact 참조를
+사용할 수 있다. `execution-completed`는 Assignment의 실행 상태다. Work Item 결과 통합, 최종 완료,
+의존성 해제 및 새 Snapshot 전환은 후속 단계가 소유한다.
 
 **Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임은 읽기·쓰기 각각에 File / Directory Scope를 지정하며, 명시된 검증 명령과 실행 횟수·시간 상한을 포함한다. R4의 PathScope 구조와 경로 경계 기반 포함 규칙을 사용한다. 기존 `readPaths`·`writePaths` 기록은 저장 형태를 보존하며 정확한 File Scope로 해석한다. Directory 권한에는 명시적 승인이 필요하다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
 

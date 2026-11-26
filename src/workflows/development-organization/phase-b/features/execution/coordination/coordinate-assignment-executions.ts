@@ -17,7 +17,8 @@ export type AssignmentExecutionInput = {
   plan: Extract<AssignmentPlanningOutput, { status: "prepared" }>["plan"];
 };
 
-export type AssignmentExecutionStatus = "pending" | "denied" | "failed";
+export type AssignmentExecutionStatus =
+  "execution-completed" | "pending" | "denied" | "failed";
 
 export type AssignmentExecutionOutput =
   | { status: "denied"; failure: "plan"; planId: string }
@@ -112,12 +113,14 @@ export async function coordinateAssignmentExecutions(
       const context = Object.hasOwn(contexts, assignment.id)
         ? contexts[assignment.id]
         : undefined;
-      // Read results do not satisfy either kind of dependency.
+      const prepared = resumable.get(assignment.id);
+      // Execution results do not satisfy either kind of dependency at this stage.
       if (
         workItem.dependsOn.length ||
         assignment.dependsOn.length ||
         !context
       ) {
+        if (prepared) results.push(prepared);
         pendingAssignments.push({
           assignmentId: assignment.id,
           workItemId,
@@ -130,13 +133,13 @@ export async function coordinateAssignmentExecutions(
         eligible.push({
           assignment,
           context,
-          prepared: resumable.get(assignment.id),
+          prepared,
         });
       }
     }
   }
-  type ReadResult = (typeof results)[number];
-  const running = new Map<string, Promise<ReadResult>>();
+  type CollectedResult = (typeof results)[number];
+  const running = new Map<string, Promise<CollectedResult>>();
   let cursor = 0;
   while (cursor < eligible.length || running.size) {
     while (running.size < maxConcurrentRuns && cursor < eligible.length) {
@@ -179,14 +182,33 @@ export async function coordinateAssignmentExecutions(
     results.push(finished);
   }
 
-  const workItemResults = selectedWorkItemIds.map((workItemId) => ({
-    workItemId,
-    status: aggregateStatus(
-      results.filter((result) => result.workItemId === workItemId)
-    ),
-  }));
+  const workItemResults = selectedWorkItemIds.map((workItemId) => {
+    const required = plan.assignments.filter(
+      (assignment) => assignment.workItemId === workItemId
+    );
+    const itemResults = results.filter(
+      (result) => result.workItemId === workItemId
+    );
+    const completed =
+      required.length > 0 &&
+      required.every(({ id, repositoryAccessCeiling }) =>
+        itemResults.some(
+          ({ assignmentId, status }) =>
+            assignmentId === id &&
+            status ===
+              (repositoryAccessCeiling === "write"
+                ? "write-completed"
+                : "read-completed")
+        )
+      );
+    return { workItemId, status: aggregateStatus(itemResults, completed) };
+  });
   return {
-    status: aggregateStatus(workItemResults),
+    status: aggregateStatus(
+      workItemResults,
+      workItemResults.length > 0 &&
+        workItemResults.every(({ status }) => status === "execution-completed")
+    ),
     planId,
     results,
     workItemResults,
@@ -195,9 +217,10 @@ export async function coordinateAssignmentExecutions(
 }
 
 function aggregateStatus(
-  results: readonly { status: string }[]
+  results: readonly { status: string }[],
+  completed: boolean
 ): AssignmentExecutionStatus {
   if (results.some(({ status }) => status === "failed")) return "failed";
   if (results.some(({ status }) => status === "denied")) return "denied";
-  return "pending";
+  return completed ? "execution-completed" : "pending";
 }

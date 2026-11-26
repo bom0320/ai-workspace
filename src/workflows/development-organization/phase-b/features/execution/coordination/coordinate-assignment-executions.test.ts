@@ -1,6 +1,9 @@
 import { expect, it, vi } from "vitest";
 import { executeAssignment } from "@/application/specialist/execution/index.js";
-import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
+import {
+  getAssignmentExecutionResults,
+  getPreparedAssignmentPlan,
+} from "@/application/governance/index.js";
 import type { ExecutionAssignment } from "@/contracts/management/execution-assignment.js";
 import { coordinateAssignmentExecutions } from "./coordinate-assignment-executions.js";
 
@@ -9,7 +12,7 @@ vi.mock("@/application/specialist/execution/index.js", () => ({
 }));
 vi.mock("@/application/governance/index.js", () => ({
   getPreparedAssignmentPlan: vi.fn(),
-  getAssignmentExecutionResults: () => [],
+  getAssignmentExecutionResults: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -24,7 +27,8 @@ function fixture(
   dependencies: Record<string, string[]>,
   assignments: Array<
     [id: string, workItemId: string, dependsOn?: string[], ceiling?: "write"]
-  >
+  >,
+  recorded: ReturnType<typeof getAssignmentExecutionResults> = []
 ) {
   const subject = {
     specialistSources: [],
@@ -56,6 +60,7 @@ function fixture(
   vi.mocked(getPreparedAssignmentPlan).mockReturnValue(
     subject as ReturnType<typeof getPreparedAssignmentPlan>
   );
+  vi.mocked(getAssignmentExecutionResults).mockReturnValue(recorded);
   const gates = new Map(
     assignments.map(([id]) => [
       id,
@@ -100,6 +105,10 @@ function fixture(
         invocationId: id,
         resultDigest: id,
       }),
+    finish: (
+      id: string,
+      result: Awaited<ReturnType<typeof executeAssignment>>
+    ) => gates.get(id)!.resolve(result),
     fail: (id: string) =>
       gates.get(id)!.resolve({
         status: "failed",
@@ -176,7 +185,7 @@ it("keeps an independent execution running when a predecessor fails", async () =
   expect(await result).toMatchObject({
     workItemResults: [
       { workItemId: "A", status: "failed" },
-      { workItemId: "B", status: "pending" },
+      { workItemId: "B", status: "execution-completed" },
       { workItemId: "C", status: "pending" },
     ],
   });
@@ -195,6 +204,132 @@ it("rejects a changed Plan payload even when its ID is registered", async () => 
   await expect(run(["a"], forged)).resolves.toMatchObject({
     status: "denied",
     failure: "plan",
+  });
+  expect(started).toEqual([]);
+});
+
+it("completes all selected Work Items with matching read and write results", async () => {
+  const { run, complete, finish } = fixture({ A: [], B: [] }, [
+    ["review", "A"],
+    ["design", "A"],
+    ["implement", "B", [], "write"],
+  ]);
+  const result = run(["review", "design", "implement"]);
+  complete("review");
+  complete("design");
+  finish("implement", {
+    status: "write-completed",
+    assignmentId: "implement",
+    workItemId: "B",
+    specialistId: "approved",
+    invocationId: "write",
+    resultDigest: "result",
+    taskContractBinding: "binding",
+    artifacts: { directory: "/run", resultDigest: "artifact" },
+  });
+  await expect(result).resolves.toMatchObject({
+    planId: "plan",
+    status: "execution-completed",
+    workItemResults: [
+      { workItemId: "A", status: "execution-completed" },
+      { workItemId: "B", status: "execution-completed" },
+    ],
+    pendingAssignments: [],
+  });
+});
+
+it("requires the correct result for every registered Assignment", async () => {
+  const { run, started } = fixture(
+    { A: [], B: ["A"], C: [], D: [] },
+    [
+      ["write", "A", [], "write"],
+      ["prepared", "B", [], "write"],
+      ["required", "C"],
+      ["unconfigured", "D"],
+    ],
+    [
+      {
+        status: "read-completed",
+        assignmentId: "write",
+        workItemId: "A",
+        invocationId: "old",
+        resultDigest: "old",
+      },
+      {
+        status: "task-prepared",
+        assignmentId: "prepared",
+        workItemId: "B",
+        invocationId: "prepare",
+        resultDigest: "draft",
+        planFormat: "structured",
+        taskContractBinding: "binding",
+      },
+      {
+        status: "read-completed",
+        assignmentId: "unknown",
+        workItemId: "C",
+        invocationId: "other",
+        resultDigest: "other",
+      },
+    ]
+  );
+  await expect(run(["prepared"])).resolves.toMatchObject({
+    status: "pending",
+    results: expect.arrayContaining([
+      expect.objectContaining({
+        assignmentId: "prepared",
+        status: "task-prepared",
+      }),
+    ]),
+    pendingAssignments: expect.arrayContaining([
+      {
+        assignmentId: "prepared",
+        workItemId: "B",
+        reason: "dependency-pending",
+      },
+    ]),
+    workItemResults: [
+      { workItemId: "A", status: "pending" },
+      { workItemId: "B", status: "pending" },
+      { workItemId: "C", status: "pending" },
+      { workItemId: "D", status: "pending" },
+    ],
+  });
+  expect(started).toEqual([]);
+});
+
+it("reuses completed results and skips already reserved Assignments", async () => {
+  const recorded = [
+    {
+      status: "read-completed",
+      assignmentId: "done",
+      workItemId: "A",
+      invocationId: "read",
+      resultDigest: "digest",
+    },
+    {
+      status: "denied",
+      failure: "duplicate",
+      assignmentId: "reserved",
+      workItemId: "B",
+      invocationId: "reservation",
+    },
+  ] as const;
+  const { run, started } = fixture(
+    { A: [], B: [] },
+    [
+      ["done", "A"],
+      ["reserved", "B"],
+    ],
+    [...recorded]
+  );
+  await expect(run(["done", "reserved"])).resolves.toMatchObject({
+    status: "denied",
+    results: recorded,
+    workItemResults: [
+      { workItemId: "A", status: "execution-completed" },
+      { workItemId: "B", status: "denied" },
+    ],
   });
   expect(started).toEqual([]);
 });

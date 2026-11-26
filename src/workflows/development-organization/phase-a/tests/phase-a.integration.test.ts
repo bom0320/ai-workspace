@@ -2501,7 +2501,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         if (mode === "write-artifact")
           vi.mocked(filesystem.writeFileSync).mockRestore();
         expect(final).toMatchObject({
-          status: passed ? "pending" : "failed",
+          status: passed ? "execution-completed" : "failed",
           results: [
             {
               assignmentId: "detail",
@@ -2517,7 +2517,10 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         );
         expect(records).toHaveLength(1);
         expect(records[0]?.status).toBe(passed ? "write-completed" : "failed");
-        expect(await runAgain()).toMatchObject({ results: records });
+        expect(await runAgain()).toMatchObject({
+          status: passed ? "execution-completed" : "failed",
+          results: records,
+        });
         expect(workerPrompts).toHaveLength(1);
         expect(readFileSync(join(root, path), "utf8")).toBe(
           "Original content\n"
@@ -2878,6 +2881,15 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         authority: { repositoryAccess: "read", shellExecution: false },
         specialistId: reviewAssignment.specialistId,
       });
+      const reservedResult = {
+        status: "denied",
+        failure: "duplicate",
+        assignmentId: permit.assignmentId,
+        invocationId: permit.id,
+      };
+      expect(
+        governance.getAssignmentExecutionResults(handoff, prepared.plan.id)
+      ).toMatchObject([reservedResult]);
       expect(permit).not.toHaveProperty("files");
       expect(() =>
         governance.reserveAssignmentExecution(handoff, {
@@ -2956,6 +2968,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         governance.consumeAssignmentReadContext(handoff, permit)
       ).toThrow("claim");
       const claimed = governance.claimAssignmentExecution(handoff, permit);
+      expect(
+        governance.getAssignmentExecutionResults(handoff, prepared.plan.id)
+      ).toMatchObject([reservedResult]);
       expect(claimed).toEqual(permit);
       expect(() =>
         governance.consumeAssignmentReadContext(handoff, { ...claimed })

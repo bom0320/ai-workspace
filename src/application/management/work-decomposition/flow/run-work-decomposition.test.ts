@@ -1,25 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getApprovedDecision } from "@/application/governance/index.js";
+import type { getApprovedDecision } from "@/application/governance/index.js";
 import { runCommand } from "@/infrastructure/process/index.js";
-import { runWorkDecomposition, type WorkItem } from "../index.js";
+import { decomposeApprovedWork, type WorkItem } from "../index.js";
 
-vi.mock("@/application/governance/index.js", () => ({
-  getApprovedDecision: vi.fn(),
-}));
 vi.mock("@/infrastructure/process/index.js", () => ({
   runCommand: vi.fn(),
 }));
 
-const lookup = vi.mocked(getApprovedDecision);
 const command = vi.mocked(runCommand);
-const input = { approvedDecisionId: "approved-1" };
+
 const statement = {
   text: "Improve accessibility and retain existing behavior",
   sources: [{ kind: "recommendation" as const, specialistId: "ux" }],
 };
 const approved: ReturnType<typeof getApprovedDecision> = {
   decision: {
-    id: input.approvedDecisionId,
+    id: "approved-1",
     reviewId: "review-1",
     reviewBinding: "private-binding",
     approvalRecordId: "approval-1",
@@ -83,6 +79,24 @@ const approved: ReturnType<typeof getApprovedDecision> = {
   snapshot: { repositoryRoot: "/example/repo", commitSha: "abc" },
 };
 
+const executionDelegationGrant = {
+  readScopes: [{ kind: "file" as const, path: "task.ts" }],
+  writeScopes: [],
+  shellCommands: [],
+  budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
+  policyVersion: 1,
+  expiresAt: "2099-01-01T00:00:00Z",
+};
+const input = {
+  handoff: { decision: approved.decision },
+  approved: {
+    context: approved.context,
+    synthesisProposal: approved.review.proposal,
+    snapshot: approved.snapshot,
+  },
+  executionDelegationGrant,
+};
+
 function work(id: string, ...dependsOn: string[]): WorkItem {
   return {
     id,
@@ -94,10 +108,9 @@ function work(id: string, ...dependsOn: string[]): WorkItem {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  lookup.mockReturnValue(approved);
 });
 
-describe("runWorkDecomposition", () => {
+describe("decomposeApprovedWork", () => {
   it.each([
     {
       name: "Single Work",
@@ -154,20 +167,20 @@ describe("runWorkDecomposition", () => {
     const agent = vi
       .fn()
       .mockResolvedValue({ type: "propose", workItems: items });
-    expect(await runWorkDecomposition(input, { agent })).toEqual({
+    expect(await decomposeApprovedWork(input, { agent })).toEqual({
       status: "proposed",
-      approvedDecisionId: input.approvedDecisionId,
+      approvedDecisionId: approved.decision.id,
       workItems: items,
     });
-    expect(lookup).toHaveBeenCalledExactlyOnceWith(input.approvedDecisionId);
     expect(agent).toHaveBeenCalledExactlyOnceWith({
       goal: approved.context.goal,
       decisions: approved.context.decisions,
       comparison: approved.context.comparison,
       proposal: approved.review.proposal,
       snapshot: approved.snapshot,
+      executionDelegationGrant,
       approvalSource: {
-        approvedDecisionId: input.approvedDecisionId,
+        approvedDecisionId: approved.decision.id,
         reviewId: "review-1",
         approvalRecordId: "approval-1",
       },
@@ -184,7 +197,7 @@ describe("runWorkDecomposition", () => {
     "checks Work Item source %j against approved analysis",
     async (source, valid) => {
       const workItem = { ...work("feedback"), sources: [source] };
-      const result = await runWorkDecomposition(input, {
+      const result = await decomposeApprovedWork(input, {
         agent: async () => ({ type: "propose", workItems: [workItem] }),
       });
       expect(result).toMatchObject(
@@ -196,17 +209,20 @@ describe("runWorkDecomposition", () => {
   );
 
   it("rejects a source when the Specialist ID matches multiple approved decisions", async () => {
-    lookup.mockReturnValueOnce({
-      ...approved,
-      context: {
-        ...approved.context,
-        decisions: [
-          approved.context.decisions[0],
-          approved.context.decisions[0],
-        ],
+    const ambiguous = {
+      ...input,
+      approved: {
+        ...input.approved,
+        context: {
+          ...approved.context,
+          decisions: [
+            approved.context.decisions[0],
+            approved.context.decisions[0],
+          ],
+        },
       },
-    });
-    const result = await runWorkDecomposition(input, {
+    };
+    const result = await decomposeApprovedWork(ambiguous, {
       agent: async () => ({
         type: "propose",
         workItems: [
@@ -251,7 +267,7 @@ describe("runWorkDecomposition", () => {
     },
   ])("rejects $name", async ({ items, reason }) => {
     expect(
-      await runWorkDecomposition(input, {
+      await decomposeApprovedWork(input, {
         agent: async () => ({ type: "propose", workItems: items }),
       })
     ).toEqual({ status: "failed", failure: "invalid-dependencies", reason });
@@ -269,33 +285,10 @@ describe("runWorkDecomposition", () => {
     ].map((items) => ({ items }))
   )("rejects an invalid Work Item list $items", async ({ items }) => {
     expect(
-      await runWorkDecomposition(input, {
+      await decomposeApprovedWork(input, {
         agent: async () => ({ type: "propose", workItems: items }),
       })
     ).toMatchObject({ status: "failed", failure: "invalid-output" });
-  });
-
-  it("rejects invalid input before querying Governance", async () => {
-    expect(
-      await runWorkDecomposition({ approvedDecisionId: " " })
-    ).toMatchObject({
-      status: "failed",
-      failure: "invalid-input",
-    });
-    expect(lookup).not.toHaveBeenCalled();
-    expect(command).not.toHaveBeenCalled();
-  });
-
-  it("stops when Governance cannot resolve the Approved Decision", async () => {
-    lookup.mockImplementation(() => {
-      throw new Error("Private ledger error");
-    });
-    expect(await runWorkDecomposition(input)).toEqual({
-      status: "failed",
-      failure: "invalid-input",
-      reason: "Approved Decision could not be restored for Work Decomposition.",
-    });
-    expect(command).not.toHaveBeenCalled();
   });
 
   it("returns questions for Human judgment on escalation", async () => {
@@ -305,7 +298,7 @@ describe("runWorkDecomposition", () => {
       questions: ["Which target applies?"],
     };
     expect(
-      await runWorkDecomposition(input, { agent: async () => action })
+      await decomposeApprovedWork(input, { agent: async () => action })
     ).toEqual({
       status: "escalated",
       reason: action.reason,
@@ -323,7 +316,7 @@ describe("runWorkDecomposition", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await runWorkDecomposition(input)).toMatchObject({
+    expect(await decomposeApprovedWork(input)).toMatchObject({
       status: "failed",
       failure: "invalid-output",
     });
@@ -339,18 +332,9 @@ describe("runWorkDecomposition", () => {
       exitCode: 0,
       timedOut: false,
     });
-    const executionDelegationGrant = {
-      readScopes: [{ kind: "file" as const, path: "task.ts" }],
-      writeScopes: [],
-      shellCommands: [],
-      budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
-      policyVersion: 1,
-      expiresAt: "2099-01-01T00:00:00Z",
-    };
     expect(
-      await runWorkDecomposition(input, {
+      await decomposeApprovedWork(input, {
         timeoutMs: 1234,
-        executionDelegationGrant,
       })
     ).toMatchObject({ status: "proposed" });
     expect(command).toHaveBeenCalledOnce();
@@ -380,7 +364,7 @@ describe("runWorkDecomposition", () => {
     "classifies Codex failures as $failure",
     async ({ failure, ...result }) => {
       command.mockResolvedValue({ ...result, stderr: "Private process error" });
-      const response = await runWorkDecomposition(input);
+      const response = await decomposeApprovedWork(input);
       expect(response).toMatchObject({ status: "failed", failure });
       expect(JSON.stringify(response)).not.toContain("Private process error");
     }

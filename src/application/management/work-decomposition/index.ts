@@ -1,7 +1,4 @@
-export {
-  runWorkDecomposition,
-  decomposeApprovedWork,
-} from "./flow/run-work-decomposition.js";
+export { decomposeApprovedWork } from "./flow/run-work-decomposition.js";
 export {
   workDecompositionResultSchema,
   type WorkDecompositionResult,
@@ -16,8 +13,6 @@ export type {
   WorkDecompositionContext,
 } from "./protocol/ceo.js";
 export {
-  workDecompositionInputSchema,
   type ApprovedWorkDecompositionInput,
-  type WorkDecompositionInput,
   type RunWorkDecompositionOptions,
 } from "./data-flow/input.js";

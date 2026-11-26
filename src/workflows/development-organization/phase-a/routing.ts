@@ -1,23 +1,8 @@
 import { END } from "@langchain/langgraph";
 import type { PhaseAState } from "./state.js";
 
-export type PhaseAExecutionTarget =
-  | "staffing-approval"
-  | "specialist-decisions"
-  | "ceo-synthesis"
-  | "human-direction-governance"
-  | "independent-direction-review";
-
-// Execution target selects an endpoint; State approval is not execution authority.
-export function routeAfterStaffingApproval(
-  state: PhaseAState,
-  executionTarget: PhaseAExecutionTarget
-) {
-  return (executionTarget === "specialist-decisions" ||
-    executionTarget === "ceo-synthesis" ||
-    executionTarget === "human-direction-governance" ||
-    executionTarget === "independent-direction-review") &&
-    state.approvalResult?.status === "approved"
+export function routeAfterStaffingApproval(state: PhaseAState) {
+  return state.approvalResult?.status === "approved"
     ? "preflight-specialist-decisions"
     : END;
 }
@@ -36,14 +21,8 @@ export function routeAfterSpecialistExecution(state: PhaseAState) {
   return END;
 }
 
-export function routeAfterComparison(
-  state: PhaseAState,
-  executionTarget: PhaseAExecutionTarget
-) {
-  return (executionTarget === "ceo-synthesis" ||
-    executionTarget === "human-direction-governance" ||
-    executionTarget === "independent-direction-review") &&
-    state.specialistDecisionsResult?.status === "completed" &&
+export function routeAfterComparison(state: PhaseAState) {
+  return state.specialistDecisionsResult?.status === "completed" &&
     (state.decisionComparisonResult?.status === "completed" ||
       (state.decisionComparisonResult?.status === "skipped" &&
         state.specialistDecisionsResult.decisions.length === 1))
@@ -53,14 +32,11 @@ export function routeAfterComparison(
 
 export function routeAfterSynthesis(
   state: PhaseAState,
-  executionTarget: PhaseAExecutionTarget
+  requireHandoff: boolean
 ) {
-  return (executionTarget === "human-direction-governance" ||
-    executionTarget === "independent-direction-review") &&
-    state.synthesisResult?.status === "proposed" &&
+  return state.synthesisResult?.status === "proposed" &&
     state.directionReview &&
-    (executionTarget !== "human-direction-governance" ||
-      state.directionReview.executionDelegationProposal) &&
+    (!requireHandoff || state.directionReview.executionDelegationProposal) &&
     !state.directionGovernanceResult
     ? "human-direction-review"
     : END;

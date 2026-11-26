@@ -12,7 +12,7 @@ Organization 실행·Handoff·State 소유권의 검토 기준은 [Workflow Arch
 | v1 | Goal-to-Task Planning | 과거 구현. 현재는 Phase B Task Detailing에 통합 |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
-| v4 | CEO Governance / AI Organization Orchestration | In progress — Step 3~5.4 / R1·R2 및 LangGraph Step 1·2·2.5·3 구현; 전체 Workflow 미완성 |
+| v4 | CEO Governance / AI Organization Orchestration | 진행 중 — Phase A 승인 및 Phase B Assignment 구현·검증까지 연결. 상위 Graph와 결과 통합은 후속 범위 |
 | v5 | Evaluation | Planned |
 
 ## v0 — Safe Execution
@@ -38,6 +38,8 @@ TaskDraft → TaskContract 변환은 Phase B의 Assignment Task Detailing에서 
 [책임 경계](architecture.md#v1-planning과-v4-ceo의-application-책임)를 따른다.
 
 ## v2 — Governed Independent Decision
+
+다음 v2 및 v3의 독립 CLI 내용은 과거 구현 기록이다. 현재 분석·비교 엔진은 Phase A에서 사용한다.
 
 > 동일 RepositorySnapshot과 Goal, 제한된 Context / authority 아래 Specialist들의 독립 판단을 구조화하고 근거를 확인할 수 있는가?
 
@@ -202,7 +204,7 @@ Codex는 Agent Execution Runtime, Human은 Final Authority다. 상세 책임과 
 
 Step 2.3 CEO Adapter / Loop와 R2의 같은 Run 기반 StaffingProposal Finalization / 제한된 Policy Validation을
 구현했다. Step 3은 로컬 Human Delegation / 직접 Staffing Approval과 Scope issuance를 연결했다.
-Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node와 명시적 실행 대상으로 현재 CLI 계약을 보존했다. Step 6.2에서 CEO Synthesis까지 연결했다. Step 7.2에서 Direction Governance와 동일 프로세스 Human Resume를 연결했다. 전체 Phase A Outcome·Phase B는 아직 없다.
+Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Comparison 연결도 구현했다. Step 2.5 재검토에서 Phase A로 Staffing / Approval 순서를 통합하고 Organization 아래 Phase A / Phase B를 주요 실행 경계로 정했다. Step 3에서 일반 Specialist Node를 연결하고 당시 CLI를 부분 실행 대상으로 보존했다. Step 6.2와 7.2에서 CEO Synthesis, Direction Governance 및 동일 프로세스 Human Resume를 추가했다. 현재 Phase A는 단일 흐름으로 실행하고, 공동 승인 Handoff를 받는 Phase B Graph는 Assignment 구현과 검증까지 지원한다.
 아래 LangGraph 연결·Step 6 CEO Synthesis 등의 마일스톤과 구현 상태를 유지하되, 구체적인 Graph 분리·연결 형태를 이 순서만으로 확정하지 않는다.
 
 1. **CEO Domain & Authority 기반**: 책임과 실행 권한 구분, Authority schema / Eligibility Evaluation.
@@ -214,7 +216,7 @@ Step 4 Authorization / Reservation과 Step 5.1–5.4의 Claim·Decision·Compari
 4. **Context Routing & Authorization — Implemented**: 최신 권한·Snapshot·Context 검증, Budget Reservation과
    Authorized Specialist Invocation 발급. Step 5.2 Claim과 Step 5.3 실행 Workflow가 사용을 연결한다.
 5. **Independent Decision & Comparison — Phase A, 5.1–5.4 Implemented**: 기존 v2 / v3와 원본 Evidence 참조·독립성 유지. 5.5의 별도 검증 단계는 생략하고 후속 통합 검증으로 이관한다.
-6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 명시적 ceo-synthesis 대상에서 Graph 연결.
+6. **CEO Synthesis — Implemented (Step 6.2)**: 출처를 참조하는 Direction / Rationale·대안·Trade-off·Risk·Unresolved Issues·Human Review와 Escalation / Failure. 당시 부분 실행 대상에서 검증했고 현재 Phase A가 직접 호출한다.
    추가 분석 요청은 별도 권한·예산 검증을 거치며 현재 v2에 자동 재질의가 있다고 가정하지 않는다.
 7. **Human Governance — Implemented (Step 7.2)**: Approve / Request Revision / Reject, 검증 출처 Review 등록, 실제 Human Receipt와 ApprovedDecision 발급. 동일 프로세스 Interrupt / Resume와 최대 두 번 Synthesis Revision을 연결했다. Direct Override와 영속 복구는 미구현이다. Phase B는 별도로 이미 승인된 방향과 활성 ExecutionDelegation의 Handoff를 검증한다.
 
@@ -255,9 +257,11 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 5.3.6 | Multi-Worktree Integration | 출처·범위·충돌 확인 후 격리된 통합 결과를 재검증하고 원본 보호 | Planned |
 | 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |
 
-### Compatibility Refactoring — runDecision() (Planned)
+### Development Organization 실행 경로 일원화
 
-기존 Decision CLI의 `runDecision()`은 Frontend / UX Specialist를 고정 구성한다. `collectIndependentDecisions()`는 이미 호출자가 제공한 Specialist를 받고, Phase A는 승인·Claim을 거친 동적 Specialist 입력으로 이를 재사용한다. CLI와 v2 호환성을 유지하면서 하드코딩된 선정을 개선하고, 동적 입력을 공개할 필요와 방식을 검토한다. 기존 Phase A의 선정·권한 경로를 중복 구현하지 않으며 Phase B의 선행조건으로 두지 않는다.
+독립 Decision·Staffing 진입점과 Phase A의 개발용 부분 실행 대상을 제거했다. 분석과 비교는 승인된
+Staffing Scope의 Phase A 전체 흐름에서 재사용한다. 구조화된 계획만 현재 수정 Runtime에 진입하며,
+이전 계약과 Work Item Reservation은 Ledger 검증 및 실행 예산에 유지한다.
 
 ### Step 1 진행 상태
 

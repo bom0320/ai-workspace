@@ -1,9 +1,7 @@
-import {
-  workDecompositionInputSchema,
-  type ApprovedWorkDecompositionInput,
-  type RunWorkDecompositionOptions,
+import type {
+  ApprovedWorkDecompositionInput,
+  RunWorkDecompositionOptions,
 } from "../data-flow/input.js";
-import type { getApprovedDecision } from "@/application/governance/index.js";
 import {
   ceoWorkDecompositionDecisionSchema,
   type WorkDecompositionContext,
@@ -15,45 +13,6 @@ import {
   runCodexCEOWorkDecomposition,
 } from "../ceo/codex-ceo.js";
 import { validateDependencies } from "@/contracts/shared/validate-dependencies.js";
-
-export async function runWorkDecomposition(
-  input: unknown,
-  options: RunWorkDecompositionOptions = {}
-): Promise<WorkDecompositionResult> {
-  const parsedInput = workDecompositionInputSchema.safeParse(input);
-  if (!parsedInput.success) {
-    return {
-      status: "failed",
-      failure: "invalid-input",
-      reason: "An Approved Decision ID is required for Work Decomposition.",
-    };
-  }
-
-  let approved: ReturnType<typeof getApprovedDecision>;
-  try {
-    // Only the standalone entry resolves approval here. Loading the API on this
-    // path also keeps Ledger schema initialization independent of its readers.
-    const { getApprovedDecision } =
-      await import("@/application/governance/index.js");
-    approved = getApprovedDecision(parsedInput.data.approvedDecisionId);
-  } catch {
-    return {
-      status: "failed",
-      failure: "invalid-input",
-      reason: "Approved Decision could not be restored for Work Decomposition.",
-    };
-  }
-
-  const { context, decision, review, snapshot } = approved;
-  return decomposeApprovedWork(
-    {
-      handoff: { decision },
-      approved: { context, synthesisProposal: review.proposal, snapshot },
-      executionDelegationGrant: options.executionDelegationGrant,
-    },
-    options
-  );
-}
 
 export async function decomposeApprovedWork(
   {
@@ -69,7 +28,7 @@ export async function decomposeApprovedWork(
     decisions: context.decisions,
     comparison: context.comparison,
     snapshot,
-    ...(executionDelegationGrant && { executionDelegationGrant }),
+    executionDelegationGrant,
     approvalSource: {
       approvedDecisionId: decision.id,
       reviewId: decision.reviewId,

@@ -1,4 +1,4 @@
-import { assignmentExecutionRequestSchema } from "../../../../../model/assignment-execution.js";
+import { assignmentExecutionRequestSchema } from "../model/assignment-execution.js";
 import { expect, it } from "vitest";
 import { validateTaskExecutionContract } from "./validate-task-execution-contract.js";
 

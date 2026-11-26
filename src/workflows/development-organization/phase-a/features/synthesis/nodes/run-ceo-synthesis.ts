@@ -16,11 +16,9 @@ import { assertCurrentAnalysis } from "@/application/governance/records/analysis
 export function createRunCEOSynthesisNode(
   options: RunSynthesisOptions = {},
   {
-    directionReview: reviewEnabled = false,
     requireHandoff = false,
     executionDelegationProposalAgent,
   }: {
-    directionReview?: boolean;
     requireHandoff?: boolean;
     executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
   } = {}
@@ -53,7 +51,6 @@ export function createRunCEOSynthesisNode(
 
     // 2. Select Original Analysis or a Recorded Human Revision Request
     const previousReviewId =
-      reviewEnabled &&
       state.directionGovernanceResult?.status === "revision-requested"
         ? state.directionGovernanceResult.reviewId
         : undefined;
@@ -96,7 +93,6 @@ export function createRunCEOSynthesisNode(
 
     // 3. Execute Synthesis Without Granting Scope or Invocation Authority
     const synthesisResult = await runSynthesis(context, options);
-    if (!reviewEnabled) return { synthesisResult };
 
     // 4. Preserve the Exact Analysis and Validated Proposal for Human Review
     // Registration is internal and follows the real Application call; State flags

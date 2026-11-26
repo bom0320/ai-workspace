@@ -18,6 +18,18 @@ const task: TaskContract = {
   constraints: ["Do not add dependencies"],
   acceptanceCriteria: ["The change behaves as requested"],
   verification: ["pnpm test"],
+  implementationPlan: {
+    background: "Clarify behavior",
+    currentState: "The expected change is absent",
+    targetDesign: "Preserve the existing contract",
+    steps: [
+      {
+        title: "Apply change",
+        targetPaths: ["src/allowed.ts"],
+        instructions: ["Implement requested behavior"],
+      },
+    ],
+  },
 };
 
 const runCommandMock = vi.mocked(runCommand);
@@ -27,32 +39,22 @@ beforeEach(() => {
 });
 
 describe("runCodexWorker", () => {
-  it("includes ordered implementation steps only when supplied", async () => {
-    runCommandMock.mockResolvedValue({
-      stdout: "done",
-      stderr: "",
-      exitCode: 0,
-      timedOut: false,
-    });
-    await runCodexWorker(task, "/tmp/workspace", 1000);
-    await runCodexWorker(
-      {
+  it.each([undefined, ["Update the allowed file"]])(
+    "rejects tasks without a structured plan before running Codex",
+    async (implementationSteps) => {
+      const legacy = {
         ...task,
-        implementationSteps: [
-          "Inspect current logic",
-          "Update the allowed file",
-        ],
-      },
-      "/tmp/workspace",
-      1000
-    );
-    expect(runCommandMock.mock.calls[0][1].at(-1)).not.toContain(
-      "Implementation Steps:"
-    );
-    expect(runCommandMock.mock.calls[1][1].at(-1)).toContain(
-      "Implementation Steps:\n1. Inspect current logic\n2. Update the allowed file\n\nAllowed paths:"
-    );
-  });
+        implementationPlan: undefined,
+        implementationSteps,
+      };
+      await expect(
+        runCodexWorker(legacy, "/tmp/workspace", 1000)
+      ).rejects.toThrow(
+        "Task execution requires a structured implementation plan."
+      );
+      expect(runCommandMock).not.toHaveBeenCalled();
+    }
+  );
 
   it("renders the structured plan and preserves contractual constraints", () => {
     const prompt = createCodexWorkerPrompt({

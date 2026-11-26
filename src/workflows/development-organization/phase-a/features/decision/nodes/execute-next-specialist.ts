@@ -10,8 +10,7 @@ import {
 import { recordAnalysisDecision } from "@/application/governance/records/analysis/record-analysis-decision.js";
 
 export async function executeNextSpecialist(
-  state: PhaseANodeInput<"execute-next-specialist">,
-  trackAnalysis = false
+  state: PhaseANodeInput<"execute-next-specialist">
 ): Promise<PhaseANodeOutput<"execute-next-specialist">> {
   // 1. Require Consistent Prepared Progress Before Reserving Budget
   const requests = state.preparedSpecialistRequests;
@@ -72,7 +71,7 @@ export async function executeNextSpecialist(
   // Failed batches expose no partial success and must not consume later budgets.
   try {
     const decision = await runAuthorizedSpecialistDecision(invocation);
-    if (trackAnalysis) recordAnalysisDecision(invocation, decision);
+    recordAnalysisDecision(invocation, decision);
     // 4. Record Progress or Complete Stage 3 With the Last Successful Execution
     const decisions = [...collected, decision];
     const nextIndex = index + 1;
@@ -90,7 +89,7 @@ export async function executeNextSpecialist(
       return {
         collectedDecisions: decisions,
         currentSpecialistIndex: nextIndex,
-        ...(trackAnalysis && { analysisBatchInvocationIds: invocationIds }),
+        analysisBatchInvocationIds: invocationIds,
       };
 
     if (decisions.length !== requests.length)
@@ -105,40 +104,34 @@ export async function executeNextSpecialist(
         item,
       ])
     );
-    if (trackAnalysis) {
-      for (const [position, value] of decisions.entries()) {
-        const assignment = state.synthesisAssignments?.[position];
-        if (
-          !assignment ||
-          assignment.specialistId !== value.specialistId ||
-          !invocationIds[position]
-        )
-          throw new Error(
-            "Analysis result does not match the prepared Assignment."
-          );
-        representatives.set(value.specialistId, {
-          decision: value,
-          assignment,
-          invocationId: invocationIds[position],
-        });
-      }
+    for (const [position, value] of decisions.entries()) {
+      const assignment = state.synthesisAssignments?.[position];
+      if (
+        !assignment ||
+        assignment.specialistId !== value.specialistId ||
+        !invocationIds[position]
+      )
+        throw new Error(
+          "Analysis result does not match the prepared Assignment."
+        );
+      representatives.set(value.specialistId, {
+        decision: value,
+        assignment,
+        invocationId: invocationIds[position],
+      });
     }
     const analysisRepresentatives = [...representatives.values()];
     return {
       collectedDecisions: decisions,
       currentSpecialistIndex: nextIndex,
-      ...(trackAnalysis && {
-        analysisRepresentatives,
-        analysisBatchInvocationIds: [],
-        synthesisAssignments: analysisRepresentatives.map(
-          ({ assignment }) => assignment
-        ),
-      }),
+      analysisRepresentatives,
+      analysisBatchInvocationIds: [],
+      synthesisAssignments: analysisRepresentatives.map(
+        ({ assignment }) => assignment
+      ),
       specialistDecisionsResult: {
         status: "completed",
-        decisions: trackAnalysis
-          ? analysisRepresentatives.map((item) => item.decision)
-          : decisions,
+        decisions: analysisRepresentatives.map((item) => item.decision),
       },
     };
   } catch (error) {

@@ -1,4 +1,4 @@
-import { validateTaskExecutionContract } from "../authorization/features/work-item-execution/flow/validation/validate-task-execution-contract.js";
+import { validateTaskExecutionContract } from "../authorization/validate-task-execution-contract.js";
 import { implementationPlanMatchesPaths } from "@/contracts/task.js";
 import { digestPreparedAssignmentTask } from "./assignment-execution.js";
 import {
@@ -35,11 +35,11 @@ import {
 } from "../approval/features/system-policy/model/execution-system-policy.js";
 import { hasValidExecutionPolicyRecords } from "../approval/features/system-policy/flow/validation/execution-policy-configuration.js";
 import {
-  executionDecompositionSchema,
   workItemExecutionSourceSchema,
   executionReservationSchema,
-} from "../authorization/features/work-item-execution/model/execution.js";
-import { hasValidExecutionReservations } from "../authorization/features/work-item-execution/flow/validation/validate-execution-reservations.js";
+} from "./work-item-execution-records.js";
+import { executionDecompositionSchema } from "./work-decomposition.js";
+import { hasValidExecutionReservations } from "../records/validate-execution-reservations.js";
 const text = z.string().min(1);
 
 export const governanceLedgerSchema = z

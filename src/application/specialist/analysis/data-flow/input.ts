@@ -5,11 +5,6 @@ import type {
 import type { SpecialistDefinition } from "@/contracts/specialist/definition.js";
 import type { SpecialistAuthority } from "@/contracts/specialist/authority.js";
 import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
-export type RunDecisionInput = {
-  repositoryPath: string;
-  objective: string;
-  filePaths: string[];
-};
 export type IndependentDecisionInput = {
   specialist: SpecialistDefinition;
   authority: SpecialistAuthority;

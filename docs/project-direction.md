@@ -67,24 +67,12 @@ AI Workspace가 소유하는 Decision Assurance는 근거와 검증의 범위·�
 
 ### 현재 구현과 확장 범위
 
-v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision과
-v3 Structured Decision Comparison을 단계적으로 검증했다. v1의 상세 계획 기반은 현재 Phase B의
-Assignment Task Detailing에서 사용한다.
-TaskContract와 승인 경계는 실행할 행동을, Snapshot / Context / Authority / AgentDecision과 Evidence
-검증은 독립 판단의 조건을 명시한다. Planning 자체보다 실행 권한을 넘기기 전 explicit contract
-boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture.md#2-current-architecture)에 둔다.
+Development Organization이 현재 실행 모델의 기준이다. 각 Phase는 독립 Graph API로 제공된다.
 
-현재 interface는 Node.js CLI이고 Agent integration은 외부 Codex CLI 하나다. 별도 GUI ADE,
-여러 provider 지원, Synthesis, Human governance history는 현재 기능이 아니다.
-현재 CLI는 독립 Decision 생성과 Structured Comparison을 별도 application use-case로 조합한다.
-v4는 진행 중이며 Authority / Staffing schema, Invocation Eligibility와 Snapshot 기반 Staffing Context
-Discovery와 CEO Staffing Agent / Loop, Approval / Authorization / Claim 및 동적 Specialist Decision·Comparison 연결이 구현되어 있다. LangGraph Phase A Graph는 정책 조회·Staffing·Approval과 콜백 기반 Human 확인까지 조정하며 별도 Staffing Setup Graph는 제거하고 Phase A가 직접 실행한다. Phase A는 명시적 specialist-decisions 대상에서 일반 Node / Edge로 Specialist 반복·실패·Comparison을 조정하고 기존 Application을 재사용한다. 기본값과 Staffing CLI는 승인까지만 실행한다. 전체 조직 운영 Workflow는 아직 연결되지 않았다.
-
-현재는 Personal Development Harness에서 Custom ADE로 발전하는 단계다. 개인/팀 개발자의 작업
-방식을 표현하는 것을 지향하되, 팀 공통 정책 배포와 Self-service Development Environment는 미구현이다.
-향후 실제 요구에 따라 Personal ADE → Team AI Development Environment → Internal AI Development
-Platform으로 일반화된다면 Platform Engineering 성격이 강화될 수 있다. 현재 완성된 ADE Platform이나
-Platform Engineering 제품으로 규정하지 않는다.
+- Phase A는 Human Goal의 해결 방향을 분석하고 승인한다. System Policy, Staffing 승인, Specialist Authorization과 읽기 전용 분석, Comparison, Assessment·Refinement, CEO Synthesis, Human Direction Review 순서로 진행한다.
+- Phase B는 검증된 Handoff를 받아 Work Item을 분해·선택하고 Specialist에게 배정한다. 읽기 Assignment는 분석과 Evidence를 기록한다. 수정 Assignment는 승인된 Read Session에서 계획을 구체화하고, TaskContract Binding과 별도 Write Authorization·Claim을 거쳐 격리된 Worktree에서 구현·검증한다.
+- Application은 역할별 기능을 제공하고 Workflow는 실행 순서·분기·상태를 조정한다. Governance는 승인·권한·기록 무결성을 소유하며 Runtime은 제한된 분석·계획·구현을 수행한다.
+- Organization 상위 Graph, 자동 Phase 전환, Integration, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
 
 ## What AI Workspace is NOT
 

@@ -9,7 +9,8 @@
 
 아래의 **확정 원칙**, **현재 구현 사실**, **미적용 개선 방향**을 구별한다. Step 2에서 Stage 3 / 4의 Result와 완료 시점을 분리했다.
 Step 4에서 Stage 1 / 2의 중복 통합 State도 제거했다. 이 문서는 새 타입·Schema·디렉터리·Node 수·Subgraph 수를 확정하지 않는다.
-Organization Graph, Phase B와 영속 Checkpoint Recovery는 미구현이다. Human Direction Governance와 동일 프로세스 Interrupt / Resume는 Step 7.2에서 구현했다. 기존 Staffing·Governance·Decision·Comparison·Synthesis와 LangGraph 기반 Phase A는 구현되어 있다.
+현재 Phase A와 Phase B Graph는 각각 제공된다. Organization 상위 Graph, 결과 통합 및 영속 복구는 후속 범위다.
+Phase A는 Human Direction Review까지 같은 Graph를 사용한다. 아래 Step별 CLI 및 실행 대상 결정은 당시의 설계 이력이다.
 
 ## 1. 문제와 책임 모델
 
@@ -86,7 +87,6 @@ Comparison을 호출하지 않는 허용 경로이며 Stage 4에 skipped / insuf
 | 현재 데이터 / 실행 | 현재 의미와 관찰 한계 |
 | --- | --- |
 | staffingResult / approvalResult | Stage 1의 proposed / failed / escalated와 Stage 2의 approved / approval-required / denied / rejected / confirmation failed를 독립 관리 |
-| runStaffingApproval()의 반환 | Entry Point가 policyLookup / staffingResult / approvalResult를 기존 외부 StaffingApprovalWorkflowResult로 변환. 합친 결과를 State에 저장하지 않음 |
 | specialistDecisionsResult | Stage 3만 표현. completed와 비어 있지 않은 Decision 배열 또는 preflight / authorization / claim / decision 실패 |
 | decisionComparisonResult | Stage 4의 completed / comparison, skipped / insufficient-decisions, failed / reason |
 | execute-next-specialist의 마지막 성공 업데이트 | 전체 Assignment 성공을 확인해 Stage 3을 확정한 뒤 Stage 4로 진행. Comparison은 완료 결과를 소비 |

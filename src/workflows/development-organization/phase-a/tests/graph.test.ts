@@ -102,8 +102,16 @@ function createPhaseAGraph(options: Parameters<typeof createGraph>[0] = {}) {
         { kind: "recommendation", specialistId: decisions[0].specialistId },
       ],
     }),
+    synthesis: {
+      agent: async () => ({
+        type: "escalate",
+        reason: "Test stops at analysis",
+        questions: ["Review direction?"],
+        sources: [],
+      }),
+    },
     ...options,
-  });
+  }).withConfig({ configurable: { thread_id: "graph-test" } });
 }
 const goal = {
   objective: "Review UI",
@@ -169,18 +177,11 @@ beforeEach(() => {
   vi.mocked(approveStaffingProposal).mockReturnValue(required);
 });
 
-it.each([true, false])(
-  "declares data flow for the registered Phase A nodes with direct approval %s",
-  (allowDirectStaffingApproval) => {
-    const graph = createGraph({ allowDirectStaffingApproval });
-    const declared = Object.keys(phaseADataFlow).filter(
-      (node) =>
-        allowDirectStaffingApproval ||
-        (node !== "confirm-staffing-approval" && node !== "confirm-refinement")
-    );
-    expect(declared.sort()).toEqual(Object.keys(graph.builder.nodes).sort());
-  }
-);
+it("declares data flow for every registered Phase A node", () => {
+  expect(Object.keys(phaseADataFlow).sort()).toEqual(
+    Object.keys(createGraph().builder.nodes).sort()
+  );
+});
 
 describe("Phase A Staffing Approval execution", () => {
   it("registers Phase A Nodes directly and preserves every terminal branch", () => {
@@ -190,6 +191,8 @@ describe("Phase A Staffing Approval execution", () => {
       "__start__",
       "assess-analysis",
       "compare-specialist-decisions",
+      "confirm-refinement",
+      "confirm-staffing-approval",
       "evaluate-staffing-approval",
       "execute-next-specialist",
       "finalize-direction-review",
@@ -323,8 +326,7 @@ describe("Phase A Staffing Approval execution", () => {
       approvalResult: required,
     });
     expect(getStaffingSystemPolicy).toHaveBeenCalledExactlyOnceWith(
-      "/repository",
-      true
+      "/repository"
     );
     expect(runStaffing).toHaveBeenCalledExactlyOnceWith({
       goal,
@@ -357,8 +359,6 @@ describe("Phase A Staffing Approval execution", () => {
       });
       const updates: Array<Record<string, Partial<PhaseAState>>> = [];
       const stream = await createPhaseAGraph({
-        executionTarget: "specialist-decisions",
-        allowDirectStaffingApproval: mode === "confirmed",
         confirmApproval: () => ({ token: "receipt" }),
       }).stream(
         { goal, repositoryPath: "/repository" },
@@ -593,7 +593,6 @@ describe("Phase A Staffing Approval execution", () => {
       );
       const result = await createPhaseAGraph({
         confirmApproval,
-        allowDirectStaffingApproval: true,
       }).invoke({
         goal,
         repositoryPath: "/repository",
@@ -707,7 +706,6 @@ function twoAssignments() {
   return stored;
 }
 const specialistInput = { goal, repositoryPath: "/repository" };
-const specialistOptions = { executionTarget: "specialist-decisions" as const };
 
 describe("Phase A Specialist execution Nodes and Edges", () => {
   beforeEach(() => {
@@ -738,22 +736,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     vi.mocked(compareDecisions).mockResolvedValue({ findings: [], gaps: [] });
   });
 
-  it.each([undefined, "staffing-approval"] as const)(
-    "stops at Staffing Approval for target %s",
-    async (executionTarget) => {
-      const state = await createPhaseAGraph({ executionTarget }).invoke(
-        specialistInput
-      );
-      expect(state.approvalResult?.status).toBe("approved");
-      expect(state.specialistDecisionsResult).toBeUndefined();
-      expect(state.decisionComparisonResult).toBeUndefined();
-      expect(getApprovedStaffingScope).not.toHaveBeenCalled();
-      expect(authorizeSpecialistInvocation).not.toHaveBeenCalled();
-      expect(state.decisionComparisonResult).toBeUndefined();
-      expect(compareDecisions).not.toHaveBeenCalled();
-      expect(state.decisionComparisonResult).toBeUndefined();
-    }
-  );
   it.each([
     "approval-required",
     "denied",
@@ -780,8 +762,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         status === "denied" ? { status, reason: "Denied" } : required
       );
     const state = await createPhaseAGraph({
-      ...specialistOptions,
-      allowDirectStaffingApproval: status === "rejected",
       confirmApproval: status === "rejected" ? () => null : undefined,
     }).invoke(specialistInput);
     if (status === "failed" || status === "escalated") {
@@ -811,8 +791,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         else stored.scope.version++;
         vi.mocked(getApprovedStaffingScope).mockReturnValue(stored);
       }
-      const state =
-        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      const state = await createPhaseAGraph().invoke(specialistInput);
       expect(state.specialistDecisionsResult).toMatchObject({
         status: "failed",
         stage: "preflight",
@@ -835,8 +814,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
           stored.scope.assignments[0]
         );
       if (kind === "malformed") stored.scope.assignments[1].contextPaths = [];
-      const state =
-        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      const state = await createPhaseAGraph().invoke(specialistInput);
       expect(state.specialistDecisionsResult).toMatchObject({
         status: "failed",
         stage: "preflight",
@@ -854,7 +832,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
   );
   it("loads the trusted Scope once while preparing the entire batch", async () => {
     twoAssignments();
-    await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    await createPhaseAGraph().invoke(specialistInput);
     expect(getApprovedStaffingScope).toHaveBeenCalledTimes(1);
   });
   it("awaits one Specialist per Node before the next Authorization and compares original inputs", async () => {
@@ -886,7 +864,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
           recommendation: invocation.assignmentObjective,
         };
       });
-    const run = createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    const run = createPhaseAGraph().invoke(specialistInput);
     await vi.waitFor(() =>
       expect(events).toEqual(["authorize:assignment-1", "decision:frontend"])
     );
@@ -946,8 +924,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     }));
     stored.scope.budget.maxAgentInvocations = 30;
     vi.mocked(getApprovedStaffingScope).mockReturnValue(stored);
-    const state =
-      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    const state = await createPhaseAGraph().invoke(specialistInput);
     expect(state.specialistDecisionsResult?.status).toBe("completed");
     expect(state.currentSpecialistIndex).toBe(30);
     expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(30);
@@ -962,8 +939,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         invocation: authorizePrepared(raw),
       }))
       .mockReturnValueOnce({ status: "denied", reason: "No budget" });
-    const state =
-      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    const state = await createPhaseAGraph().invoke(specialistInput);
     expect(state.specialistDecisionsResult).toEqual({
       status: "failed",
       stage: "authorization",
@@ -985,8 +961,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
           ? new InvocationClaimError("opaque denial")
           : new Error("Invocation claim denied: still a Decision error");
       vi.mocked(runAuthorizedSpecialistDecision).mockRejectedValueOnce(error);
-      const state =
-        await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+      const state = await createPhaseAGraph().invoke(specialistInput);
       expect(state.specialistDecisionsResult).toEqual({
         status: "failed",
         stage,
@@ -1001,8 +976,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     }
   );
   it("completes a single Decision without Comparison", async () => {
-    const state =
-      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    const state = await createPhaseAGraph().invoke(specialistInput);
     expect(state.specialistDecisionsResult).toEqual(completed);
     expect(state.decisionComparisonResult).toEqual({
       status: "skipped",
@@ -1022,8 +996,15 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     "failed",
     "completed",
   ])("rejects %s progress before any Authorization", async (kind) => {
-    const state = await createPhaseAGraph().invoke(specialistInput);
-    const progress: PhaseAState = {
+    const state = {
+      ...specialistInput,
+      synthesisAssignments: undefined,
+      specialistDecisionsResult: undefined,
+      analysisRepresentatives: undefined,
+      analysisBatchInvocationIds: undefined,
+      analysisRefinement: undefined,
+    };
+    const progress: Parameters<typeof executeNextSpecialist>[0] = {
       ...state,
       preparedSpecialistRequests: ["a", "b"].map((assignmentId) => ({
         scopeId: "scope",
@@ -1072,10 +1053,9 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     async (count) => {
       if (count === 2) twoAssignments();
       const updates: Array<Record<string, Partial<PhaseAState>>> = [];
-      const stream = await createPhaseAGraph(specialistOptions).stream(
-        specialistInput,
-        { streamMode: "updates" }
-      );
+      const stream = await createPhaseAGraph().stream(specialistInput, {
+        streamMode: "updates",
+      });
       for await (const update of stream) updates.push(update);
       const completionIndex = updates.findIndex(
         (update) =>
@@ -1117,7 +1097,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     }
   );
   it("Comparison consumes completed Decisions rather than intermediate collection", async () => {
-    const state = await createPhaseAGraph().invoke(specialistInput);
+    const state = specialistInput;
     const decisions = [
       ...completed.decisions,
       { ...completed.decisions[0], specialistId: "ux" },
@@ -1142,7 +1122,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     vi.mocked(compareDecisions)
       .mockResolvedValueOnce({ findings: [], gaps: [] })
       .mockRejectedValueOnce(new Error("New Comparison failed"));
-    const graph = createPhaseAGraph(specialistOptions);
+    const graph = createPhaseAGraph();
     const first = await graph.invoke(specialistInput);
     expect(first.decisionComparisonResult?.status).toBe("completed");
     const second = await graph.invoke(first);
@@ -1160,8 +1140,7 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     vi.mocked(compareDecisions).mockRejectedValueOnce(
       new Error("Invalid reference")
     );
-    const state =
-      await createPhaseAGraph(specialistOptions).invoke(specialistInput);
+    const state = await createPhaseAGraph().invoke(specialistInput);
     expect(state.specialistDecisionsResult).toEqual({
       status: "completed",
       decisions: state.collectedDecisions,
@@ -1175,14 +1154,14 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
     expect(compareDecisions).toHaveBeenCalledTimes(1);
     expect(state.collectedDecisions).toHaveLength(2);
   });
-  it.each(["staffing-approval", "specialist-decisions"] as const)(
+  it.each(["joint", "direction-only"] as const)(
     "clears all stale execution data for fresh %s execution",
-    async (executionTarget) => {
+    async (directionApproval) => {
       vi.mocked(getStaffingSystemPolicy).mockReturnValue({
         status: "denied",
         reason: "No policy",
       });
-      const state = await createPhaseAGraph({ executionTarget }).invoke({
+      const state = await createPhaseAGraph({ directionApproval }).invoke({
         ...specialistInput,
         synthesisResult: {
           status: "failed",
@@ -1256,7 +1235,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         synthesisAction(context)
       );
       const state = await createPhaseAGraph({
-        executionTarget: "ceo-synthesis",
         synthesis: { agent },
       }).invoke(specialistInput);
       expect(state.synthesisResult?.status).toBe("proposed");
@@ -1303,7 +1281,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         }
       );
       const state = await createPhaseAGraph({
-        executionTarget: "ceo-synthesis",
         synthesis: { agent },
       }).invoke(specialistInput);
       expect(state.synthesisResult).toMatchObject(
@@ -1315,20 +1292,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       expect(state.decisionComparisonResult?.status).toBe("skipped");
       expect(agent).toHaveBeenCalledTimes(1);
       expect(authorizeSpecialistInvocation).toHaveBeenCalledTimes(1);
-    }
-  );
-  it.each(["staffing-approval", "specialist-decisions"] as const)(
-    "does not synthesize for the existing %s target",
-    async (executionTarget) => {
-      const agent = vi.fn(async (context: SynthesisContext) =>
-        synthesisAction(context)
-      );
-      const state = await createPhaseAGraph({
-        executionTarget,
-        synthesis: { agent },
-      }).invoke(specialistInput);
-      expect(agent).not.toHaveBeenCalled();
-      expect(state.synthesisResult).toBeUndefined();
     }
   );
   it.each(["approval", "preflight", "decision", "comparison"])(
@@ -1357,7 +1320,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
         synthesisAction(context)
       );
       const state = await createPhaseAGraph({
-        executionTarget: "ceo-synthesis",
         synthesis: { agent },
       }).invoke(specialistInput);
       expect(agent).not.toHaveBeenCalled();
@@ -1374,7 +1336,6 @@ describe("Phase A Specialist execution Nodes and Edges", () => {
       synthesisAction(context)
     );
     const graph = createPhaseAGraph({
-      executionTarget: "ceo-synthesis",
       synthesis: { agent },
     });
     const first = await graph.invoke(specialistInput);

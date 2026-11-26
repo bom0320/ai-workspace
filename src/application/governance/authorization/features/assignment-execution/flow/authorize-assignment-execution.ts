@@ -7,7 +7,7 @@ import {
   executionScopes,
   executionBoundsSchema,
 } from "../../../../approval/features/system-policy/model/execution-system-policy.js";
-import { validateTaskExecutionContract } from "../../work-item-execution/flow/validation/validate-task-execution-contract.js";
+import { validateTaskExecutionContract } from "../../../validate-task-execution-contract.js";
 import {
   assertGovernedGitConfiguration,
   listRepositoryFilesAtCommit,

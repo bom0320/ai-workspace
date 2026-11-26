@@ -5,8 +5,7 @@ import type {
 import { getStaffingSystemPolicy } from "@/application/governance/index.js";
 
 export function loadSystemPolicy(
-  state: PhaseANodeInput<"load-system-policy">,
-  includeDelegationConstraints = false
+  state: PhaseANodeInput<"load-system-policy">
 ): PhaseANodeOutput<"load-system-policy"> {
   // 1. Check Repository Path
   if (!state.repositoryPath?.trim()) {
@@ -38,9 +37,7 @@ export function loadSystemPolicy(
 
   // 2. Load Human-approved System Policy
   // Always consult Governance; caller-supplied State cannot establish trust.
-  const policyLookup = includeDelegationConstraints
-    ? getStaffingSystemPolicy(state.repositoryPath, true)
-    : getStaffingSystemPolicy(state.repositoryPath);
+  const policyLookup = getStaffingSystemPolicy(state.repositoryPath);
 
   // 3. Return Policy Lookup Result
   // Replace the whole result so a denial cannot retain stale successful policy data.

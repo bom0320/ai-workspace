@@ -1,9 +1,4 @@
-export { runDecision } from "./flow/run-decision.js";
-export type {
-  RunDecisionInput,
-  IndependentDecisionInput,
-} from "./data-flow/input.js";
-export { type RunDecisionResult } from "./data-flow/output.js";
+export type { IndependentDecisionInput } from "./data-flow/input.js";
 export {
   collectIndependentDecisions,
   DecisionValidationError,

@@ -32,42 +32,27 @@ import {
   routeAfterSpecialistExecution,
   routeAfterComparison,
   routeAfterSynthesis,
-  type PhaseAExecutionTarget,
 } from "./routing.js";
 
-export type { PhaseAExecutionTarget } from "./routing.js";
 export type PhaseAGraphOptions = StaffingExecutionOptions &
   StaffingConfirmationOptions &
   DirectionConfirmationOptions & {
-    executionTarget?: PhaseAExecutionTarget;
-    allowDirectStaffingApproval?: boolean;
+    directionApproval?: "joint" | "direction-only";
     synthesis?: RunSynthesisOptions;
     executionDelegationProposalAgent?: ExecutionDelegationProposalAgent;
     assessmentAgent?: AssessmentAgent;
   };
 
 export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
-  const {
-    executionTarget = "staffing-approval",
-    allowDirectStaffingApproval = false,
-  } = options;
-
-  const requireHandoff = executionTarget === "human-direction-governance";
-  const humanGovernance =
-    requireHandoff || executionTarget === "independent-direction-review";
-  const trackAnalysis = humanGovernance || executionTarget === "ceo-synthesis";
+  const requireHandoff = options.directionApproval !== "direction-only";
 
   // 1. Register Workflow Nodes
   const graph = new StateGraph(phaseAState)
-    .addNode("load-system-policy", (state) =>
-      loadSystemPolicy(state, !allowDirectStaffingApproval)
-    )
+    .addNode("load-system-policy", loadSystemPolicy)
     .addNode("run-staffing", createRunStaffingNode(options))
     .addNode("evaluate-staffing-approval", evaluateStaffingApproval)
     .addNode("preflight-specialist-decisions", preflightSpecialistDecisionsNode)
-    .addNode("execute-next-specialist", (state) =>
-      executeNextSpecialist(state, trackAnalysis)
-    )
+    .addNode("execute-next-specialist", executeNextSpecialist)
     .addNode("compare-specialist-decisions", compareSpecialistDecisions)
     .addNode(
       "assess-analysis",
@@ -77,7 +62,6 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     .addNode(
       "run-ceo-synthesis",
       createRunCEOSynthesisNode(options.synthesis, {
-        directionReview: humanGovernance,
         requireHandoff,
         executionDelegationProposalAgent:
           options.executionDelegationProposalAgent,
@@ -92,6 +76,14 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         options.confirmDirection,
         requireHandoff
       )
+    )
+    .addNode(
+      "confirm-staffing-approval",
+      createConfirmStaffingApprovalNode(options.confirmApproval)
+    )
+    .addNode(
+      "confirm-refinement",
+      createConfirmRefinementNode(options.confirmApproval)
     );
 
   // 2. Connect Execution Edges
@@ -109,62 +101,37 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
         : END,
     ["evaluate-staffing-approval", END]
   );
-  if (allowDirectStaffingApproval) {
-    const compatibilityGraph = graph
-      .addNode(
-        "confirm-staffing-approval",
-        createConfirmStaffingApprovalNode(options.confirmApproval)
-      )
-      .addNode(
-        "confirm-refinement",
-        createConfirmRefinementNode(options.confirmApproval)
-      );
-    compatibilityGraph.addConditionalEdges(
-      "prepare-refinement",
-      (state) =>
-        state.analysisRefinement?.status === "approval-required"
-          ? "confirm-refinement"
-          : state.analysisRefinement?.status === "ready"
-            ? "execute-next-specialist"
-            : END,
-      ["confirm-refinement", "execute-next-specialist", END]
-    );
-    compatibilityGraph.addConditionalEdges(
-      "confirm-refinement",
-      (state) =>
-        state.analysisRefinement?.status === "ready"
+  graph.addConditionalEdges(
+    "prepare-refinement",
+    (state) =>
+      state.analysisRefinement?.status === "approval-required"
+        ? "confirm-refinement"
+        : state.analysisRefinement?.status === "ready"
           ? "execute-next-specialist"
           : END,
-      ["execute-next-specialist", END]
-    );
-    compatibilityGraph.addConditionalEdges(
-      "evaluate-staffing-approval",
-      (state) =>
-        state.approvalResult?.status === "approval-required"
-          ? "confirm-staffing-approval"
-          : routeAfterStaffingApproval(state, executionTarget),
-      ["confirm-staffing-approval", "preflight-specialist-decisions", END]
-    );
-    compatibilityGraph.addConditionalEdges(
-      "confirm-staffing-approval",
-      (state) => routeAfterStaffingApproval(state, executionTarget),
-      ["preflight-specialist-decisions", END]
-    );
-  } else {
-    graph.addConditionalEdges(
-      "prepare-refinement",
-      (state) =>
-        state.analysisRefinement?.status === "ready"
-          ? "execute-next-specialist"
-          : END,
-      ["execute-next-specialist", END]
-    );
-    graph.addConditionalEdges(
-      "evaluate-staffing-approval",
-      (state) => routeAfterStaffingApproval(state, executionTarget),
-      ["preflight-specialist-decisions", END]
-    );
-  }
+    ["confirm-refinement", "execute-next-specialist", END]
+  );
+  graph.addConditionalEdges(
+    "confirm-refinement",
+    (state) =>
+      state.analysisRefinement?.status === "ready"
+        ? "execute-next-specialist"
+        : END,
+    ["execute-next-specialist", END]
+  );
+  graph.addConditionalEdges(
+    "evaluate-staffing-approval",
+    (state) =>
+      state.approvalResult?.status === "approval-required"
+        ? "confirm-staffing-approval"
+        : routeAfterStaffingApproval(state),
+    ["confirm-staffing-approval", "preflight-specialist-decisions", END]
+  );
+  graph.addConditionalEdges(
+    "confirm-staffing-approval",
+    (state) => routeAfterStaffingApproval(state),
+    ["preflight-specialist-decisions", END]
+  );
   graph.addConditionalEdges(
     "preflight-specialist-decisions",
     (state) =>
@@ -179,10 +146,10 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
     routeAfterSpecialistExecution,
     [END, "execute-next-specialist", "compare-specialist-decisions"]
   );
-  // Stage 4 failure never enters Synthesis, and existing execution targets keep their endpoint.
+  // Stage 4 failure never enters Synthesis, and only supported analysis reaches Synthesis.
   graph.addConditionalEdges(
     "compare-specialist-decisions",
-    (state) => routeAfterComparison(state, executionTarget),
+    routeAfterComparison,
     ["assess-analysis", END]
   );
   graph.addConditionalEdges(
@@ -197,7 +164,7 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   );
   graph.addConditionalEdges(
     "run-ceo-synthesis",
-    (state) => routeAfterSynthesis(state, executionTarget),
+    (state) => routeAfterSynthesis(state, requireHandoff),
     ["human-direction-review", END]
   );
   graph.addConditionalEdges(
@@ -223,6 +190,6 @@ export function createPhaseAGraph(options: PhaseAGraphOptions = {}) {
   // The finite Assignment cursor bounds repetition. LangGraph's default 25 steps
   // must not become an additional Invocation budget; callers may set a lower limit.
   return graph
-    .compile(humanGovernance ? { checkpointer: new MemorySaver() } : {})
+    .compile({ checkpointer: new MemorySaver() })
     .withConfig({ recursionLimit: Number.MAX_SAFE_INTEGER });
 }

@@ -2,22 +2,18 @@ import { prepareAssignmentContext } from "@/application/governance/records/assig
 import { withGovernanceLedger } from "@/application/governance/records/governance-transaction.js";
 import * as governanceRecords from "@/services/governance-records/index.js";
 import * as filesystem from "node:fs";
-import { Command } from "@langchain/langgraph";
 import * as staffingApplication from "@/application/management/allocation/analysis-assignment/index.js";
-import * as phaseAGraph from "../graph.js";
+import type { StaffingConfirmationOptions } from "../features/governance/nodes/staffing-approval/confirm-staffing-approval.js";
+import { Command } from "@langchain/langgraph";
 import {
   createPhaseBGraph,
   type PhaseBGraphOptions,
 } from "../../phase-b/index.js";
-import { runWorkDecomposition } from "@/application/management/work-decomposition/index.js";
-import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
-import {
-  createPhaseAGraph as createGraph,
-  runAuthorizedSpecialistDecision,
-} from "../index.js";
+import { createPhaseAGraph as createGraph } from "../index.js";
+import { runAuthorizedSpecialistDecision } from "../features/decision/execution/authorized-specialist-decision.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -45,14 +41,11 @@ import {
   governanceDigest,
 } from "@/services/governance-records/index.js";
 import type {
+  RunStaffingOptions,
+  StaffingRunResult,
   StaffingDraft,
   CEOStaffingAgent,
 } from "@/application/management/allocation/analysis-assignment/index.js";
-import {
-  runStaffingApproval,
-  type StaffingApprovalWorkflowOptions,
-} from "../entrypoints/run-staffing-approval.js";
-
 function createPhaseAGraph(options: Parameters<typeof createGraph>[0] = {}) {
   return createGraph({
     assessmentAgent: async ({ decisions }) => ({
@@ -62,8 +55,87 @@ function createPhaseAGraph(options: Parameters<typeof createGraph>[0] = {}) {
         { kind: "recommendation", specialistId: decisions[0].specialistId },
       ],
     }),
+    directionApproval: "direction-only",
     ...options,
+  }).withConfig({ configurable: { thread_id: "phase-a-test" } });
+}
+
+function createAnalysisCheckpoint(options: Parameters<typeof createGraph>[0]) {
+  return createPhaseAGraph(options).withConfig({
+    interruptBefore: ["assess-analysis"],
   });
+}
+
+type ApprovalRequest = Extract<
+  StaffingApprovalResult,
+  { status: "approval-required" }
+>;
+
+type StaffingCheckpointOptions = Omit<
+  RunStaffingOptions,
+  "systemPolicy" | "assignmentConstraints"
+> &
+  StaffingConfirmationOptions & {
+    repositoryPath: string;
+  };
+
+type StaffingCheckpointResult =
+  | Exclude<StaffingRunResult, { status: "proposed" }>
+  | Extract<StaffingApprovalResult, { status: "approved" | "denied" }>
+  | { status: "approval-required"; request: ApprovalRequest }
+  | { status: "rejected"; reason: string }
+  | {
+      status: "failed";
+      failure: "system-policy" | "confirmation";
+      reason: string;
+      rounds: number;
+    };
+
+async function inspectStaffingCheckpoint(
+  options: StaffingCheckpointOptions
+): Promise<StaffingCheckpointResult> {
+  // 1. Execute the Current Phase A Staffing Approval Flow
+  // Inspect the approval checkpoint without invoking later stages in these tests.
+  const state = await createPhaseAGraph({
+    ...options,
+  }).invoke(
+    {
+      goal: options.goal,
+      repositoryPath: options.repositoryPath,
+    },
+    {
+      configurable: { thread_id: "staffing-test" },
+      interruptBefore: ["preflight-specialist-decisions"],
+    }
+  );
+
+  // 2. Project Independent Stage Results Into the Existing External Contract
+  // This adapter owns presentation of the combined result, never Graph State.
+  const { policyLookup, staffingResult, approvalResult } = state;
+  if (policyLookup?.status === "denied") {
+    if (staffingResult || approvalResult)
+      throw new Error(
+        "Policy denial cannot contain Staffing or Approval results."
+      );
+    return {
+      status: "failed",
+      failure: "system-policy",
+      reason: policyLookup.reason,
+      rounds: 0,
+    };
+  }
+  if (policyLookup?.status !== "ready" || !staffingResult)
+    throw new Error("Phase A returned no Staffing Approval outcome.");
+  if (staffingResult.status !== "proposed") {
+    if (approvalResult)
+      throw new Error("Approval requires a proposed Staffing result.");
+    return staffingResult;
+  }
+  if (!approvalResult)
+    throw new Error("Phase A returned no Staffing Approval outcome.");
+  if (approvalResult.status === "approval-required")
+    return { status: "approval-required", request: approvalResult };
+  return approvalResult;
 }
 
 // Real receipts, signed storage and Git; only controlling-terminal I/O is fake.
@@ -116,7 +188,7 @@ vi.mock("node:fs", async (original) => {
 let root: string;
 let home: string;
 let system: StaffingSystemPolicy;
-let options: StaffingApprovalWorkflowOptions;
+let options: StaffingCheckpointOptions;
 let draft: StaffingDraft;
 const git = (...args: string[]) =>
   execFileSync("git", args, {
@@ -241,7 +313,7 @@ afterEach(() => {
 
 describe("Real Staffing and Governance composition", () => {
   it("blocks an absent policy before any CEO invocation", async () => {
-    expect(await runStaffingApproval(options)).toMatchObject({
+    expect(await inspectStaffingCheckpoint(options)).toMatchObject({
       status: "failed",
       failure: "system-policy",
       rounds: 0,
@@ -320,7 +392,7 @@ describe("Real Staffing and Governance composition", () => {
       });
     }
     expect(getStaffingSystemPolicy(root).status).toBe("denied");
-    expect(await runStaffingApproval(options)).toMatchObject({
+    expect(await inspectStaffingCheckpoint(options)).toMatchObject({
       status: "failed",
       failure: "system-policy",
     });
@@ -330,7 +402,7 @@ describe("Real Staffing and Governance composition", () => {
     configure();
     delegate();
     options.confirmApproval = vi.fn();
-    const result = await runStaffingApproval(options);
+    const result = await inspectStaffingCheckpoint(options);
     expect(result.status).toBe("approved");
     if (result.status !== "approved") throw new Error(JSON.stringify(result));
     expect(result.approval.source.type).toBe("human-delegation");
@@ -356,7 +428,7 @@ describe("Real Staffing and Governance composition", () => {
         ]);
         return { type: "propose", draft };
       });
-    expect((await runStaffingApproval(options)).status).toBe("approved");
+    expect((await inspectStaffingCheckpoint(options)).status).toBe("approved");
     expect(options.agent).toHaveBeenCalledTimes(2);
     expect(issuanceCount()).toBe(1);
   });
@@ -373,7 +445,7 @@ describe("Real Staffing and Governance composition", () => {
           reviewedId = request.subject.id;
         return accept(request);
       });
-      const result = await runStaffingApproval(options);
+      const result = await inspectStaffingCheckpoint(options);
       expect(result.status).toBe("approved");
       if (result.status !== "approved") throw new Error(JSON.stringify(result));
       expect(result.approval.source.type).toBe("direct-human");
@@ -388,7 +460,7 @@ describe("Real Staffing and Governance composition", () => {
       configure();
       options.confirmApproval = () =>
         kind === "reject" ? null : { token: "forged" };
-      expect((await runStaffingApproval(options)).status).toBe(
+      expect((await inspectStaffingCheckpoint(options)).status).toBe(
         kind === "reject" ? "rejected" : "denied"
       );
       expect(issuanceCount()).toBe(0);
@@ -405,7 +477,7 @@ describe("Real Staffing and Governance composition", () => {
       ).status
     ).toBe("configured");
     options.confirmApproval = vi.fn();
-    expect((await runStaffingApproval(options)).status).toBe("denied");
+    expect((await inspectStaffingCheckpoint(options)).status).toBe("denied");
     expect(options.confirmApproval).not.toHaveBeenCalled();
     expect(issuanceCount()).toBe(0);
   });
@@ -427,7 +499,7 @@ describe("Real Staffing and Governance composition", () => {
         }
         return receipt;
       };
-      expect((await runStaffingApproval(options)).status).toBe("denied");
+      expect((await inspectStaffingCheckpoint(options)).status).toBe("denied");
       expect(options.agent).toHaveBeenCalledTimes(1);
       expect(issuanceCount()).toBe(0);
     }
@@ -439,7 +511,7 @@ describe("Real Staffing and Governance composition", () => {
       return { type: "propose" as const, draft };
     });
     options.confirmApproval = (request) => accept(request);
-    const result = await runStaffingApproval(options);
+    const result = await inspectStaffingCheckpoint(options);
     expect(result.status).toBe("approved");
     if (result.status === "approved")
       expect(result.approval.systemPolicyVersion).toBe(2);
@@ -452,7 +524,7 @@ describe("Real Staffing and Governance composition", () => {
       return { type: "propose" as const, draft };
     });
     options.confirmApproval = vi.fn();
-    expect((await runStaffingApproval(options)).status).toBe("denied");
+    expect((await inspectStaffingCheckpoint(options)).status).toBe("denied");
     expect(options.confirmApproval).not.toHaveBeenCalled();
     expect(issuanceCount()).toBe(0);
   });
@@ -462,7 +534,7 @@ describe("Reserved Invocation → existing v2 Decision integration", () => {
   async function reserve() {
     configure();
     delegate();
-    const approval = await runStaffingApproval(options);
+    const approval = await inspectStaffingCheckpoint(options);
     if (approval.status !== "approved")
       throw new Error(JSON.stringify(approval));
     const authorized = governance.authorizeSpecialistInvocation({
@@ -687,7 +759,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       let assessmentCalls = 0;
       const graph = createPhaseAGraph({
         ...options,
-        executionTarget: "ceo-synthesis",
         assessmentAgent: async ({ limits }) => {
           if (assessmentCalls === 0) {
             const initial = withGovernanceRecords((raw) => {
@@ -774,7 +845,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         mode === "delegated" ? 5 : 3
       );
       draft.budget.maxTotalAnalysisInvocations = 5;
-      const result = await runStaffingApproval(options);
+      const result = await inspectStaffingCheckpoint(options);
       if (mode === "policy") {
         expect(result).toMatchObject({
           status: "failed",
@@ -951,9 +1022,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: normalWorkflow
-        ? "human-direction-governance"
-        : "independent-direction-review",
+      ...(normalWorkflow ? { directionApproval: undefined } : {}),
       confirmDirection,
       executionDelegationProposalAgent,
     });
@@ -991,7 +1060,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       let round = 0;
       const graph = createPhaseAGraph({
         ...options,
-        executionTarget: "ceo-synthesis",
         assessmentAgent: async () => ({
           status: mode === "blocked" ? "blocked" : "refinement-required",
           reason: "More evidence",
@@ -1155,9 +1223,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const graph = createPhaseAGraph({
       ...options,
       assessmentAgent,
-      confirmApproval,
-      allowDirectStaffingApproval: mode === "human",
-      executionTarget: "independent-direction-review",
+      confirmApproval: mode === "pending" ? undefined : confirmApproval,
       confirmDirection: (request) =>
         confirmHumanAction(request.binding, JSON.stringify(request)),
     });
@@ -1725,13 +1791,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assignmentPlanResult = state.assignmentPlanResult;
       assignmentExecutionResult = state.assignmentExecutionResult;
     } else {
-      const decomposition = await runWorkDecomposition(
-        { approvedDecisionId: decision.id },
-        { agent }
-      );
-      if (decomposition.status !== "proposed")
-        throw new Error(JSON.stringify(decomposition));
-      registerWorkDecomposition(decomposition);
+      // Seed a historical decomposition to test handoff and reservation rejection.
+      registerWorkDecomposition({
+        status: "proposed",
+        approvedDecisionId: decision.id,
+        workItems,
+      });
     }
     return {
       assignmentPlanResult,
@@ -3566,7 +3631,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     runtime();
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "independent-direction-review",
       confirmDirection,
     });
     const config = { configurable: { thread_id: "delegation-history" } };
@@ -4144,7 +4208,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "independent-direction-review",
     });
     const state = await graph.invoke(
       { goal: options.goal, repositoryPath: root },
@@ -4160,7 +4223,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     runtime("comparison");
     const graph = createPhaseAGraph({
       ...options,
-      executionTarget: "independent-direction-review",
     });
     const state = await graph.invoke(
       { goal: options.goal, repositoryPath: root },
@@ -4219,7 +4281,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       };
       const graph = createPhaseAGraph({
         ...options,
-        executionTarget: "independent-direction-review",
         confirmDirection: confirm,
         synthesis: {
           agent: async () =>
@@ -4372,7 +4433,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       const command = runtime();
       const state = await createPhaseAGraph({
         ...options,
-        executionTarget: "ceo-synthesis",
       }).invoke({ goal: options.goal, repositoryPath: root });
       expect(state.synthesisResult?.status).toBe("proposed");
       expect(state.specialistDecisionsResult?.status).toBe("completed");
@@ -4407,9 +4467,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     prepareBatch();
     const command = runtime();
     const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     const result = state.specialistDecisionsResult;
     const approval = state.approvalResult;
@@ -4477,9 +4536,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       }
     );
     const command = runtime();
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4502,9 +4560,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         return result;
       });
     const command = runtime();
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     expect(queried).toHaveBeenCalledTimes(1);
     expect(state.specialistDecisionsResult).toMatchObject({
@@ -4528,9 +4585,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       }
     );
     const command = runtime();
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4545,9 +4601,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   it("stops after budget denial without executing or comparing remaining work", async () => {
     prepareBatch(1);
     const command = runtime();
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4567,9 +4622,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       reason: "Invocation claim denied",
     });
     const command = runtime();
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4593,9 +4647,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     prepareBatch();
     const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const command = runtime("decision");
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4618,9 +4671,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     prepareBatch();
     const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const command = runtime("comparison");
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     const result = state.specialistDecisionsResult;
     expect(state.approvalResult?.status).toBe("approved");
@@ -4655,9 +4707,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       if (++calls === 1) configure(); // New policy version invalidates the issued Scope.
       return result;
     });
-    const state = await createPhaseAGraph({
+    const state = await createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     }).invoke({ goal: options.goal, repositoryPath: root });
     if (state.approvalResult?.status !== "approved")
       throw new Error("Missing Scope");
@@ -4677,9 +4728,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const command = runtime();
     const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
     const claim = vi.spyOn(governance, "claimAuthorizedInvocation");
-    const graph = createPhaseAGraph({
+    const graph = createAnalysisCheckpoint({
       ...options,
-      executionTarget: "specialist-decisions",
     });
     const first = await graph.invoke({
       goal: options.goal,
@@ -4718,9 +4768,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       }
       const command = runtime();
       const authorize = vi.spyOn(governance, "authorizeSpecialistInvocation");
-      const state = await createPhaseAGraph({
+      const state = await createAnalysisCheckpoint({
         ...options,
-        executionTarget: "specialist-decisions",
       }).invoke({ goal: options.goal, repositoryPath: root });
       expect(state.approvalResult?.status).toBe("approved");
       expect(options.agent).toHaveBeenCalledTimes(1);
@@ -4879,8 +4928,10 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
       const state = await createPhaseAGraph({
         ...options,
         agent,
-        confirmApproval,
-        executionTarget: "specialist-decisions",
+        confirmApproval:
+          kind === "expired" || kind === "policy-version" || kind === "snapshot"
+            ? confirmApproval
+            : undefined,
       }).invoke({ goal: options.goal, repositoryPath: root });
       if (kind === "snapshot")
         expect(state.staffingResult).toMatchObject({
@@ -4908,7 +4959,10 @@ describe("Phase A Graph → real Staffing and Governance Approval", () => {
       const state = await createPhaseAGraph({
         maxRounds: options.maxRounds,
         agent: options.agent,
-      }).invoke({ goal: options.goal, repositoryPath: root });
+      }).invoke(
+        { goal: options.goal, repositoryPath: root },
+        { interruptBefore: ["preflight-specialist-decisions"] }
+      );
       const outcome = state.approvalResult;
       expect(state.goal).toEqual(options.goal);
       expect(options.agent).toHaveBeenCalledTimes(1);
@@ -4968,11 +5022,17 @@ it("finalizes direct Human approval and retains Phase A stage results", async ()
   const confirmApproval = vi.fn((request: Parameters<typeof accept>[0]) =>
     accept(request)
   );
-  const state = await createPhaseAGraph({
+  const graph = createPhaseAGraph({
     ...options,
     confirmApproval,
-    allowDirectStaffingApproval: true,
-  }).invoke({ goal: options.goal, repositoryPath: root });
+  });
+  const config = { configurable: { thread_id: "direct-staffing" } };
+  await graph.invoke(
+    { goal: options.goal, repositoryPath: root },
+    { ...config, interruptBefore: ["preflight-specialist-decisions"] }
+  );
+  const { values: state, next } = await graph.getState(config);
+  expect(next).toEqual(["preflight-specialist-decisions"]);
   expect(state.approvalResult?.status).toBe("approved");
   expect(Object.keys(state).sort()).toEqual([
     "analysisAssessment",
@@ -5015,38 +5075,9 @@ describe("Graph approval concurrency boundary", () => {
       );
       return receipt;
     };
-    const result = await runStaffingApproval(options);
+    const result = await inspectStaffingCheckpoint(options);
     expect(result.status).toBe("denied");
     expect(options.agent).toHaveBeenCalledTimes(1);
-    expect(issuanceCount()).toBe(1);
-  });
-});
-
-describe("CLI through current Phase A Staffing Approval", () => {
-  it("executes the real Phase A Graph and finalizes terminal confirmation once", async () => {
-    configure();
-    const executeStaffing = staffingApplication.runStaffing;
-    vi.spyOn(staffingApplication, "runStaffing").mockImplementation((input) =>
-      executeStaffing({ ...input, agent: options.agent })
-    );
-    const createGraph = vi.spyOn(phaseAGraph, "createPhaseAGraph");
-    const specialistProcess = vi
-      .spyOn(processRuntime, "runCommand")
-      .mockRejectedValue(new Error("Unexpected Specialist execution"));
-    const scopeLookup = vi.spyOn(governance, "getApprovedStaffingScope");
-    const output = vi.spyOn(console, "log").mockImplementation(() => {});
-    writeFileSync(join(home, "goal.json"), JSON.stringify(options.goal));
-    expect(await runStaffingCli([root, join(home, "goal.json")])).toBe(0);
-    expect(createGraph).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ executionTarget: "staffing-approval" })
-    );
-    expect(specialistProcess).not.toHaveBeenCalled();
-    expect(scopeLookup).not.toHaveBeenCalled();
-    expect(options.agent).toHaveBeenCalledTimes(1);
-    const result = JSON.parse(output.mock.calls[0][0]);
-    expect(result.status).toBe("approved");
-    expect(result.approval.source.type).toBe("direct-human");
-    expect(result.scope.goal).toEqual(options.goal);
     expect(issuanceCount()).toBe(1);
   });
 });

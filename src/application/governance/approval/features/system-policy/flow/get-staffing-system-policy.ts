@@ -16,8 +16,7 @@ import {
 // Return a detached configuration under a short authenticated read transaction.
 // The caller must not keep the ledger locked while an Agent or Human responds.
 export function getStaffingSystemPolicy(
-  repositoryPath: string,
-  includeDelegationConstraints = false
+  repositoryPath: string
 ): StaffingSystemPolicyResult {
   try {
     const root = resolveGovernanceRepository(repositoryPath);
@@ -26,9 +25,7 @@ export function getStaffingSystemPolicy(
       const system = entry?.systems.at(-1);
       if (!system) throw new Error("Missing System Policy.");
       const configuration = requireCurrentSystemRecord(system, root);
-      const assignmentConstraints = includeDelegationConstraints
-        ? readAssignmentConstraints(entry)
-        : undefined;
+      const assignmentConstraints = readAssignmentConstraints(entry);
       return {
         status: "ready",
         configuration: validateSystemConfiguration(configuration),

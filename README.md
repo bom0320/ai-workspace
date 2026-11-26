@@ -6,57 +6,23 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
 현재 operator interface는 Node.js CLI로 제공된다. 최종 목표는 CEO가 여러 전문 AI 직원의 의사결정과
 상세 설계·구현·테스트·리뷰를 관리하고 Human이 승인과 Evidence로 통제하는 AI Development Organization이다.
 
-현재 다음 흐름이 구현되어 있다.
+Development Organization이 현재 실행 모델의 기준이다. 각 Phase는 독립 Graph API로 제공된다.
 
-- **v0 — Safe Execution**: isolated Git worktree, Scope, Verification, Evidence와 binary patch 보존 기반을 구현했다.
-  기존 실행 기반과 Review, Delivery, Cleanup 모듈은 후속 Assignment 수정 실행에 재사용할 수 있다.
-- **v1 — Goal-to-Task Planning**: 자연어 Goal에서 TaskContract를 만드는 독립 CLI를 검증했다.
-  현재 TaskContract는 Phase B의 Assignment 기반 Task Detailing에서 생성한다.
-- **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
-  Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
-- **v3 — Structured Decision Comparison**: 독립 AgentDecision을 Concern 단위로 비교해
-  Agreement / Conflict / Trade-off와 Uncertainty / Limitation / Separate Concern을 구조화하고,
-  원본 Specialist / Evidence reference를 검증한다.
+- Phase A는 Human Goal의 해결 방향을 분석하고 승인한다. System Policy, Staffing 승인, Specialist Authorization과 읽기 전용 분석, Comparison, Assessment·Refinement, CEO Synthesis, Human Direction Review 순서로 진행한다.
+- Phase B는 검증된 Handoff를 받아 Work Item을 분해·선택하고 Specialist에게 배정한다. 읽기 Assignment는 분석과 Evidence를 기록한다. 수정 Assignment는 승인된 Read Session에서 계획을 구체화하고, TaskContract Binding과 별도 Write Authorization·Claim을 거쳐 격리된 Worktree에서 구현·검증한다.
+- Application은 역할별 기능을 제공하고 Workflow는 실행 순서·분기·상태를 조정한다. Governance는 승인·권한·기록 무결성을 소유하며 Runtime은 제한된 분석·계획·구현을 수행한다.
+- Organization 상위 Graph, 자동 Phase 전환, Integration, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
 
-Agent discussion / CEO 전체 조직 운영 / Coordinator, 공유 메모리, 자동 retry와 dependency 설치는
-미구현이다. Agents SDK integration, OPA, Temporal / Restate 등 외부 후보도 현재 도입되어 있지 않다.
+`createPhaseAGraph()`는 기본적으로 방향과 실행 위임의 동시 승인까지 진행한다. 방향 단독 승인이 필요한 경우
+`directionApproval: "direction-only"`를 선택한다. 이 방식은 같은 분석·승인 경계를 거치며 완료된 Phase B Handoff를 발급하지 않는다.
+Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을 사용한다. 콜백이 없으면 승인 필요 상태에서
+종료하고, 거절이나 정책 검증 실패 후에는 실행을 진행하지 않는다. 방향 검토는 동일한 Graph 인스턴스와
+`configurable.thread_id`에서 Interrupt / Resume를 사용한다. Resume action의 Review ID·Binding과 실제 Human Receipt를 검증한다.
 
-문서는 다음 책임으로 나눈다.
-
-- [Project direction](docs/project-direction.md): 왜 만드는가 — North Star와 설계 판단 기준
-- [Architecture](docs/architecture.md): 어떻게 구성되는가 — 현재 구현과 목표 책임 경계
-- [Roadmap](docs/roadmap.md): 어디로 가는가 — 구현 상태와 v4 이후 검증 단계
-- [CLI / Human interface](docs/cli-and-human-interface.md): 사람이 현재 어떻게 조작하는가
-
-**v4 — CEO Governance / AI Organization Orchestration은 진행 중이며 전체 Workflow는 미완성**이다.
-CEO Staffing / Snapshot Context Discovery / Proposal Finalization, Human Staffing Approval·Delegation,
-Scope 발급과 Authorization·Reservation·일회 Claim이 구현되어 있다. Phase A Workflow API는 승인 Scope의
-동적 Specialist를 기존 v2로 순차 실행하고 둘 이상이면 기존 v3 Comparison을 호출한다.
-CLI `staffing`은 Staffing → Approval → Scope 발급까지 연결하며, 이후 Decision 묶음 실행은 별도 API다.
-CEO Synthesis와 Human Direction Governance는 API / Graph에 연결했다. Phase B는 승인된 방향을 업무로 분해하고 Specialist 배정을 등록하며, 명시적으로 요청한 Assignment 읽기 실행을 지원한다. Assignment 상세 계획, Repository 수정 및 Delivery 연결은 후속 범위다.
-
-목표 Workflow는 **Phase A — Decision & Approval**과 **Phase B — Detailed Design & Execution**으로 나뉜다.
-CEO가 Specialist 판단을 종합해 해결 방향에 대한 Human 승인을 받은 뒤에도 업무를 분해·배치하고,
-여러 직원의 설계·개발·검증과 재작업·재배치·진행 평가를 관리하여 Executive Report까지 연결한다.
-현재 v2 Specialist는 read-only Decision Agent이며, 다중 Writing Worker·병렬 실행·Worktree 통합은 미구현이다.
-Workflow Runtime은 **LangGraph.js Minimal Integration Step 1·2·2.5·3을 구현**했다.
-Phase A Graph는 정책 조회 → CEO Staffing → Staffing Approval 평가를 조건부 Edge로 연결한다.
-정책 거부·Staffing 실패/Escalation이면 중단하며, 직접 승인이 필요한 경우에만 Human Confirmation 콜백과 Governance 최종 승인으로 진행한다.
-콜백이 없으면 approval-required를 유지한다. CLI는 runStaffingApproval() Adapter에서 staffing-approval 실행 대상을 명시해 승인 단계 결과만 반환한다. 별도 Staffing Setup Graph는 없다.
-specialist-decisions 실행 대상을 명시하면 approved 이후 기존 순차 Specialist Workflow와 v3 Comparison을 실행한다.
-ceo-synthesis 실행 대상은 Comparison 성공 또는 단일 생략 후 CEO Synthesis 제안 / Escalation / 실패까지 진행한다. 이 결과는 Phase A 전체 완료나 해결 방향 승인이 아니다.
-Organization State는 원본 goal / repositoryPath, Phase A State는 공통 입력, 정책 조회와 개별 staffingResult / approvalResult / specialistDecisionsResult / decisionComparisonResult / synthesisResult를 소유한다.
-기본 실행 대상은 staffing-approval로 기존 CLI 범위를 유지한다. human-direction-governance 대상은 실제 Human Confirmation을 거친 방향 승인 / 수정 요청 / 거부와 같은 프로세스 Interrupt / Resume를 제공한다. 영속 장애 복구는 없으며 자세한 계약은 [Workflow Architecture](docs/workflow-architecture.md#step-72--human-direction-governance)를 따른다.
-상위 Organization Graph는 향후 Phase 간 Handoff 계약에 맞춰 구성하며 현재 Wrapper Graph는 없다.
-State는 실행 데이터이고 승인·권한 기록은 기존 Governance Ledger가 소유한다.
-
-LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evidence / 승인 정책은 Harness가
-소유한다. 별도 채택 평가·선행 Runtime Spike 없이 v4 구현 과정에서 통합·검증한다.
-판단 기준은 [Project Direction](docs/project-direction.md#build-vs-adopt), 책임 경계는
-[Architecture](docs/architecture.md#5-target-responsibility-model), 순서는
-[Roadmap](docs/roadmap.md#v4--ceo-governance--ai-organization-orchestration)에 둔다.
-
-아래는 지금 사용할 수 있는 기능과 사용법이다.
+- [Project Direction](docs/project-direction.md)
+- [Architecture](docs/architecture.md)
+- [Workflow Architecture](docs/workflow-architecture.md)
+- [Roadmap](docs/roadmap.md)
 
 ## 사전 준비
 
@@ -74,56 +40,16 @@ LangGraph.js는 workflow 실행 메커니즘을 맡고 Authority / Context / Evi
 
 ```sh
 pnpm install
-pnpm dev
+pnpm dev governance setup /path/to/system-policy.json
 ```
 
-인자 없이 실행하면 독립 Decision 입력을 시작한다. Repository, Decision Goal, Context Files를
-입력한다. Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
+CLI는 `governance setup / delegate / revoke / approve`를 제공한다. 인자 없는 실행은 안내와 종료 코드 1을 반환한다.
+전체 실행은 [Phase A API](src/workflows/development-organization/phase-a/index.ts)와
+[Phase B API](src/workflows/development-organization/phase-b/index.ts)를 사용한다. 검증된 공동 승인 Handoff를
+Phase B에 전달하는 방법과 Human 콜백 예시는 [Workflow Architecture](docs/workflow-architecture.md#4-phase-a--phase-b-handoff-contract)에 있다.
+정책 설정과 실제 Human 확인은 [CLI 문서](docs/cli-and-human-interface.md)를 따른다.
 
-기존 독립 `plan`과 `execute` 명령 및 위치 인자 방식은 종료 코드 1로 거부된다.
-Task Detailing과 수정 실행은 승인된 Phase B Assignment에서 수행한다.
-
-## v4 현재 진입점
-
-| 진입점 | 현재 연결 범위 |
-| --- | --- |
-| `pnpm dev governance setup / delegate / revoke / approve` | 정책·위임 설정, 기존 Proposal 승인과 Scope 관리 |
-| `pnpm dev staffing <repository> <goal.json>` | 승인 정책 조회 → CEO Staffing → Human Staffing Approval → Scope 발급 |
-| `createPhaseAGraph({ maxRounds: 4 }).invoke({ goal, repositoryPath })` API | 정책 조회 → Staffing → Approval → 선택적 Preflight·Specialist 반복·Comparison(Node / Edge). 기본값은 승인까지만 실행; API의 executionTarget으로 분석 명시 |
-
-Governance / Staffing의 실제 명령과 JSON 입력은 [CLI 문서](docs/cli-and-human-interface.md#7-staffing-approval--human-delegation--step-3),
-API의 실패 단계·예산·Claim 한계는 [Architecture](docs/architecture.md#96-step-54--phase-a-multi-specialist-decision--comparison--implemented)를 따른다.
-
-## Decision quick example
-
-Clean Repository와 명시적 repository-relative UTF-8 text 파일이 필요하다.
-
-```sh
-pnpm decision . \
-  "Evaluate the current decision architecture" \
-  src/application/specialist/analysis/flow/run-decision.ts \
-  src/application/specialist/analysis/flow/independent/collect-independent-decisions.ts
-```
-
-Snapshot capture 후 해당 commit의 Git blob에서만 파일 내용을 읽는다. 빈 경로·absolute path·`..`
-traversal, 없는 파일·directory·binary/invalid UTF-8 입력은 거부한다. Dirty Repository나 실행 전후
-Snapshot drift, runtime / schema / Evidence 오류가 있으면 전체 명령이 실패하고 partial result를 표시하지 않는다.
-
-Frontend / UX Specialist는 같은 Goal / commit과 같은 선택 파일을 각각 받고 순차 실행한다.
-`read` authority는 supplied Context 읽기이며 전체 target filesystem 접근이 아니다.
-다른 Specialist의 Decision을 전달하지 않고 Harness가 specialistId를 주입한다.
-Evidence는 제공 파일의 exact path와 line 조건·범위를 검사한다. Schema / Evidence 검증 통과가
-recommendation의 의미적 정확성을 보장하지는 않는다.
-
-Decision command는 `runDecision()`의 실제 Goal / Snapshot SHA / 원본 AgentDecision[]을
-`compareDecisions()`에 전달한다. 출력은 Snapshot, 각 Specialist의 Recommendation / Evidence /
-Risks / Uncertainty, Comparison의 Findings / Gaps와 전체 Decision Duration이다. 비교 결과가 모두
-비어 있으면 `Comparison: no material relationships found.`를 표시한다. Comparator의 JSON protocol과
-source reference도 검증하며 실패 시 전체 명령이 실패한다.
-Synthesis / final recommendation / winner / automatic resolution / persistence와 Planning·Execution
-자동 연결은 없다. 이 명령은 Repository 변경,
-Task Approval / Review / Apply / Commit / Push / Cleanup flow를 실행하지 않는다.
-상세 입력·오류·출력은 [CLI / Human interface](docs/cli-and-human-interface.md#decision-flow)를 따른다.
+## 과거 독립 Decision 검증 기록
 
 ### v2 실제 E2E 기록
 
@@ -142,7 +68,7 @@ Structured AgentDecision / Evidence Validation / CLI integration / Actual Codex 
 
 ### v3 automated E2E coverage
 
-Automated Decision CLI E2E는 explicit / interactive 입력에서 Frontend → UX → Comparator와
+제거 전 Automated Decision CLI E2E는 explicit / interactive 입력에서 Frontend → UX → Comparator와
 Comparison presentation 연결, 동일 commit SHA, Decision 전달 구조, Comparator Context의 files 부재,
 Specialist 간 isolation, Repository unchanged와 Evidence 실패 시 fail-fast를 확인한다.
 Command unit test는 동일 Goal / Decision 배열의 identity와 Comparison 실패 전파도 확인한다.

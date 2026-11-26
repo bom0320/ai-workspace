@@ -4,6 +4,12 @@ import { runCommand } from "@/infrastructure/process/index.js";
 import type { ExecutionTelemetry } from "../model/result.js";
 
 export function createCodexWorkerPrompt(task: TaskContract): string {
+  const { implementationPlan } = task;
+  if (!implementationPlan || task.implementationSteps !== undefined)
+    throw new Error(
+      "Task execution requires a structured implementation plan."
+    );
+
   return [
     "Complete the following task within the provided repository workspace.",
     "",
@@ -15,39 +21,27 @@ export function createCodexWorkerPrompt(task: TaskContract): string {
     "Objective:",
     task.objective,
     "",
-    ...(task.implementationPlan
-      ? [
-          "Background:",
-          task.implementationPlan.background,
-          "",
-          "Current State:",
-          task.implementationPlan.currentState,
-          "",
-          "Target Design:",
-          task.implementationPlan.targetDesign,
-          "",
-          "Implementation Plan:",
-          ...task.implementationPlan.steps.flatMap(
-            ({ title, targetPaths, instructions }, index) => [
-              `Step ${index + 1}. ${title}`,
-              "Target Paths:",
-              ...targetPaths.map((path) => `- ${path}`),
-              ...(targetPaths.length ? [] : ["- (none)"]),
-              "Instructions:",
-              ...instructions.map((instruction) => `- ${instruction}`),
-            ]
-          ),
-          "",
-        ]
-      : task.implementationSteps
-        ? [
-            "Implementation Steps:",
-            ...task.implementationSteps.map(
-              (step, index) => `${index + 1}. ${step}`
-            ),
-            "",
-          ]
-        : []),
+    "Background:",
+    implementationPlan.background,
+    "",
+    "Current State:",
+    implementationPlan.currentState,
+    "",
+    "Target Design:",
+    implementationPlan.targetDesign,
+    "",
+    "Implementation Plan:",
+    ...implementationPlan.steps.flatMap(
+      ({ title, targetPaths, instructions }, index) => [
+        `Step ${index + 1}. ${title}`,
+        "Target Paths:",
+        ...targetPaths.map((path) => `- ${path}`),
+        ...(targetPaths.length ? [] : ["- (none)"]),
+        "Instructions:",
+        ...instructions.map((instruction) => `- ${instruction}`),
+      ]
+    ),
+    "",
     "Allowed paths:",
     task.allowedPaths.map((path) => `- ${path}`).join("\n") || "- (none)",
     "",

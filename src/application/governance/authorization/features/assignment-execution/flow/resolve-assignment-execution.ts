@@ -1,4 +1,4 @@
-import { validateTaskExecutionContract } from "../../work-item-execution/flow/validation/validate-task-execution-contract.js";
+import { validateTaskExecutionContract } from "../../../validate-task-execution-contract.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { resolvePreparedAssignmentPlan } from "../../../../records/assignment-plans/assignment-plan-records.js";
 import type { Handoff } from "../../../../records/assignment-plans/prepare-assignment-context.js";

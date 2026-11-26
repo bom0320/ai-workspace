@@ -9,4 +9,3 @@ export {
   type InvocationReservation,
 } from "./features/specialist-invocation/model/reservation.js";
 export { claimAuthorizedInvocation } from "./features/specialist-invocation/flow/claim-authorized-invocation.js";
-export { validateTaskExecutionContract } from "./features/work-item-execution/flow/validation/validate-task-execution-contract.js";

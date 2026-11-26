@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
 it.each([
+  [],
+  ["decision", ".", "Review UI", "README.md"],
+  ["staffing", ".", "goal.json"],
   ["plan", ".", "Clarify README"],
   ["execute", "task.json", "."],
   [".", "Old positional syntax"],
@@ -16,7 +19,7 @@ it.each([
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      "Task Detailing and execution require an approved Phase B Assignment."
+      "Run Development Organization phases through the Workflow API."
     );
   },
   20_000

@@ -298,6 +298,9 @@ Workflow는 이 계약들을 사용해 State와 Phase Handoff를 구성한다. G
 
 개별 Assignment는 `specialist/execution`이 수행하며, 복수 Assignment의 실행 순서와 동시성은 Workflow Coordinator가 조정한다. Write Claim에서 받은 프로세스 내부 객체를 `task-execution`이 한 번 소비하고, 기존 Worktree·Scope·Verification·Artifact 절차를 실행한다. `detailAssignmentTask()`는 Phase B 수정 Assignment 실행에서 승인된 Read Session과 Execution Bounds를 전달받아 계약을 생성한다.
 
+Read·Write Runtime 사전 검사는 Specialist Execution이 예약 전에
+`task-execution/runtime/`을 호출해 수행한다. `task-execution/flow/`는 승인 Permit을 소비한 뒤
+구현·검증·보고서 저장을 조정한다.
 
 [`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition, Execution Assignment, Specialist Execution의 각 `data-flow/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
 

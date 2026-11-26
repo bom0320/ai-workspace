@@ -66,6 +66,16 @@ Phase A 완료 계약 → Work Decomposition → Execution Assignment
 
 Phase B에서 TaskContract와 실행 결과는 Assignment에 연결된다. Worktree는 실행 후 보존되며 원본 반영은 별도의 Human 결정이다.
 
+Specialist Execution은 읽기와 수정 요청을 예약하기 전에 각각 `checkReadOnlyRuntime()`과
+`checkGovernedWorkerRuntime()`을 호출한다. [Runtime 사전 검사](../src/application/task-execution/runtime/check-execution-runtime.ts)는
+호스트, 임시 디렉터리, Git 설정과 Timeout 범위를 점검한다. 수정 요청은 이후 Governance의 예약·Claim을 거쳐
+[실행 Pipeline](../src/application/task-execution/flow/run-task-execution.ts)에 일회용 Permit을 전달한다.
+
+Pipeline의 `flow/implementation/`은 Worker 호출·실행 시간·실패를 상태에 반영한다.
+`worker/`는 Codex 프로세스를 실행한다. `flow/verification/`은 변경 경로와 승인된 검증 명령을 검사하고,
+`flow/finalization/`은 최종 결과를 구성하고 보고서를 저장한다. Worktree 준비와 Patch 보존 순서는
+`runTaskExecution()`이 조정하며, Specialist Execution은 Artifact를 확인하고 결과를 Governance에 기록한다.
+
 ### Phase A Decision Governance
 
 `createPhaseAGraph()`는 기본적으로 방향과 실행 위임의 동시 승인까지 진행한다. 방향 단독 승인이 필요한 경우

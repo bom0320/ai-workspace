@@ -18,8 +18,8 @@ import {
   collectChangedPathsEvidence,
 } from "./verification/check-execution-scope.js";
 import { runApprovedVerification } from "./verification/run-approved-verification.js";
-import { finalizeTaskExecutionResult } from "./finalize-task-execution-result.js";
-import { runCodexWorkerStage } from "./run-codex-worker-stage.js";
+import { finalizeTaskExecutionResult } from "./finalization/finalize-task-execution-result.js";
+import { runCodexWorkerStage } from "./implementation/run-codex-worker-stage.js";
 
 // Internal pipeline. Only the execution use case supplies an authorized execution.
 export async function runTaskExecution(

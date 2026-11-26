@@ -8,4 +8,4 @@ export { runTaskExecution } from "./flow/run-task-execution.js";
 export {
   checkReadOnlyRuntime,
   checkGovernedWorkerRuntime,
-} from "./flow/check-execution-runtime.js";
+} from "./runtime/check-execution-runtime.js";

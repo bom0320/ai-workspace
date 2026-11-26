@@ -38,14 +38,16 @@ export {
   type AssignmentExecutionRequest,
   type AuthorizedAssignmentExecution,
 } from "./model/assignment-execution.js";
+export { reserveAssignmentExecution } from "./authorization/features/assignment-execution/flow/reservation/reserve-assignment-execution.js";
+export { claimAssignmentExecution } from "./authorization/features/assignment-execution/flow/claim/claim-assignment-execution.js";
 export {
-  reserveAssignmentExecution,
-  claimAssignmentExecution,
   consumeAssignmentReadContext,
+  type AssignmentReadSession,
+} from "./authorization/features/assignment-execution/flow/read-session/consume-assignment-read-context.js";
+export {
   consumeAssignmentWriteExecution,
   takeAssignmentTaskExecution,
-  type AssignmentReadSession,
-} from "./authorization/features/assignment-execution/flow/authorize-assignment-execution.js";
+} from "./authorization/features/assignment-execution/flow/write-execution/consume-assignment-write-execution.js";
 export {
   recordAssignmentFailure,
   getAssignmentExecutionResults,

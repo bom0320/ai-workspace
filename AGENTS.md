@@ -63,6 +63,7 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 - `src/application/management/`: 분석·실행 배정, 비교·Assessment·Synthesis, 업무 분해.
 - `src/application/specialist/`: 승인된 분석, Assignment 상세 계획, Assignment 실행 연결.
 - `src/application/governance/`: 승인·권한·Ledger·예약·일회 Claim 검증 및 기록.
+- `src/application/governance/authorization/features/assignment-execution/flow/`: Assignment의 Context·Binding·예약·Claim·Read Session·Write 실행 권한. 프로세스 내부 Claim 등록은 발급 파일에, Runtime Permit 등록은 Write 소비 파일에 캡슐화한다.
 - `src/application/task-execution/`: `runtime/`은 Specialist가 예약 전에 호출하는 환경 검사, `flow/`는 승인 Permit을 소비하는 Worktree 실행·검증·결과 확정, `worker/`는 Codex 프로세스 실행.
 - `src/workflows/development-organization/phase-a/` 및 `phase-b/`: 각 Phase의 Graph, State, Data Flow 및 테스트.
 - `src/infrastructure/codex/`: 외부 Codex 실행 설정과 격리 Context lifecycle.

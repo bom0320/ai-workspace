@@ -76,6 +76,28 @@ Pipeline의 `flow/implementation/`은 Worker 호출·실행 시간·실패를 �
 `flow/finalization/`은 최종 결과를 구성하고 보고서를 저장한다. Worktree 준비와 Patch 보존 순서는
 `runTaskExecution()`이 조정하며, Specialist Execution은 Artifact를 확인하고 결과를 Governance에 기록한다.
 
+#### Assignment Execution Authorization 내부 경계
+
+Governance의 [Assignment Authorization](../src/application/governance/authorization/features/assignment-execution/flow/)은
+다음 내부 책임을 분리한다.
+
+| 위치 | 책임 |
+| --- | --- |
+| `context/`, `binding/` | 현재 Plan·Assignment·승인 범위·의존성 복원과 Read/Write Binding 구성 |
+| `reservation/` | 기존 Work Item 예약까지 포함한 중복·예산·시간 검증 및 동일 Ledger 트랜잭션에서 예약 저장 |
+| `claim/` | 현재 Binding·만료 재검증, Claim 저장 및 성공한 트랜잭션의 객체를 프로세스에 등록 |
+| `read-session/` | Read Claim 소비, Snapshot Context 적재 및 제한된 Inspection, Write Eligibility, Prepared Task 검증과 결과 기록 |
+| `write-execution/` | Write Claim 소비, 현재 실행 범위 및 Deadline 재검증, Runtime Permit 생성과 결과 기록 |
+
+Claim 등록은 `claim-assignment-execution.ts`의 private WeakMap에 한정한다. Read Session과 Write Execution은
+내부 소비 함수를 통해 객체와 Digest를 확인한다. Claim은 잘못된 소비 시도에도 다시 사용할 수 없도록
+검증 전에 해당 객체의 등록을 삭제한다. Write 실행의 private WeakMap은 승인 계약과 Snapshot·시간
+데이터의 복제본을 등록한다. Task Execution은 동일 객체로 복제본을 한 번 꺼내며 만료 시에도 등록을 삭제한다.
+
+Session은 Inspection, Write Eligibility, 결과 기록 때마다 최신 Ledger에서 Live Claim을 확인한다.
+Prepared Task 검증, Context Digest·Binding 계산 및 결과 저장은 동일 트랜잭션에서 수행한다.
+실패 기록과 결과 복원은 `records/assignment-executions/`가 담당한다.
+
 ### Phase A Decision Governance
 
 `createPhaseAGraph()`는 기본적으로 방향과 실행 위임의 동시 승인까지 진행한다. 방향 단독 승인이 필요한 경우

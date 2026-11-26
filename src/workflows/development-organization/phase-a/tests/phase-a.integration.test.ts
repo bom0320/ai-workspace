@@ -2177,6 +2177,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "outside-step",
     "uninspected",
     "new-file",
+    "new-file-collision",
     "symlink",
     "mixed-plan",
     "historical-result",
@@ -2189,6 +2190,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "write-resume",
     "write-artifact",
     "claim-token",
+    "wrong-claim-access",
   ] as const)(
     "details a write Assignment with %s",
     async (mode) => {
@@ -2202,6 +2204,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           "invalid-scope": "docs-extra/other.md",
           uninspected: "docs/extra-1.md",
           "new-file": "docs/new.md",
+          "new-file-collision": "docs/README.md/child.md",
           symlink: "docs/link.ts",
         }[mode as string] ?? path;
       const implementationPlan = {
@@ -2441,6 +2444,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         symlink: "validation",
         "mixed-plan": "validation",
         "new-file": undefined,
+        "new-file-collision": "validation",
         "historical-result": undefined,
         "round-limit": "planning",
         deadline: "claim",
@@ -2452,6 +2456,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "write-resume": undefined,
         "write-artifact": undefined,
         "claim-token": undefined,
+        "wrong-claim-access": undefined,
       };
       const failure = failures[mode];
       expect(prompts).toHaveLength(
@@ -2557,7 +2562,11 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       expect(() =>
         governance.reserveAssignmentExecution(handoff, request)
       ).toThrow("duplicate");
-      if (mode === "claim-token" || mode === "inspection") {
+      if (
+        mode === "claim-token" ||
+        mode === "wrong-claim-access" ||
+        mode === "inspection"
+      ) {
         const write = {
           access: "write",
           planId: plan.id,
@@ -2566,7 +2575,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           readPaths: [],
           timeoutMs: 1000,
         };
-        if (mode === "claim-token") {
+        if (mode === "claim-token" || mode === "wrong-claim-access") {
           const reserved = governance.reserveAssignmentExecution(
             handoff,
             write
@@ -2581,6 +2590,15 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           expect(() =>
             governance.consumeAssignmentWriteExecution(handoff, { ...claim })
           ).toThrow("claim");
+          if (mode === "wrong-claim-access") {
+            expect(() =>
+              governance.consumeAssignmentReadContext(handoff, claim)
+            ).toThrow();
+            expect(() =>
+              governance.consumeAssignmentWriteExecution(handoff, claim)
+            ).toThrow("claim");
+            return;
+          }
           const runtime = governance.consumeAssignmentWriteExecution(
             handoff,
             claim
@@ -2589,10 +2607,19 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           expect(() =>
             governance.takeAssignmentTaskExecution({ ...runtime })
           ).toThrow("claim");
-          expect(
-            governance.takeAssignmentTaskExecution(runtime).task
-              .implementationPlan
-          ).toEqual(implementationPlan);
+          const approvedRuntime = structuredClone({
+            task: runtime.task,
+            snapshot: runtime.snapshot,
+            timeoutMs: runtime.timeoutMs,
+            expiresAt: runtime.expiresAt,
+          });
+          runtime.task.allowedPaths.push("unapproved.ts");
+          runtime.snapshot.commitSha = "b".repeat(40);
+          runtime.timeoutMs = Number.MAX_SAFE_INTEGER;
+          runtime.expiresAt = new Date(0).toISOString();
+          expect(governance.takeAssignmentTaskExecution(runtime)).toEqual(
+            approvedRuntime
+          );
           expect(() => governance.takeAssignmentTaskExecution(runtime)).toThrow(
             "claim"
           );
@@ -2616,7 +2643,19 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           ...request,
           assignmentId: "other",
         });
-        governance.claimAssignmentExecution(handoff, other);
+        const otherClaim = governance.claimAssignmentExecution(handoff, other);
+        const session = governance.consumeAssignmentReadContext(
+          handoff,
+          otherClaim
+        );
+        expect(() => session.inspect(["docs/extra-1.md"])).toThrow("claim");
+        expect(() => session.recordPreparedTask({})).toThrow("claim");
+        const clock = vi.spyOn(Date, "now").mockReturnValue(session.deadlineMs);
+        try {
+          expect(() => session.checkWriteEligibility()).toThrow("claim");
+        } finally {
+          clock.mockRestore();
+        }
         withGovernanceRecords((raw, save) => {
           const ledger =
             raw as import("@/application/governance/model/ledger.js").GovernanceLedger;

@@ -9,8 +9,8 @@ import {
   assertRepositoryMatchesSnapshot,
   loadSnapshotFiles,
 } from "@/services/repository-snapshot/index.js";
-import { AssignmentExecutionError } from "../../../../model/assignment-execution.js";
-import type { resolveAssignmentExecution } from "./resolve-assignment-execution.js";
+import { AssignmentExecutionError } from "../../../../../model/assignment-execution.js";
+import type { resolveAssignmentExecution } from "../context/resolve-assignment-execution.js";
 
 const maxFiles = 32;
 const maxFileBytes = 16 * 1024;

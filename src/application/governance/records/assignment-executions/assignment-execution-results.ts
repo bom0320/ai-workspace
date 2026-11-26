@@ -1,10 +1,10 @@
 import { fingerprintExecutionArtifacts } from "@/services/artifacts/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
+import { resolveAssignmentExecution } from "../../authorization/features/assignment-execution/flow/context/resolve-assignment-execution.js";
 import {
-  resolveAssignmentExecution,
   bindAssignmentReadExecution,
   bindAssignmentWriteExecution,
-} from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
+} from "../../authorization/features/assignment-execution/flow/binding/bind-assignment-execution.js";
 import { resolveApprovedDecision } from "../../approval/features/direction-review/flow/approved-decision.js";
 import {
   AssignmentExecutionError,

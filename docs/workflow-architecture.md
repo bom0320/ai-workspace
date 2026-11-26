@@ -321,6 +321,13 @@ Task Detailing은 기존 Planner와 TaskDraft 생성·반복 기능으로 `imple
 
 전체 TaskContract를 누적 Context Digest 및 Read Binding과 묶어 원자적으로 저장한다. 이전 `implementationSteps` 기반 기록은 원래 Digest로 읽으며, 복원한 `task-prepared` 참조의 `planFormat`으로 `legacy-steps`와 `structured`를 구분한다. 신규 기록은 구조화된 계획을 요구한다.
 
+**Assignment 권한 생명주기.** Governance 내부에서는 `reservation/`이 예약을 저장하고,
+`claim/`이 현재 Binding을 다시 확인해 성공적으로 저장된 Claim 객체를 등록한다.
+`read-session/`은 Claim을 한 번 소비하고 조회·적격성 확인·결과 기록 시 현재 권한을 재검증한다.
+`write-execution/`은 별도 Write Claim을 소비해 Runtime Permit을 등록한다. Task Execution이
+이 Permit을 한 번 소비하며, Specialist Execution은 검증된 결과를 기존 기록 인터페이스로 제출한다.
+[Governance 내부 책임과 트랜잭션 경계](architecture.md#assignment-execution-authorization-내부-경계)
+
 **5.3.4 Implementation Runtime.** Coordinator는 저장된 구조화 계획이 있는 Assignment에 대해 Read나 Planner를 반복하지 않는다. Governance는 동일 Plan·Assignment·Specialist와 Read Invocation에서 그 계약을 복원하고 현재 정책·위임·Snapshot·범위·검증 명령과 함께 다시 확인한다. Read와 Write는 각각 실행 예산을 소비한다. Write에는 별도 Claim 기준 Deadline을 적용하며, 설정의 `writeTimeoutMs`가 없으면 기존 `timeoutMs`를 사용한다. Claim은 발급받은 동일 프로세스에서 한 번만 소비한다. 기존 문자열 계획은 Write 권한 발급이 거부된다.
 
 Worker는 승인 Commit의 격리 Worktree에서 구조화된 계약을 그대로 사용한다. Harness는 변경 경로를 검증 전후에 확인하고, 승인된 `git diff --check`는 임시 인덱스에서 제출 대상 변경을 검사한다. 성공 시 Read 준비 기록에 연결된 별도 Write 실행 기록에 결과·Patch Digest를 저장하고 복원할 때 Artifact를 재검증한다. 소비된 Claim은 결과 기록에 실패해도 자동으로 재실행하지 않는다. `write-completed`는 개별 실행 상태이며 Work Item 통합과 기능적 완료는 후속 책임이다.

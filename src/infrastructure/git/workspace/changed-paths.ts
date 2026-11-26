@@ -8,7 +8,33 @@ export function getWorkspaceChangedPaths(
 ): string[] {
   const tracked = execFileSync(
     "git",
-    ["-C", workspaceRoot, "diff", "--name-only", "-z", baseCommit, "--"],
+    [
+      "-C",
+      workspaceRoot,
+      "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--name-only",
+      "-z",
+      baseCommit,
+      "--",
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+  );
+  const staged = execFileSync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "diff",
+      "--cached",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--name-only",
+      "-z",
+      baseCommit,
+      "--",
+    ],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
   );
   const untracked = execFileSync(
@@ -18,7 +44,9 @@ export function getWorkspaceChangedPaths(
   );
   return [
     ...new Set(
-      `${tracked}${untracked}`.split("\0").filter((path) => path.length > 0)
+      `${tracked}${staged}${untracked}`
+        .split("\0")
+        .filter((path) => path.length > 0)
     ),
   ].sort();
 }

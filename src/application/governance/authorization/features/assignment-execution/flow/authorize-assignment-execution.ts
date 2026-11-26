@@ -25,6 +25,12 @@ import {
   assignmentExecutionRequestSchema,
   digestPreparedAssignmentTask,
   authorizedAssignmentReadExecutionSchema,
+  authorizedAssignmentExecutionSchema,
+  authorizedAssignmentWriteExecutionSchema,
+  isAssignmentReadRecord,
+  assignmentWriteResultSchema,
+  type AssignmentWriteRecord,
+  digestAssignmentWriteResult,
 } from "../../../../model/assignment-execution.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import { resolvePreparedAssignmentPlan } from "../../../../records/assignment-plans/assignment-plan-records.js";
@@ -32,6 +38,7 @@ import type { Handoff } from "../../../../records/assignment-plans/prepare-assig
 import {
   assertAssignmentReadDependencies,
   bindAssignmentReadExecution,
+  bindAssignmentWriteExecution,
   resolveAssignmentExecution,
   resolveAssignmentBinding,
 } from "./resolve-assignment-execution.js";
@@ -41,8 +48,6 @@ export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
   return withGovernanceLedger((ledger, save) => {
     const context = resolveAssignmentExecution(ledger, handoff, request);
     assertAssignmentReadDependencies(context);
-    if (request.access !== "read")
-      throw new AssignmentExecutionError("unsupported");
     const { entry, delegation, policy, assignment } = context;
     if (
       assignment.repositoryAccessCeiling === "write" &&
@@ -98,6 +103,24 @@ export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
       throw new AssignmentExecutionError("authority");
 
     const id = randomUUID();
+    if (request.access === "write") {
+      const { execution, binding } = bindAssignmentWriteExecution(
+        context,
+        request,
+        id
+      );
+      (entry.assignmentExecutions ??= []).push({
+        kind: "write",
+        id,
+        delegationId: delegation.id,
+        request,
+        execution,
+        binding,
+        reservedAt: new Date(now).toISOString(),
+      });
+      save();
+      return execution;
+    }
     const { execution, binding } = bindAssignmentReadExecution(
       context,
       request,
@@ -121,7 +144,7 @@ export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
 const unusedClaims = new WeakMap<object, string>();
 
 export function claimAssignmentExecution(handoff: Handoff, input: unknown) {
-  const execution = authorizedAssignmentReadExecutionSchema.parse(input);
+  const execution = authorizedAssignmentExecutionSchema.parse(input);
   const claimed = withGovernanceLedger((ledger, save) => {
     const prepared = resolvePreparedAssignmentPlan(
       ledger,
@@ -137,11 +160,9 @@ export function claimAssignmentExecution(handoff: Handoff, input: unknown) {
 
     const context = resolveAssignmentBinding(prepared, record.request);
     assertAssignmentReadDependencies(context);
-    const current = bindAssignmentReadExecution(
-      context,
-      record.request,
-      record.id
-    );
+    const current = isAssignmentReadRecord(record)
+      ? bindAssignmentReadExecution(context, record.request, record.id)
+      : bindAssignmentWriteExecution(context, record.request, record.id);
     if (
       record.binding !== current.binding ||
       record.binding !==
@@ -181,9 +202,9 @@ export function consumeAssignmentReadContext(
       trustedHandoff,
       permit.planId
     );
-    const record = prepared.entry.assignmentExecutions?.find(
-      ({ id }) => id === permit.id
-    );
+    const record = prepared.entry.assignmentExecutions
+      ?.filter(isAssignmentReadRecord)
+      .find(({ id }) => id === permit.id);
     if (!record?.claimedAt || record.failure || record.result)
       throw new AssignmentExecutionError("claim");
     const deadlineMs = Math.min(
@@ -465,3 +486,79 @@ export function consumeAssignmentReadContext(
 export type AssignmentReadSession = ReturnType<
   typeof consumeAssignmentReadContext
 >;
+
+export function consumeAssignmentWriteExecution(
+  handoff: Handoff,
+  claim: ReturnType<typeof claimAssignmentExecution>
+) {
+  const issued = unusedClaims.get(claim);
+  unusedClaims.delete(claim);
+  if (!issued || issued !== governanceDigest(claim))
+    throw new AssignmentExecutionError("claim");
+  const permit = authorizedAssignmentWriteExecutionSchema.parse(claim);
+  const trustedHandoff = structuredClone(handoff);
+  const resolve = (ledger: GovernanceLedger) => {
+    const prepared = resolvePreparedAssignmentPlan(
+      ledger,
+      trustedHandoff,
+      permit.planId
+    );
+    const record = prepared.entry.assignmentExecutions?.find(
+      ({ id }) => id === permit.id
+    );
+    if (
+      !record?.claimedAt ||
+      isAssignmentReadRecord(record) ||
+      record.result ||
+      record.failure
+    )
+      throw new AssignmentExecutionError("claim");
+    const context = resolveAssignmentBinding(prepared, record.request);
+    assertAssignmentReadDependencies(context);
+    const current = bindAssignmentWriteExecution(
+      context,
+      record.request,
+      record.id
+    );
+    const deadline = Math.min(
+      Date.parse(record.claimedAt) + permit.timeoutMs,
+      Date.parse(permit.expiresAt)
+    );
+    if (
+      record.binding !== current.binding ||
+      record.binding !==
+        governanceDigest({ request: record.request, execution: permit }) ||
+      deadline <= Date.now()
+    )
+      throw new AssignmentExecutionError("claim");
+    return {
+      record,
+      task: current.task,
+      deadline,
+      workItemId: context.workItem.id,
+    };
+  };
+  const { task, deadline, workItemId } = withGovernanceLedger(resolve);
+  let finalized = false;
+  return {
+    task,
+    workItemId,
+    specialistId: permit.specialistId,
+    snapshot: permit.snapshot,
+    expiresAt: new Date(deadline).toISOString(),
+    timeoutMs: deadline - Date.now(),
+    recordResult(
+      input: Omit<NonNullable<AssignmentWriteRecord["result"]>, "digest">
+    ) {
+      if (finalized) throw new AssignmentExecutionError("claim");
+      finalized = true;
+      return withGovernanceLedger((ledger, save) => {
+        const { record } = resolve(ledger);
+        const digest = digestAssignmentWriteResult(record, input);
+        record.result = assignmentWriteResultSchema.parse({ ...input, digest });
+        save();
+        return { invocationId: record.id, resultDigest: digest };
+      });
+    },
+  };
+}

@@ -46,7 +46,7 @@ export type AssignmentExecutionOptions = {
     Pick<
       Extract<AssignmentExecutionRequest, { access: "read" }>,
       "readScopes" | "timeoutMs" | "initialReadPaths"
-    >
+    > & { writeTimeoutMs?: number }
   >;
 };
 
@@ -83,11 +83,25 @@ export async function coordinateAssignmentExecutions(
     return { status: "denied" as const, failure: "plan" as const, planId };
   }
 
+  const resumable = new Map(
+    recorded.flatMap((result) =>
+      result.status === "task-prepared" &&
+      result.planFormat === "structured" &&
+      Object.hasOwn(contexts, result.assignmentId)
+        ? [[result.assignmentId, result] as const]
+        : []
+    )
+  );
+  const terminalResults = recorded.filter(
+    ({ assignmentId }) => !resumable.has(assignmentId)
+  );
   const results: (IndividualAssignmentOutput & {
     assignmentId: string;
     workItemId: string;
-  })[] = [...recorded];
-  const terminal = new Set(recorded.map(({ assignmentId }) => assignmentId));
+  })[] = [...terminalResults];
+  const terminal = new Set(
+    terminalResults.map(({ assignmentId }) => assignmentId)
+  );
   const pendingAssignments = [];
   const eligible = [];
   for (const workItemId of selectedWorkItemIds) {
@@ -113,7 +127,11 @@ export async function coordinateAssignmentExecutions(
               : ("context-required" as const),
         });
       } else {
-        eligible.push({ assignment, context });
+        eligible.push({
+          assignment,
+          context,
+          prepared: resumable.get(assignment.id),
+        });
       }
     }
   }
@@ -125,21 +143,34 @@ export async function coordinateAssignmentExecutions(
       const {
         assignment: { id: assignmentId, workItemId },
         context,
+        prepared,
       } = eligible[cursor++]!;
       running.set(
         assignmentId,
         executeAssignment({
           handoff,
-          request: {
-            planId,
-            assignmentId,
-            access: "read",
-            readScopes: context.readScopes,
-            ...(context.initialReadPaths && {
-              initialReadPaths: context.initialReadPaths,
-            }),
-            timeoutMs: context.timeoutMs,
-          },
+          ...(context.writeTimeoutMs !== undefined && {
+            writeTimeoutMs: context.writeTimeoutMs,
+          }),
+          request: prepared
+            ? {
+                planId,
+                assignmentId,
+                access: "write",
+                taskContractBinding: prepared.taskContractBinding,
+                readPaths: [],
+                timeoutMs: context.writeTimeoutMs ?? context.timeoutMs,
+              }
+            : {
+                planId,
+                assignmentId,
+                access: "read",
+                readScopes: context.readScopes,
+                ...(context.initialReadPaths && {
+                  initialReadPaths: context.initialReadPaths,
+                }),
+                timeoutMs: context.timeoutMs,
+              },
         }).then((result) => ({ assignmentId, workItemId, ...result }))
       );
     }

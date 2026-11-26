@@ -13,6 +13,7 @@ type CommandOptions = {
   cwd: string;
   timeoutMs: number;
   shell?: boolean;
+  env?: NodeJS.ProcessEnv;
 };
 
 const FORCE_KILL_DELAY_MS = 250;
@@ -25,6 +26,7 @@ export function runCommand(
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      env: options.env,
       shell: options.shell ?? false,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],

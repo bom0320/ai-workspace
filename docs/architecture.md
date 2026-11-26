@@ -972,6 +972,8 @@ Phase A와 Phase B의 `graph.ts`는 실행 순서와 분기를 정의한다. 각
 
 새 Phase B Write Assignment는 읽기 Claim과 Write Eligibility를 거쳐 Task Detailing으로 진입한다. 상세 계획은 공급된 Snapshot Context를 분석하고 기존 Planning Loop를 사용한다. Governance가 Step별 대상 경로, 기존 파일의 Snapshot Context 제공 여부와 검증 명령을 확인한 뒤 `implementationPlan`을 포함한 계약을 실행 기록에 귀속한다. Worker Prompt는 배경, 현재 구조, 목표 설계와 단계별 대상·지시를 순서대로 표시한다. 이전 계약의 `implementationSteps`도 기존 형식으로 렌더링한다. [Task Detailing 흐름](workflow-architecture.md#phase-b-data-flow)
 
+Phase B Write 실행은 준비된 계약을 다시 검증한 일회성 Claim을 통해 기존 Worktree Pipeline을 사용한다. Read와 Write의 Ledger 기록을 분리하고 Write 결과에 보존된 보고서와 Patch의 Digest를 연결한다. 실행 전후의 권한 확인과 변경 경로 검증은 Codex Sandbox의 파일별 접근 제어를 대신하지 않는다. [Implementation Runtime](workflow-architecture.md#phase-b-data-flow)
+
 | Records 위치 | 관리하는 기록과 조회 책임 |
 | --- | --- |
 | `analysis/` | 최초 분석과 Refinement의 출처 및 누적 예산, Claim에 결합된 Decision Digest와 Refinement 요청 |

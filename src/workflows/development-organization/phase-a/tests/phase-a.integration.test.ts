@@ -2117,6 +2117,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "round-limit",
     "legacy",
     "deadline",
+    "write-completed",
+    "write-scope",
+    "write-verification",
+    "write-resume",
+    "write-artifact",
+    "claim-token",
   ] as const)(
     "details a write Assignment with %s",
     async (mode) => {
@@ -2149,10 +2155,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           },
         ],
       };
+      const executesWrite = mode.startsWith("write-");
+      const workerPrompts: string[] = [];
       const settings = {
         readScopes: [{ kind: "directory" as const, path: "docs" }],
         initialReadPaths: [path],
         timeoutMs: 12_000,
+        writeTimeoutMs:
+          executesWrite && mode !== "write-resume" ? 12_000 : 16_000,
       };
       const prompts: string[] = [];
       const { assignmentPlanResult, assignmentExecutionResult, handoff } =
@@ -2185,8 +2195,58 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             const command = vi.mocked(processRuntime.runCommand);
             const previous = command.getMockImplementation()!;
             command.mockImplementation(async (name, args, options) => {
-              if (name !== "codex") return previous(name, args, options);
+              if (name !== "codex") {
+                if (name === "git") {
+                  const actual = await vi.importActual<typeof processRuntime>(
+                    "@/infrastructure/process/command-runner.js"
+                  );
+                  return actual.runCommand(name, args, options);
+                }
+                return previous(name, args, options);
+              }
               const prompt = args.at(-1)!;
+              if (args.includes("workspace-write")) {
+                workerPrompts.push(prompt);
+                expect(options.cwd).not.toBe(root);
+                expect(prompt).toContain("Implementation Plan:");
+                expect(prompt).toContain(steps[0]);
+                expect(
+                  execFileSync("git", ["rev-parse", "HEAD"], {
+                    cwd: options.cwd,
+                    encoding: "utf8",
+                  }).trim()
+                ).toBe(git("rev-parse", "HEAD").trim());
+                if (mode === "write-scope")
+                  writeFileSync(
+                    join(options.cwd, "docs-extra/other.md"),
+                    "Out of scope\n"
+                  );
+                else
+                  writeFileSync(
+                    join(options.cwd, path),
+                    mode === "write-verification"
+                      ? "Bad whitespace  \n"
+                      : "Verified correction\n"
+                  );
+                if (mode === "write-verification")
+                  execFileSync("git", ["add", path], { cwd: options.cwd });
+                if (mode === "write-artifact") {
+                  const original = filesystem.writeFileSync;
+                  vi.spyOn(filesystem, "writeFileSync").mockImplementation(
+                    (file, data, options) => {
+                      if (String(file).endsWith("/result.json"))
+                        throw new Error("Artifact store failed.");
+                      return original(file, data, options);
+                    }
+                  );
+                }
+                return {
+                  stdout: "Implemented",
+                  stderr: "",
+                  exitCode: 0,
+                  timedOut: false,
+                };
+              }
               expect(prompt).not.toContain("SpecialistContext:");
               expect(args).toContain("read-only");
               expect(args.join(" ")).toContain("shell_tool=false");
@@ -2276,7 +2336,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         access: "read",
         planId: plan.id,
         assignmentId: "detail",
-        ...settings,
+        readScopes: settings.readScopes,
+        initialReadPaths: settings.initialReadPaths,
+        timeoutMs: settings.timeoutMs,
       };
       if (mode === "legacy") {
         const { id: _id, writeDetailingVersion: _version, ...subject } = plan;
@@ -2318,6 +2380,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         deadline: "claim",
         prepared: undefined,
         inspection: undefined,
+        "write-completed": undefined,
+        "write-scope": undefined,
+        "write-verification": undefined,
+        "write-resume": undefined,
+        "write-artifact": undefined,
+        "claim-token": undefined,
       };
       const failure = failures[mode];
       expect(prompts).toHaveLength(
@@ -2346,17 +2414,63 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         });
         return;
       }
+      if (executesWrite) {
+        const { coordinateAssignmentExecutions } =
+          await import("../../phase-b/features/execution/coordination/coordinate-assignment-executions.js");
+        const runAgain = () =>
+          coordinateAssignmentExecutions(
+            { handoff, plan, selectedWorkItemIds: ["first"] },
+            { contexts: { detail: { ...settings, writeTimeoutMs: 12_000 } } }
+          );
+        const final =
+          mode === "write-resume"
+            ? await runAgain()
+            : assignmentExecutionResult;
+        const passed = mode === "write-completed" || mode === "write-resume";
+        if (mode === "write-artifact")
+          vi.mocked(filesystem.writeFileSync).mockRestore();
+        expect(final).toMatchObject({
+          status: passed ? "pending" : "failed",
+          results: [
+            {
+              assignmentId: "detail",
+              status: passed ? "write-completed" : "failed",
+            },
+          ],
+        });
+        expect(workerPrompts).toHaveLength(1);
+        expect(prompts).toHaveLength(1);
+        const records = governance.getAssignmentExecutionResults(
+          handoff,
+          plan.id
+        );
+        expect(records).toHaveLength(1);
+        expect(records[0]?.status).toBe(passed ? "write-completed" : "failed");
+        expect(await runAgain()).toMatchObject({ results: records });
+        expect(workerPrompts).toHaveLength(1);
+        expect(readFileSync(join(root, path), "utf8")).toBe(
+          "Original content\n"
+        );
+        if (records[0]?.status === "write-completed") {
+          expect(
+            readFileSync(
+              join(records[0].artifacts.directory, "changes.patch"),
+              "utf8"
+            )
+          ).toContain("+Verified correction");
+          writeFileSync(
+            join(records[0].artifacts.directory, "changes.patch"),
+            "Tampered"
+          );
+          expect(
+            governance.getAssignmentExecutionResults(handoff, plan.id)[0]
+          ).toMatchObject({ status: "failed", failure: "handoff" });
+        }
+        return;
+      }
       expect(assignmentExecutionResult).toMatchObject({
-        status: "pending",
-        workItemResults: [{ workItemId: "first", status: "pending" }],
-        results: [
-          {
-            assignmentId: "detail",
-            status: "task-prepared",
-            planFormat: "structured",
-            taskContractBinding: expect.stringMatching(/^[a-f0-9]{64}$/),
-          },
-        ],
+        status: "denied",
+        results: [{ status: "denied", failure: "authority" }],
       });
       const [restored] = governance.getAssignmentExecutionResults(
         handoff,
@@ -2370,23 +2484,56 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         await coordinateAssignmentExecutions(
           { handoff, plan, selectedWorkItemIds: ["first"] },
           {
-            contexts: { detail: settings },
+            contexts: {},
           }
         )
       ).toMatchObject({ status: "pending", results: [restored] });
       expect(() =>
         governance.reserveAssignmentExecution(handoff, request)
       ).toThrow("duplicate");
-      expect(() =>
-        governance.reserveAssignmentExecution(handoff, {
+      if (mode === "claim-token" || mode === "inspection") {
+        const write = {
           access: "write",
           planId: plan.id,
           assignmentId: "detail",
           taskContractBinding: restored.taskContractBinding,
-          readPaths: [path],
+          readPaths: [],
           timeoutMs: 1000,
-        })
-      ).toThrow("unsupported");
+        };
+        if (mode === "claim-token") {
+          const reserved = governance.reserveAssignmentExecution(
+            handoff,
+            write
+          );
+          expect(() =>
+            governance.reserveAssignmentExecution(handoff, write)
+          ).toThrow("duplicate");
+          const claim = governance.claimAssignmentExecution(handoff, reserved);
+          expect(() =>
+            governance.claimAssignmentExecution(handoff, reserved)
+          ).toThrow("claim");
+          expect(() =>
+            governance.consumeAssignmentWriteExecution(handoff, { ...claim })
+          ).toThrow("claim");
+          expect(
+            governance.consumeAssignmentWriteExecution(handoff, claim).task
+              .implementationPlan
+          ).toEqual(implementationPlan);
+          expect(() =>
+            governance.consumeAssignmentWriteExecution(handoff, claim)
+          ).toThrow("claim");
+          expect(
+            governance.getAssignmentExecutionResults(handoff, plan.id)
+          ).toMatchObject([{ status: "denied", failure: "duplicate" }]);
+          return;
+        }
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, {
+            ...write,
+            assignmentId: "other",
+          })
+        ).toThrow("validation");
+      }
       if (mode === "inspection") {
         const other = governance.reserveAssignmentExecution(handoff, {
           ...request,
@@ -2438,6 +2585,22 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         ).toMatchObject([
           { status: "task-prepared", planFormat: "legacy-steps" },
         ]);
+        const [legacy] = governance.getAssignmentExecutionResults(
+          handoff,
+          plan.id
+        );
+        if (legacy?.status !== "task-prepared")
+          throw new Error("Missing legacy result.");
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, {
+            access: "write",
+            planId: plan.id,
+            assignmentId: "detail",
+            taskContractBinding: legacy.taskContractBinding,
+            readPaths: [],
+            timeoutMs: 1000,
+          })
+        ).toThrow("legacy-write-plan");
         expect(readFileSync(ledgerPath, "utf8")).toBe(original);
       }
       if (mode === "prepared") {
@@ -2577,7 +2740,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           readPaths: [],
           taskContractBinding: "a".repeat(64),
         })
-      ).toThrow("unsupported");
+      ).toThrow(mode === "independent" ? "validation" : "dependency");
       const ledgerPath = join(home, ".ai-workspace-governance", "records.json");
       const before = readFileSync(ledgerPath, "utf8");
       vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {

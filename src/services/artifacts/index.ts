@@ -1,5 +1,6 @@
 export {
   createExecutionRun,
+  fingerprintExecutionArtifacts,
   getExecutionBaseCommit,
   preserveExecutionChanges,
   writeExecutionResult,

@@ -10,6 +10,20 @@ export type AssignmentExecutionOutput =
       taskContractBinding: string;
     }
   | {
+      status: "write-completed";
+      invocationId: string;
+      resultDigest: string;
+      specialistId: string;
+      workItemId: string;
+      assignmentId: string;
+      taskContractBinding: string;
+      artifacts: {
+        directory: string;
+        resultDigest: string;
+        patchDigest?: string;
+      };
+    }
+  | {
       status: "denied";
       failure: AssignmentExecutionError["failure"] | "runtime";
     }
@@ -19,4 +33,10 @@ export type AssignmentExecutionOutput =
       invocationId: string;
       failureRecorded: boolean;
       reason?: string;
+      resultDigest?: string;
+      artifacts?: {
+        directory: string;
+        resultDigest: string;
+        patchDigest?: string;
+      };
     };

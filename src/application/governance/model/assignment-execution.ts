@@ -63,21 +63,25 @@ export const authorizedAssignmentReadExecutionSchema = z.strictObject({
     shellExecution: z.literal(false),
   }),
 });
+export const authorizedAssignmentWriteExecutionSchema =
+  assignmentWriteRequestSchema.extend({
+    ...authorizationFields,
+    preparedInvocationId: id,
+    authority: specialistAuthoritySchema.extend({
+      repositoryAccess: z.literal("write"),
+      shellExecution: z.literal(true),
+    }),
+    writePaths: executionBoundsSchema.shape.writePaths.refine(
+      (paths) => paths.length > 0
+    ),
+    verification: executionBoundsSchema.shape.shellCommands,
+    workerMode: executionBoundsSchema.shape.workerMode.unwrap(),
+  });
 export const authorizedAssignmentExecutionSchema = z.discriminatedUnion(
   "access",
   [
     authorizedAssignmentReadExecutionSchema,
-    assignmentWriteRequestSchema.extend({
-      ...authorizationFields,
-      authority: specialistAuthoritySchema.extend({
-        repositoryAccess: z.literal("write"),
-      }),
-      writePaths: executionBoundsSchema.shape.writePaths.refine(
-        (paths) => paths.length > 0
-      ),
-      verification: executionBoundsSchema.shape.shellCommands,
-      workerMode: executionBoundsSchema.shape.workerMode.unwrap(),
-    }),
+    authorizedAssignmentWriteExecutionSchema,
   ]
 );
 export type AuthorizedAssignmentExecution = z.infer<
@@ -116,7 +120,7 @@ export class AssignmentExecutionError extends Error {
   }
 }
 
-export const assignmentExecutionRecordSchema = z
+export const assignmentReadRecordSchema = z
   .object({
     id,
     delegationId: id,
@@ -154,9 +158,51 @@ export const assignmentExecutionRecordSchema = z
   })
   .strict();
 
-type AssignmentExecutionRecord = z.infer<
-  typeof assignmentExecutionRecordSchema
->;
+export const assignmentWriteResultSchema = z
+  .strictObject({
+    passed: z.boolean(),
+    artifacts: z
+      .strictObject({
+        directory: id,
+        resultDigest: digest,
+        patchDigest: digest.optional(),
+      })
+      .optional(),
+    digest,
+  })
+  .refine((result) => !result.passed || !!result.artifacts?.patchDigest);
+export const assignmentWriteRecordSchema = assignmentReadRecordSchema.extend({
+  kind: z.literal("write"),
+  request: assignmentWriteRequestSchema,
+  execution: authorizedAssignmentWriteExecutionSchema,
+  result: assignmentWriteResultSchema.optional(),
+});
+export const assignmentExecutionRecordSchema = z.union([
+  assignmentReadRecordSchema,
+  assignmentWriteRecordSchema,
+]);
+export type AssignmentWriteRecord = z.infer<typeof assignmentWriteRecordSchema>;
+export type AssignmentReadRecord = z.infer<typeof assignmentReadRecordSchema>;
+
+export function isAssignmentReadRecord(
+  record: AssignmentReadRecord | AssignmentWriteRecord
+): record is AssignmentReadRecord {
+  return !("kind" in record);
+}
+
+export function digestAssignmentWriteResult(
+  record: Pick<AssignmentWriteRecord, "id" | "binding">,
+  result: Omit<z.infer<typeof assignmentWriteResultSchema>, "digest">
+) {
+  return governanceDigest({
+    id: record.id,
+    binding: record.binding,
+    passed: result.passed,
+    ...(result.artifacts && { artifacts: result.artifacts }),
+  });
+}
+
+type AssignmentExecutionRecord = z.infer<typeof assignmentReadRecordSchema>;
 type PreparedTask = Extract<
   NonNullable<AssignmentExecutionRecord["result"]>,
   { status: "task-prepared" }

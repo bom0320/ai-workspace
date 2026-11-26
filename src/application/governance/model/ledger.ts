@@ -1,8 +1,11 @@
+import { validateTaskExecutionContract } from "../authorization/features/work-item-execution/flow/validation/validate-task-execution-contract.js";
 import { implementationPlanMatchesPaths } from "@/contracts/task.js";
 import { digestPreparedAssignmentTask } from "./assignment-execution.js";
 import {
   assignmentDelegationBinding,
   assignmentExecutionRecordSchema,
+  isAssignmentReadRecord,
+  digestAssignmentWriteResult,
 } from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
@@ -168,7 +171,9 @@ export const governanceLedgerSchema = z
         const policy = policyRecord?.policy;
         const { execution, request } = record;
         const preparedDigests =
-          record.result && "status" in record.result
+          isAssignmentReadRecord(record) &&
+          record.result &&
+          "status" in record.result
             ? digestPreparedAssignmentTask(record, record.result)
             : undefined;
         const count = (executionCounts.get(record.delegationId) ?? 0) + 1;
@@ -182,7 +187,65 @@ export const governanceLedgerSchema = z
           assignment?.workItemId,
         ]);
         const competing = workItemPlans.get(workKey);
-        const scope = { readScopes: request.readScopes, writeScopes: [] };
+        const scope = isAssignmentReadRecord(record)
+          ? { readScopes: record.request.readScopes, writeScopes: [] }
+          : {
+              readScopes: record.request.readPaths.map((path) => ({
+                kind: "file" as const,
+                path,
+              })),
+              writeScopes: record.execution.writePaths.map((path) => ({
+                kind: "file" as const,
+                path,
+              })),
+            };
+        let validWrite = true;
+        if (!isAssignmentReadRecord(record)) {
+          const source = entry.assignmentExecutions
+            ?.filter(isAssignmentReadRecord)
+            .find(({ id }) => id === record.execution.preparedInvocationId);
+          const task =
+            source?.result && "status" in source.result
+              ? source.result
+              : undefined;
+          validWrite = false;
+          if (
+            source?.claimedAt &&
+            task?.task.implementationPlan &&
+            policy &&
+            delegation &&
+            plan?.writeDetailingVersion === 1 &&
+            assignment?.repositoryAccessCeiling === "write" &&
+            source.delegationId === record.delegationId &&
+            source.request.planId === request.planId &&
+            source.request.assignmentId === request.assignmentId &&
+            source.claimedAt <= record.reservedAt &&
+            request.access === "write" &&
+            task.taskContractBinding === request.taskContractBinding &&
+            record.execution.taskContractBinding ===
+              request.taskContractBinding &&
+            governanceDigest(record.execution.readPaths) ===
+              governanceDigest(request.readPaths) &&
+            governanceDigest(record.execution.writePaths) ===
+              governanceDigest(task.task.allowedPaths) &&
+            governanceDigest(record.execution.verification) ===
+              governanceDigest(task.task.verification) &&
+            policy.workerMode === record.execution.workerMode &&
+            delegation.grant.workerMode === record.execution.workerMode
+          ) {
+            try {
+              validateTaskExecutionContract(task.task, policy);
+              validateTaskExecutionContract(task.task, delegation.grant);
+              validWrite =
+                !record.result ||
+                (!!record.claimedAt &&
+                  record.result.digest ===
+                    digestAssignmentWriteResult(record, record.result));
+            } catch {
+              // Invalid historical Write record.
+            }
+          }
+        }
         if (
           executionIds.has(record.id) ||
           assignmentKeys.has(key) ||
@@ -214,10 +277,12 @@ export const governanceLedgerSchema = z
           execution.expiresAt !== delegation.grant.expiresAt ||
           governanceDigest(execution.snapshot) !==
             governanceDigest(plan.snapshot) ||
-          governanceDigest(execution.initialReadPaths ?? null) !==
-            governanceDigest(request.initialReadPaths ?? null) ||
-          governanceDigest(execution.readScopes) !==
-            governanceDigest(request.readScopes) ||
+          !validWrite ||
+          (isAssignmentReadRecord(record) &&
+            (governanceDigest(record.execution.initialReadPaths ?? null) !==
+              governanceDigest(record.request.initialReadPaths ?? null) ||
+              governanceDigest(record.execution.readScopes) !==
+                governanceDigest(record.request.readScopes))) ||
           record.binding !== governanceDigest({ request, execution }) ||
           !isExecutionScopeContained(scope, executionScopes(policy)) ||
           !isExecutionScopeContained(
@@ -252,7 +317,8 @@ export const governanceLedgerSchema = z
                     reason: record.failure.reason,
                   }),
                 }))) ||
-          (record.result &&
+          (isAssignmentReadRecord(record) &&
+            record.result &&
             (!record.claimedAt ||
               ("status" in record.result
                 ? plan.writeDetailingVersion !== 1 ||

@@ -1,7 +1,12 @@
-import { mkdtempSync } from "node:fs";
-import { join } from "node:path";
 import type { AuthorizedExecution } from "@/application/governance/index.js";
-import { createExecutionWorkspace } from "@/infrastructure/git/index.js";
+import { mkdtempSync, statSync } from "node:fs";
+import { join } from "node:path";
+import type { TaskContract } from "@/contracts/task.js";
+import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
+import {
+  assertGovernedGitConfiguration,
+  createExecutionWorkspace,
+} from "@/infrastructure/git/index.js";
 import {
   createExecutionRun,
   getExecutionBaseCommit,
@@ -20,12 +25,22 @@ import { runWorkerStage } from "./run-worker-stage.js";
 
 // Internal pipeline. Only the execution use case supplies an authorized execution.
 export async function runExecutionPipeline(
-  execution: AuthorizedExecution,
+  execution:
+    | AuthorizedExecution
+    | {
+        task: TaskContract;
+        snapshot: RepositorySnapshot;
+        timeoutMs: number;
+        expiresAt: string;
+      },
   temporaryRoot: string
 ): Promise<ExecutionResult> {
-  const { task } = execution.request;
+  const assignmentExecution = "task" in execution;
+  const { task, timeoutMs } = assignmentExecution
+    ? execution
+    : execution.request;
   const { repositoryRoot, commitSha } = execution.snapshot;
-  const deadline = performance.now() + execution.request.timeoutMs;
+  const deadline = performance.now() + timeoutMs;
   const expiresAt = Date.parse(execution.expiresAt);
   const remaining = () => {
     const ms = Math.floor(
@@ -105,10 +120,25 @@ export async function runExecutionPipeline(
     remaining
   );
 
+  if (assignmentExecution) {
+    try {
+      assertGovernedGitConfiguration(workspaceRoot, remaining(), "worktree");
+    } catch (error) {
+      addExecutionFailure(state, "scope", error);
+      return finalizeExecutionResult(state, artifacts, workspaceRoot);
+    }
+  }
+
   if (!workerSucceeded) {
     collectChangedPathsEvidence(state, workspaceRoot, baseCommit);
   } else if (checkExecutionScope(task, state, workspaceRoot, baseCommit)) {
-    await runApprovedVerification(task, state, workspaceRoot, remaining);
+    await runApprovedVerification(
+      task,
+      state,
+      workspaceRoot,
+      remaining,
+      assignmentExecution ? { baseCommit, directory: runDirectory } : undefined
+    );
 
     checkExecutionScope(task, state, workspaceRoot, baseCommit);
   }
@@ -123,6 +153,13 @@ export async function runExecutionPipeline(
 
   try {
     preserveExecutionChanges(workspaceRoot, runDirectory, baseCommit);
+    if (
+      assignmentExecution &&
+      statSync(join(runDirectory, "changes.patch")).size === 0
+    )
+      throw new Error(
+        "Assignment implementation produced no preserved changes."
+      );
   } catch (error) {
     addExecutionFailure(state, "preservation", error);
   }

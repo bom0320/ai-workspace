@@ -24,5 +24,6 @@ export {
 export { getWorkspaceChangedPaths } from "./workspace/changed-paths.js";
 export {
   writeWorkspacePatch,
+  stageWorkspaceSnapshot,
   WorkspacePatchCleanupError,
 } from "./workspace/workspace-patch.js";

@@ -1,11 +1,14 @@
+import { fingerprintExecutionArtifacts } from "@/services/artifacts/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   resolveAssignmentExecution,
   bindAssignmentReadExecution,
+  bindAssignmentWriteExecution,
 } from "../../authorization/features/assignment-execution/flow/resolve-assignment-execution.js";
 import { resolveApprovedDecision } from "../../approval/features/direction-review/flow/approved-decision.js";
 import {
   AssignmentExecutionError,
+  isAssignmentReadRecord,
   assignmentExecutionFailureStageSchema,
   type AssignmentExecutionFailureStage,
 } from "../../model/assignment-execution.js";
@@ -77,6 +80,14 @@ export function getAssignmentExecutionResults(
       invocationId: string;
     } & (
       | { status: "read-completed"; resultDigest: string }
+      | { status: "denied"; failure: "duplicate" }
+      | {
+          status: "write-completed";
+          resultDigest: string;
+          specialistId: string;
+          taskContractBinding: string;
+          artifacts: ReturnType<typeof fingerprintExecutionArtifacts>;
+        }
       | {
           status: "task-prepared";
           planFormat: "structured" | "legacy-steps";
@@ -86,14 +97,26 @@ export function getAssignmentExecutionResults(
       | {
           status: "failed";
           failure: AssignmentExecutionFailureStage;
-          failureRecorded: true;
+          failureRecorded: boolean;
           reason?: string;
+          resultDigest?: string;
+          artifacts?: ReturnType<typeof fingerprintExecutionArtifacts>;
         }
     );
-    return (entry.assignmentExecutions ?? []).flatMap<Reference>((record) => {
+    const records = (entry.assignmentExecutions ?? []).filter(
+      (record) =>
+        record.request.planId === planId &&
+        record.delegationId === delegation.id
+    );
+    const writeAttempts = new Set(
+      records
+        .filter((record) => !isAssignmentReadRecord(record))
+        .map(({ request }) => request.assignmentId)
+    );
+    return records.flatMap<Reference>((record) => {
       if (
-        record.request.planId !== planId ||
-        record.delegationId !== delegation.id
+        isAssignmentReadRecord(record) &&
+        writeAttempts.has(record.request.assignmentId)
       )
         return [];
       if (record.failure) {
@@ -110,6 +133,72 @@ export function getAssignmentExecutionResults(
             failure: record.failure.stage,
             failureRecorded: true,
             ...(record.failure.reason && { reason: record.failure.reason }),
+          },
+        ];
+      }
+      if (!isAssignmentReadRecord(record)) {
+        const context = resolveAssignmentExecution(
+          ledger,
+          handoff,
+          record.request
+        );
+        const { binding } = bindAssignmentWriteExecution(
+          context,
+          record.request,
+          record.id
+        );
+        if (binding !== record.binding)
+          throw new AssignmentExecutionError("handoff");
+        const identity = {
+          assignmentId: context.assignment.id,
+          workItemId: context.workItem.id,
+          invocationId: record.id,
+        };
+        if (!record.result)
+          return [{ ...identity, status: "denied", failure: "duplicate" }];
+        const { artifacts, digest: resultDigest, passed } = record.result;
+        if (artifacts) {
+          try {
+            if (
+              governanceDigest(
+                fingerprintExecutionArtifacts(
+                  artifacts.directory,
+                  undefined,
+                  !!artifacts.patchDigest
+                )
+              ) !== governanceDigest(artifacts)
+            )
+              throw new Error("Execution artifact digest mismatch.");
+          } catch {
+            return [
+              {
+                ...identity,
+                status: "failed",
+                failure: "handoff",
+                failureRecorded: false,
+              },
+            ];
+          }
+        }
+        if (!passed || !artifacts)
+          return [
+            {
+              ...identity,
+              status: "failed",
+              failure: "execution",
+              failureRecorded: true,
+              resultDigest,
+              ...(artifacts && { artifacts }),
+            },
+          ];
+        return [
+          {
+            ...identity,
+            status: "write-completed",
+            resultDigest,
+            artifacts,
+            specialistId: context.specialist.id,
+            taskContractBinding: record.request.taskContractBinding,
           },
         ];
       }

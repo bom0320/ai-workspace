@@ -1,3 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+import {
+  assertGovernedGitConfiguration,
+  stageWorkspaceSnapshot,
+} from "@/infrastructure/git/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import type { VerificationResult } from "@/services/verification/index.js";
@@ -7,7 +14,8 @@ export async function runApprovedVerification(
   task: TaskContract,
   state: ExecutionState,
   workspaceRoot: string,
-  remaining: () => number
+  remaining: () => number,
+  snapshot?: { baseCommit: string; directory: string }
 ): Promise<void> {
   const startedAt = performance.now();
   try {
@@ -15,15 +23,44 @@ export async function runApprovedVerification(
     for (const command of task.verification) {
       if (command !== "git diff --check")
         throw new Error("Unknown verification command.");
-      const output = await runCommand(
-        "git",
-        ["diff", "--check", "--no-ext-diff", "--no-textconv"],
-        {
-          cwd: workspaceRoot,
-          timeoutMs: remaining(),
-          shell: false,
-        }
-      );
+      const temporaryIndex =
+        snapshot && join(snapshot.directory, `verify-index-${randomUUID()}`);
+      let output: Awaited<ReturnType<typeof runCommand>>;
+      try {
+        if (snapshot)
+          assertGovernedGitConfiguration(
+            workspaceRoot,
+            remaining(),
+            "worktree"
+          );
+        const env =
+          snapshot && temporaryIndex
+            ? stageWorkspaceSnapshot(
+                workspaceRoot,
+                snapshot.baseCommit,
+                temporaryIndex,
+                remaining
+              )
+            : undefined;
+        output = await runCommand(
+          "git",
+          [
+            "diff",
+            "--check",
+            "--no-ext-diff",
+            "--no-textconv",
+            ...(snapshot ? ["--cached", snapshot.baseCommit, "--"] : []),
+          ],
+          {
+            cwd: workspaceRoot,
+            timeoutMs: remaining(),
+            shell: false,
+            ...(env && { env }),
+          }
+        );
+      } finally {
+        if (temporaryIndex) rmSync(temporaryIndex, { force: true });
+      }
       commands.push({
         command,
         passed: output.exitCode === 0 && !output.timedOut && !output.error,

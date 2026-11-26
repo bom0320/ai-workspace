@@ -26,14 +26,7 @@ export function writeWorkspacePatch(
   const gitEnvironment = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
   let patchDescriptor: number | undefined;
   try {
-    execFileSync("git", ["-C", workspaceRoot, "read-tree", baseCommit], {
-      env: gitEnvironment,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    execFileSync("git", ["-C", workspaceRoot, "add", "-A", "--"], {
-      env: gitEnvironment,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    stageWorkspaceSnapshot(workspaceRoot, baseCommit, temporaryIndex);
     patchDescriptor = openSync(patchPath, "w");
     execFileSync(
       "git",
@@ -61,4 +54,25 @@ export function writeWorkspacePatch(
       throw new WorkspacePatchCleanupError(error);
     }
   }
+}
+
+// Builds the base-to-working-files delta including staged and untracked files.
+export function stageWorkspaceSnapshot(
+  workspaceRoot: string,
+  baseCommit: string,
+  temporaryIndex: string,
+  remaining?: () => number
+) {
+  const env = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
+  execFileSync("git", ["-C", workspaceRoot, "read-tree", baseCommit], {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: remaining?.(),
+  });
+  execFileSync("git", ["-C", workspaceRoot, "add", "-A", "--"], {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: remaining?.(),
+  });
+  return env;
 }

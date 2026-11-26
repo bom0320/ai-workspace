@@ -255,7 +255,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 5.3.1-R에서 Work Item 실행 유형을 제거하고 직접 실행 차단. 구형 계약은 자동 변환 없이 거부 | Implemented |
 | 5.3.2 | Phase-scoped Capability & Authorization | Identity·Authority 분리, Read Reservation·Claim, 제한된 Snapshot Context 조회, Specialist 읽기 실행 및 결과 기록. Write 권한 발급은 5.3.3의 Binding에 의존 | Implemented (Read) |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 새 Write Assignment의 승인된 Read Session에서 구현 지시를 상세화하고 TaskContract를 Assignment 및 Snapshot에 결합 | Implemented (Task Prepared) |
-| 5.3.4 | Specialist Implementation Runtime | 개별 승인 후 기존 Codex Worktree 실행·Scope·Verification·Artifact 흐름을 재사용 | Planned |
+| 5.3.4 | Specialist Implementation Runtime | 저장된 구조화 계약의 Write Reservation·Claim과 기존 Worktree Pipeline을 연결해 개별 결과와 Artifact Digest를 저장 | Implemented |
 | 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |
 | 5.3.6 | Multi-Worktree Integration | 출처·범위·충돌 확인 후 격리된 통합 결과를 재검증하고 원본 보호 | Planned |
 | 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |

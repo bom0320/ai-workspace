@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -94,4 +96,32 @@ export function writeExecutionResult(
       }
     );
   }
+}
+
+export function fingerprintExecutionArtifacts(
+  directory: string,
+  expectedResult?: object,
+  includePatch = true
+) {
+  const digest = (name: string, expected?: string) => {
+    const path = join(directory, name);
+    if (!lstatSync(path).isFile())
+      throw new Error("Expected a regular execution artifact.");
+    const bytes = readFileSync(path);
+    if (expected !== undefined && !bytes.equals(Buffer.from(expected)))
+      throw new Error(
+        "Stored execution result differs from the verified runtime result."
+      );
+    return createHash("sha256").update(bytes).digest("hex");
+  };
+  return {
+    directory,
+    resultDigest: digest(
+      "result.json",
+      expectedResult &&
+        `${JSON.stringify(expectedResult, null, 2)}
+`
+    ),
+    ...(includePatch && { patchDigest: digest("changes.patch") }),
+  };
 }

@@ -4,7 +4,7 @@ import {
   synthesisProposalSchema,
   type SynthesisContext,
   type SynthesisProposal,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
 import type { DirectionReview } from "../model/review.js";

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ExecutionResult } from "@/application/execution/index.js";
+import type { ExecutionResult } from "@/application/task-execution/index.js";
 import { applyPatch, PatchApplyError } from "@/infrastructure/git/index.js";
 
 import { approveApply } from "../../prompts/delivery/index.js";

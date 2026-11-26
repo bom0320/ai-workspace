@@ -1,14 +1,14 @@
-import {
-  loadSnapshotFiles,
-  type CollaborativeSpecialistContext,
-} from "@/application/decision/index.js";
+import { type CollaborativeSpecialistContext } from "@/application/specialist/analysis/index.js";
 import type { PathScope } from "@/contracts/repository/context-access-policy.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import {
   isContextPathAllowed,
   isInspectablePath,
 } from "@/services/repository-inspection/index.js";
-import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
+import {
+  assertRepositoryMatchesSnapshot,
+  loadSnapshotFiles,
+} from "@/services/repository-snapshot/index.js";
 import { AssignmentExecutionError } from "../../../../model/assignment-execution.js";
 import type { resolveAssignmentExecution } from "./resolve-assignment-execution.js";
 

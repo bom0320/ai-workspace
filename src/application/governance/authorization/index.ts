@@ -9,17 +9,4 @@ export {
   type InvocationReservation,
 } from "./features/specialist-invocation/model/reservation.js";
 export { claimAuthorizedInvocation } from "./features/specialist-invocation/flow/claim-authorized-invocation.js";
-export {
-  authorizeExecutionForRun,
-  checkExecutionEligibility,
-} from "./features/work-item-execution/flow/execution-authorization.js";
-export {
-  executionRequestSchema,
-  readOnlyExecutionRequestSchema,
-  authorizedExecutionSchema,
-  executionAuthorizationVerdictSchema,
-  type ExecutionRequest,
-  type AuthorizedExecution,
-  type ExecutionAuthorizationVerdict,
-} from "./features/work-item-execution/model/execution.js";
 export { validateTaskExecutionContract } from "./features/work-item-execution/flow/validation/validate-task-execution-contract.js";

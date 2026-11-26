@@ -2,13 +2,13 @@ import type { AssignmentExecutionRequest } from "@/application/governance/index.
 import {
   executeAssignment,
   type AssignmentExecutionOutput as IndividualAssignmentOutput,
-} from "@/application/execution/index.js";
+} from "@/application/specialist/execution/index.js";
 import {
   getPreparedAssignmentPlan,
   getAssignmentExecutionResults,
 } from "@/application/governance/index.js";
 import type { PhaseBHandoff } from "../../../../contracts/phase-handoff.js";
-import type { AssignmentPlanningOutput } from "@/application/planning/index.js";
+import type { AssignmentPlanningOutput } from "@/application/management/allocation/execution-assignment/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 
 export type AssignmentExecutionInput = {

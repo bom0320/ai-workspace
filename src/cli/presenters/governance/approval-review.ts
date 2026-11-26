@@ -1,5 +1,5 @@
 import type { StaffingApprovalResult } from "@/application/governance/index.js";
-import { staffingProposalSchema } from "@/application/staffing/index.js";
+import { staffingProposalSchema } from "@/application/management/allocation/analysis-assignment/index.js";
 
 type ApprovalRequest = Extract<
   StaffingApprovalResult,

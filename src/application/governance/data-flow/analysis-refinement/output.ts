@@ -1,4 +1,4 @@
-import type { StaffingProposal } from "@/application/staffing/index.js";
+import type { StaffingProposal } from "@/application/management/allocation/analysis-assignment/index.js";
 import type { AnalysisRefinement } from "../../model/analysis-refinement.js";
 
 export type AnalysisRefinementPreparationResult =

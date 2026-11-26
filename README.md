@@ -117,8 +117,8 @@ Clean Repository와 명시적 repository-relative UTF-8 text 파일이 필요하
 ```sh
 pnpm decision . \
   "Evaluate the current decision architecture" \
-  src/application/decision/flow/run-decision.ts \
-  src/application/decision/flow/orchestration/run-independent-decisions.ts
+  src/application/specialist/analysis/flow/run-decision.ts \
+  src/application/specialist/analysis/flow/independent/collect-independent-decisions.ts
 ```
 
 Snapshot capture 후 해당 commit의 Git blob에서만 파일 내용을 읽는다. 빈 경로·absolute path·`..`

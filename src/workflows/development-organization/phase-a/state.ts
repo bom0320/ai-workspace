@@ -6,11 +6,11 @@ import {
 import {
   synthesisContextSchema,
   synthesisResultSchema,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { phaseACompletionSchema } from "../contracts/phase-handoff.js";
-import { assessmentResultSchema } from "@/application/analysis/index.js";
+import { assessmentResultSchema } from "@/application/management/decision-support/analysis-review/index.js";
 import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
 import {
   approvalRecordSchema,
@@ -21,15 +21,15 @@ import {
   staffingRunResultSchema,
   staffingAssignmentConstraintsSchema,
   staffingProposalSchema,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import type {
   StaffingApprovalResult,
   StaffingSystemPolicyResult,
 } from "@/application/governance/index.js";
 import { developmentOrganizationState } from "../state.js";
 
-import { agentDecisionSchema } from "@/application/decision/index.js";
-import { comparisonPayloadSchema } from "@/application/comparison/index.js";
+import { agentDecisionSchema } from "@/application/specialist/analysis/index.js";
+import { comparisonPayloadSchema } from "@/application/management/decision-support/comparison/index.js";
 
 // The envelope belongs to this Graph; Domain payload validation stays in v2/v3.
 const specialistDecisionsResultSchema = z.discriminatedUnion("status", [

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { agentDecisionSchema } from "@/application/decision/index.js";
+import { agentDecisionSchema } from "@/application/specialist/analysis/index.js";
 import {
   synthesisContextSchema,
   synthesisProposalSchema,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import { humanConfirmationEvidenceSchema } from "../../../shared/model/confirmation.js";
 import { directionActionSchema } from "./action.js";
 import { executionDelegationProposalSchema } from "../../execution-delegation/model/execution-delegation-proposal.js";

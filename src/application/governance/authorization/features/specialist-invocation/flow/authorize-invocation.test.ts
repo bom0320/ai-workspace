@@ -1,6 +1,6 @@
 import * as fileSystem from "node:fs";
 import { spawn } from "node:child_process";
-import { runStaffing } from "@/application/staffing/index.js";
+import { runStaffing } from "@/application/management/allocation/analysis-assignment/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import type { GovernanceLedger } from "../../../../model/ledger.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";
@@ -73,7 +73,7 @@ vi.mock("node:fs", async (original) => {
 let root: string;
 let home: string;
 let system: StaffingSystemPolicy;
-let proposal: import("@/application/staffing/index.js").StaffingProposal;
+let proposal: import("@/application/management/allocation/analysis-assignment/index.js").StaffingProposal;
 const git = (...args: string[]) =>
   execFileSync("git", args, {
     cwd: root,

@@ -1,4 +1,4 @@
-import type { ExecutionTelemetry } from "@/application/execution/index.js";
+import type { ExecutionTelemetry } from "@/application/task-execution/index.js";
 
 export type HumanInteractionTiming = {
   planningDurationMs?: number;

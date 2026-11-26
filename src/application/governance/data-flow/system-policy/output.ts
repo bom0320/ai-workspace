@@ -1,5 +1,5 @@
 import type { StaffingSystemPolicy } from "../../approval/features/system-policy/model/policy.js";
-import type { StaffingAssignmentConstraints } from "@/application/staffing/index.js";
+import type { StaffingAssignmentConstraints } from "@/application/management/allocation/analysis-assignment/index.js";
 
 export type StaffingSystemPolicyResult =
   | {

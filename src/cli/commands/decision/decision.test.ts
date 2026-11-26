@@ -3,18 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   runDecision,
   type RunDecisionResult,
-} from "@/application/decision/index.js";
+} from "@/application/specialist/analysis/index.js";
 import {
   compareDecisions,
   type ComparisonResult,
-} from "@/application/comparison/index.js";
+} from "@/application/management/decision-support/comparison/index.js";
 
 import { runDecisionCommand } from "./decision.js";
 
-vi.mock("@/application/decision/index.js", () => ({ runDecision: vi.fn() }));
-vi.mock("@/application/comparison/index.js", () => ({
-  compareDecisions: vi.fn(),
+vi.mock("@/application/specialist/analysis/index.js", () => ({
+  runDecision: vi.fn(),
 }));
+vi.mock(
+  "@/application/management/decision-support/comparison/index.js",
+  () => ({
+    compareDecisions: vi.fn(),
+  })
+);
 
 const input = {
   repositoryPath: "/repositories/example",

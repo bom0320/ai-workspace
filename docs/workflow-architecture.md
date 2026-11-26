@@ -192,7 +192,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 
 독립 업무와 의존 업무는 한 계획에 섞일 수 있다. 세 형태는 Work Item 수와 의존 관계에서 파악하므로 별도 Workflow 모드나 분류용 `type` 필드가 필요하지 않다.
 
-**현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID를 전달한다. Phase B Graph가 승인 위임을 전달한 경우 `executionDelegationGrant`도 포함한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/work-decomposition/index.ts)
+**현재 Application 계약:** `runWorkDecomposition({ approvedDecisionId })`은 Governance에서 승인 기록을 복원한 뒤 Context-only Codex CEO를 한 번 호출한다. CEO에게는 원본 Goal / Constraints, 승인된 Proposal, Decisions / Comparison, Snapshot, 승인 출처 ID를 전달한다. Phase B Graph가 승인 위임을 전달한 경우 `executionDelegationGrant`도 포함한다. 결과는 `proposed`, `escalated`, `failed`로 구분한다. Work Item ID는 제안 내부의 의존성 참조이며 `suggestedRoles`는 역할 제안이다. Harness는 출력 구조와 의존성을 검증한다. 구조 검증은 업무 분해의 의미적 타당성을 보증하지 않는다. [Work Decomposition Application](../src/application/management/work-decomposition/index.ts)
 
 **현재 Graph 계약:** Graph 입력은 `{ handoff: PhaseBHandoff }`다. Work Decomposition Node는 승인 쌍을 Ledger에서 다시 검증한 뒤 승인된 `ExecutionDelegation.grant`를 `executionDelegationGrant`로 Application에 전달한다. 검증 실패 시 `handoffResult`에 거부를 기록하고 종료한다. Planning 실행 옵션이 없거나 결과가 `failed` 또는 `escalated`이면 END로 종료한다. [Phase B Graph](../src/workflows/development-organization/phase-b/graph.ts)
 
@@ -253,7 +253,7 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 | Authorization | Harness가 유효한 승인·위임·정책·Snapshot·범위·예산을 검증해 개별 실행에 부여하는 권한 |
 | Runtime / Verification | Runtime은 승인된 실행을 수행한다. Harness는 별도로 변경 범위·검증 결과·Evidence를 확인하고 기록한다. |
 
-**Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/staffing/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/decision/specialist/codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
+**Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/management/allocation/analysis-assignment/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/specialist/analysis/agent/invoke-codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
 
 **5.3.2.1 Identity와 Authority 분리.** 공통 `SpecialistDefinition`에는 ID·역할·기본 전문 업무를 둔다. `SpecialistAuthority`는 정책과 개별 실행 계약이 사용하는 공통 권한 표현이다. Phase A의 정책 등록과 Invocation은 기존처럼 Identity와 읽기 전용 Authority를 함께 저장·검증한다. Claim 후에는 둘을 분리해 Decision Runtime에 전달하며 Runtime은 권한 누락, 쓰기 또는 Shell 허용을 거부한다. Phase B는 승인 당시의 평면 정책 등록 항목으로 기존 Staffing Binding을 재현한 뒤 Identity만 복원한다. 이 단계에서 Phase B 읽기·수정 권한 발급은 연결하지 않는다.
 
@@ -311,7 +311,10 @@ Staffing, Decision, Comparison, Analysis, Synthesis, Governance, Work Decomposit
 
 ### Phase B Data Flow
 
-[`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition의 `data-flow/`, Planning과 Execution의 `data-flow/assignment/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
+개별 Assignment는 `specialist/execution`이 수행하며, 복수 Assignment의 실행 순서와 동시성은 Workflow Coordinator가 조정한다. Write Claim에서 받은 프로세스 내부 객체를 `task-execution`이 한 번 소비하고, 기존 Worktree·Scope·Verification·Artifact 절차를 실행한다. 독립 Decision·Plan CLI는 각각 `specialist/analysis`와 `specialist/task-detailing`을 호출한다.
+
+
+[`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition, Execution Assignment, Specialist Execution의 각 `data-flow/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
 
 | 단계 | Input | Output 및 신뢰 근거 |
 | --- | --- | --- |
@@ -352,9 +355,9 @@ Human Direction Review 대상에서는 Synthesis가 제안한 방향과 검증�
 
 실행 권한 검증은 Ledger에서 Human Direction Approval과 위임, 현재 정책 및 계획 출처를 복원한다. 요청 경로는 정책과 위임의 Scope 안에 있고 승인 commit이 추적하는 일반 파일이어야 한다. 작업 트리에서 Symlink를 통해 해석되는 경로는 거부한다. 선행 업무가 없는 Work Item만 지원하며 쓰기 경로와 Verification 명령은 각각 `task.allowedPaths`와 `task.verification`에서 가져온다.
 
-즉시 실행용 `authorizeExecutionForRun(request)`는 동일 Ledger 트랜잭션에서 요청과 예산을 검사하고 `reservedAt`과 `claimedAt`을 함께 기록한 후 `authorized`와 검증된 실행 입력을 반환한다. 성공 상태는 실행 권한의 사용 확정을 뜻한다. 검증된 Runtime이 확보되면 Worker 시작 직전에 이 API를 호출하고, 반환된 기준 commit과 권한 범위를 사용한다. 과거 예약과 Digest는 변경 없이 보존하며, 미사용 예약도 예산과 동일 Work Item 중복 제한에 포함한다. 과거 Permit을 소비하는 분리 API는 제거되었다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
+이전 직접 실행 API는 동일 Ledger 트랜잭션에서 요청과 예산을 체크하고 `reservedAt`과 `claimedAt`을 함께 기록했다. 과거 예약과 Digest는 변경 없이 보존하며, 미사용 예약도 예산과 동일 Work Item 중복 제한에 포함한다. 과거 Permit을 소비하는 분리 API는 제거되었다. 프로세스가 저장 후 종료되면 Worker가 시작되지 않아도 사용 기록은 보존된다. Ledger 잠금은 Git 상태나 Worker 프로세스를 잠그지 않는다.
 
-**현재 실행 경계:** Graph에서 직접 Work Item 실행 요청을 거부하며 기존 Work Item Authorization의 차단도 유지된다. 기존 Codex Worker와 공통 Worktree·Scope·Verification·Evidence·Artifact Pipeline은 후속 Assignment 실행에 재사용할 기반이다. 이전 Codex 모드는 정책과 Human 위임에 모두 명시된 경우에만 실행할 수 있었다. Step 5.3.2에서 Assignment 읽기 실행을 연결했으며 쓰기 실행은 TaskContract Binding과 구현 Runtime 권한 강제를 기다린다.
+**현재 실행 경계:** 직접 Work Item 요청은 Assignment 입력 경계에서 거부한다. 이전 실행 출처와 예약은 Ledger의 역사적 검증 및 중복·예산 계산에 남는다. 5.3.4의 Write Assignment는 소비된 Claim을 통해 기존 Worktree·Scope·Verification·Evidence·Artifact 기능을 사용한다.
 
 `codex-worktree`는 Codex가 승인 Commit에 고정된 Worktree에서 파일을 탐색·수정하고 일반 개발 명령을 실행하는 권한이다. 승인 요청은 Worktree 밖의 읽기 노출 가능성과 사후 검사 한계를 명시한다. 이 모드는 `workspace-write`, 승인 승격 금지, 도구 네트워크 비활성화 및 임시 쓰기 루트 제외를 설정한다. Worktree에는 외부 의존성을 연결하지 않는다. Codex 자체의 모델 통신과 시스템 설정은 신뢰 경계에 남으며, Worktree는 파일별 읽기 제한이나 모든 프로세스 부작용의 격리를 보장하지 않는다. `task.allowedPaths`와 `task.forbiddenPaths`는 최종 변경의 사후 검사에 사용하며, 일시적인 쓰기나 외부 부작용을 되돌릴 수 없다.
 
@@ -499,9 +502,9 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 | LangGraph Runtime / Phase A Graph | [createPhaseAGraph](../src/workflows/development-organization/phase-a/graph.ts) 구현 | 정책 → Staffing → Approval → 실행 대상·승인에 따른 선택적 Specialist 실행 |
 | Staffing / Approval Nodes | 정책 조회·Staffing·승인 평가·Human 확인 4개 Node 구현 | 기존 Application 호출·최소 선행조건·State 업데이트. 별도 Setup Graph나 결과 수집 Node는 없음 |
 | Staffing CLI | [runStaffingApproval](../src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts)이 staffing-approval 실행 대상을 명시하고 개별 Stage 결과를 기존 반환 형식으로 변환 | 기존 입력·Human 확인·출력 유지, Specialist 실행 없음 |
-| Staffing / Governance | [Staffing API](../src/application/staffing/index.ts), [Governance API](../src/application/governance/index.ts) 구현 | Proposal Finalization, 직접/위임 승인·Scope 발급, Authorization / Reservation / 일회 Claim 제공 |
+| Staffing / Governance | [Staffing API](../src/application/management/allocation/analysis-assignment/index.ts), [Governance API](../src/application/governance/index.ts) 구현 | Proposal Finalization, 직접/위임 승인·Scope 발급, Authorization / Reservation / 일회 Claim 제공 |
 | Specialist Decisions / Comparison | [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)의 일반 Specialist Node / Edge가 기존 Governance·v2 / v3를 조합 | 순차 반복·Fail-fast는 Edge가 제어. 단일 Decision은 Comparison 생략; Staffing CLI에서는 미실행 |
-| Planning / Execution | [v1 Planning](../src/application/planning/index.ts), [v0 Execution](../src/application/execution/index.ts) 구현 | 독립 CLI / Application capability. ApprovedDecision 입력·Phase B 실행 조정은 없음 |
+| Planning / Execution | [v1 Planning](../src/application/specialist/task-detailing/index.ts), [v0 Execution](../src/application/task-execution/index.ts) 구현 | 독립 CLI / Application capability. ApprovedDecision 입력·Phase B 실행 조정은 없음 |
 
 현재 Stage 3 실패 단계는 preflight / authorization / claim / decision이며 미완료 묶음을 성공으로
 반환하지 않는다. Stage 4 실패는 별도 decisionComparisonResult에 기록한다. Claim 세부 거부 원인은 구분하지

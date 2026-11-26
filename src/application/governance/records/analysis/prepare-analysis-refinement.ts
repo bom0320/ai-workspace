@@ -4,11 +4,11 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   normalizeRefinementChanges,
   buildRefinementProposal,
-} from "@/application/analysis/index.js";
+} from "@/application/management/decision-support/analysis-review/index.js";
 import type {
   AssessmentInput,
   AssessmentResult,
-} from "@/application/analysis/index.js";
+} from "@/application/management/decision-support/analysis-review/index.js";
 import { requireCurrentSystemRecord } from "../../approval/features/system-policy/flow/validation/system-configuration.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import { requireAnalysisRoot } from "./analysis-budget.js";

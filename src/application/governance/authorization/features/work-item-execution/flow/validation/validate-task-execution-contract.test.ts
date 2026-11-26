@@ -1,4 +1,4 @@
-import { readOnlyExecutionRequestSchema } from "../../model/execution.js";
+import { assignmentExecutionRequestSchema } from "../../../../../model/assignment-execution.js";
 import { expect, it } from "vitest";
 import { validateTaskExecutionContract } from "./validate-task-execution-contract.js";
 
@@ -69,24 +69,14 @@ const readOnlyRequest = {
   timeoutMs: 1000,
 };
 
-it("parses the taskless request without a Work Item execution type and rejects legacy fields", () => {
-  expect(readOnlyExecutionRequestSchema.parse(readOnlyRequest)).toEqual(
-    readOnlyRequest
-  );
-  expect(
-    readOnlyExecutionRequestSchema.safeParse({
-      ...readOnlyRequest,
-      workItem: { ...readOnlyRequest.workItem, workType: "read-only" },
-    }).success
-  ).toBe(false);
-});
-
-it.each([{ task }, { workerMode: "codex-worktree" }])(
-  "rejects modification contract fields on a read-only request %j",
+it.each([{}, { task }, { workerMode: "codex-worktree" }])(
+  "rejects direct Work Item requests at the active Assignment boundary %j",
   (extra) => {
     expect(
-      readOnlyExecutionRequestSchema.safeParse({ ...readOnlyRequest, ...extra })
-        .success
+      assignmentExecutionRequestSchema.safeParse({
+        ...readOnlyRequest,
+        ...extra,
+      }).success
     ).toBe(false);
   }
 );

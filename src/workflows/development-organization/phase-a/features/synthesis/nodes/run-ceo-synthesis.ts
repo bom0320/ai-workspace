@@ -5,7 +5,7 @@ import {
   runSynthesis,
   type RunSynthesisOptions,
   type SynthesisContext,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import {
   getDirectionReview,
   proposeExecutionDelegation,

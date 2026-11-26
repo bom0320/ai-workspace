@@ -1,4 +1,4 @@
-import type { AgentDecision } from "@/application/decision/index.js";
+import type { AgentDecision } from "@/application/specialist/analysis/index.js";
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 
 export function presentDecisions(

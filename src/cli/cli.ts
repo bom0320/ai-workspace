@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { RunDecisionInput } from "@/application/decision/index.js";
-import type { PlanningResult } from "@/application/planning/index.js";
+import type { RunDecisionInput } from "@/application/specialist/analysis/index.js";
+import type { PlanningResult } from "@/application/specialist/task-detailing/index.js";
 
 import { runGovernanceCli } from "./commands/governance/index.js";
 import { runStaffingCli } from "./commands/staffing/index.js";

@@ -37,7 +37,7 @@ pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 
 # 독립 Decision → Structured Comparison, 명시적 Context files
 pnpm decision . "Evaluate the current decision architecture" \
-  src/application/decision/flow/run-decision.ts \
+  src/application/specialist/analysis/flow/run-decision.ts \
   src/contracts/specialist/authority.ts
 
 ```
@@ -49,7 +49,7 @@ pnpm decision . "Evaluate the current decision architecture" \
 Decision은 Repository, Decision Goal, Context Files로 독립 판단과 비교를 실행한다.
 
 이전 `execute` 명령과 위치 인자 기반 Plan & Execute는 종료 코드 1로 거부된다.
-실제 Worker 실행은 Phase B의 승인된 Work Item을 받는 `executeWorkItem()`에서 제공한다.
+실제 Worker 실행은 Phase B의 승인된 Assignment를 받는 `executeAssignment()`에서 제공한다.
 
 ## 3. 현재 Human Interaction Flow
 
@@ -76,7 +76,7 @@ Context Files
 Enter one repository-relative file path per line.
 Submit an empty line when finished.
 
-> src/application/decision/flow/run-decision.ts
+> src/application/specialist/analysis/flow/run-decision.ts
 > src/contracts/specialist/authority.ts
 >
 ```
@@ -215,7 +215,7 @@ CLI → Application
 Application → CLI를 모름
 ```
 
-`planTask()` / `executeWorkItem()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
+`planTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
 UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한다. 향후 Web UI / API adapter는
 같은 application logic을 사용할 수 있지만 현재 구현된 인터페이스는 아니다.
 Human 권한을 새 interface가 우회하지 않아야 한다.

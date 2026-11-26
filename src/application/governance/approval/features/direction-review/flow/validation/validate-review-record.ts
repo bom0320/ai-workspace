@@ -3,7 +3,7 @@ import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 import {
   validateAnalysisReferences,
   type SynthesisContext,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import type { DirectionReview } from "../../model/review.js";
 
 // Explicit rule rejection; storage and unexpected errors are not this type.

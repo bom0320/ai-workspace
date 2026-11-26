@@ -1,7 +1,7 @@
 import {
   validateWorkItemSources,
   type WorkDecompositionResult,
-} from "@/application/work-decomposition/index.js";
+} from "@/application/management/work-decomposition/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { resolveApprovedDecision } from "../approval/features/direction-review/flow/approved-decision.js";
 import type { RepositoryGovernance } from "../model/ledger.js";

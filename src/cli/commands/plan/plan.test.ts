@@ -2,13 +2,18 @@ import { basename, resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planTask, type PlanningState } from "@/application/planning/index.js";
+import {
+  planTask,
+  type PlanningState,
+} from "@/application/specialist/task-detailing/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 
 import { runPlanningCli } from "../../cli.js";
 import { runPlanCommand } from "./plan.js";
 
-vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
+vi.mock("@/application/specialist/task-detailing/index.js", () => ({
+  planTask: vi.fn(),
+}));
 
 const task: TaskContract = {
   id: "task-001",

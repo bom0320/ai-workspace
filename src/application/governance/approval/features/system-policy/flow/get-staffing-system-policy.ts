@@ -5,7 +5,7 @@ import {
 } from "../../../../records/governance-transaction.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 
-import type { StaffingAssignmentConstraints } from "@/application/staffing/index.js";
+import type { StaffingAssignmentConstraints } from "@/application/management/allocation/analysis-assignment/index.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";
 import { readCurrentStaffingDelegation } from "../../human-delegation/flow/validation/delegation-configuration.js";
 import {

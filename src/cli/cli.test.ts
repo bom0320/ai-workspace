@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planTask, type PlanningState } from "@/application/planning/index.js";
+import {
+  planTask,
+  type PlanningState,
+} from "@/application/specialist/task-detailing/index.js";
 import { resolveRepositoryRoot } from "@/infrastructure/git/index.js";
 import type { TaskContract } from "@/contracts/task.js";
 
@@ -20,7 +23,9 @@ vi.mock("./commands/staffing/index.js", () => ({ runStaffingCli: vi.fn() }));
 vi.mock("./commands/governance/index.js", () => ({
   runGovernanceCli: vi.fn(),
 }));
-vi.mock("@/application/planning/index.js", () => ({ planTask: vi.fn() }));
+vi.mock("@/application/specialist/task-detailing/index.js", () => ({
+  planTask: vi.fn(),
+}));
 vi.mock("@/infrastructure/git/index.js", () => ({
   resolveRepositoryRoot: vi.fn(),
 }));

@@ -19,15 +19,31 @@ v4는 진행 중이다. Step 7.2의 해결 방향 Human Governance와 동일 프
 
 ## 2. Current Architecture
 
+Application의 책임은 조직의 역할과 실행 경계에 따라 나뉜다.
+
+| 경로 | 책임 |
+| --- | --- |
+| `management/allocation/` | 분석 담당자와 실행 담당자를 배정 |
+| `management/decision-support/` | 전문 판단 비교, 분석 충분성 평가, 방향 종합 |
+| `management/work-decomposition/` | 승인된 방향을 목표·산출물·의존성을 갖는 Work Item으로 분해 |
+| `specialist/analysis/` | 독립 분석과 Assignment 분석 |
+| `specialist/task-detailing/` | 승인된 Context 또는 독립 Plan CLI 입력으로 TaskContract 작성 |
+| `specialist/execution/` | Assignment의 읽기·수정 절차와 Governance 호출 연결 |
+| `governance/` | 승인 출처와 기록 검증, 개별 실행 권한 발급·소비 |
+| `task-execution/` | 소비된 Write Claim으로 Worktree 실행, Scope·Verification·Artifact 처리 |
+
+Phase A와 Phase B의 Graph는 각 기능의 순서와 상태를 소유한다. 예전 Work Item 직접 실행 진입점은 제거했고, 기존 Work Item Source·Reservation의 Ledger 검증과 실행 예산·중복 차단은 유지한다. Evaluation과 Integration은 후속 기능이다.
+
+
 현재는 Codex CLI를 Planner / Worker / decision-only Specialist / Comparator로 사용하는 Development Governance Harness다.
 독립적인 대상 Git Repository에 연결하며, 대상이 이 시스템의 코드나 조직 구조를 포함할 필요는 없다.
 
 ```text
 CLI: workflow selection / explicit arguments / Human gates / presentation
-  ├─ application/planning → TaskContract
-  ├─ application/decision → { goal, snapshot, decisions: AgentDecision[] }
-  └─ application/comparison → ComparisonResult
-Phase B → application/execution → ExecutionOutcome
+  ├─ application/specialist/task-detailing → TaskContract
+  ├─ application/specialist/analysis → { goal, snapshot, decisions: AgentDecision[] }
+  └─ application/management/decision-support/comparison → ComparisonResult
+Phase B → application/task-execution → ExecutionOutcome
            ↓
 Contracts / application policies / Scope / Verification / Evidence / Artifacts
            ↓
@@ -64,9 +80,9 @@ LangGraph Phase A Graph는 정책 조회·Staffing·Approval·Human 확인과 �
 ### Phase B Action Governance
 
 ```text
-Phase A 완료 계약 → Work Decomposition → Detailed Planning
-→ TaskContract + Execution Source → executeWorkItem
-→ 승인된 Codex Worktree 모드 확인 및 Governance Authorization
+Phase A 완료 계약 → Work Decomposition → Execution Assignment
+→ executeAssignment → Task Detailing → Bound TaskContract
+→ Write Authorization 및 Claim → runTaskExecution
 → 승인 Snapshot 기반 Worktree → Codex Worker
 → Scope → Verification → Final Scope Check
 → Evidence / Artifacts → Phase B State
@@ -83,7 +99,7 @@ Repository path + Decision Goal + explicit file paths
 → input validation → clean RepositorySnapshot capture
 → GoalSpec 생성 → snapshot.commitSha의 Git blob Context loading
 → Frontend / UX SpecialistDefinition 구성
-→ runIndependentDecisions() (중복 Specialist ID 사전 거부)
+→ collectIndependentDecisions() (중복 Specialist ID 사전 거부)
    ├─ Frontend Context → Snapshot assert → Codex Specialist
    │                    → schema / identity → Snapshot assert → Evidence validation
    └─ UX Context       → Snapshot assert → Codex Specialist
@@ -173,7 +189,7 @@ process 시작 전에 거부한다. Read는 supplied Context를 읽는 권한이
 
 ### Codex Specialist runtime
 
-`runCodexSpecialist()`는 target Repository 밖의 빈 temporary cwd에서 `codex exec`를 실행하고
+`analyzeIndependently()`는 target Repository 밖의 빈 temporary cwd에서 `codex exec`를 실행하고
 성공·실패 모두 cwd를 cleanup한다. Read-only sandbox, non-interactive / ephemeral, user config·rules
 무시와 strict config를 사용한다. `approval_policy="never"`, web disabled, project docs 자동 읽기 제한과
 shell / code execution / apps / plugins / browser / computer use / multi-agent / hooks / image /
@@ -184,7 +200,7 @@ Codex는 specialistId 없는 payload를 JSON만으로 반환해야 한다. `stdo
 strict payload schema → Harness가 specialist.id 주입 → 최종 AgentDecision schema 순서다.
 Agent가 specialistId나 추가 필드를 반환하면 거부한다. Malformed JSON / schema 오류를 자동 복구하지 않는다.
 기본 timeout은 Specialist당 15분이며 timeout, executable/process failure, non-zero exit를 실패로 처리한다.
-`runCodexSpecialist` / `runIndependentDecisions` API의 options로 timeout을 지정할 수 있으나 현재
+`analyzeIndependently` / `collectIndependentDecisions` API의 options로 timeout을 지정할 수 있으나 현재
 `runDecision()` / CLI에는 Specialist timeout override 입력이 없다.
 
 이것은 현재 Codex 실행 설정과 Harness 검사의 조합이며 모든 runtime에서 통하는 보편적 sandbox의
@@ -387,7 +403,7 @@ Phase B Work Item은 목표·산출물·의존성과 선택적 근거·추천 �
 
 ### 통합 시 지켜야 할 invariant
 
-- 기존 `planTask()` / `executeWorkItem()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
+- 기존 `planTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
   Decision 생성과 Comparison의 독립 capability 경계를 유지하고 각 application에 전체 조직 workflow를 숨겨 넣지 않는다.
 - LangGraph.js가 workflow state와 순서를 실행하더라도 Governance 전이의 허용 조건·의미는 Harness가 정의한다.
   Framework state / run / node가 core Domain Model에 불필요하게 누출되지 않도록 한다.
@@ -489,7 +505,7 @@ Human GoalSpec + RepositorySnapshot + Available Specialists + Repository Context
 → Human Staffing Approval / Delegation (Step 3 implemented) → ApprovedOperatingScope issuance (Step 3 implemented)
 ```
 
-`application/staffing/model/staffing.ts`는 CEO의 해석인 IntentAnalysis와 공식 제안인
+`application/management/allocation/analysis-assignment/model/staffing.ts`는 CEO의 해석인 IntentAnalysis와 공식 제안인
 StaffingProposal / StaffingAssignment를 정의한다. Proposal은 원본 Human GoalSpec과 Constraints,
 Harness가 확보한 RepositorySnapshot, Harness 소유 Proposal / Assignment ID를 보존할 구조다.
 IntentAnalysis는 원본 Goal을 대체하지 않는다. 원본 보존·ID 발급은 아래 R2의 Finalization 책임이며
@@ -1083,17 +1099,17 @@ Goal / explicit file paths → Snapshot / commit Context → Specialist 구성
 ```
 
 flow root에는 가능한 한 public use-case entry를 둔다.
-현재 `planning/flow/plan-task.ts`, `execution/flow/execute-task.ts`,
-`decision/flow/run-decision.ts`가 해당한다. 파일명은 실제 TaskContract / Decision 책임을 반영하며
+현재 `specialist/task-detailing/flow/plan-task.ts`, `specialist/execution/flow/execute-assignment.ts`,
+`specialist/analysis/flow/run-decision.ts`가 해당한다. 파일명은 실제 TaskContract / Decision 책임을 반영하며
 억지로 대칭시키지 않는다.
 
-#### flow/orchestration
+#### 실행 순서와 반복
 
 해당 Application use-case 내부의 순서와 진행 상태를 제어한다. 내부 단계 결정, 반복·실패 처리와
 use-case 종료가 여기에 속한다. 여러 Application을 조합하는 Phase A의 Assignment 반복·Stage 전환은
 LangGraph가 소유한다. 업무 Stage와 Node·Application의 구분은
 [Workflow 책임 경계](workflow-responsibility-boundaries.md#4-세-번째-경계--application과-workflow)를 따른다.
-현재 `planning-loop.ts`, `run-execution-pipeline.ts`, `finalize-execution-result.ts`, `run-independent-decisions.ts`가 해당한다.
+현재 `planning-loop.ts`, `run-task-execution.ts`, `finalize-task-execution-result.ts`, `collect-independent-decisions.ts`가 해당한다.
 Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유한다.
 
 #### Flow Implementation Grouping
@@ -1105,7 +1121,7 @@ flow의 책임이 늘어나면 세부 작업별로 한 단계의 하위 디렉�
 flow/
 ├─ plan-task.ts
 ├─ adaptive/
-├─ orchestration/
+├─ planning-loop/
 ├─ inspection/
 └─ transformation/
 ```
@@ -1122,8 +1138,7 @@ flow/
 단순히 별도 책임이라는 이유로 `planning/inspection`, `planning/transformation`처럼
 use-case root로 올리지 않는다. 분류 축을 일관되게 유지한다.
 
-Decision도 같은 기준으로 `flow/context`에 commit 파일 loading과 Snapshot 서비스의 호환 export,
-`flow/orchestration`에 순차 실행·fail-fast, `flow/validation`에 Evidence invariant 검증을 둔다.
+Specialist Analysis는 `flow/independent`에서 순차 실행과 실패 종료를 조정하고 `flow/validation`에서 Evidence를 검증한다. 커밋 파일 로딩은 Repository Snapshot 서비스가 소유한다.
 `run-decision.ts`는 입력 검증, Goal 생성, Context loading과 두 Specialist 구성을 조립한다.
 
 #### model
@@ -1159,8 +1174,8 @@ protocol은 항상 필요한 폴더가 아니며, 명확한 component boundary�
 #### Role Folder
 
 명확한 application 역할의 구현체를 둔다.
-현재 `planning/planner/codex-planner.ts`, `execution/worker/codex-worker.ts`,
-`decision/specialist/codex-specialist.ts`가 해당한다.
+현재 `specialist/task-detailing/planner/codex-planner.ts`, `task-execution/worker/codex-worker.ts`,
+`specialist/analysis/agent/invoke-codex-specialist.ts`가 해당한다.
 
 Codex Planner는 Codex 기술을 사용하기 때문에 planner에 있는 것이 아니라,
 Planning의 Planner 역할을 구현하기 때문에 그곳에 있다.
@@ -1169,7 +1184,7 @@ Codex Worker도 Execution의 Worker 역할 구현체이므로 Execution이 소�
 
 #### index.ts
 
-해당 use-case의 public boundary다. `planTask`, `executeWorkItem`, `runDecision`과 각 결과 타입,
+해당 use-case의 public boundary다. `planTask`, `executeAssignment`, `runDecision`과 각 결과 타입,
 필요한 하위 capability 등 외부에 필요한 API를 제공한다.
 내부 파일 위치가 바뀌어도 외부 사용자가 그 배치에 직접 의존하지 않도록 한다.
 Cross-module은 `@/*` alias와 대상 module의 `index.ts`, same-module 내부는 상대경로를 사용한다.
@@ -1191,9 +1206,9 @@ config 같은 기술적 메커니즘을 `infrastructure/codex/`로 추출할 수
 현재 이 모듈은 구현되어 있지 않으며, 사용 기술이 같다는 이유만으로 만들지 않는다.
 
 ```text
-Planning 개념을 안다       → application/planning
-Execution 개념을 안다      → application/execution
-Decision 개념을 안다       → application/decision
+Planning 개념을 안다       → application/specialist/task-detailing
+Execution 개념을 안다      → application/task-execution
+Decision 개념을 안다       → application/specialist/analysis
 Codex 실행 방법만 안다     → infrastructure
 ```
 
@@ -1214,7 +1229,7 @@ workflow가 끝난다는 이유만으로 finalizer를 만들지 않는다.
 
 > 종료 처리 자체가 독립 책임일 정도로 복잡한가?
 
-Execution의 `finalizeExecutionResult`는 state 조립, passed 계산,
+Execution의 `finalizeTaskExecutionResult`는 state 조립, passed 계산,
 evidence/scope/failures와 artifacts 반영, result persistence 시도,
 report failure 처리, 최종 ExecutionResult 반환을 담당한다.
 따라서 workflow 종료 orchestration으로서 독립 책임이 있다.
@@ -1226,118 +1241,64 @@ Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이�
 
 ### 7.6 Current Source Layout
 
-현재 브랜치의 주요 배치는 다음과 같다. 테스트는 구현 파일과 함께 배치되며,
-아래 예시에서는 CLI 세부 구조와 일부 파일을 생략한다.
+테스트는 구현 파일과 함께 배치한다. Evaluation과 Integration은 후속 기능이다.
 
 ```text
 src/
-├─ cli/  # operator adapter; 세부 구조는 CLI 문서 참조
+├─ cli/
 ├─ application/
-│  ├─ comparison/
-│  │  ├─ comparator/
-│  │  │  └─ codex-comparator.ts
-│  │  ├─ flow/
-│  │  │  ├─ compare-decisions.ts
-│  │  │  └─ validation/
-│  │  │     └─ validate-references.ts
-│  │  ├─ model/
-│  │  │  └─ comparison.ts
-│  │  ├─ protocol/
-│  │  │  ├─ context.ts
-│  │  │  └─ comparison.ts
-│  │  └─ index.ts
-│  ├─ planning/
-│  │  ├─ flow/
-│  │  │  ├─ plan-task.ts
-│  │  │  ├─ adaptive/
-│  │  │  ├─ orchestration/
-│  │  │  ├─ inspection/
-│  │  │  └─ transformation/
-│  │  ├─ model/
-│  │  ├─ protocol/
-│  │  ├─ planner/
-│  │  └─ index.ts
-│  ├─ execution/
-│  │  ├─ flow/
-│  │  │  ├─ execute-task.ts
-│  │  │  └─ orchestration/
-│  │  ├─ model/
-│  │  ├─ worker/
-│  │  └─ index.ts
-│  ├─ staffing/  # CEO Loop / Context / Finalization
-│  ├─ governance/  # approval / authorization / records / model
-│  └─ decision/
-│     ├─ flow/
-│     │  ├─ context/
-│     │  │  ├─ repository-snapshot.ts
-│     │  │  └─ load-snapshot-files.ts
-│     │  ├─ orchestration/
-│     │  │  └─ run-independent-decisions.ts
-│     │  ├─ validation/
-│     │  │  └─ validate-evidence.ts
-│     │  └─ run-decision.ts
-│     ├─ protocol/
-│     │  ├─ context.ts
-│     │  └─ decision.ts
-│     ├─ specialist/
-│     │  └─ codex-specialist.ts
-│     └─ index.ts
-├─ workflows/
-│  └─ development-organization/
-│     ├─ index.ts
-│     ├─ state.ts  # 공통 goal / repositoryPath만 소유
-│     └─ phase-a/
-│        ├─ index.ts
-│        ├─ graph.ts
-│        ├─ state.ts  # 공통 입력 + Staffing / Specialist 단계 결과·중간 상태
-│        ├─ tests/
-│        │  ├─ graph.test.ts
-│        │  └─ phase-a.integration.test.ts
-│        ├─ features/  # 기능별 Workflow 내부 모듈; 새 Application 계층이 아님
-│        │  ├─ staffing/nodes/run-staffing.ts
-│        │  ├─ governance/nodes/
-│        │  │  ├─ load-system-policy.ts
-│        │  │  ├─ evaluate-staffing-approval.ts
-│        │  │  └─ confirm-staffing-approval.ts
-│        │  ├─ decision/
-│        │  │  ├─ nodes/
-│        │  │  │  ├─ preflight-specialist-decisions.ts
-│        │  │  │  └─ execute-next-specialist.ts
-│        │  │  ├─ validation/validate-specialist-request-batch.ts
-│        │  │  └─ execution/authorized-specialist-decision.ts
-│        │  ├─ comparison/nodes/compare-specialist-decisions.ts
-│        │  └─ synthesis/nodes/run-ceo-synthesis.ts
-│        └─ entrypoints/run-staffing-approval.ts
-├─ contracts/  # goal / task / repository / specialist / staffing
+│  ├─ management/
+│  │  ├─ allocation/
+│  │  │  ├─ analysis-assignment/
+│  │  │  └─ execution-assignment/
+│  │  ├─ decision-support/
+│  │  │  ├─ comparison/
+│  │  │  ├─ analysis-review/
+│  │  │  └─ synthesis/
+│  │  └─ work-decomposition/
+│  ├─ specialist/
+│  │  ├─ analysis/
+│  │  │  ├─ data-flow/
+│  │  │  ├─ flow/independent/
+│  │  │  ├─ protocol/
+│  │  │  └─ agent/
+│  │  ├─ task-detailing/
+│  │  │  ├─ data-flow/
+│  │  │  ├─ flow/planning-loop/
+│  │  │  ├─ model/
+│  │  │  ├─ protocol/
+│  │  │  └─ planner/
+│  │  └─ execution/
+│  │     ├─ data-flow/
+│  │     └─ flow/task-contract/
+│  ├─ governance/
+│  │  ├─ approval/
+│  │  ├─ authorization/
+│  │  ├─ records/
+│  │  ├─ data-flow/
+│  │  └─ model/
+│  └─ task-execution/
+│     ├─ flow/verification/
+│     ├─ model/
+│     └─ worker/
+├─ workflows/development-organization/
+│  ├─ phase-a/
+│  └─ phase-b/
+├─ contracts/
 ├─ services/
-│  ├─ artifacts/
-│  ├─ evidence/
-│  ├─ scope/
-│  ├─ repository-snapshot/
-│  ├─ repository-inspection/
-│  ├─ governance-records/
-│  └─ verification/
 └─ infrastructure/
-   ├─ git/
-   ├─ terminal/
-   └─ process/
 ```
-
-Execution의 일부 단계는 이미 services의 독립 capability로 분리되어 있다.
-Planning의 inspection과 transformation은 아직 Planning flow와 강하게 결합되어 있다.
-따라서 application의 구조가 대칭이 아니거나 Planning flow가 더 커 보이는 것은 문제가 아니다.
-맞춰야 하는 것은 파일 개수, 폴더 개수, 모양이 아니라 책임을 판단하는 기준이다.
 
 ### 7.7 Placement Checklist
 
 새 기능이나 리팩토링의 파일 배치는 다음 질문으로 판단한다.
 
 1. 어떤 use-case가 이 코드를 소유하는가?
-   → planning / execution / decision / system-wide
+   → management / specialist / governance / task-execution
 2. 해당 use-case가 진행되는 과정에 직접 속하는가?
    → flow
 3. 흐름의 순서와 상태를 제어하는가?
-   → flow/orchestration
+   → flow/<responsibility>
 4. flow 안의 특정 작업 단계인가?
    → flow/<responsibility>
 5. use-case 전체가 소유하는 상태/설정/결과인가?
@@ -1397,11 +1358,11 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | Repository 실체와 Commit 파일 데이터의 기술적 유효성 | Git Infrastructure | `resolveRepositoryRoot()`, `readRepositoryFileAtCommit()` — `infrastructure/git/repository/repository.ts`; `listRepositoryFilesAtCommit()` — `commit-files.ts` | Planning, Snapshot 서비스, Staffing, Decision, Governance 경로 확인 | Repository 해석·Commit tree/blob 로딩 | Policy + Lifecycle |
 | HEAD·Clean 상태와 Snapshot 일치 | Repository Snapshot 서비스 | `captureRepositorySnapshot()`, `assertRepositoryMatchesSnapshot()` — `services/repository-snapshot/repository-snapshot.ts` | Decision, Staffing, Governance Approval/Scope 조회 | Capture·Agent/파일 로딩 전후·발급 전 | Lifecycle |
 | 상대경로·정규 표현, File/Directory 포함 관계 | Repository Inspection 서비스 | `isRepositoryRelativePath()`, `isUnambiguousRepositoryPath()` — `discovery.ts`; `validateContextAccessPolicy()`, `isContextPathAllowed()`, `isContextScopeContained()` — `services/repository-inspection/access-policy.ts` | Decision loader, Staffing, Delegation, Invocation 평가 | 경로 입력·목록 노출·내용 요청·범위 포함 검사 | Schema + Policy |
-| Working Tree 조사 경로, 내부 디렉터리 차단, 파일 여부·조사 한도 | Planning | `inspectFiles()`, `inspectInitialFiles()` — `application/planning/detailed/flow/inspection/`; `hasValidLimits()`, `prepareInspection()` — `flow/orchestration/planning-loop.ts` | `planTask()`, Planning Loop | 초기 seeding·추가 조사·round 제어 | Policy + Lifecycle |
-| Context 접근·민감 경로·regular mode·파일 수/크기·실제 JSON byte 제한 | Staffing Inspection | `isInspectablePath()`, `requireFile()`, `prepareInspection()`, `createAllowedFileTree()`, `prepareMetadataInspection()`, `assertContextBudget()` — [context-policy.ts](../src/application/staffing/flow/inspection/context-policy.ts) | Discovery, Metadata/Initial Seeding/추가 Inspection, Proposal Validation | 파일 목록 노출 전·batch 로딩 전·직렬화 후 | Policy |
+| Working Tree 조사 경로, 내부 디렉터리 차단, 파일 여부·조사 한도 | Planning | `inspectFiles()`, `inspectInitialFiles()` — `application/specialist/task-detailing/flow/inspection/`; `hasValidLimits()`, `prepareInspection()` — `flow/planning-loop/planning-loop.ts` | `planTask()`, Planning Loop | 초기 seeding·추가 조사·round 제어 | Policy + Lifecycle |
+| Context 접근·민감 경로·regular mode·파일 수/크기·실제 JSON byte 제한 | Staffing Inspection | `isInspectablePath()`, `requireFile()`, `prepareInspection()`, `createAllowedFileTree()`, `prepareMetadataInspection()`, `assertContextBudget()` — [context-policy.ts](../src/application/management/allocation/analysis-assignment/flow/inspection/context-policy.ts) | Discovery, Metadata/Initial Seeding/추가 Inspection, Proposal Validation | 파일 목록 노출 전·batch 로딩 전·직렬화 후 | Policy |
 | CEO-facing 구조·응답 분기·호출/조사 한도 | Staffing Protocol / Flow | `staffingContextSchema`, `ceoStaffingDecisionSchema`; `validateDiscoveryInput()` — `flow/inspection/discover-context.ts`; `callLimitsSchema` — `flow/orchestration/run-staffing-loop.ts` | Discovery, CEO Adapter, Staffing Loop | Context 투영·모델 응답·최종 propose/escalate | Schema + Policy + Lifecycle |
-| Assignment 등록·중복·Context·예산과 원본 Run 연결 | Staffing Finalization | `staffingDraftSchema`, `staffingProposalSchema`; `prepareProposalInput()`, `validateProposal()` — [validate-proposal.ts](../src/application/staffing/flow/validation/validate-proposal.ts); `buildStaffingProposal()` | `runStaffing()` | Draft 수신·ID 발급 전후 | Schema + Policy |
-| 완성된 Proposal ID·현재 설정·Snapshot 파일 재검증 | Staffing | `validateStaffingProposal()` — [validate-staffing-proposal.ts](../src/application/staffing/flow/validation/validate-staffing-proposal.ts) → `validateProposal()` | Governance의 `validateCurrentStaffingPolicy()` | 신규 Approval·저장 Scope 조회 | Schema + Policy + Lifecycle |
+| Assignment 등록·중복·Context·예산과 원본 Run 연결 | Staffing Finalization | `staffingDraftSchema`, `staffingProposalSchema`; `prepareProposalInput()`, `validateProposal()` — [validate-proposal.ts](../src/application/management/allocation/analysis-assignment/flow/validation/validate-proposal.ts); `buildStaffingProposal()` | `runStaffing()` | Draft 수신·ID 발급 전후 | Schema + Policy |
+| 완성된 Proposal ID·현재 설정·Snapshot 파일 재검증 | Staffing | `validateStaffingProposal()` — [validate-staffing-proposal.ts](../src/application/management/allocation/analysis-assignment/flow/validation/validate-staffing-proposal.ts) → `validateProposal()` | Governance의 `validateCurrentStaffingPolicy()` | 신규 Approval·저장 Scope 조회 | Schema + Policy + Lifecycle |
 | 승인된 System 설정 조회·Human 확인·Legacy 운영 차단 | Governance system-policy | `validateSystemConfiguration()`, `requireCurrentSystemPolicy()`, `configureStaffingSystemPolicy()`, `getStaffingSystemPolicy()` — `application/governance/approval/features/system-policy/` | Governance CLI, Staffing→Approval Workflow | 설정/갱신·Staffing 시작 전 조회 | Schema + Policy + Lifecycle |
 | 자동 승인 범위와 System 포함 관계·위임 수명주기 | Governance human-delegation / proposal-management | `humanDelegationPolicyInputSchema`, `recordedHumanDelegationPolicySchema`, `readRecordedDelegationInput()`, `validateDelegationConfiguration()`; `evaluateStaffingApproval()` | 위임 설정, 신규 Approval, 위임 승인 Scope 조회 | 설정·만료/철회/버전/범위 재평가 | Schema + Policy + Lifecycle |
 | Ledger 구조·저장소 무결성·Repository 분리·동일 transaction | Governance 공통 모델/기록 + Records 서비스 | `governanceLedgerSchema` — `application/governance/model/ledger.ts`; `withGovernanceLedger()` — `application/governance/records/governance-transaction.ts`; `withGovernanceRecords()`, `assertGovernanceStoreOutsideRepository()` — `services/governance-records/records.ts` | 모든 Governance 설정·승인·조회·예약 | Lock 내 읽기/저장·예약 참조/상한·HMAC/UID/권한/크기 확인 | Schema + Policy + Lifecycle |
@@ -1409,10 +1370,10 @@ Planning의 inspection과 transformation은 아직 Planning flow와 강하게 �
 | 승인 방식·중복 발급·ApprovalRecord/Scope 구성과 연결 | Governance proposal-management | `evaluateStaffingApproval()`, `assertProposalNotIssued()`, `assertIssuanceIdsUnused()`, `issueStaffingScope()` — `approval/features/proposal-management/flow/`; `approvalRecordSchema`, `approvedOperatingScopeSchema` | `approveStaffingProposal()` | 평가·발급 전·동일 transaction 저장 전 | Schema + Policy + Lifecycle |
 | 저장된 승인과 현재 Scope 유효성 | Governance proposal-management | `validateStoredIssuance()` 및 binding/content/source 검사 — [staffing-issuance.ts](../src/application/governance/approval/features/proposal-management/flow/validation/staffing-issuance.ts) | `getApprovedStaffingScope()` | 저장 Scope 조회 | Policy + Lifecycle |
 | 개별 Invocation의 Scope identity/version·Assignment·정확한 Context 부분집합·잔여 횟수 | Governance Authorization | `invokeSpecialistRequestSchema`, `invocationEvaluationContextSchema`, `approvedOperatingScopeSchema`; [evaluateInvocationRequest()](../src/application/governance/authorization/features/specialist-invocation/flow/validation/evaluate-invocation.ts) | `authorizeSpecialistInvocation()`이 사용; 순수 API도 유지 | 제공된 사실의 요청 시점 평가 | Schema + Policy + Lifecycle 입력 평가 |
-| Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `runIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
+| Decision 응답 구조와 supplied file/line Evidence | Decision | `agentDecisionPayloadSchema`, `agentDecisionSchema` — `protocol/decision.ts`; `validateDecisionEvidence()` — `flow/validation/validate-evidence.ts` | Specialist Adapter, `collectIndependentDecisions()` | 모델 응답·다음 Specialist 실행 전 | Schema + Policy |
 | Comparison source 구성·Concern별 참조 | Comparison | `comparisonPayloadSchema` — `protocol/comparison.ts`; `compareDecisions()`, `validateComparisonReferences()` — `flow/validation/validate-references.ts` | Comparator Adapter, Decision CLI 조합 | 비교 입력·응답 수신 후 | Schema + Policy |
-| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `checkExecutionScope()` / `runApprovedVerification()` — `application/execution/flow/verification/` | `executeWorkItem()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
-| 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `runCodexSpecialist()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
+| 실제 변경 파일의 허용/금지 Exact Scope, 명령 결과 | Scope / Verification 서비스 + Execution Flow | `checkScope()` — `services/scope/scope-enforcement.ts`; `checkExecutionScope()` / `runApprovedVerification()` — `application/task-execution/flow/verification/` | `executeAssignment()` | Worker 성공 후·Verification 후 | Policy + Lifecycle |
+| 프로세스 오류·Timeout·모델 JSON 결과 | 역할 Adapter + Process Infrastructure | `runCodexCEO()`, `createCodexPlanner()`, `analyzeIndependently()`, `runCodexComparator()`, `runCodexWorker()`; `runCommand()` — `infrastructure/process/command-runner.ts` | 각 Application의 Loop/Stage | 호출 설정·프로세스 종료·응답 파싱 | Schema(구조화 응답) + Policy + Lifecycle |
 | Human 실행/변경 반영 gate와 Git Delivery 사전 조건 | CLI + Git Infrastructure | `runApplyCommand()`, `isValidCommitMessage()`, `runCommitCommand()`, `runPushCommand()` — `cli/`; `applyPatch()`, `stagePaths()`, `pushCurrentBranch()` — `infrastructure/git/delivery/` | 보존된 Review·Delivery 모듈 | Review·Apply·Commit·Push | Policy + Lifecycle |
 | 상위 실행 분기·실패/승인 대기 전달 | Phase A Graph | `createPhaseAGraph()` — `workflows/development-organization/phase-a/graph.ts`; `runStaffingApproval()`은 결과 변환 Adapter | `cli/commands/staffing/staffing.ts` | 정책 조회 → Staffing → Approval → 선택적 Human 콜백·최종 승인 | Lifecycle 조정; 업무 검증은 Application 재사용 |
 
@@ -1531,8 +1492,8 @@ Scope의 다른 무효화 기준은 유지한다.
 ```text
 runDecision: 입력 필수값 → captureRepositorySnapshot → goalSpecSchema
   → loadSnapshotFiles: isRepositoryRelativePath → Git blob/text 확인
-  → runIndependentDecisions: Specialist ID 중복 검사
-    → 각 Specialist 전 assertSnapshot → runCodexSpecialist (read-only Authority guard)
+  → collectIndependentDecisions: Specialist ID 중복 검사
+    → 각 Specialist 전 assertSnapshot → analyzeIndependently (read-only Authority guard)
       → Process/JSON → agentDecisionPayloadSchema → Harness specialistId + agentDecisionSchema
     → assertSnapshot → validateDecisionEvidence → 다음 Specialist
 
@@ -1564,8 +1525,8 @@ Codex Planner와 최종 TaskContract 경계다. 모든 내부 typed 함수를 �
 **Phase B Execution → Scope → Verification — 현재**
 
 ```text
-검증된 Work Item + Execution Source → executeWorkItem
-  → Runtime 확인 → authorizeExecutionForRun → 승인 Commit 기반 Worktree
+검증된 Assignment + Bound TaskContract → executeAssignment
+  → Runtime 확인 → Write Authorization / Claim → runTaskExecution → 승인 Commit 기반 Worktree
   → Codex Worker → Scope → Harness Verification → Scope 재검사
   → 변경·Evidence 보존 → ExecutionResult → Phase B State
 ```
@@ -1661,7 +1622,7 @@ authorizeSpecialistInvocation(request, attempt?)
 - **Workflow / Step 5.3**은 `workflows/development-organization/phase-a/features/decision/execution/authorized-specialist-decision.ts`의
   `runAuthorizedSpecialistDecision(invocation)`으로 단일 호출을 연결한다. 실행 직전 Claim이 거부되면
   오류로 종료하고 v2를 호출하지 않는다. 성공하면 반환된 Invocation의 snapshot·goal과
-  specialist·assignmentObjective·files 한 개를 `runIndependentDecisions()`에 전달한다.
+  specialist·assignmentObjective·files 한 개를 `collectIndependentDecisions()`에 전달한다.
   기존 Codex Specialist와 실행 전후 Snapshot·Evidence 검증을 유지하며 검증된 AgentDecision 한 개를 반환한다.
   Claim은 반환 시 Ledger Lock을 해제하므로 Codex는 Lock 밖에서 실행한다. 추가 Authorization·Reservation은 없다.
   Snapshot·Evidence·Codex 오류는 그대로 전파하고 Claim은 유지한다. 동일 Invocation 재호출은 Claim에서 거부한다.
@@ -2048,7 +2009,7 @@ Graph State 변경은 내부 Entry Point와 테스트에 반영했고 저장소�
 
 ### Step 6.2 — CEO Synthesis Application & Graph Integration
 
-`src/application/synthesis/`는 SourceReference 기반 해결 방향 제안을 생성한다.
+`src/application/management/decision-support/synthesis/`는 SourceReference 기반 해결 방향 제안을 생성한다.
 이 단계는 ApprovedDecision이나 승인 기록을 만들지 않으며 Human Governance는 Step 7의 책임이다.
 
 | 파일 | 책임 |

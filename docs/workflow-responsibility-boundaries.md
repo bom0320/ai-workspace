@@ -147,7 +147,7 @@ Node가 다른 Node를 직접 호출해 별도의 Orchestrator를 만들지 않�
 | Assignment 순서·한 Specialist 완료 후 다음 실행·실패 시 중단 | Phase A Graph: 업무 목록의 진행·분기·종료를 Workflow가 관찰하고 통제 |
 | 입력·파일·Evidence 검증과 데이터 처리 | 해당 Application: 그 기능의 정확성·정책을 위한 내부 반복 |
 
-현재 runIndependentDecisions()는 배열을 처리하는 내부 반복을 갖지만 Phase A의 실행 함수는 매번 입력
+현재 collectIndependentDecisions()는 배열을 처리하는 내부 반복을 갖지만 Phase A의 실행 함수는 매번 입력
 한 개만 전달한다. 이를 이유로 기존 v2 알고리즘을 다시 쓰거나 모든 내부 반복을 Graph로 옮기지 않는다.
 과거 단일 run-specialist-decisions Node → 함수형 runSpecialistDecisions() 구조는 Graph가 시작만 하고
 내부 반복·실패를 관찰하지 못하는 한계로 제거했다. 이를 목표 구조로 다시 도입하지 않는다.
@@ -234,12 +234,12 @@ State의 approved나 Preflight 통과를 대신 권한으로 사용하거나 예
 ```text
 Workflow → runAuthorizedSpecialistDecision()
 → claimAuthorizedInvocation() → Claim이 반환한 Invocation
-→ runIndependentDecisions() → Snapshot / Evidence Validation → AgentDecision
+→ collectIndependentDecisions() → Snapshot / Evidence Validation → AgentDecision
 ```
 
 [단일 실행 함수](../src/workflows/development-organization/phase-a/features/decision/execution/authorized-specialist-decision.ts)는
 Governance Claim을 호출한 뒤 반환된 Invocation의 Snapshot·Goal·Specialist·Assignment Objective·files를
-[Decision Application](../src/application/decision/flow/orchestration/run-independent-decisions.ts)에 전달한다.
+[Decision Application](../src/application/specialist/analysis/flow/independent/collect-independent-decisions.ts)에 전달한다.
 Claim은 저장 Reservation의 존재·Binding / Digest·최신 승인/정책/Context와 일회 사용 여부를 검증하고
 claimedAt을 저장한 뒤에만 성공한다. Ledger Lock은 반환 전에 해제되므로 Specialist는 Lock 밖에서 실행한다.
 Decision Application은 실제 실행과 전후 Snapshot·supplied Context의 Evidence를 검증한다.
@@ -256,7 +256,7 @@ Workflow의 동일 비교 단위 Goal / Snapshot SHA·검증된 Decisions 준비
 → compareDecisions() → Comparison Application의 Reference Validation → ComparisonResult
 ```
 
-[Comparison Application](../src/application/comparison/flow/compare-decisions.ts)은 두 개 이상 Decision,
+[Comparison Application](../src/application/management/decision-support/comparison/flow/compare-decisions.ts)은 두 개 이상 Decision,
 Specialist 중복 부재·Snapshot SHA 등의 선행조건을 확인하고 Comparator 결과의 Specialist ID·Evidence
 Reference를 검증한다. Workflow는 Stage 3 완료 후 API를 호출하고 실패 시 이미 완료된 Stage 3은 보존하되 후속 종합을 차단한다.
 Evidence 경로·줄 범위 또는 Reference 구조의 유효성이 AI 분석 내용의 사실성·의미적 정확성을 보장하지는 않는다.

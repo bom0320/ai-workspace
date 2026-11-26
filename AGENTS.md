@@ -59,10 +59,10 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
 - `src/contracts/`: 여러 Application이 공유하는 도메인별 runtime-validated 데이터 계약
 - `src/cli/commands/execute/load-task-contract.ts`: Execute Command의 TaskContract 파일 로딩
-- `src/application/planning/`: Goal-to-Task Planning use-case와 public API
-- `src/application/decision/`: 독립 Decision use-case와 public API; flow/context, orchestration, validation은 실제 책임별 grouping
-- `src/application/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; 기존 CLI command와 v4 Phase A Workflow가 독립 API를 조합
-- `src/application/staffing/`: CEO Staffing·Snapshot Context·Proposal Finalization
+- `src/application/specialist/task-detailing/`: Goal-to-Task Planning use-case와 public API
+- `src/application/specialist/analysis/`: 독립·Assignment 분석의 use-case와 public API. Snapshot 파일 로딩은 Repository Snapshot Service가 소유
+- `src/application/management/decision-support/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; 기존 CLI command와 v4 Phase A Workflow가 독립 API를 조합
+- `src/application/management/allocation/analysis-assignment/`: CEO Staffing·Snapshot Context·Proposal Finalization
 - `src/application/governance/`: Approval / Authorization과 저장 Ledger·Reservation·Claim 검증
 - `src/workflows/development-organization/state.ts`: 전체 조직의 공통 goal / repositoryPath State; 상위 Organization Graph는 아직 없음
 - `src/workflows/development-organization/phase-a/graph.ts`, `state.ts`: Phase A 순서·정책/Staffing/Approval 개별 결과와 specialistDecisionsResult / decisionComparisonResult / synthesisResult
@@ -73,13 +73,14 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 - `src/workflows/development-organization/phase-a/entrypoints/`: runStaffingApproval의 기존 API·CLI 호환; Phase A Graph의 staffing-approval 실행 대상을 명시하고 기존 결과 계약 유지
 - `src/workflows/development-organization/phase-a/features/decision/validation/`: 전체 Specialist 요청의 동기 Preflight 검증·분리
 - `src/workflows/development-organization/phase-a/features/decision/execution/`: 단일 Invocation Claim·기존 v2 Decision 실행; 반복·실패 분기·Comparison 진입은 Phase A Graph가 소유
-- `src/application/synthesis/`: CEO Synthesis Context·Proposal·SourceReference 계약과 출처 / 누락 검증. 제안은 ApprovedDecision이나 실행 권한이 아님
+- `src/application/management/decision-support/synthesis/`: CEO Synthesis Context·Proposal·SourceReference 계약과 출처 / 누락 검증. 제안은 ApprovedDecision이나 실행 권한이 아님
 - `src/workflows/development-organization/phase-a/features/synthesis/nodes/`: 명시적 ceo-synthesis 대상에서만 기존 Stage 결과를 Application 입력으로 연결
 - `src/infrastructure/codex/`: Staffing / Synthesis가 공유하는 Context-only Codex 실행 옵션·임시 디렉터리 lifecycle; 역할·정책·출력 검증은 Application 소유
-- `src/application/execution/`: Task 실행 모듈의 public API
-- `src/application/execution/flow/`: Task 실행 순서와 orchestration
-- `src/application/execution/model/`: 실행 상태와 결과 모델
-- `src/application/execution/worker/`: 제한된 Task를 수행하는 Worker integration
+- `src/application/specialist/execution/`: Assignment 읽기·수정 절차, TaskContract 준비 및 Binding 연결
+- `src/application/task-execution/`: 소비된 Assignment Write Claim에 연결된 Task 실행 모듈
+- `src/application/task-execution/flow/`: 승인된 수정 작업의 실행·검증·결과 확정
+- `src/application/task-execution/model/`: 실행 상태와 결과 모델
+- `src/application/task-execution/worker/`: 제한된 Task를 수행하는 Worker integration
 - `src/services/scope/`: 변경 경로 Scope 정책 검사
 - `src/services/verification/`: verification command 실행
 - `src/services/artifacts/`: 실행 디렉터리, patch, 결과 persistence

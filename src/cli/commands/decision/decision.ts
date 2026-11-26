@@ -2,11 +2,11 @@ import {
   runDecision,
   type RunDecisionInput,
   type RunDecisionResult,
-} from "@/application/decision/index.js";
+} from "@/application/specialist/analysis/index.js";
 import {
   compareDecisions,
   type ComparisonResult,
-} from "@/application/comparison/index.js";
+} from "@/application/management/decision-support/comparison/index.js";
 
 export type DecisionCommandResult = RunDecisionResult & {
   comparison: ComparisonResult;

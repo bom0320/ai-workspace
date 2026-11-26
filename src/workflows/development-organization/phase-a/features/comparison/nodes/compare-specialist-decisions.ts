@@ -1,5 +1,5 @@
 import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
-import { compareDecisions } from "@/application/comparison/index.js";
+import { compareDecisions } from "@/application/management/decision-support/comparison/index.js";
 
 export async function compareSpecialistDecisions(
   state: PhaseANodeInput<"compare-specialist-decisions">

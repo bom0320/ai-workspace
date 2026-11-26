@@ -2,7 +2,7 @@ import {
   validateAnalysisReferences,
   type SynthesisContext,
   type SynthesisProposal,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import { runContextOnlyCodex } from "@/infrastructure/codex/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import type { RepositoryGovernance } from "../../../../model/ledger.js";

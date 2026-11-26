@@ -1,7 +1,7 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import { z } from "zod";
-import type { RunWorkDecompositionOptions } from "@/application/work-decomposition/index.js";
-import type { AssignmentPlanAgent } from "@/application/planning/index.js";
+import type { RunWorkDecompositionOptions } from "@/application/management/work-decomposition/index.js";
+import type { AssignmentPlanAgent } from "@/application/management/allocation/execution-assignment/index.js";
 import type { AssignmentExecutionOptions } from "./features/execution/coordination/coordinate-assignment-executions.js";
 import { createAssignSpecialistsNode } from "./features/planning/nodes/assign-specialists.js";
 import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";

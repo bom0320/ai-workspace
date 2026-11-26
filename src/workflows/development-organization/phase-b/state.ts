@@ -1,9 +1,9 @@
 import type { VerifiedPhaseBContext } from "@/application/governance/index.js";
-import type { AssignmentPlanningOutput } from "@/application/planning/index.js";
+import type { AssignmentPlanningOutput } from "@/application/management/allocation/execution-assignment/index.js";
 import type { AssignmentExecutionOutput } from "./features/execution/coordination/coordinate-assignment-executions.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
-import { workDecompositionResultSchema } from "@/application/work-decomposition/index.js";
+import { workDecompositionResultSchema } from "@/application/management/work-decomposition/index.js";
 import { phaseBHandoffSchema } from "../contracts/phase-handoff.js";
 
 export const phaseBInput = new StateSchema({ handoff: phaseBHandoffSchema });

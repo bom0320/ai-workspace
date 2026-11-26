@@ -15,7 +15,7 @@ import {
 import {
   agentDecisionSchema,
   validateDecisionEvidence,
-} from "@/application/decision/index.js";
+} from "@/application/specialist/analysis/index.js";
 import { loadAssignmentReadContext } from "./load-assignment-read-context.js";
 import type { GovernanceLedger } from "../../../../model/ledger.js";
 import { randomUUID } from "node:crypto";
@@ -540,7 +540,7 @@ export function consumeAssignmentWriteExecution(
   };
   const { task, deadline, workItemId } = withGovernanceLedger(resolve);
   let finalized = false;
-  return {
+  const execution = {
     task,
     workItemId,
     specialistId: permit.specialistId,
@@ -561,4 +561,32 @@ export function consumeAssignmentWriteExecution(
       });
     },
   };
+  pendingTaskExecutions.set(
+    execution,
+    structuredClone({
+      task: execution.task,
+      snapshot: execution.snapshot,
+      timeoutMs: execution.timeoutMs,
+      expiresAt: execution.expiresAt,
+    })
+  );
+  return execution;
+}
+
+type TaskExecutionInput = Pick<
+  ReturnType<typeof consumeAssignmentWriteExecution>,
+  "task" | "snapshot" | "timeoutMs" | "expiresAt"
+>;
+const pendingTaskExecutions = new WeakMap<object, TaskExecutionInput>();
+
+// Only the process-local object produced by consuming the Write claim can
+// supply a task, and the registered snapshot of its data is authoritative.
+export function takeAssignmentTaskExecution(
+  execution: TaskExecutionInput
+): TaskExecutionInput {
+  const approved = pendingTaskExecutions.get(execution);
+  pendingTaskExecutions.delete(execution);
+  if (!approved || Date.parse(approved.expiresAt) <= Date.now())
+    throw new AssignmentExecutionError("claim");
+  return approved;
 }

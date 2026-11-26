@@ -1,7 +1,7 @@
 import {
   createAssignmentPlan,
   type AssignmentPlanAgent,
-} from "@/application/planning/index.js";
+} from "@/application/management/allocation/execution-assignment/index.js";
 import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 
 export function createAssignSpecialistsNode(agent?: AssignmentPlanAgent) {

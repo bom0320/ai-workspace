@@ -1,17 +1,15 @@
 import { prepareAssignmentContext } from "@/application/governance/records/assignment-plans/prepare-assignment-context.js";
 import { withGovernanceLedger } from "@/application/governance/records/governance-transaction.js";
-import { executeReadOnlyWorkItem } from "@/application/execution/index.js";
 import * as governanceRecords from "@/services/governance-records/index.js";
 import * as filesystem from "node:fs";
 import { Command } from "@langchain/langgraph";
-import * as staffingApplication from "@/application/staffing/index.js";
+import * as staffingApplication from "@/application/management/allocation/analysis-assignment/index.js";
 import * as phaseAGraph from "../graph.js";
 import {
   createPhaseBGraph,
   type PhaseBGraphOptions,
 } from "../../phase-b/index.js";
-import { runWorkDecomposition } from "@/application/work-decomposition/index.js";
-import { beginWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
+import { runWorkDecomposition } from "@/application/management/work-decomposition/index.js";
 import { runStaffingCli } from "@/cli/commands/staffing/staffing.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";
 import * as governance from "@/application/governance/index.js";
@@ -49,7 +47,7 @@ import {
 import type {
   StaffingDraft,
   CEOStaffingAgent,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
@@ -1678,7 +1676,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (approved.directionGovernanceResult?.status !== "approved")
       throw new Error(JSON.stringify(approved.directionGovernanceResult));
     const decision = approved.directionGovernanceResult.decision;
-    let workItems: import("@/application/work-decomposition/index.js").WorkItem[] =
+    let workItems: import("@/application/management/work-decomposition/index.js").WorkItem[] =
       ["first", "second", "third"].map((id) => ({
         id,
         objective: fastPath
@@ -2515,10 +2513,21 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           expect(() =>
             governance.consumeAssignmentWriteExecution(handoff, { ...claim })
           ).toThrow("claim");
+          const runtime = governance.consumeAssignmentWriteExecution(
+            handoff,
+            claim
+          );
+          expect(runtime.task.implementationPlan).toEqual(implementationPlan);
+          expect(() =>
+            governance.takeAssignmentTaskExecution({ ...runtime })
+          ).toThrow("claim");
           expect(
-            governance.consumeAssignmentWriteExecution(handoff, claim).task
+            governance.takeAssignmentTaskExecution(runtime).task
               .implementationPlan
           ).toEqual(implementationPlan);
+          expect(() => governance.takeAssignmentTaskExecution(runtime)).toThrow(
+            "claim"
+          );
           expect(() =>
             governance.consumeAssignmentWriteExecution(handoff, claim)
           ).toThrow("claim");
@@ -2866,11 +2875,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           }))
         )
       ).toEqual([{ executionReservations: [], workItemExecutionSources: [] }]);
-      const proposal = {
-        status: "proposed" as const,
-        approvedDecisionId: decision.id,
-        workItems,
-      };
       const task = {
         id: "standalone-bypass",
         goalId: "goal",
@@ -2882,14 +2886,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         acceptanceCriteria: ["Patch"],
         verification: [],
       };
-      const executionSourceId = beginWorkItemExecutionSource(
-        proposal,
-        workItems[0],
-        root
-      )?.(task);
-      expect(executionSourceId).toBeDefined();
+      const executionSourceId = seedHistoricalWorkItemSource(
+        decision.id,
+        workItems[0].id,
+        task
+      );
       expect(
-        governance.authorizeExecutionForRun({
+        governance.assignmentExecutionRequestSchema.safeParse({
           approvedDecisionId: decision.id,
           executionSourceId,
           task,
@@ -2898,12 +2901,38 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           readPaths: ["README.md"],
           timeoutMs: 5000,
           workerMode: "codex-worktree",
-        })
-      ).toMatchObject({
-        status: "denied",
-      });
+        }).success
+      ).toBe(false);
     }
   );
+
+  function seedHistoricalWorkItemSource(
+    approvedDecisionId: string,
+    workItemId: string,
+    task: object
+  ) {
+    const { snapshot } = governance.getApprovedDecision(approvedDecisionId);
+    return withGovernanceRecords((raw, save) => {
+      const ledger =
+        raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+      const entry = Object.values(ledger.repositories)[0];
+      const decomposition = entry.executionDecompositions?.find(
+        (record) => record.approvedDecisionId === approvedDecisionId
+      );
+      if (!decomposition)
+        throw new Error("Missing historical decomposition fixture.");
+      const subject = {
+        decompositionBinding: decomposition.binding,
+        workItemId,
+        taskDigest: governanceDigest(task),
+        snapshot,
+      };
+      const id = governanceDigest(subject);
+      (entry.workItemExecutionSources ??= []).push({ id, ...subject });
+      save(ledger);
+      return id;
+    });
+  }
 
   async function plannedExecutions(
     ...args: Parameters<typeof planExecutionItems>
@@ -2922,16 +2951,15 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       acceptanceCriteria: ["Review"],
       verification: args[2] ?? ["git diff --check"],
     };
-    const executionSourceId = beginWorkItemExecutionSource(
-      { status: "proposed", approvedDecisionId: decision.id, workItems },
-      workItem,
-      root
-    )?.(task);
-    expect(executionSourceId).toBeDefined();
+    const executionSourceId = seedHistoricalWorkItemSource(
+      decision.id,
+      workItem.id,
+      task
+    );
     return [
       {
         approvedDecisionId: decision.id,
-        executionSourceId: executionSourceId!,
+        executionSourceId,
         repositoryPath: root,
         workItem,
         task,
@@ -2989,7 +3017,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     });
   });
 
-  it("blocks both direct execution entry points with valid Work Item provenance and no Assignment Plan", async () => {
+  it("rejects direct Work Item payloads at the Assignment boundary without effects", async () => {
     const [request] = await plannedExecutions(
       true,
       1,
@@ -3002,16 +3030,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const before = readFileSync(path, "utf8");
     const command = vi.mocked(processRuntime.runCommand);
     const calls = command.mock.calls.length;
-    expect(governance.checkExecutionEligibility(request)).toMatchObject({
-      status: "denied",
-      reason: expect.stringContaining("requires Assignment Authorization"),
-    });
-    expect(governance.authorizeExecutionForRun(request)).toMatchObject({
-      status: "denied",
-    });
-    await expect(executeReadOnlyWorkItem(readRequest)).resolves.toMatchObject({
-      status: "denied",
-    });
+    expect(
+      governance.assignmentExecutionRequestSchema.safeParse(request).success
+    ).toBe(false);
+    expect(
+      governance.assignmentExecutionRequestSchema.safeParse(readRequest).success
+    ).toBe(false);
     expect(command).toHaveBeenCalledTimes(calls);
     expect(readFileSync(path, "utf8")).toBe(before);
   });
@@ -3091,7 +3115,9 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(
       governance.getExecutionDelegation(request.approvedDecisionId)
     ).toBeUndefined();
-    expect(governance.checkExecutionEligibility(request).status).toBe("denied");
+    expect(
+      governance.assignmentExecutionRequestSchema.safeParse(request).success
+    ).toBe(false);
     const input = postDelegationInput(request, scopedPolicy);
     const receipt = confirmPostDelegation(input);
     const result = governance.approveExecutionDelegation(input, receipt);
@@ -3111,18 +3137,20 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     );
     expect(governance.approveExecutionDelegation(input).status).toBe("denied");
     expect(
-      governance.checkExecutionEligibility({
+      governance.assignmentExecutionRequestSchema.safeParse({
         ...request,
         readPaths: ["docs-extra/other.md"],
-      }).status
-    ).toBe("denied");
+      }).success
+    ).toBe(false);
     expect(
-      governance.checkExecutionEligibility({
+      governance.assignmentExecutionRequestSchema.safeParse({
         ...request,
         readPaths: ["docs/link.ts"],
-      }).status
-    ).toBe("denied");
-    expect(governance.authorizeExecutionForRun(request).status).toBe("denied");
+      }).success
+    ).toBe(false);
+    expect(
+      governance.assignmentExecutionRequestSchema.safeParse(request).success
+    ).toBe(false);
   });
 
   it("denies post-direction grants with invalid scope, input, or confirmation and leaves failed writes atomic", async () => {
@@ -4104,7 +4132,8 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     runtime();
     // A real policy change after Synthesis must prevent registration, while
     // preserving the valid Stage 5 result independently of Governance failure.
-    const application = await import("@/application/synthesis/index.js");
+    const application =
+      await import("@/application/management/decision-support/synthesis/index.js");
     const originalRun = application.runSynthesis;
     vi.spyOn(application, "runSynthesis").mockImplementation(
       async (...args) => {
@@ -4198,7 +4227,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               ? ({
                   type: "propose",
                   proposal: { direction: "Invalid" },
-                } as unknown as import("@/application/synthesis/index.js").CEOSynthesisDecision)
+                } as unknown as import("@/application/management/decision-support/synthesis/index.js").CEOSynthesisDecision)
               : {
                   type: "propose",
                   proposal:
@@ -4980,7 +5009,7 @@ describe("Graph approval concurrency boundary", () => {
       const receipt = accept(request);
       expect(request.subject).not.toBeNull();
       const proposal =
-        request.subject as import("@/application/staffing/index.js").StaffingProposal;
+        request.subject as import("@/application/management/allocation/analysis-assignment/index.js").StaffingProposal;
       expect(governance.approveStaffingProposal(proposal, receipt).status).toBe(
         "approved"
       );

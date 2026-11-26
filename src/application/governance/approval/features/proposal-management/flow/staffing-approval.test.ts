@@ -27,7 +27,7 @@ import {
 import {
   runStaffing,
   type StaffingProposal,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import {
   approveStaffingProposal,
   configureHumanDelegation,
@@ -40,7 +40,7 @@ import {
   type HumanDelegationPolicyInput,
 } from "../../../../index.js";
 
-import * as staffingValidation from "@/application/staffing/index.js";
+import * as staffingValidation from "@/application/management/allocation/analysis-assignment/index.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";
 import * as snapshotValidation from "@/services/repository-snapshot/index.js";
 import * as scopeIssuance from "./transformation/issue-staffing-scope.js";

@@ -1,4 +1,4 @@
-import type { ExecutionResult } from "@/application/execution/index.js";
+import type { ExecutionResult } from "@/application/task-execution/index.js";
 
 import { runApplyCommand, type ApplyResult } from "./apply.js";
 import { runCommitCommand, type CommitResult } from "./commit.js";

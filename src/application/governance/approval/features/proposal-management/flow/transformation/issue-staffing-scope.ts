@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { StaffingProposal } from "@/application/staffing/index.js";
+import type { StaffingProposal } from "@/application/management/allocation/analysis-assignment/index.js";
 import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {

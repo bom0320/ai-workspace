@@ -2,7 +2,7 @@ import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
-import type { WorkDecompositionResult } from "@/application/work-decomposition/index.js";
+import type { WorkDecompositionResult } from "@/application/management/work-decomposition/index.js";
 import { resolveExecutionHandoff } from "../../approval/features/phase-handoff/verify-execution-handoff.js";
 import { executionScopes } from "../../approval/features/system-policy/model/execution-system-policy.js";
 import type { GovernanceLedger } from "../../model/ledger.js";

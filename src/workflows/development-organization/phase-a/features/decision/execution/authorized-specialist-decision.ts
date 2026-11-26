@@ -3,9 +3,9 @@ import {
   type AuthorizedSpecialistInvocation,
 } from "@/application/governance/index.js";
 import {
-  runIndependentDecisions,
+  collectIndependentDecisions,
   type AgentDecision,
-} from "@/application/decision/index.js";
+} from "@/application/specialist/analysis/index.js";
 
 // Claim's generic denial is intentionally not classified into finer causes.
 export class InvocationClaimError extends Error {
@@ -28,7 +28,7 @@ export async function runAuthorizedSpecialistDecision(
   const { snapshot, goal, specialist, assignmentObjective, files } =
     claim.invocation;
   const { authority, ...definition } = specialist;
-  const [decision] = await runIndependentDecisions(snapshot, goal, [
+  const [decision] = await collectIndependentDecisions(snapshot, goal, [
     { specialist: definition, authority, assignmentObjective, files },
   ]);
   return decision;

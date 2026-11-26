@@ -1,23 +1,20 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { loadSnapshotFiles } from "@/application/decision/index.js";
 import {
   listRepositoryFilesAtCommit,
   type CommitFile,
 } from "@/infrastructure/git/index.js";
-import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
+import {
+  assertRepositoryMatchesSnapshot,
+  loadSnapshotFiles,
+} from "@/services/repository-snapshot/index.js";
 import { loadAssignmentReadContext } from "./load-assignment-read-context.js";
 
-vi.mock("@/application/decision/index.js", async () => ({
-  agentDecisionSchema: (
-    await import("@/application/decision/protocol/decision.js")
-  ).agentDecisionSchema,
-  loadSnapshotFiles: vi.fn(),
-}));
 vi.mock("@/infrastructure/git/index.js", () => ({
   listRepositoryFilesAtCommit: vi.fn(),
 }));
 vi.mock("@/services/repository-snapshot/index.js", () => ({
   assertRepositoryMatchesSnapshot: vi.fn(),
+  loadSnapshotFiles: vi.fn(),
 }));
 
 const snapshot = { repositoryRoot: "/repo", commitSha: "a".repeat(40) };

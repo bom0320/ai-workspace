@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import type { AgentDecision } from "@/application/decision/index.js";
+import type { AgentDecision } from "@/application/specialist/analysis/index.js";
 
 import { presentDecisions } from "./decisions.js";
 

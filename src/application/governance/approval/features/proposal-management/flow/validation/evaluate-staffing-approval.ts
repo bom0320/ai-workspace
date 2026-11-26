@@ -6,7 +6,7 @@ import { realpathSync } from "node:fs";
 import {
   validateStaffingProposal,
   type StaffingProposal,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 
 // Current proposal validity is shared by new approval and stored issuance checks.

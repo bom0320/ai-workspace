@@ -51,7 +51,7 @@ Goal flow의 Task Approval과 실행 후 Review / Apply / Commit / Push / Cleanu
 
 RepositorySnapshot, commit 기반 Context loading, SpecialistDefinition / Authority / Context,
 Zod 기반 AgentDecision / EvidenceReference와 Codex Specialist runtime이 구현되었다.
-`runDecision()`은 명시적 파일과 Frontend / UX 역할을 구성하고 `runIndependentDecisions()`로 연결한다.
+`runDecision()`은 명시적 파일과 Frontend / UX 역할을 구성하고 `collectIndependentDecisions()`로 연결한다.
 현재 CLI는 두 Specialist를 순차 실행하며 같은 Goal / commit과 supplied files를 제공한다.
 
 ### 확인된 조건과 한계
@@ -255,14 +255,14 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 5.3.1 | Multi-Specialist Assignment Contract | Specialist 책임·접근 상한·선택 범위를 검증하고 Digest에 결합. 5.3.1-R에서 Work Item 실행 유형을 제거하고 직접 실행 차단. 구형 계약은 자동 변환 없이 거부 | Implemented |
 | 5.3.2 | Phase-scoped Capability & Authorization | Identity·Authority 분리, Read Reservation·Claim, 제한된 Snapshot Context 조회, Specialist 읽기 실행 및 결과 기록. Write 권한 발급은 5.3.3의 Binding에 의존 | Implemented (Read) |
 | 5.3.3 | Specialist Planning & TaskContract Binding | 새 Write Assignment의 승인된 Read Session에서 구현 지시를 상세화하고 TaskContract를 Assignment 및 Snapshot에 결합 | Implemented (Task Prepared) |
-| 5.3.4 | Specialist Implementation Runtime | 저장된 구조화 계약의 Write Reservation·Claim과 기존 Worktree Pipeline을 연결해 개별 결과와 Artifact Digest를 저장 | Implemented |
+| 5.3.4 | Specialist Implementation Runtime | Specialist Execution이 Write Claim을 확보하고 Task Execution이 Worktree·검증·Artifact를 처리해 개별 결과를 저장 | Implemented |
 | 5.3.5 | Assignment Result & Execution Coordination | 검증된 산출물과 실패를 담당 Specialist에 귀속하고 의존성·병렬 실행·완료 판단에 반영 | Planned |
 | 5.3.6 | Multi-Worktree Integration | 출처·범위·충돌 확인 후 격리된 통합 결과를 재검증하고 원본 보호 | Planned |
 | 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |
 
 ### Compatibility Refactoring — runDecision() (Planned)
 
-기존 Decision CLI의 `runDecision()`은 Frontend / UX Specialist를 고정 구성한다. `runIndependentDecisions()`는 이미 호출자가 제공한 Specialist를 받고, Phase A는 승인·Claim을 거친 동적 Specialist 입력으로 이를 재사용한다. CLI와 v2 호환성을 유지하면서 하드코딩된 선정을 개선하고, 동적 입력을 공개할 필요와 방식을 검토한다. 기존 Phase A의 선정·권한 경로를 중복 구현하지 않으며 Phase B의 선행조건으로 두지 않는다.
+기존 Decision CLI의 `runDecision()`은 Frontend / UX Specialist를 고정 구성한다. `collectIndependentDecisions()`는 이미 호출자가 제공한 Specialist를 받고, Phase A는 승인·Claim을 거친 동적 Specialist 입력으로 이를 재사용한다. CLI와 v2 호환성을 유지하면서 하드코딩된 선정을 개선하고, 동적 입력을 공개할 필요와 방식을 검토한다. 기존 Phase A의 선정·권한 경로를 중복 구현하지 않으며 Phase B의 선행조건으로 두지 않는다.
 
 ### Step 1 진행 상태
 
@@ -351,7 +351,7 @@ Ledger 정책 주입은 아래 Staffing → Approval Workflow에서 구현했다
 - **5.2 Implemented — Reservation Claim**: 저장된 Reservation의 binding·Invocation/Request digest·최신 승인/정책/Snapshot/Context를 검증하고
   같은 Ledger Lock에서 선택적인 claimedAt을 저장한다. 재사용은 거부하며 Budget은 예약 시 소비하는 정책을 유지한다.
 - **5.3 Implemented — 단일 실행 연결**: Phase A의 `runAuthorizedSpecialistDecision()`에서 성공한 Claim의 반환 입력을
-  기존 `runIndependentDecisions()`에 연결해 검증된 AgentDecision 한 개를 반환한다.
+  기존 `collectIndependentDecisions()`에 연결해 검증된 AgentDecision 한 개를 반환한다.
   실패는 전파하고 Claim을 유지한다. 추가 Authorization·Reservation·자동 재시도·환불은 없다.
 - **5.4 Implemented — 복수 실행·Comparison**: 초기 함수형 runSpecialistDecisions는 승인된 동적 Assignment를 사전 검증 후
   순차 Authorization·Step 5.3 실행하며, Decision 두 개 이상이면 기존 v3 Comparison을 연결한다.

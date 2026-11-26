@@ -1,4 +1,4 @@
-import type { ComparisonResult } from "@/application/comparison/index.js";
+import type { ComparisonResult } from "@/application/management/decision-support/comparison/index.js";
 
 export function presentComparison(comparison: ComparisonResult): void {
   if (comparison.findings.length === 0 && comparison.gaps.length === 0) {

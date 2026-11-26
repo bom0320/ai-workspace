@@ -1,7 +1,7 @@
 import type {
   AssessmentInput,
   AssessmentResult,
-} from "@/application/analysis/index.js";
+} from "@/application/management/decision-support/analysis-review/index.js";
 
 export type RefinementBasis = {
   context: AssessmentInput;

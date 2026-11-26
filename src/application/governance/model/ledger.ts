@@ -20,7 +20,7 @@ import { invocationReservationSchema } from "../authorization/features/specialis
 import { analysisRefinementSchema } from "./analysis-refinement.js";
 import { hasValidAnalysisRefinements } from "../records/analysis/refinement-records.js";
 import { z } from "zod";
-import { staffingProposalSchema } from "@/application/staffing/index.js";
+import { staffingProposalSchema } from "@/application/management/allocation/analysis-assignment/index.js";
 import { approvedOperatingScopeSchema } from "./authority.js";
 import { recordedSystemPolicySchema } from "../approval/features/system-policy/model/policy.js";
 import { recordedHumanDelegationPolicySchema } from "../approval/features/human-delegation/model/policy.js";

@@ -1,9 +1,9 @@
 import { governanceDigest } from "@/services/governance-records/index.js";
-import type { SynthesisContext } from "@/application/synthesis/index.js";
+import type { SynthesisContext } from "@/application/management/decision-support/synthesis/index.js";
 import type {
   AssessmentInput,
   AssessmentLimits,
-} from "@/application/analysis/index.js";
+} from "@/application/management/decision-support/analysis-review/index.js";
 import type { RepositoryGovernance } from "../../model/ledger.js";
 import {
   validateStoredIssuance,

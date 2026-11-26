@@ -2,7 +2,7 @@ import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import {
   runStaffing,
   type RunStaffingOptions,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 
 export type StaffingExecutionOptions = Partial<
   Pick<RunStaffingOptions, "maxRounds" | "timeoutMs" | "agent">

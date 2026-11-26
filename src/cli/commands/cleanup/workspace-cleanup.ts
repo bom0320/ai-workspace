@@ -1,4 +1,4 @@
-import type { ExecutionResult } from "@/application/execution/index.js";
+import type { ExecutionResult } from "@/application/task-execution/index.js";
 import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
 
 import { approveWorkspaceDeletion } from "../../prompts/cleanup/index.js";

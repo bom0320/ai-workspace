@@ -1,17 +1,13 @@
-import {
-  executeAssignment,
-  executeWorkItem,
-} from "@/application/execution/index.js";
+import { executeAssignment } from "@/application/specialist/execution/index.js";
 import { beforeEach, expect, expectTypeOf, it, vi } from "vitest";
 import { phaseBDataFlow } from "../data-flow.js";
-import { createAssignmentPlan } from "@/application/planning/index.js";
+import { createAssignmentPlan } from "@/application/management/allocation/execution-assignment/index.js";
 import {
   getApprovedDecision,
   getPreparedAssignmentPlan,
   verifyPhaseBHandoff,
 } from "@/application/governance/index.js";
-import { decomposeApprovedWork } from "@/application/work-decomposition/index.js";
-import { beginValidatedWorkItemExecutionSource } from "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js";
+import { decomposeApprovedWork } from "@/application/management/work-decomposition/index.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import {
   createPhaseBGraph,
@@ -19,15 +15,15 @@ import {
   type PhaseBHandoff,
 } from "../index.js";
 
-vi.mock("@/application/planning/index.js", () => ({
-  createAssignmentPlan: vi.fn(),
-}));
+vi.mock(
+  "@/application/management/allocation/execution-assignment/index.js",
+  () => ({
+    createAssignmentPlan: vi.fn(),
+  })
+);
 
-vi.mock("@/application/execution/index.js", () => ({
+vi.mock("@/application/specialist/execution/index.js", () => ({
   executeAssignment: vi.fn(),
-  executeWorkItem: vi
-    .fn()
-    .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
 }));
 vi.mock("@/application/governance/index.js", async () => ({
   approvedDecisionSchema: (
@@ -47,25 +43,23 @@ vi.mock(
     registerWorkDecomposition: vi.fn(),
   })
 );
-vi.mock(
-  "@/application/governance/authorization/features/work-item-execution/flow/register-work-item-execution-source.js",
-  () => ({
-    beginValidatedWorkItemExecutionSource: vi.fn(),
-  })
-);
+
 vi.mock("@/infrastructure/process/index.js", () => ({
   runCommand: vi.fn(),
 }));
-vi.mock("@/application/work-decomposition/index.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/application/work-decomposition/index.js")
-    >();
-  return {
-    ...actual,
-    decomposeApprovedWork: vi.fn(actual.decomposeApprovedWork),
-  };
-});
+vi.mock(
+  "@/application/management/work-decomposition/index.js",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@/application/management/work-decomposition/index.js")
+      >();
+    return {
+      ...actual,
+      decomposeApprovedWork: vi.fn(actual.decomposeApprovedWork),
+    };
+  }
+);
 
 const decompositionInput = { approvedDecisionId: "approved-1" };
 const direction = {
@@ -176,7 +170,6 @@ const workItems = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(beginValidatedWorkItemExecutionSource).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
   vi.mocked(verifyPhaseBHandoff).mockReturnValue(approved);
 });
@@ -338,8 +331,6 @@ it.each([
     );
     expect(verifyPhaseBHandoff).not.toHaveBeenCalled();
     expect(createAssignmentPlan).not.toHaveBeenCalled();
-    expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
-    expect(executeWorkItem).not.toHaveBeenCalled();
     expect(executeAssignment).not.toHaveBeenCalled();
   }
 );
@@ -541,8 +532,6 @@ it.each([
       agent
     );
     expect(result.assignmentPlanResult).toEqual(assignmentResult);
-    expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
-    expect(executeWorkItem).not.toHaveBeenCalled();
     expect(getPreparedAssignmentPlan).toHaveBeenCalledTimes(
       shouldExecute ? 1 : 0
     );

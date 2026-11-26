@@ -4,7 +4,7 @@ import type { StaffingApprovalResult } from "@/application/governance/index.js";
 import type {
   RunStaffingOptions,
   StaffingRunResult,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 
 import type { StaffingConfirmationOptions } from "../features/governance/nodes/staffing-approval/confirm-staffing-approval.js";
 

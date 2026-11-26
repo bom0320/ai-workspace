@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { ExecutionResult } from "@/application/execution/index.js";
+import type { ExecutionResult } from "@/application/task-execution/index.js";
 import { getWorkspaceDiff } from "@/infrastructure/git/index.js";
 
 import { completeReview } from "../../prompts/review/index.js";

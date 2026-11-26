@@ -2,7 +2,7 @@ import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
 import {
   assessAnalysis,
   type AssessmentAgent,
-} from "@/application/analysis/index.js";
+} from "@/application/management/decision-support/analysis-review/index.js";
 import { assertCurrentAnalysis } from "@/application/governance/records/analysis/analysis-provenance.js";
 
 export function assessmentBasis(

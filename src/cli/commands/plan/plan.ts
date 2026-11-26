@@ -1,6 +1,9 @@
 import { basename, resolve } from "node:path";
 
-import { planTask, type PlanningResult } from "@/application/planning/index.js";
+import {
+  planTask,
+  type PlanningResult,
+} from "@/application/specialist/task-detailing/index.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 
 import type { GoalInput } from "../../prompts/planning/index.js";

@@ -1,7 +1,7 @@
 import {
   agentDecisionSchema,
   type AgentDecision,
-} from "@/application/decision/index.js";
+} from "@/application/specialist/analysis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import type { AuthorizedSpecialistInvocation } from "../../model/authority.js";

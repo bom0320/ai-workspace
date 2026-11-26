@@ -4,7 +4,7 @@ import {
   type DirectionConfirmationOptions,
 } from "./features/governance/nodes/direction-review/finalize-direction-review.js";
 import { createRunCEOSynthesisNode } from "./features/synthesis/nodes/run-ceo-synthesis.js";
-import type { RunSynthesisOptions } from "@/application/synthesis/index.js";
+import type { RunSynthesisOptions } from "@/application/management/decision-support/synthesis/index.js";
 import type { ExecutionDelegationProposalAgent } from "@/application/governance/index.js";
 import { END, START, StateGraph, MemorySaver } from "@langchain/langgraph";
 import { phaseAState } from "./state.js";
@@ -22,7 +22,7 @@ import {
 import { preflightSpecialistDecisionsNode } from "./features/decision/nodes/preflight-specialist-decisions.js";
 import { executeNextSpecialist } from "./features/decision/nodes/execute-next-specialist.js";
 import { compareSpecialistDecisions } from "./features/comparison/nodes/compare-specialist-decisions.js";
-import type { AssessmentAgent } from "@/application/analysis/index.js";
+import type { AssessmentAgent } from "@/application/management/decision-support/analysis-review/index.js";
 import { createAssessAnalysisNode } from "./features/analysis/nodes/assess-analysis.js";
 import { createConfirmRefinementNode } from "./features/analysis/nodes/confirm-refinement.js";
 import { prepareRefinementNode } from "./features/analysis/nodes/prepare-refinement.js";

@@ -1,6 +1,6 @@
 import { taskContractSchema } from "@/contracts/task.js";
 import { z } from "zod";
-import { agentDecisionSchema } from "@/application/decision/index.js";
+import { agentDecisionSchema } from "@/application/specialist/analysis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { specialistAuthoritySchema } from "@/contracts/specialist/authority.js";

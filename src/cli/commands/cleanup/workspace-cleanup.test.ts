@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { ExecutionResult } from "@/application/execution/index.js";
+import type { ExecutionResult } from "@/application/task-execution/index.js";
 import {
   createExecutionWorkspace,
   removeExecutionWorkspace,

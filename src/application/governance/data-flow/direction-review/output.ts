@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
-import { synthesisContextSchema } from "@/application/synthesis/index.js";
+import { synthesisContextSchema } from "@/application/management/decision-support/synthesis/index.js";
 import { directionActionSchema } from "../../approval/features/direction-review/model/action.js";
 import { directionReviewSchema } from "../../approval/features/direction-review/model/review.js";
 import { approvedDecisionSchema } from "../../approval/features/direction-review/model/approved-decision.js";

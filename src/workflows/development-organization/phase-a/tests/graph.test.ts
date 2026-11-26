@@ -1,7 +1,7 @@
 import type {
   CEOSynthesisDecision,
   SynthesisContext,
-} from "@/application/synthesis/index.js";
+} from "@/application/management/decision-support/synthesis/index.js";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
@@ -17,7 +17,7 @@ import {
   runStaffing,
   type StaffingProposal,
   type StaffingRunResult,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import { createPhaseAGraph as createGraph } from "../graph.js";
 import { phaseADataFlow } from "../data-flow.js";
 import { executeNextSpecialist } from "../features/decision/nodes/execute-next-specialist.js";
@@ -33,7 +33,7 @@ import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
 } from "../features/decision/execution/authorized-specialist-decision.js";
-import { compareDecisions } from "@/application/comparison/index.js";
+import { compareDecisions } from "@/application/management/decision-support/comparison/index.js";
 import type {
   AuthorizedSpecialistInvocation,
   InvokeSpecialistRequest,
@@ -47,10 +47,15 @@ vi.mock(
     runAuthorizedSpecialistDecision: vi.fn(),
   })
 );
-vi.mock("@/application/comparison/index.js", async (original) => ({
-  ...(await original<typeof import("@/application/comparison/index.js")>()),
-  compareDecisions: vi.fn(),
-}));
+vi.mock(
+  "@/application/management/decision-support/comparison/index.js",
+  async (original) => ({
+    ...(await original<
+      typeof import("@/application/management/decision-support/comparison/index.js")
+    >()),
+    compareDecisions: vi.fn(),
+  })
+);
 
 vi.mock("@/application/governance/index.js", async (original) => ({
   ...(await original<typeof import("@/application/governance/index.js")>()),
@@ -61,10 +66,15 @@ vi.mock("@/application/governance/index.js", async (original) => ({
   claimAuthorizedInvocation: vi.fn(),
 }));
 
-vi.mock("@/application/staffing/index.js", async (original) => ({
-  ...(await original<typeof import("@/application/staffing/index.js")>()),
-  runStaffing: vi.fn(),
-}));
+vi.mock(
+  "@/application/management/allocation/analysis-assignment/index.js",
+  async (original) => ({
+    ...(await original<
+      typeof import("@/application/management/allocation/analysis-assignment/index.js")
+    >()),
+    runStaffing: vi.fn(),
+  })
+);
 
 vi.mock(
   "@/application/governance/records/analysis/record-analysis-decision.js",

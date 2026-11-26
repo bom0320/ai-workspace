@@ -1,10 +1,10 @@
 import { expect, it, vi } from "vitest";
-import { executeAssignment } from "@/application/execution/index.js";
+import { executeAssignment } from "@/application/specialist/execution/index.js";
 import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
 import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
 import { coordinateAssignmentExecutions } from "./coordinate-assignment-executions.js";
 
-vi.mock("@/application/execution/index.js", () => ({
+vi.mock("@/application/specialist/execution/index.js", () => ({
   executeAssignment: vi.fn(),
 }));
 vi.mock("@/application/governance/index.js", () => ({

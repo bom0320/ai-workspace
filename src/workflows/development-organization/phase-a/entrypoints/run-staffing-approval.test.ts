@@ -9,7 +9,7 @@ import {
 import {
   runStaffing,
   type StaffingProposal,
-} from "@/application/staffing/index.js";
+} from "@/application/management/allocation/analysis-assignment/index.js";
 import {
   runStaffingApproval,
   type StaffingApprovalWorkflowOptions,
@@ -20,10 +20,15 @@ vi.mock("@/application/governance/index.js", async (original) => ({
   getStaffingSystemPolicy: vi.fn(),
   approveStaffingProposal: vi.fn(),
 }));
-vi.mock("@/application/staffing/index.js", async (original) => ({
-  ...(await original<typeof import("@/application/staffing/index.js")>()),
-  runStaffing: vi.fn(),
-}));
+vi.mock(
+  "@/application/management/allocation/analysis-assignment/index.js",
+  async (original) => ({
+    ...(await original<
+      typeof import("@/application/management/allocation/analysis-assignment/index.js")
+    >()),
+    runStaffing: vi.fn(),
+  })
+);
 const goal = {
   objective: "Review login",
   targetRepository: "repo",

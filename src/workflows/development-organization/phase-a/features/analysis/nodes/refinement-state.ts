@@ -1,4 +1,4 @@
-import type { StaffingProposal } from "@/application/staffing/index.js";
+import type { StaffingProposal } from "@/application/management/allocation/analysis-assignment/index.js";
 import type { StaffingApprovalResult } from "@/application/governance/index.js";
 import type { AnalysisRefinement } from "@/application/governance/model/analysis-refinement.js";
 import { projectRefinementRequests } from "@/application/governance/records/analysis/refinement-records.js";

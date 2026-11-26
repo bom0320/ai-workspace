@@ -4,7 +4,7 @@ import {
   withGovernanceLedger,
 } from "../../../../records/governance-transaction.js";
 
-import { staffingProposalSchema } from "@/application/staffing/index.js";
+import { staffingProposalSchema } from "@/application/management/allocation/analysis-assignment/index.js";
 import type { HumanConfirmation } from "@/infrastructure/terminal/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";

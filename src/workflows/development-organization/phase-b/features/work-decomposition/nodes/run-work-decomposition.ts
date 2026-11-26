@@ -2,7 +2,7 @@ import { phaseBHandoffSchema } from "../../../../contracts/phase-handoff.js";
 import {
   decomposeApprovedWork,
   type RunWorkDecompositionOptions,
-} from "@/application/work-decomposition/index.js";
+} from "@/application/management/work-decomposition/index.js";
 import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 import { verifyPhaseBHandoff } from "@/application/governance/index.js";
 import { registerWorkDecomposition } from "@/application/governance/records/work-decomposition-records.js";

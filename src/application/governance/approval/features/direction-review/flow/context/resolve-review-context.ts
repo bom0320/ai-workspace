@@ -2,7 +2,7 @@ import type {
   GovernanceLedger,
   RepositoryGovernance,
 } from "../../../../../model/ledger.js";
-import type { SynthesisContext } from "@/application/synthesis/index.js";
+import type { SynthesisContext } from "@/application/management/decision-support/synthesis/index.js";
 import type { DirectionReview } from "../../model/review.js";
 import { verifyAnalysisSources } from "../../../../../records/analysis/analysis-provenance.js";
 import {

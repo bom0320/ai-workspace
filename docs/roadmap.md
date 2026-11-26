@@ -9,7 +9,7 @@ Organization 실행·Handoff·State 소유권의 검토 기준은 [Workflow Arch
 | 단계 | 검증 주제 | 상태 |
 | --- | --- | --- |
 | v0 | Safe Execution | Implemented |
-| v1 | Goal-to-Task Planning | Implemented |
+| v1 | Goal-to-Task Planning | 과거 구현. 현재는 Phase B Task Detailing에 통합 |
 | v2 | Governed Independent Decision | Implemented |
 | v3 | Agreement / Conflict — Structured Decision Comparison | Implemented |
 | v4 | CEO Governance / AI Organization Orchestration | In progress — Step 3~5.4 / R1·R2 및 LangGraph Step 1·2·2.5·3 구현; 전체 Workflow 미완성 |
@@ -31,16 +31,11 @@ Verification 통과도 자연어 acceptance criteria 전체의 증명은 아니�
 
 > Human Goal을 바로 실행하지 않고 명시적 계약으로 변환한 뒤 Human approval을 거칠 수 있는가?
 
-상태: **Implemented**.
-
-GoalSpec, repository inspection, adaptive planning / Fast Path, Codex Planner와 Planning loop,
-TaskDraft → TaskContract, Human constraints preservation, Human Task Approval을 제공한다.
-Planning 자체보다 실행 전 explicit contract boundary가 핵심이다. Zod는 structural validity를 검증한다.
-Goal flow의 Task Approval과 실행 후 Review / Apply / Commit / Push / Cleanup을 구분한다.
-명시적 JSON execute는 Planning / Task Approval을 거치지 않는 별도 경로다.
-현재 Standalone v1은 Human Goal로 독립 실행하며 그대로 유지한다. 향후 v4 통합에서는 승인된 방향과
-개별 구현 업무를 실행 계약으로 구체화하는 데 재사용한다. 입력·검증 계약은 아래 v4 Step 9의 Planned
-범위이며 현재 planTask()의 기능이 아니다. [책임 경계](architecture.md#v1-planning과-v4-ceo의-application-책임)를 따른다.
+독립 v1은 GoalSpec, Working Tree inspection, Fast Path, Codex Planner와 Planning Loop를 사용해
+명시적 TaskContract를 생성했다. 현재 독립 진입점과 Fast Path는 제거했고, Planner Loop와
+TaskDraft → TaskContract 변환은 Phase B의 Assignment Task Detailing에서 재사용한다.
+계획 수립은 승인된 Read Session을 사용하고 실제 수정 실행은 별도 Write Authorization을 거친다.
+[책임 경계](architecture.md#v1-planning과-v4-ceo의-application-책임)를 따른다.
 
 ## v2 — Governed Independent Decision
 

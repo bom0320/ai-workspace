@@ -12,12 +12,33 @@ function createState(): PlanningState {
       targetRepository: "example",
       constraints: ["Keep changes scoped"],
     },
+    detail: {
+      objective: "Improve error feedback",
+      deliverable: "Actionable error descriptions",
+      direction: "Keep the existing input contract",
+    },
+    assignmentDetail: {
+      specialist: {
+        id: "engineer",
+        role: "Engineer",
+        objective: "Improve feedback",
+      },
+      workItem: {
+        id: "work-1",
+        objective: "Improve feedback",
+        deliverable: "Clear errors",
+      },
+      executionBounds: {
+        readScopes: [],
+        writeScopes: [],
+        shellCommands: ["git diff --check"],
+        budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
+      },
+    },
     repository: {
       repositoryRoot: "/repositories/example",
       repositoryName: "example",
       fileTree: ["package.json", "src/cli.ts"],
-      packageScripts: { test: "vitest run" },
-      instructions: "Repository instructions",
     },
     inspectedFiles: [{ path: "src/cli.ts", content: "// File content" }],
   };
@@ -46,11 +67,11 @@ describe("createPlannerContext", () => {
 
     expect(input).toEqual({
       goal: state.goal,
+      detail: state.detail,
+      assignmentDetail: state.assignmentDetail,
       repository: {
         name: "example",
         fileTree: state.repository.fileTree,
-        packageScripts: state.repository.packageScripts,
-        instructions: state.repository.instructions,
       },
       inspectedFiles: state.inspectedFiles,
       limits,
@@ -60,23 +81,12 @@ describe("createPlannerContext", () => {
     expect(input).not.toHaveProperty("repositoryRoot");
   });
 
-  it("preserves optional instructions when they are absent", () => {
-    const state = createState();
-    delete state.repository.instructions;
-
-    expect(
-      createPlannerContext(state, limits).repository.instructions
-    ).toBeUndefined();
-    expect(state.repository).not.toHaveProperty("instructions");
-  });
-
   it("shares existing fact references without mutating state", () => {
     const state = createState();
     const before = structuredClone(state);
     Object.freeze(state.goal);
     Object.freeze(state.repository);
     Object.freeze(state.repository.fileTree);
-    Object.freeze(state.repository.packageScripts);
     Object.freeze(state.inspectedFiles);
     Object.freeze(state);
 
@@ -84,9 +94,6 @@ describe("createPlannerContext", () => {
 
     expect(input.goal).toBe(state.goal);
     expect(input.repository.fileTree).toBe(state.repository.fileTree);
-    expect(input.repository.packageScripts).toBe(
-      state.repository.packageScripts
-    );
     expect(input.inspectedFiles).toBe(state.inspectedFiles);
     expect(state).toEqual(before);
   });

@@ -212,11 +212,11 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 - **Multi-Work Planning:** Work Item의 선행 관계와 상세 계획에 필요한 정보를 확인한다. 필요한 설계 정보가 충분하면 선행 업무 실행 전에도 상세 계획을 수립할 수 있다.
 - **공통 Detailed Planning:** 개별 Work Item의 계획 기능을 두 경우에 재사용한다. 모든 `TaskContract`를 최초 Planning 시점에 일괄 생성할 필요는 없다.
 
-**계약 교체 전 R5 구현 범위.** Phase B는 선택한 Work Item의 Objective·Deliverable과 승인 방향을 기존 Planner에 연결해 업무별 상세 계획을 만들었다. Work Item 단위 상세 계획 진입점은 제거했다. 독립 v1의 `planTask({ goal, repositoryPath, limits, planner? })`, Fast Path 및 Planner Loop는 후속 Assignment 상세 계획에서 재사용할 수 있다.
+**계약 교체 전 R5 구현 범위.** Phase B는 선택한 Work Item의 Objective·Deliverable과 승인 방향을 기존 Planner에 연결해 업무별 상세 계획을 만들었다. Work Item 단위 상세 계획 진입점은 제거했다. 당시에는 독립 v1 Planning도 유지했다. 현재 Assignment Task Detailing은 기존 Planner Loop와 계약 변환을 재사용한다.
 
 **Step 5.3.1-R Work Item 책임.** Work Item은 승인 방향에서 도출한 목표·산출물·선행 관계 및 선택적인 분리 근거·추천 역할을 정의한다. CEO는 승인 방향, Human 제약 및 위임 범위를 고려해 업무와 완료 경계를 분해한다. Work Item에는 실행 유형이나 접근 상한이 없다. Assignment가 개별 Specialist의 목표·산출물·접근 상한을 정의하고, 별도의 Authorization이 실제 권한을 결정한다. Worker는 승인된 구현에 사용하는 내부 Runtime이다.
 
-이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B Graph는 구형 Work Item 단위 상세 계획 및 직접 실행 옵션을 입력 단계에서 거부한다. Graph는 Execution Source를 발급하지 않는다. 독립 Planning, Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
+이전 Step 4.3은 `workType`을 사용해 읽기 전용과 수정 실행으로 분기했다. 현재 Phase B는 Assignment Plan 유무와 관계없이 직접 Work Item 실행을 차단한다. Phase B Graph는 구형 Work Item 단위 상세 계획 및 직접 실행 옵션을 입력 단계에서 거부한다. Graph는 Execution Source를 발급하지 않는다. Codex Runtime, Worktree·Scope·Verification·Evidence·Artifact 구성 요소는 유지한다.
 
 이전 `workType`을 포함한 Decomposition은 strict Ledger Schema에서 거부한다. Digest 재발급, 레코드 수정 또는 초기화는 수행하지 않는다. 같은 Ledger 파일이 호환되지 않는 기록을 포함하면 그 파일을 사용하는 다른 Governance 조회도 실패할 수 있다.
 
@@ -307,11 +307,11 @@ Approval의 `execution-delegation/`은 위임 제안·승인·조회와 위임 �
 
 Phase A의 Node는 `PhaseANodeInput`과 `PhaseANodeOutput`을 사용한다. [`phaseADataFlow`](../src/workflows/development-organization/phase-a/data-flow.ts)는 정책 조회가 지우는 이전 결과, Specialist 반복 실행의 진행 정보, Refinement가 이어받는 분석 근거, Synthesis Revision 및 방향 승인 완료 결과를 포함한다. 직접 Staffing 승인이 허용될 때 등록하는 `confirm-staffing-approval`과 `confirm-refinement`도 선언에 포함된다. 실제 등록 조건과 실행 순서는 [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)에서 정의한다.
 
-Staffing, Decision, Comparison, Analysis, Synthesis, Governance, Work Decomposition, Planning, Execution은 Application 최상위의 `data-flow/`에서 업무 계약을 소유한다. Analysis는 Assessment와 Refinement를, Planning은 Assignment Planning과 독립 Detailed Planning을 구분한다. 계약이 기존 도메인 모델이나 AI Protocol을 참조하는 경우 같은 스키마를 재사용한다.
+Staffing, Decision, Comparison, Analysis, Synthesis, Governance, Work Decomposition, Planning, Execution은 Application 최상위의 `data-flow/`에서 업무 계약을 소유한다. Analysis는 Assessment와 Refinement를, Assignment Planning은 Management가, Assignment Task Detailing은 Specialist가 소유한다. 계약이 기존 도메인 모델이나 AI Protocol을 참조하는 경우 같은 스키마를 재사용한다.
 
 ### Phase B Data Flow
 
-개별 Assignment는 `specialist/execution`이 수행하며, 복수 Assignment의 실행 순서와 동시성은 Workflow Coordinator가 조정한다. Write Claim에서 받은 프로세스 내부 객체를 `task-execution`이 한 번 소비하고, 기존 Worktree·Scope·Verification·Artifact 절차를 실행한다. 독립 Decision·Plan CLI는 각각 `specialist/analysis`와 `specialist/task-detailing`을 호출한다.
+개별 Assignment는 `specialist/execution`이 수행하며, 복수 Assignment의 실행 순서와 동시성은 Workflow Coordinator가 조정한다. Write Claim에서 받은 프로세스 내부 객체를 `task-execution`이 한 번 소비하고, 기존 Worktree·Scope·Verification·Artifact 절차를 실행한다. 독립 Decision CLI는 `specialist/analysis`를 호출한다. `detailAssignmentTask()`는 Phase B 수정 Assignment 실행에서 승인된 Read Session과 Execution Bounds를 전달받아 계약을 생성한다.
 
 
 [`phaseBDataFlow`](../src/workflows/development-organization/phase-b/data-flow.ts)는 실제 Node가 소비하는 State 필드와 기록하는 결과를 선언한다. Node는 이 선언에서 입력과 출력의 필드 타입을 가져오며, Agent와 실행 설정은 Node 생성 옵션으로 전달한다. Governance의 `data-flow/handoff/`, Work Decomposition, Execution Assignment, Specialist Execution의 각 `data-flow/`에는 각 업무가 직접 사용하는 입출력 계약이 있다. 전체 Assignment의 실행 입력과 집계 결과는 Workflow Coordinator가 소유한다. 공통 `PhaseBHandoff` 스키마는 Phase A 성공 분기와 Phase B 입력에서 재사용한다. [공통 Handoff 계약](../src/workflows/development-organization/contracts/phase-handoff.ts)
@@ -504,7 +504,7 @@ CLI 노출 여부만으로 Application 구현 여부를 판정하지 않는다.
 | Staffing CLI | [runStaffingApproval](../src/workflows/development-organization/phase-a/entrypoints/run-staffing-approval.ts)이 staffing-approval 실행 대상을 명시하고 개별 Stage 결과를 기존 반환 형식으로 변환 | 기존 입력·Human 확인·출력 유지, Specialist 실행 없음 |
 | Staffing / Governance | [Staffing API](../src/application/management/allocation/analysis-assignment/index.ts), [Governance API](../src/application/governance/index.ts) 구현 | Proposal Finalization, 직접/위임 승인·Scope 발급, Authorization / Reservation / 일회 Claim 제공 |
 | Specialist Decisions / Comparison | [Phase A Graph](../src/workflows/development-organization/phase-a/graph.ts)의 일반 Specialist Node / Edge가 기존 Governance·v2 / v3를 조합 | 순차 반복·Fail-fast는 Edge가 제어. 단일 Decision은 Comparison 생략; Staffing CLI에서는 미실행 |
-| Planning / Execution | [v1 Planning](../src/application/specialist/task-detailing/index.ts), [v0 Execution](../src/application/task-execution/index.ts) 구현 | 독립 CLI / Application capability. ApprovedDecision 입력·Phase B 실행 조정은 없음 |
+| Task Detailing / Execution | [Assignment Task Detailing](../src/application/specialist/task-detailing/index.ts), [Task Execution](../src/application/task-execution/index.ts) | 승인된 Phase B Assignment 경로에서 사용 |
 
 현재 Stage 3 실패 단계는 preflight / authorization / claim / decision이며 미완료 묶음을 성공으로
 반환하지 않는다. Stage 4 실패는 별도 decisionComparisonResult에 기록한다. Claim 세부 거부 원인은 구분하지

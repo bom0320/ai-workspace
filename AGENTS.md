@@ -4,7 +4,7 @@
 
 이 프로젝트는 개발자와 AI Coding Agent가 실제 Repository에서 함께 일하기 위한 ADE이자 Development Governance Harness다. North Star와 Make vs Adopt의 기준은 [Project Direction](docs/project-direction.md)에 둔다.
 
-현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision, v3 Structured Decision Comparison이 구현되어 있으며 다음 원칙을 따른다.
+v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision, v3 Structured Decision Comparison을 단계적으로 검증했다. 현재 상세 계획은 Phase B의 Assignment Task Detailing에서 수행하며 다음 원칙을 따른다.
 
 > Reliable Worker before Agent Team
 
@@ -56,10 +56,10 @@ Development Organization 실행 계약·Phase Handoff·Graph State / Output 소�
 
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
 - `docs/workflow-architecture.md`: Organization 실행 계약·Phase Handoff·State / Output 소유권과 Step 2.5 재검토 기준
-- `src/cli/cli.ts`: interactive workflow selector와 explicit command의 CLI entry point
+- `src/cli/cli.ts`: interactive Decision 입력과 explicit command의 CLI entry point
 - `src/contracts/`: 여러 Application이 공유하는 도메인별 runtime-validated 데이터 계약
 - `src/cli/commands/execute/load-task-contract.ts`: Execute Command의 TaskContract 파일 로딩
-- `src/application/specialist/task-detailing/`: Goal-to-Task Planning use-case와 public API
+- `src/application/specialist/task-detailing/`: 승인된 Context 기반 Assignment Task Detailing과 public API
 - `src/application/specialist/analysis/`: 독립·Assignment 분석의 use-case와 public API. Snapshot 파일 로딩은 Repository Snapshot Service가 소유
 - `src/application/management/decision-support/comparison/`: 독립 AgentDecision을 Concern 단위로 비교하고 source reference를 검증하는 use-case와 public API; 기존 CLI command와 v4 Phase A Workflow가 독립 API를 조합
 - `src/application/management/allocation/analysis-assignment/`: CEO Staffing·Snapshot Context·Proposal Finalization

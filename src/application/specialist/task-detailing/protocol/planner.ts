@@ -4,18 +4,16 @@ import type { GoalSpec } from "@/contracts/goal.js";
 import { taskContractSchema } from "@/contracts/task.js";
 
 import type { PlanningLimits } from "../model/limits.js";
-import type { DetailedPlanningInput, PlanningState } from "../model/state.js";
-import type { InspectRequest, InspectedFile } from "./inspection.js";
+import type { PlanningState } from "../model/state.js";
+import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 
 export type PlannerContext = {
   goal: GoalSpec;
-  detail?: DetailedPlanningInput;
-  assignmentDetail?: PlanningState["assignmentDetail"];
+  detail: PlanningState["detail"];
+  assignmentDetail: PlanningState["assignmentDetail"];
   repository: {
     name: string;
     fileTree: string[];
-    packageScripts: Record<string, string>;
-    instructions?: string;
   };
   inspectedFiles: InspectedFile[];
   limits: PlanningLimits;
@@ -31,7 +29,9 @@ export type TaskDraft = z.infer<typeof taskDraftSchema>;
 
 const inspectionRequestSchema = z.object({
   paths: z.array(z.string().min(1)),
-}) satisfies z.ZodType<InspectRequest>;
+});
+
+export type InspectRequest = z.infer<typeof inspectionRequestSchema>;
 
 export const plannerDecisionSchema = z.discriminatedUnion("type", [
   z.object({

@@ -103,23 +103,19 @@ async function runScenario(
           }, 20_000);
           child.stdout.on("data", (chunk) => {
             stdout += chunk.toString();
-            if (step === 0 && stdout.includes("2. Decision")) {
+            if (step === 0 && stdout.includes("Repository:\n>")) {
               step = 1;
-              child.stdin.write("2\n");
-            }
-            if (step === 1 && stdout.includes("Repository:\n>")) {
-              step = 2;
               child.stdin.write(`${repositoryRoot}\n`);
             }
-            if (step === 2 && stdout.includes("Decision Goal:\n>")) {
-              step = 3;
+            if (step === 1 && stdout.includes("Decision Goal:\n>")) {
+              step = 2;
               child.stdin.write("Evaluate the button\n");
             }
             if (
-              step === 3 &&
+              step === 2 &&
               stdout.includes("Submit an empty line when finished.")
             ) {
-              step = 4;
+              step = 3;
               child.stdin.end("button.tsx\n\n");
             }
           });
@@ -222,12 +218,12 @@ it("rejects a dirty repository before starting Codex", async () => {
   expect(result.statusAfter).toContain("button.tsx");
 }, 30_000);
 
-it("selects Decision from the interactive menu, collects Context and prints both results with one title", async () => {
+it("opens Decision prompts directly and presents both results with one title", async () => {
   const result = await runScenario("success", true);
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout.match(/AI Workspace/g)).toHaveLength(1);
-  expect(result.stdout).toContain("Select workflow:");
+  expect(result.stdout).not.toContain("Select workflow:");
   expect(result.stdout).toContain("Decision Goal:");
   expect(result.stdout).toContain("Context Files");
   expect(result.stdout).toContain("[Frontend Specialist]");

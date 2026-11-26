@@ -27,7 +27,7 @@ Application의 책임은 조직의 역할과 실행 경계에 따라 나뉜다.
 | `management/decision-support/` | 전문 판단 비교, 분석 충분성 평가, 방향 종합 |
 | `management/work-decomposition/` | 승인된 방향을 목표·산출물·의존성을 갖는 Work Item으로 분해 |
 | `specialist/analysis/` | 독립 분석과 Assignment 분석 |
-| `specialist/task-detailing/` | 승인된 Context 또는 독립 Plan CLI 입력으로 TaskContract 작성 |
+| `specialist/task-detailing/` | 승인된 Read Session과 배정 업무에서 TaskContract 작성 |
 | `specialist/execution/` | Assignment의 읽기·수정 절차와 Governance 호출 연결 |
 | `governance/` | 승인 출처와 기록 검증, 개별 실행 권한 발급·소비 |
 | `task-execution/` | 소비된 Write Claim으로 Worktree 실행, Scope·Verification·Artifact 처리 |
@@ -39,24 +39,24 @@ Phase A와 Phase B의 Graph는 각 기능의 순서와 상태를 소유한다. �
 독립적인 대상 Git Repository에 연결하며, 대상이 이 시스템의 코드나 조직 구조를 포함할 필요는 없다.
 
 ```text
-CLI: workflow selection / explicit arguments / Human gates / presentation
-  ├─ application/specialist/task-detailing → TaskContract
+CLI: interactive Decision / explicit arguments / Human gates / presentation
   ├─ application/specialist/analysis → { goal, snapshot, decisions: AgentDecision[] }
   └─ application/management/decision-support/comparison → ComparisonResult
-Phase B → application/task-execution → ExecutionOutcome
+Phase B → specialist/execution → specialist/task-detailing → Bound TaskContract
+        → task-execution → ExecutionResult
            ↓
 Contracts / application policies / Scope / Verification / Evidence / Artifacts
            ↓
 Codex role implementations / Git and Process infrastructure → Target Repository
 ```
 
-- Planning: GoalSpec, repository inspection, conservative Fast Path 또는 Codex Planner loop,
-  TaskDraft → TaskContract, Human constraints 보존.
+- Task Detailing: Assignment와 승인된 Read Session, Codex Planner loop,
+  구조화된 Implementation Plan 및 TaskDraft → TaskContract, Human constraints 보존.
 - Execution: detached Git worktree, Codex Worker, Scope / Verification / Evidence / artifacts와 duration telemetry.
 - Decision: clean RepositorySnapshot, commit의 explicit files, Frontend / UX 구성,
   순차 독립 실행, JSON schema / Evidence invariant 검증, 결과 반환.
 - Comparison: supplied AgentDecision[]의 Concern별 관계를 strict JSON으로 구조화하고 source reference 검증.
-- CLI: 인자 없는 workflow selector, 명시적 plan / decision / staffing / governance 및 결과 표시.
+- CLI: 인자 없는 Decision 입력, 명시적 decision / staffing / governance 및 결과 표시.
   Review / Delivery / Cleanup 모듈은 후속 Workflow 연결을 위해 유지한다.
 
 현재 stack은 Node.js / TypeScript / pnpm / tsx / Vitest / Zod / LangGraph.js와 필수 LangChain core다. Codex CLI는 외부 실행 도구이며
@@ -88,8 +88,7 @@ Phase A 완료 계약 → Work Decomposition → Execution Assignment
 → Evidence / Artifacts → Phase B State
 ```
 
-독립 Planning CLI는 TaskContract를 표시한다. Phase B에서 실행 준비 실패와 Pipeline 실행 결과는
-선택된 Work Item ID에 연결된다. Worktree는 실행 후 보존되며 원본 반영은 별도의 Human 결정이다.
+Phase B에서 TaskContract와 실행 결과는 Assignment에 연결된다. Worktree는 실행 후 보존되며 원본 반영은 별도의 Human 결정이다.
 
 ### Decision Governance
 
@@ -359,15 +358,9 @@ v4는 **What & Why / Governance**를 맡는다. CEO는 문제·불확실성의 �
 평가·재작업·재배치·Escalation·보고를 담당한다. 해결 방향의 최종 승인은 Human에게 있고, Harness가
 검증·권한 통제를 소유한다. 현재 구현된 CEO Staffing 호출·Loop와 이 전체 목표 책임을 구분한다.
 
-v1은 **Task Planning & Execution Contract**를 맡는다. Repository Context에서 개별 작업의 objective,
-수정 가능·금지 경로, Constraints, Acceptance Criteria와 Verification을 구체화하고 TaskDraft를 만든다.
-Harness의 buildTaskContract()가 계약을 최종화한다. CLI는 계획을 표시하며 Phase B는 Governance의
-Execution Source 등록과 실행 허가를 거쳐 계약을 Worker에 전달한다.
-
-| 사용 맥락 | 결정 범위 | 현재 상태 |
-| --- | --- | --- |
-| Standalone v1 | Human Goal과 Repository Context에서 구체적인 실행 작업을 계획 | 현재 Plan only. 실행은 Phase B 승인 경로에서 수행 |
-| v4-integrated v1 | Human이 승인한 해결 방향과 개별 구현 업무를 실행 계약으로 구체화 | 개별 Repository 변경 Work Item을 계획하고 승인된 Execution Source를 등록 |
+v1은 Human Goal을 TaskDraft와 명시적 TaskContract로 변환하는 독립 Planning을 검증했다.
+현재는 그 Draft/Contract 및 Planning Loop를 Phase B의 Assignment Task Detailing에서 재사용한다.
+Harness가 계약을 최종화하고 Governance가 Assignment Binding과 실제 수정 실행 권한을 별도로 검증한다.
 
 IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 CEO의 Goal 해석을 나타내는
 **데이터 모델**이다. 현재 CEOStaffingDecision의 propose 분기에 포함된 StaffingDraft.intent로 생성되며
@@ -377,12 +370,12 @@ IntentAnalysis의 problem / desiredOutcome / considerations / uncertainties는 C
 
 Phase B Work Decomposition은 Work Item의 목적·산출물·의존성을 정의한다. Specialist Assignment는 해당 업무에서 맡을 역할과 작업을 표현한다. 기존 Phase A StaffingAssignment는 분석 배치 계약으로 유지한다. Repository 변경 업무의 상세 계획에서 기존 TaskDraft / TaskContract를 활용한다. 세 개념과 실행 권한의 관계는 [Phase B 실행 계약](workflow-architecture.md#phase-b--detailed-design--execution)을 따른다.
 
-### CEO와 Planner의 handoff — Planned
+### CEO와 Planner의 handoff
 
-초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. R5.1 / R5.2는 기존 v1의 독립 호출을 보존하면서 개별 Work Item Planning 입력을 확장했다. R5.3 / R5.4는 Phase B Graph에서 명시적으로 선택한 Work Item의 Planning을 순차 실행하고 결과를 기록한다. 검증된 선행 결과 전달은 후속 실행 계약에서 다룬다.
+초기 설계는 승인 방향과 개별 구현 Assignment를 한 번에 Planner에 전달하는 흐름을 가정했다. 복수 Work Item에서는 선행 산출물이 상세 계획의 입력이 될 수 있어, R5는 [Planning Coordination & Detailed Planning](workflow-architecture.md#r5--phase-b-planning-coordination--detailed-planning)에서 업무별 계획 시점과 개별 계획 수립을 구분한다. R5.1 / R5.2는 기존 v1의 독립 호출을 보존하면서 개별 Work Item Planning 입력을 확장했다. R5.3 / R5.4에서는 Phase B Graph에서 명시적으로 선택한 Work Item의 Planning을 순차 실행했다. 현재는 수정 Assignment의 실행 내부에서 상세 계획을 수립한다. 검증된 선행 결과 전달은 후속 실행 계약에서 다룬다.
 
 현재 runStaffing()은 CEO의 Draft를 검증·최종화해 StaffingProposal / Escalation / Failure를 반환할 뿐
-planTask(), Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
+Task Detailing, Specialist Decision 실행, Comparison을 호출하지 않는다. 공통 Snapshot 모델·검사 서비스 재사용은
 이 use-case들의 실행 연결과 다르다. 현재 Decision CLI의 runDecision() → compareDecisions() 조합도
 CEO Staffing이나 Planning handoff와 독립적이다.
 
@@ -393,7 +386,7 @@ CEO Staffing이나 Planning handoff와 독립적이다.
 | CEO Agent — Autonomous Decision Maker | Phase A 판단·종합·제안, Phase B 업무 분해·배치·의존성·진행·실패 평가·재작업·재배치·Escalation·최종 보고 | 판단과 제안은 자율적이나 승인 없이 authority / scope / budget을 확대하거나 실행을 허가할 수 없음 |
 | Specialist | Phase A 독립 판단, Phase B 배정에 따른 분석·설계·구현·테스트·검토. 담당 Specialist에 결과 출처를 연결 | Phase A는 승인 Context의 읽기 전용·Shell 비활성화 실행. Phase B 수정은 별도 개별 Assignment Authorization 필요 |
 | Codex Worker | Specialist의 Repository 수정에 재사용하는 내부 Worktree 실행 Runtime | 조직 구성원에 해당하는 책임은 Specialist가 소유. Runtime은 승인 계약에 따라 실행하며 Harness가 독립 Verification을 수행 |
-| Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | 기존 Goal → TaskDraft / TaskContract를 재사용. Phase B Planning 기능이 승인 참조에서 개별 업무의 상세 계획 입력을 구성하며 Phase B Graph가 선택된 업무의 계획을 조정 |
+| Planner | 승인된 방향과 개별 업무를 실행 명세로 구체화 | Phase B 수정 Assignment에서 승인된 Read Session과 Execution Bounds를 사용해 TaskDraft / TaskContract를 생성 |
 | Harness — Governance & Control Owner | Authority / Scope / Budget 정책, Staffing validation, approval enforcement, Context isolation, schema / reference / Evidence validation, TaskContract / Repository execution, Verification | 실행 허용 조건과 Domain 의미를 소유하며 Human의 최종 권한을 보존 |
 | LangGraph.js — Workflow Runtime | Workflow state management, conditional routing, agent coordination, interrupt / resume, checkpoint / recovery, execution lifecycle | 실행 메커니즘을 담당하며 Governance policy / approval의 의미를 정의하지 않음; 실제 지원 동작은 통합에서 검증 |
 | Codex — Agent Execution Runtime | 개별 CEO / Specialist 등 모델 호출, prompt / Context 전달, structured output 생성, 개별 Agent 실행 | LangGraph.js로 대체하지 않음; 기존 통합 재사용; CEO Staffing 호출 구현, 전체 조직 실행 연결은 Planned |
@@ -403,7 +396,7 @@ Phase B Work Item은 목표·산출물·의존성과 선택적 근거·추천 �
 
 ### 통합 시 지켜야 할 invariant
 
-- 기존 `planTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
+- 기존 `detailAssignmentTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`와 Domain Model을 재사용한다.
   Decision 생성과 Comparison의 독립 capability 경계를 유지하고 각 application에 전체 조직 workflow를 숨겨 넣지 않는다.
 - LangGraph.js가 workflow state와 순서를 실행하더라도 Governance 전이의 허용 조건·의미는 Harness가 정의한다.
   Framework state / run / node가 core Domain Model에 불필요하게 누출되지 않도록 한다.
@@ -552,12 +545,9 @@ Staffing의 `flow/inspection/discover-context.ts`는 입력 검증·Snapshot cap
 `model/state.ts`에 두며 기존 Staffing public API와 flow의 타입 export 경로는 유지한다.
 Snapshot 검증 시점과 외부 동작·실패 의미는 이 책임 분리로 변경하지 않는다.
 
-`services/repository-inspection`은 v1의 exact path / unique basename / README mention 선택,
-package scripts 추출, 내부 디렉터리 제외와 v2 / Governance의 경로 predicate를 공유한다.
-Planning은 기존 Working Tree 읽기·정규화 허용 범위·Fast Path·TaskContract 생성과 초기 64 KiB/file /
-128 KiB Context·파일 수 제한을 유지한다. Staffing은 Planning private flow나 planTask를 호출하지 않는다.
-공유되는 것은 조사 선택·metadata parsing·경로 정책이며 PlanningState / PlannerContext / loop는 아니다.
-`createStaffingContext`는 기존 Planner projection과 같은 책임 분리 방식을 따르는 별도 Staffing 계약이다.
+`services/repository-inspection`은 exact path 및 unique basename 선택, package scripts 추출,
+내부 디렉터리 제외와 경로 정책을 제공한다. Staffing Context와 Task Detailing Context는 각자의
+입력 계약을 사용한다. Task Detailing의 파일 조회는 Governance의 승인된 Read Session을 사용한다.
 
 공통 services/repository-snapshot에서 Snapshot capture/assert를 재사용하고 파일 내용은 기존
 readRepositoryFileAtCommit으로 읽는다. 새 Git mechanism은 `git ls-tree -r -l -z --full-tree <full SHA>`로
@@ -1051,10 +1041,10 @@ Build vs Adopt도 같은 책임 기준을 따른다. Governance semantics와 외
 
 Source 영역은 다음 기준으로 구분한다.
 
-- `application`: 사용자의 목적을 실제 workflow로 수행한다. 현재 Planning의
-  `GoalSpec → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
+- `application`: 업무를 수행한다. 현재 Task Detailing의
+  `Assignment + Authorized Context → TaskContract`, Execution의 `TaskContract → ExecutionResult`, Decision의
   `Goal + RepositorySnapshot + explicit files → AgentDecision[]`가 여기에 속한다.
-  각 use-case는 독립 진입점을 가지며 CLI가 Planning과 Execution을 Human gate로 연결한다.
+  Phase B는 Task Detailing 결과를 Governance Binding과 Write Authorization을 거쳐 실행에 연결한다.
 - `workflows`: 여러 Application의 실행 순서·분기·대기를 조정한다. `development-organization/phase-a`는 Staffing → Approval 및 승인 Scope → Decision → Comparison을 별도 API로 연결한다. Organization state.ts는 공통 입력을, phase-a/graph.ts는 Phase A 내부 순서를 소유하며 현재 정책 조회·Staffing·Approval·Human 확인과 실행 대상에 따른 Specialist Decisions를 조정한다. 상위 Organization Graph는 Phase 간 Handoff 정의 이후 구성한다. Application으로부터 역참조하지 않는다. CLI I/O나 Application의 검증 정책을 옮기지 않는다.
 - `contracts`: 특정 application 하나에 종속되지 않는 system-wide contract를 둔다.
   현재 GoalSpec, TaskContract, InspectedFile의 runtime schema와 그 schema에서 파생된 타입이 해당한다.
@@ -1087,7 +1077,7 @@ flow는 orchestration만 담는 폴더가 아니다. 다음 과정에 직접 속
 
 ```text
 Planning:
-Goal → Repository 조사 → Planner 판단 → 추가 inspection → TaskDraft → TaskContract
+Assignment + Authorized Read Session → Planner → 필요시 승인된 Context 조회 → TaskDraft → TaskContract
 
 Execution:
 TaskContract → workspace 생성 → Worker 실행 → scope 검사
@@ -1099,7 +1089,7 @@ Goal / explicit file paths → Snapshot / commit Context → Specialist 구성
 ```
 
 flow root에는 가능한 한 public use-case entry를 둔다.
-현재 `specialist/task-detailing/flow/plan-task.ts`, `specialist/execution/flow/execute-assignment.ts`,
+현재 `specialist/task-detailing/flow/detail-assignment-task.ts`, `specialist/execution/flow/execute-assignment.ts`,
 `specialist/analysis/flow/run-decision.ts`가 해당한다. 파일명은 실제 TaskContract / Decision 책임을 반영하며
 억지로 대칭시키지 않는다.
 
@@ -1115,28 +1105,18 @@ Review / Delivery / Cleanup의 Human interaction 연결은 현재 CLI가 소유�
 #### Flow Implementation Grouping
 
 flow의 책임이 늘어나면 세부 작업별로 한 단계의 하위 디렉터리를 둘 수 있다.
-현재 Planning은 다음처럼 구분한다.
+Task Detailing은 다음처럼 구분한다.
 
 ```text
 flow/
-├─ plan-task.ts
-├─ adaptive/
+├─ detail-assignment-task.ts
 ├─ planning-loop/
-├─ inspection/
 └─ transformation/
 ```
 
-- `adaptive`: 보수적인 trivial task 판정과 Fast Path draft 생성.
-- `inspection`: workflow 진행에 필요한 사실 수집.
-  `inspectRepository`, `inspectFiles`가 Repository를 read-only로 조사한다.
-- `transformation`: workflow를 제어하지 않고 데이터 표현을 변환하거나 확정한다.
-  `createPlannerContext`는 AI-facing projection을 만들고,
-  `buildTaskContract`는 Draft에 Harness 식별자와 Human 제약을 반영한다.
-
-`inspection`, `transformation`은 flow 내부의 implementation grouping이다.
-`model`, `protocol`과 같은 application 최상위 분류가 아니므로,
-단순히 별도 책임이라는 이유로 `planning/inspection`, `planning/transformation`처럼
-use-case root로 올리지 않는다. 분류 축을 일관되게 유지한다.
+`planning-loop`는 round·요청·누적 파일 수를 확인하고 Read Session에서 전달받은 조회를 호출한다.
+`transformation`의 `createPlannerContext`는 AI-facing projection을 만들고,
+`buildTaskContract`는 Draft에 Harness 식별자와 Human 제약을 반영한다.
 
 Specialist Analysis는 `flow/independent`에서 순차 실행과 실패 종료를 조정하고 `flow/validation`에서 Evidence를 검증한다. 커밋 파일 로딩은 Repository Snapshot 서비스가 소유한다.
 `run-decision.ts`는 입력 검증, Goal 생성, Context loading과 두 Specialist 구성을 조립한다.
@@ -1156,14 +1136,14 @@ system-wide contract는 `contracts`, 역할 간 message contract는 `protocol`�
 #### protocol
 
 컴포넌트나 역할 사이에서 주고받는 구조화된 message contract를 둔다.
-Planning에는 PlannerContext, PlannerDecision, InspectRequest, InspectResult, TaskDraft가 있다.
+Planning에는 PlannerContext, PlannerDecision, InspectRequest, TaskDraft가 있다.
 Decision에는 SpecialistContext, AgentDecision, EvidenceReference와 Decision Zod schema가 있다.
 Comparison에는 ComparisonContext와 strict ComparisonPayload schema가 있다.
 
 ```text
 Harness → PlannerContext → Planner
 Planner → PlannerDecision → Harness
-Planner → InspectRequest → Harness inspectFiles() → InspectResult → PlanningState update
+Planner → InspectRequest → AssignmentReadSession.inspect() → 승인된 누적 Context → PlanningState update
 ```
 
 PlanningResult는 Planning use-case의 최종 결과이고,
@@ -1184,7 +1164,7 @@ Codex Worker도 Execution의 Worker 역할 구현체이므로 Execution이 소�
 
 #### index.ts
 
-해당 use-case의 public boundary다. `planTask`, `executeAssignment`, `runDecision`과 각 결과 타입,
+해당 use-case의 public boundary다. `detailAssignmentTask`, `executeAssignment`, `runDecision`과 각 결과 타입,
 필요한 하위 capability 등 외부에 필요한 API를 제공한다.
 내부 파일 위치가 바뀌어도 외부 사용자가 그 배치에 직접 의존하지 않도록 한다.
 Cross-module은 `@/*` alias와 대상 module의 `index.ts`, same-module 내부는 상대경로를 사용한다.
@@ -1358,7 +1338,7 @@ src/
 | Repository 실체와 Commit 파일 데이터의 기술적 유효성 | Git Infrastructure | `resolveRepositoryRoot()`, `readRepositoryFileAtCommit()` — `infrastructure/git/repository/repository.ts`; `listRepositoryFilesAtCommit()` — `commit-files.ts` | Planning, Snapshot 서비스, Staffing, Decision, Governance 경로 확인 | Repository 해석·Commit tree/blob 로딩 | Policy + Lifecycle |
 | HEAD·Clean 상태와 Snapshot 일치 | Repository Snapshot 서비스 | `captureRepositorySnapshot()`, `assertRepositoryMatchesSnapshot()` — `services/repository-snapshot/repository-snapshot.ts` | Decision, Staffing, Governance Approval/Scope 조회 | Capture·Agent/파일 로딩 전후·발급 전 | Lifecycle |
 | 상대경로·정규 표현, File/Directory 포함 관계 | Repository Inspection 서비스 | `isRepositoryRelativePath()`, `isUnambiguousRepositoryPath()` — `discovery.ts`; `validateContextAccessPolicy()`, `isContextPathAllowed()`, `isContextScopeContained()` — `services/repository-inspection/access-policy.ts` | Decision loader, Staffing, Delegation, Invocation 평가 | 경로 입력·목록 노출·내용 요청·범위 포함 검사 | Schema + Policy |
-| Working Tree 조사 경로, 내부 디렉터리 차단, 파일 여부·조사 한도 | Planning | `inspectFiles()`, `inspectInitialFiles()` — `application/specialist/task-detailing/flow/inspection/`; `hasValidLimits()`, `prepareInspection()` — `flow/planning-loop/planning-loop.ts` | `planTask()`, Planning Loop | 초기 seeding·추가 조사·round 제어 | Policy + Lifecycle |
+| 승인된 Snapshot 경로·Context 한도 및 계획 반복 제한 | Governance / Task Detailing | `AssignmentReadSession.inspect()`, `runPlanningLoop()` | `detailAssignmentTask()` | 권한·Snapshot 재검증 및 round 제어 | Policy + Lifecycle |
 | Context 접근·민감 경로·regular mode·파일 수/크기·실제 JSON byte 제한 | Staffing Inspection | `isInspectablePath()`, `requireFile()`, `prepareInspection()`, `createAllowedFileTree()`, `prepareMetadataInspection()`, `assertContextBudget()` — [context-policy.ts](../src/application/management/allocation/analysis-assignment/flow/inspection/context-policy.ts) | Discovery, Metadata/Initial Seeding/추가 Inspection, Proposal Validation | 파일 목록 노출 전·batch 로딩 전·직렬화 후 | Policy |
 | CEO-facing 구조·응답 분기·호출/조사 한도 | Staffing Protocol / Flow | `staffingContextSchema`, `ceoStaffingDecisionSchema`; `validateDiscoveryInput()` — `flow/inspection/discover-context.ts`; `callLimitsSchema` — `flow/orchestration/run-staffing-loop.ts` | Discovery, CEO Adapter, Staffing Loop | Context 투영·모델 응답·최종 propose/escalate | Schema + Policy + Lifecycle |
 | Assignment 등록·중복·Context·예산과 원본 Run 연결 | Staffing Finalization | `staffingDraftSchema`, `staffingProposalSchema`; `prepareProposalInput()`, `validateProposal()` — [validate-proposal.ts](../src/application/management/allocation/analysis-assignment/flow/validation/validate-proposal.ts); `buildStaffingProposal()` | `runStaffing()` | Draft 수신·ID 발급 전후 | Schema + Policy |
@@ -1507,20 +1487,15 @@ Evidence 검증은 supplied path와 line 범위/순서이고, Reference 검증�
 finding/gap의 최소 source 수다. 내용의 진실성·비교의 완전성은 증명하지 않는다. Comparison 자체는
 Repository를 조사하거나 Snapshot drift를 다시 검사하지 않는다.
 
-**v1 Planning → TaskContract — 현재**
+**Phase B Task Detailing → TaskContract — 현재**
 
 ```text
-CLI 입력/goalSpecSchema → planTask: resolveRepositoryRoot → Working Tree metadata / inspectInitialFiles
-  ├─ createFastPathTaskDraft의 대상/목표 조건 → buildTaskContract
-  └─ runPlanningLoop: hasValidLimits → planner (기본 Adapter는 Process/JSON/plannerDecisionSchema)
-      ├─ inspect: 요청 수·resolve 기준 중복·총 조사 수 → inspectFiles의 경로/내부 폴더/파일 검사
-      └─ complete → buildTaskContract: Harness ID/targetRepository, 원본 Constraints와 Draft 제약 합집합
-        → taskContractSchema → 독립 CLI 표시 또는 Phase B 출처 등록
+Write Assignment + 승인된 Read Session + Execution Bounds → detailAssignmentTask
+  → runPlanningLoop → 현재 Eligibility 및 Deadline 확인 → Codex Planner
+    ├─ inspect: 요청 수·중복·누적 파일 수 확인 → 승인된 Read Session에서 추가 조회
+    ├─ complete: TaskDraft → buildTaskContract → Governance Validation / Binding
+    └─ blocked: 사유를 포함한 Assignment 계획 중단
 ```
-
-`planTask()`는 typed Goal 입력을 받으며 자체적으로 Goal Schema를 다시 파싱하지 않는다. 주입 Planner를
-Loop가 `plannerDecisionSchema`로 다시 파싱하는 구조도 아니다. 실제 Runtime Schema 적용 위치는 기본
-Codex Planner와 최종 TaskContract 경계다. 모든 내부 typed 함수를 동일한 unknown 입력 validator로 설명하지 않는다.
 
 **Phase B Execution → Scope → Verification — 현재**
 
@@ -1549,7 +1524,6 @@ Worker 실패 시에는 변경 Evidence를 수집하며 Verification을 시작�
 | 공통화 완료 | System Schema와 `validateDiscoveryInput()`이 `contracts/specialist/definition.ts`의 `specialistDefinitionsSchema`를 재사용 | ID 고유성 구현은 공통 목록 Schema 한 곳에 둔다. 독립 Discovery의 입력 파싱은 유지한다. 목록 자체에는 최소 개수·Phase A Authority를 강제하지 않고 System Policy만 해당 제한을 추가한다. |
 | 제거 완료 / 별도 guard 유지 | `validateStaffingProposal()`의 System Schema parse 직후 Specialist Set 검사 제거 | 같은 설정의 고유성을 Schema가 이미 보장하므로 별도 검사는 불필요하다. Assignment ID 중복 검사는 다른 대상이므로 유지한다. `validateProposal()`의 선택된 Authority guard는 내부 typed 입력 전제를 바꾸지 않기 위해 유지했다. |
 | 서로 다른 규칙 | 등록 ID 고유성, Draft Specialist 중복 배치, 발급 Assignment ID 충돌, Invocation의 승인 Assignment ID 중복 | 서로 다른 식별 대상과 신뢰 경계다. 하나의 duplicate 검사로 합치지 않는다. v2 source ID·v3 finding별 source 중복도 별도 규칙이다. |
-| 독립 계약 / 공통화 검토 | v1 Working Tree `inspectFiles()`와 Staffing Snapshot Inspection | v1은 resolve/normalize·stat/read와 조사 수 제한, Staffing은 canonical path·access scopes·Commit regular mode·민감 경로·실제 JSON budget이다. 초기 seeding의 64/128 KiB 정책은 유사하지만 Snapshot/Working Tree 로딩은 다르다. 보안 동등성이나 통합 가능성을 이름만 보고 단정하지 않는다. |
 | 측정 후 유지 | 성공하는 `approveStaffingProposal()` 한 호출에서 `evaluateStaffingApproval()` 3회 및 각 Proposal tree/blob 재검증 | 최초 승인 방식, 근거 확보 후 발급 전, 최종 저장 전을 보호한다. Ledger Lock은 외부 Git을 잠그지 않는다. 발급 직전/저장 직전 위임 만료와 Git blob 변경 회귀 테스트를 보강했으며, 전체 평가를 캐시하거나 Snapshot/시간 검사만 남기지 않았다. |
 | 반복 비용 검토 후보 | Finalization 주변의 연속 Snapshot assert, Approval의 별도 assert와 중첩된 Proposal assert | 일부 구간은 동기 Schema/변환만 수행하지만 Git은 다른 프로세스가 변경할 수 있다. 어떤 상태와 I/O를 끼고 있는지 먼저 명시해야 하며, 호출 횟수만으로 불필요하다고 확정하지 않는다. |
 

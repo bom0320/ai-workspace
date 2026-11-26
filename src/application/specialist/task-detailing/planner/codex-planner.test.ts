@@ -8,19 +8,43 @@ import { runCommand } from "@/infrastructure/process/index.js";
 import type { TaskDraft } from "../protocol/planner.js";
 import * as projection from "../flow/transformation/create-planner-context.js";
 import type { PlanningState } from "../model/state.js";
-import { createCodexPlanner } from "./codex-planner.js";
+import {
+  AssignmentPlanningBlockedError,
+  createCodexPlanner,
+} from "./codex-planner.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 
 const runCommandMock = vi.mocked(runCommand);
 const state: PlanningState = {
   goal: { objective: "Implement the goal", targetRepository: "example" },
+  detail: {
+    objective: "Improve error feedback",
+    deliverable: "Actionable error descriptions",
+    direction: "Keep the existing input contract",
+  },
+  assignmentDetail: {
+    specialist: {
+      id: "engineer",
+      role: "Engineer",
+      objective: "Improve feedback",
+    },
+    workItem: {
+      id: "work-1",
+      objective: "Improve feedback",
+      deliverable: "Clear errors",
+    },
+    executionBounds: {
+      readScopes: [],
+      writeScopes: [],
+      shellCommands: ["git diff --check"],
+      budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
+    },
+  },
   repository: {
     repositoryRoot: "/private/repositories/example",
     repositoryName: "example",
     fileTree: ["src/example.ts"],
-    packageScripts: { test: "vitest run" },
-    instructions: "Keep changes minimal",
   },
   inspectedFiles: [{ path: "src/example.ts", content: "// Example" }],
 };
@@ -31,7 +55,19 @@ const task: TaskDraft = {
   forbiddenPaths: [],
   constraints: [],
   acceptanceCriteria: ["The goal is implemented"],
-  verification: ["pnpm test"],
+  verification: ["git diff --check"],
+  implementationPlan: {
+    background: "Improve feedback",
+    currentState: "The example lacks error feedback",
+    targetDesign: "Display actionable errors",
+    steps: [
+      {
+        title: "Add feedback",
+        targetPaths: ["src/example.ts"],
+        instructions: ["Display the error message"],
+      },
+    ],
+  },
 };
 const limits = { maxRounds: 4, maxFilesPerRequest: 5, maxTotalFiles: 12 };
 const inspect = { type: "inspect", request: { paths: ["package.json"] } };
@@ -48,32 +84,46 @@ beforeEach(() => {
 });
 
 describe("createCodexPlanner", () => {
-  it("sends the detailed direction, objective, deliverable and serialized delegation grant to Codex", async () => {
-    const detail = {
-      direction: "Keep the existing input contract",
-      objective: "Improve error feedback",
-      deliverable: "Actionable error descriptions",
-      executionDelegationGrant: JSON.stringify({
-        readPaths: ["src/example.ts"],
-        writePaths: ["src/example.ts"],
-        shellCommands: ["pnpm test"],
-        budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
-        policyVersion: 1,
-        expiresAt: "2099-01-01T00:00:00Z",
-      }),
-    };
-    await createCodexPlanner()({ ...state, detail }, limits);
+  it("uses the Assignment objective, deliverable, direction and execution bounds", async () => {
+    await createCodexPlanner({ timeoutMs: 5000 })(state, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
-    expect(prompt).toContain("only the supplied detailed planning objective");
-    expect(prompt).toContain(
-      "within the approved detail.executionDelegationGrant"
-    );
-    expect(JSON.parse(prompt.split("PlannerContext:\n")[1]).detail).toEqual(
-      detail
-    );
+    const input = JSON.parse(prompt.split("PlannerContext:\n")[1]);
+    expect(input.detail).toEqual(state.detail);
+    expect(input.assignmentDetail).toEqual(state.assignmentDetail);
+    expect(prompt).toContain("Stay within assignmentDetail.executionBounds");
+    expect(prompt).toContain("On complete, include implementationPlan");
   });
+
+  it("recognizes blocked Assignment plans", async () => {
+    runCommandMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        type: "blocked",
+        reason: "Already implemented",
+      }),
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    });
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).rejects.toThrow(AssignmentPlanningBlockedError);
+  });
+
+  it("rejects an oversized authorized context before calling Codex", async () => {
+    const oversized = {
+      ...state,
+      inspectedFiles: [
+        { path: "src/example.ts", content: "a".repeat(64 * 1024) },
+      ],
+    };
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(oversized, limits)
+    ).rejects.toThrow("Authorized planning context exceeds 64 KiB.");
+    expect(runCommandMock).not.toHaveBeenCalled();
+  });
+
   it("prefers minimum-round completion without weakening inspection limits", async () => {
-    await createCodexPlanner()(state, limits);
+    await createCodexPlanner({ timeoutMs: 5000 })(state, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
     for (const rule of [
       "fewest planning rounds possible",
@@ -93,7 +143,7 @@ describe("createCodexPlanner", () => {
         content: "context",
       })),
     };
-    await createCodexPlanner()(currentState, limits);
+    await createCodexPlanner({ timeoutMs: 5000 })(currentState, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
     const context = JSON.parse(prompt.split("PlannerContext:\n")[1]);
     expect(context.limits).toEqual(limits);
@@ -122,7 +172,7 @@ describe("createCodexPlanner", () => {
 
   it("uses supplied non-default limits without hardcoding", async () => {
     const custom = { maxRounds: 2, maxFilesPerRequest: 1, maxTotalFiles: 3 };
-    await createCodexPlanner()(state, custom);
+    await createCodexPlanner({ timeoutMs: 5000 })(state, custom);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
     expect(prompt).toContain("max files per inspect request: 1");
     expect(JSON.parse(prompt.split("PlannerContext:\n")[1])).toMatchObject({
@@ -131,7 +181,7 @@ describe("createCodexPlanner", () => {
     });
   });
   it("requires executable verification commands and explicitly prohibits prose", async () => {
-    await createCodexPlanner()(state, limits);
+    await createCodexPlanner({ timeoutMs: 5000 })(state, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
     expect(prompt).toContain(
       "Verification entries MUST be executable shell commands"
@@ -141,9 +191,8 @@ describe("createCodexPlanner", () => {
       "Do not put prose, explanations, or natural-language instructions"
     );
     for (const example of [
+      "Use only verification commands listed in the supplied execution bounds",
       "git diff --check",
-      "pnpm typecheck",
-      "pnpm test",
       "README 변경 내용을 검토한다",
       "git diff로 변경 내용을 확인한다",
       "git diff -- README.md로 변경 범위를 확인한다",
@@ -154,7 +203,7 @@ describe("createCodexPlanner", () => {
   it("projects state into the prompt without repositoryRoot or internal paths", async () => {
     const createInput = vi.spyOn(projection, "createPlannerContext");
     const before = structuredClone(state);
-    await createCodexPlanner()(state, limits);
+    await createCodexPlanner({ timeoutMs: 5000 })(state, limits);
 
     expect(createInput).toHaveBeenCalledWith(state, limits);
     const prompt = runCommandMock.mock.calls[0][1].at(-1)!;
@@ -163,7 +212,7 @@ describe("createCodexPlanner", () => {
     expect(prompt).not.toContain(state.repository.repositoryRoot);
     expect(prompt).not.toContain("repositoryRoot");
     expect(state).toEqual(before);
-    expect(prompt).toContain("planning-only");
+    expect(prompt).toContain("Prepare a plan as assignmentDetail.specialist");
     expect(prompt).toContain("must not edit files");
     expect(prompt).toContain("execute repository commands");
     expect(prompt).toContain("must not assume file contents");
@@ -173,7 +222,6 @@ describe("createCodexPlanner", () => {
     expect(prompt).toContain('"type":"complete"');
     expect(prompt).toContain("TaskDraft");
     expect(prompt).toContain("Do not generate id or goalId");
-    expect(prompt).not.toContain('"id":');
     expect(prompt).not.toContain('"goalId":');
   });
 
@@ -231,7 +279,9 @@ describe("createCodexPlanner", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await createCodexPlanner()(state, limits)).toEqual(inspect);
+    expect(
+      await createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).toEqual(inspect);
   });
 
   it("returns a validated complete decision", async () => {
@@ -242,7 +292,9 @@ describe("createCodexPlanner", () => {
       exitCode: 0,
       timedOut: false,
     });
-    expect(await createCodexPlanner()(state, limits)).toEqual(decision);
+    expect(
+      await createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).toEqual(decision);
   });
 
   it.each(["I think you should inspect...", "```json\n{}\n```", ""])(
@@ -254,9 +306,9 @@ describe("createCodexPlanner", () => {
         exitCode: 0,
         timedOut: false,
       });
-      await expect(createCodexPlanner()(state, limits)).rejects.toThrow(
-        "Codex planner returned malformed JSON."
-      );
+      await expect(
+        createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+      ).rejects.toThrow("Codex planner returned malformed JSON.");
       expect(existsSync(runCommandMock.mock.calls[0][2].cwd)).toBe(false);
     }
   );
@@ -272,9 +324,9 @@ describe("createCodexPlanner", () => {
       exitCode: 0,
       timedOut: false,
     });
-    await expect(createCodexPlanner()(state, limits)).rejects.toBeInstanceOf(
-      ZodError
-    );
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).rejects.toBeInstanceOf(ZodError);
   });
 
   it("throws on non-zero process exit", async () => {
@@ -284,9 +336,9 @@ describe("createCodexPlanner", () => {
       exitCode: 1,
       timedOut: false,
     });
-    await expect(createCodexPlanner()(state, limits)).rejects.toThrow(
-      "Failed to run Codex planner: Process failed"
-    );
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).rejects.toThrow("Failed to run Codex planner: Process failed");
   });
 
   it("throws on executable failure and retains its cause", async () => {
@@ -298,7 +350,9 @@ describe("createCodexPlanner", () => {
       timedOut: false,
       error,
     });
-    await expect(createCodexPlanner()(state, limits)).rejects.toMatchObject({
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).rejects.toMatchObject({
       cause: error,
     });
   });
@@ -318,7 +372,9 @@ describe("createCodexPlanner", () => {
   it("propagates unexpected runner rejection and cleans up the working directory", async () => {
     const error = new Error("System failure");
     runCommandMock.mockRejectedValue(error);
-    await expect(createCodexPlanner()(state, limits)).rejects.toBe(error);
+    await expect(
+      createCodexPlanner({ timeoutMs: 5000 })(state, limits)
+    ).rejects.toBe(error);
     expect(existsSync(runCommandMock.mock.calls[0][2].cwd)).toBe(false);
   });
 });

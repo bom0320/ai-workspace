@@ -2,62 +2,16 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { RunDecisionInput } from "@/application/specialist/analysis/index.js";
-import type { PlanningResult } from "@/application/specialist/task-detailing/index.js";
 
 import { runGovernanceCli } from "./commands/governance/index.js";
 import { runStaffingCli } from "./commands/staffing/index.js";
 
-import { runPlanCommand } from "./commands/plan/index.js";
 import { runDecisionCommand } from "./commands/decision/index.js";
 import {
   presentDecisions,
   presentComparison,
 } from "./presenters/decision/index.js";
-import { selectWorkflow } from "./prompts/workflow/index.js";
-import { askGoal, type GoalInput } from "./prompts/planning/index.js";
 import { askDecision } from "./prompts/decision/index.js";
-import { presentTaskContract } from "./presenters/planning/index.js";
-
-function reportPlanning(result: PlanningResult): boolean {
-  if (result.status === "failed") {
-    console.error("Planning: failed");
-    console.error(`Rounds: ${result.rounds}`);
-    console.error(`Reason: ${result.reason}`);
-    return false;
-  }
-  console.log("Planning: completed");
-  console.log(`Rounds: ${result.rounds}`);
-  return true;
-}
-
-export async function runPlanningCli(args: string[]): Promise<number> {
-  return executePlanningInput({
-    repositoryPath: args[0] ?? "",
-    objective: args[1] ?? "",
-  });
-}
-
-async function executePlanningInput(input: GoalInput): Promise<number> {
-  const startedAt = performance.now();
-  try {
-    const result = await runPlanCommand(input);
-    console.log(
-      `Planning Duration: ${((performance.now() - startedAt) / 1_000).toFixed(1)}s`
-    );
-    if (!reportPlanning(result) || result.status !== "completed") return 1;
-    presentTaskContract(result.task);
-    return 0;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const inputError =
-      message === "Repository path is required." ||
-      message === "Objective is required.";
-    console.error(
-      inputError ? `Error: ${message}` : `Error: Planning failed: ${message}`
-    );
-    return 1;
-  }
-}
 
 export async function runDecisionCli(args: string[]): Promise<number> {
   return executeDecisionInput({
@@ -90,21 +44,15 @@ export async function runCli(args: string[]): Promise<number> {
   if (args[0] === "staffing") return runStaffingCli(args.slice(1));
   if (args[0] === "governance") return runGovernanceCli(args.slice(1));
   if (args[0] === "decision") return runDecisionCli(args.slice(1));
-  if (args[0] === "plan") return runPlanningCli(args.slice(1));
   try {
     if (args.length > 0) {
       console.error(
-        "Error: Standalone execution is unavailable. Execution requires an approved Phase B Work Item. Use the plan command for Planning only."
+        "Error: Unsupported command. Use decision, staffing, or governance. Task Detailing and execution require an approved Phase B Assignment."
       );
       return 1;
     }
-    const workflow = await selectWorkflow();
-    switch (workflow) {
-      case "plan":
-        return await executePlanningInput(await askGoal());
-      case "decision":
-        return await executeDecisionInput(await askDecision());
-    }
+    console.log("AI Workspace\n");
+    return await executeDecisionInput(await askDecision());
   } catch (error) {
     console.error(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`

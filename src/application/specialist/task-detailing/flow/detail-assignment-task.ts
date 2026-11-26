@@ -39,7 +39,6 @@ export function detailAssignmentTask({
         repositoryRoot,
         repositoryName: context.goal.targetRepository,
         fileTree: context.repositoryFiles?.map(({ path }) => path) ?? [],
-        packageScripts: {},
       },
     },
     limits,
@@ -49,22 +48,17 @@ export function detailAssignmentTask({
       assertEligible();
       const timeoutMs = deadlineMs - Date.now();
       if (timeoutMs < 1) throw new Error("Assignment Read Session expired.");
-      return createCodexPlanner({ timeoutMs, governedAssignment: true })(
-        state,
-        limits
-      );
+      return createCodexPlanner({ timeoutMs })(state, limits);
     },
     inspect(state, paths) {
       const expanded = inspect(paths);
       return {
         ...state,
         inspectedFiles: expanded.files,
-        ...(state.assignmentDetail && {
-          assignmentDetail: {
-            ...state.assignmentDetail,
-            analysisEvidence: expanded.analysisEvidence,
-          },
-        }),
+        assignmentDetail: {
+          ...state.assignmentDetail,
+          analysisEvidence: expanded.analysisEvidence,
+        },
       };
     },
   });

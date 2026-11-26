@@ -67,8 +67,9 @@ AI Workspace가 소유하는 Decision Assurance는 근거와 검증의 범위·�
 
 ### 현재 구현과 확장 범위
 
-현재 v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision,
-v3 Structured Decision Comparison이 구현되어 있다.
+v0 Safe Execution, v1 Goal-to-Task Planning, v2 Governed Independent Decision과
+v3 Structured Decision Comparison을 단계적으로 검증했다. v1의 상세 계획 기반은 현재 Phase B의
+Assignment Task Detailing에서 사용한다.
 TaskContract와 승인 경계는 실행할 행동을, Snapshot / Context / Authority / AgentDecision과 Evidence
 검증은 독립 판단의 조건을 명시한다. Planning 자체보다 실행 권한을 넘기기 전 explicit contract
 boundary가 핵심이다. 상세 구현과 한계는 [Architecture](architecture.md#2-current-architecture)에 둔다.

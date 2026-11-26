@@ -8,7 +8,7 @@
 
 > CLI is an operator/debug interface for the Harness, not the core product value.
 
-현재 CLI는 workflow 선택, Goal / 명시적 Context 입력, TaskContract / Decision / Comparison 표시와
+현재 CLI는 Decision Goal / 명시적 Context 입력, Decision / Comparison 표시와
 Staffing·Governance 상호작용을 담당한다. Harness를 사람이 관찰하고 통제하는
 operator/debug adapter이자 Human decision surface다. 전체 AI 조직의 orchestration과
 Planning / Execution / Governance의 core logic은 application / Harness와 Workflow Runtime의 책임이며
@@ -29,11 +29,8 @@ Fancy TUI나 Web UI 자체가 현재 프로젝트의 핵심 가치는 아니다.
 현재 script는 `TSX_TSCONFIG_PATH=./tsconfig.json tsx src/cli/cli.ts`다.
 
 ```sh
-# 인자 없음: workflow 선택 메뉴
+# 인자 없음: 독립 Decision 입력
 pnpm dev
-
-# Planning only
-pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
 
 # 독립 Decision → Structured Comparison, 명시적 Context files
 pnpm decision . "Evaluate the current decision architecture" \
@@ -44,11 +41,10 @@ pnpm decision . "Evaluate the current decision architecture" \
 
 ### Interactive entry
 
-인자가 없으면 `1. Plan only`와 `2. Decision`을 표시한다. 유효한 선택 전 EOF는 오류와
-종료 코드 1이다. Plan only는 Repository와 Goal로 TaskContract를 생성해 표시한다.
-Decision은 Repository, Decision Goal, Context Files로 독립 판단과 비교를 실행한다.
+인자가 없으면 Repository, Decision Goal, Context Files를 입력받아 독립 판단과 비교를 실행한다.
+필수 입력이 끝나기 전 EOF는 오류와 종료 코드 1을 반환한다.
 
-이전 `execute` 명령과 위치 인자 기반 Plan & Execute는 종료 코드 1로 거부된다.
+이전 `plan`, `execute` 명령과 위치 인자 기반 Plan & Execute는 종료 코드 1로 거부된다.
 실제 Worker 실행은 Phase B의 승인된 Assignment를 받는 `executeAssignment()`에서 제공한다.
 
 ## 3. 현재 Human Interaction Flow
@@ -151,8 +147,6 @@ rationale / statement 정확성 평가가 아니다.
 src/cli/
 ├─ cli.ts
 ├─ commands/
-│  ├─ plan/
-│  │  └─ plan.ts
 │  ├─ decision/
 │  │  └─ decision.ts
 │  ├─ delivery/
@@ -167,28 +161,21 @@ src/cli/
 ├─ prompts/
 │  ├─ decision/
 │  │  └─ ask-decision.ts
-│  ├─ planning/
-│  │  └─ ask-goal.ts
 │  ├─ cleanup/
 │  │  └─ cleanup.ts
 │  ├─ delivery/
 │  │  ├─ apply-changes.ts
 │  │  └─ delivery.ts
-│  ├─ review/
-│  │  └─ review.ts
-│  └─ workflow/
-│     └─ select-workflow.ts
+│  └─ review/
+│     └─ review.ts
 └─ presenters/
    ├─ decision/
    │  ├─ decisions.ts
    │  └─ comparison.ts
-   ├─ planning/
-   │  └─ task-contract.ts
    └─ timing.ts
 ```
 
-- `cli.ts`: interactive selector와 plan / decision / governance / staffing 명령을 연결한다.
-- `commands/plan/plan.ts`: GoalSpec 생성·검증, `planTask()` 호출, PlanningResult 반환.
+- `cli.ts`: interactive Decision 입력과 decision / governance / staffing 명령을 연결한다.
 - `commands/decision/decision.ts`: `runDecision()` → `compareDecisions()`를 CLI command layer에서
   조합하고 Comparison을 포함한 DecisionCommandResult를 반환한다. Snapshot / Goal / 파일 loading /
   Specialist 구성과 각 application의 validation은 중복하지 않는다.
@@ -196,8 +183,7 @@ src/cli/
 - `commands/delivery/`: Apply 성공 후 Commit, Commit 성공 후 Push의 승인·결과 연결.
 - `commands/cleanup/`: Delete / Keep 결정에 따라 infrastructure의 worktree 제거 호출.
 - `prompts/<feature>/`: 해당 CLI feature가 소유하는 입력·상호작용. Delivery는 Apply / Commit / Push를 포함한다.
-- `prompts/workflow/`: Planning only와 Decision의 interactive 선택.
-- `presenters/`: TaskContract, 개별 Decision / Comparison과 timing을 보여주며 입력·승인 판단을 하지 않는다.
+- `presenters/`: 개별 Decision / Comparison과 timing을 보여주며 입력·승인 판단을 하지 않는다.
 
 현재 Review와 Execution 결과 presentation 일부는 해당 command에 있다. 모든 출력을
 새 presenter로 추출하거나 구현되지 않은 파일을 미리 나열하지 않는다.
@@ -205,7 +191,7 @@ Git command는 CLI에 직접 넣지 않고 `infrastructure/git` API를 사용한
 
 ## 5. 관찰할 결과와 Timing
 
-CLI는 Planning과 Decision의 결과 및 소요 시간을 표시한다. Phase B 실행의 단계별 telemetry와
+CLI는 Decision 결과 및 소요 시간을 표시한다. Phase B 실행의 단계별 telemetry와
 Evidence는 `ExecutionResult`에 기록한다.
 
 ## 6. 인터페이스 경계
@@ -215,7 +201,7 @@ CLI → Application
 Application → CLI를 모름
 ```
 
-`planTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
+`detailAssignmentTask()` / `executeAssignment()` / `runDecision()` / `compareDecisions()`의 실제 use-case logic은 application에 유지한다.
 UI가 바뀌어도 계약과 실행 정책은 UI에 종속되지 않아야 한다. 향후 Web UI / API adapter는
 같은 application logic을 사용할 수 있지만 현재 구현된 인터페이스는 아니다.
 Human 권한을 새 interface가 우회하지 않아야 한다.

@@ -2,10 +2,11 @@ import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
 it.each([
+  ["plan", ".", "Clarify README"],
   ["execute", "task.json", "."],
   [".", "Old positional syntax"],
 ])(
-  "rejects retired execution arguments in the CLI process %j",
+  "rejects retired commands or positional arguments in the CLI process %j",
   (...args) => {
     const result = spawnSync(
       process.execPath,
@@ -15,7 +16,7 @@ it.each([
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      "Execution requires an approved Phase B Work Item."
+      "Task Detailing and execution require an approved Phase B Assignment."
     );
   },
   20_000

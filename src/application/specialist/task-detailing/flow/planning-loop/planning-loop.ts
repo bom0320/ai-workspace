@@ -3,15 +3,14 @@ import { resolve } from "node:path";
 import { ZodError } from "zod";
 
 import type { PlanningState } from "../../model/state.js";
-import type { InspectRequest } from "../../protocol/inspection.js";
-import type { Planner, TaskDraft } from "../../protocol/planner.js";
+import type {
+  InspectRequest,
+  Planner,
+  TaskDraft,
+} from "../../protocol/planner.js";
 import type { PlanningLimits } from "../../model/limits.js";
 import type { PlanningResult } from "../../data-flow/output.js";
 import { buildTaskContract } from "../transformation/build-task-contract.js";
-import {
-  inspectFiles,
-  InspectionRequestError,
-} from "../inspection/inspect-files.js";
 
 function hasValidLimits(limits: PlanningLimits): boolean {
   return Object.values(limits).every(
@@ -50,17 +49,6 @@ function prepareInspection(
   return { paths };
 }
 
-function inspectNewContext(
-  state: PlanningState,
-  paths: string[]
-): PlanningState {
-  const result = inspectFiles(state.repository.repositoryRoot, { paths });
-  return {
-    ...state,
-    inspectedFiles: [...state.inspectedFiles, ...result.files],
-  };
-}
-
 function completePlanning(
   state: PlanningState,
   draft: TaskDraft,
@@ -90,14 +78,14 @@ export async function runPlanningLoop({
   limits,
   goalId,
   taskId,
-  inspect = inspectNewContext,
+  inspect,
 }: {
   initialState: PlanningState;
   planner: Planner;
   limits: PlanningLimits;
   goalId: string;
   taskId: string;
-  inspect?: (state: PlanningState, paths: string[]) => PlanningState;
+  inspect: (state: PlanningState, paths: string[]) => PlanningState;
 }): Promise<PlanningResult> {
   let state = initialState;
   let rounds = 0;
@@ -128,14 +116,7 @@ export async function runPlanningLoop({
       return fail(inspection.reason);
     }
 
-    try {
-      state = inspect(state, inspection.paths);
-    } catch (error) {
-      if (error instanceof InspectionRequestError) {
-        return fail("Inspection request is invalid.");
-      }
-      throw error;
-    }
+    state = inspect(state, inspection.paths);
   }
 
   return fail("Planning round limit reached.");

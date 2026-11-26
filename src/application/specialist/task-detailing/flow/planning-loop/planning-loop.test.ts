@@ -1,17 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { sep } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type TaskDraft, type Planner } from "../../protocol/planner.js";
 import type { PlanningLimits } from "../../model/limits.js";
 import type { PlanningState } from "../../model/state.js";
-import * as inspection from "../inspection/inspect-files.js";
 import * as finalization from "../transformation/build-task-contract.js";
 import { runPlanningLoop } from "./planning-loop.js";
 
-const temporaryDirectories: string[] = [];
 const limits: PlanningLimits = {
   maxRounds: 3,
   maxFilesPerRequest: 3,
@@ -28,17 +24,35 @@ const task: TaskDraft = {
 };
 
 function createState(): PlanningState {
-  const root = mkdtempSync(join(tmpdir(), "ai-workspace-planning-loop-"));
-  temporaryDirectories.push(root);
-  writeFileSync(join(root, "a.ts"), "A 내용");
-  writeFileSync(join(root, "b.ts"), "B");
   return {
     goal: { objective: "Implement the goal", targetRepository: "example" },
+    detail: {
+      objective: "Improve error feedback",
+      deliverable: "Actionable error descriptions",
+      direction: "Keep the existing input contract",
+    },
+    assignmentDetail: {
+      specialist: {
+        id: "engineer",
+        role: "Engineer",
+        objective: "Improve feedback",
+      },
+      workItem: {
+        id: "work-1",
+        objective: "Improve feedback",
+        deliverable: "Clear errors",
+      },
+      executionBounds: {
+        readScopes: [],
+        writeScopes: [],
+        shellCommands: ["git diff --check"],
+        budget: { maxExecutions: 1, maxTimeoutMs: 5000 },
+      },
+    },
     repository: {
-      repositoryRoot: root,
+      repositoryRoot: "/repositories/example",
       repositoryName: "example",
       fileTree: ["a.ts", "b.ts"],
-      packageScripts: {},
     },
     inspectedFiles: [],
   };
@@ -46,10 +60,21 @@ function createState(): PlanningState {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const directory of temporaryDirectories.splice(0)) {
-    rmSync(directory, { recursive: true });
-  }
+  inspect.mockClear();
 });
+
+const inspect = vi.fn(
+  (state: PlanningState, paths: string[]): PlanningState => ({
+    ...state,
+    inspectedFiles: [
+      ...state.inspectedFiles,
+      ...paths.map((path) => ({
+        path,
+        content: path === "a.ts" ? "A 내용" : "B",
+      })),
+    ],
+  })
+);
 
 describe("runPlanningLoop", () => {
   it("finalizes Drafts with Harness identifiers, Human constraints, and the Goal repository", async () => {
@@ -64,6 +89,7 @@ describe("runPlanningLoop", () => {
       },
     });
     const result = await runPlanningLoop({
+      inspect,
       initialState,
       planner,
       limits,
@@ -91,6 +117,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValue({ type: "complete", task });
     await expect(
       runPlanningLoop({
+        inspect,
         initialState: createState(),
         planner,
         limits,
@@ -105,6 +132,7 @@ describe("runPlanningLoop", () => {
       .fn<Planner>()
       .mockResolvedValue({ type: "complete", task });
     const result = await runPlanningLoop({
+      inspect,
       initialState: createState(),
       planner,
       limits,
@@ -123,6 +151,7 @@ describe("runPlanningLoop", () => {
       .fn<Planner>()
       .mockResolvedValue({ type: "complete", task });
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -153,6 +182,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValueOnce({ type: "complete", task });
 
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -178,9 +208,8 @@ describe("runPlanningLoop", () => {
     expect(initialState.inspectedFiles).toBe(originalFiles);
   });
 
-  it("accumulates multiple rounds and sends only unread files to inspectFiles", async () => {
+  it("accumulates multiple rounds and sends only unread files to the authorized inspector", async () => {
     const initialState = createState();
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const planner = vi
       .fn<Planner>()
       .mockResolvedValueOnce({ type: "inspect", request: { paths: ["a.ts"] } })
@@ -191,6 +220,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValueOnce({ type: "complete", task });
 
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -203,13 +233,13 @@ describe("runPlanningLoop", () => {
     expect(inspect).toHaveBeenCalledTimes(2);
     expect(inspect).toHaveBeenNthCalledWith(
       1,
-      initialState.repository.repositoryRoot,
-      { paths: ["a.ts"] }
+      expect.objectContaining({ repository: initialState.repository }),
+      ["a.ts"]
     );
     expect(inspect).toHaveBeenNthCalledWith(
       2,
-      initialState.repository.repositoryRoot,
-      { paths: ["b.ts"] }
+      expect.objectContaining({ repository: initialState.repository }),
+      ["b.ts"]
     );
     expect(planner.mock.calls[1][0].inspectedFiles).toEqual([
       { path: "a.ts", content: "A 내용" },
@@ -226,8 +256,6 @@ describe("runPlanningLoop", () => {
     initialState.inspectedFiles = [
       { path: "a.ts", content: "Previously read" },
     ];
-    rmSync(join(initialState.repository.repositoryRoot, "a.ts"));
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const planner = vi
       .fn<Planner>()
       .mockResolvedValueOnce({
@@ -237,6 +265,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValueOnce({ type: "complete", task });
 
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -246,8 +275,8 @@ describe("runPlanningLoop", () => {
 
     expect(result.status).toBe("completed");
     expect(inspect).toHaveBeenCalledWith(
-      initialState.repository.repositoryRoot,
-      { paths: ["b.ts"] }
+      expect.objectContaining({ repository: initialState.repository }),
+      ["b.ts"]
     );
     expect(result.state.inspectedFiles[0]).toEqual({
       path: "a.ts",
@@ -265,13 +294,13 @@ describe("runPlanningLoop", () => {
     async ({ paths }) => {
       const initialState = createState();
       initialState.inspectedFiles = [{ path: "a.ts", content: "A" }];
-      const inspect = vi.spyOn(inspection, "inspectFiles");
       const planner = vi
         .fn<Planner>()
         .mockResolvedValue({ type: "inspect", request: { paths } });
 
       expect(
         await runPlanningLoop({
+          inspect,
           goalId: "goal-harness",
           taskId: "task-harness",
           initialState,
@@ -291,12 +320,12 @@ describe("runPlanningLoop", () => {
 
   it("counts every requested path before deduplication for maxFilesPerRequest", async () => {
     const initialState = createState();
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const planner = vi.fn<Planner>().mockResolvedValue({
       type: "inspect",
       request: { paths: ["a.ts", "a.ts"] },
     });
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -316,7 +345,6 @@ describe("runPlanningLoop", () => {
   it("rejects the entire request before reading when maxTotalFiles would be exceeded", async () => {
     const initialState = createState();
     initialState.inspectedFiles = [{ path: "a.ts", content: "A" }];
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const planner = vi.fn<Planner>().mockResolvedValue({
       type: "inspect",
       request: { paths: ["a.ts", "b.ts"] },
@@ -324,6 +352,7 @@ describe("runPlanningLoop", () => {
 
     expect(
       await runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState,
@@ -350,6 +379,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValueOnce({ type: "complete", task });
 
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState,
@@ -367,6 +397,7 @@ describe("runPlanningLoop", () => {
       .fn<Planner>()
       .mockResolvedValue({ type: "complete", task });
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState: createState(),
@@ -379,13 +410,13 @@ describe("runPlanningLoop", () => {
 
   it("fails an inspect decision on the last round without reading files or calling planner again", async () => {
     const initialState = createState();
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const planner = vi
       .fn<Planner>()
       .mockResolvedValue({ type: "inspect", request: { paths: ["a.ts"] } });
 
     expect(
       await runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState,
@@ -405,6 +436,7 @@ describe("runPlanningLoop", () => {
   it("does not call planner when maxRounds is zero", async () => {
     const planner = vi.fn<Planner>();
     const result = await runPlanningLoop({
+      inspect,
       goalId: "goal-harness",
       taskId: "task-harness",
       initialState: createState(),
@@ -427,6 +459,7 @@ describe("runPlanningLoop", () => {
     });
     expect(
       await runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState,
@@ -453,6 +486,7 @@ describe("runPlanningLoop", () => {
     }
     await expect(
       runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState: createState(),
@@ -462,11 +496,11 @@ describe("runPlanningLoop", () => {
     ).rejects.toBe(error);
   });
 
-  it("propagates unexpected inspection filesystem errors", async () => {
+  it("propagates an authorized inspection failure", async () => {
     const error = Object.assign(new Error("Permission denied"), {
       code: "EACCES",
     });
-    vi.spyOn(inspection, "inspectFiles").mockImplementation(() => {
+    inspect.mockImplementationOnce(() => {
       throw error;
     });
     const planner = vi
@@ -474,6 +508,7 @@ describe("runPlanningLoop", () => {
       .mockResolvedValue({ type: "inspect", request: { paths: ["a.ts"] } });
     await expect(
       runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState: createState(),
@@ -483,58 +518,29 @@ describe("runPlanningLoop", () => {
     ).rejects.toBe(error);
   });
 
-  it("converts expected inspection request errors to a stable workflow failure", async () => {
+  it("delegates unsafe request validation to the authorized inspector", async () => {
     const initialState = createState();
-    vi.spyOn(inspection, "inspectFiles").mockImplementation(() => {
-      throw new inspection.InspectionRequestError("Request details");
+    const error = new Error("Path outside approved scope");
+    inspect.mockImplementationOnce(() => {
+      throw error;
     });
-    const planner = vi
-      .fn<Planner>()
-      .mockResolvedValue({ type: "inspect", request: { paths: ["a.ts"] } });
-
-    expect(
-      await runPlanningLoop({
-        goalId: "goal-harness",
-        taskId: "task-harness",
-        initialState,
-        planner,
-        limits,
-      })
-    ).toEqual({
-      status: "failed",
-      state: initialState,
-      rounds: 1,
-      reason: "Inspection request is invalid.",
-    });
-    expect(planner).toHaveBeenCalledOnce();
-  });
-
-  it("delegates unsafe request validation to inspectFiles", async () => {
-    const initialState = createState();
-    const inspect = vi.spyOn(inspection, "inspectFiles");
     const paths = ["../outside.ts"];
     const planner = vi
       .fn<Planner>()
       .mockResolvedValue({ type: "inspect", request: { paths } });
 
-    expect(
-      await runPlanningLoop({
+    await expect(
+      runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState,
         planner,
         limits,
       })
-    ).toEqual({
-      status: "failed",
-      state: initialState,
-      rounds: 1,
-      reason: "Inspection request is invalid.",
-    });
-    expect(inspect).toHaveBeenCalledWith(
-      initialState.repository.repositoryRoot,
-      { paths }
-    );
+    ).rejects.toBe(error);
+    expect(inspect).toHaveBeenCalledWith(initialState, paths);
+    expect(planner).toHaveBeenCalledOnce();
   });
 
   it.each([NaN, Infinity, -1, 1.5])(
@@ -542,6 +548,7 @@ describe("runPlanningLoop", () => {
     async (maxRounds) => {
       const planner = vi.fn<Planner>();
       const result = await runPlanningLoop({
+        inspect,
         goalId: "goal-harness",
         taskId: "task-harness",
         initialState: createState(),

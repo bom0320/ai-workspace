@@ -10,8 +10,8 @@ Agent Development Environment(ADE)이자 Development Governance Harness다. 개�
 
 - **v0 — Safe Execution**: isolated Git worktree, Scope, Verification, Evidence와 binary patch 보존 기반을 구현했다.
   기존 실행 기반과 Review, Delivery, Cleanup 모듈은 후속 Assignment 수정 실행에 재사용할 수 있다.
-- **v1 — Goal-to-Task Planning**: 자연어 Goal을 repository inspection과 Adaptive Planning으로
-  TaskContract로 변환한다. 독립 CLI는 계획을 표시한다.
+- **v1 — Goal-to-Task Planning**: 자연어 Goal에서 TaskContract를 만드는 독립 CLI를 검증했다.
+  현재 TaskContract는 Phase B의 Assignment 기반 Task Detailing에서 생성한다.
 - **v2 — Governed Independent Decision**: 같은 Snapshot / Goal과 명시적 Context 아래 Frontend / UX
   Specialist를 Codex로 순차 독립 실행하고 구조화된 AgentDecision과 Evidence를 검증·표시한다.
 - **v3 — Structured Decision Comparison**: 독립 AgentDecision을 Concern 단위로 비교해
@@ -77,27 +77,11 @@ pnpm install
 pnpm dev
 ```
 
-인자 없이 실행하면 workflow를 선택한다. 제목은 한 번만 표시한다.
+인자 없이 실행하면 독립 Decision 입력을 시작한다. Repository, Decision Goal, Context Files를
+입력한다. Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
 
-```text
-AI Workspace
-
-Select workflow:
-
-1. Plan only
-2. Decision
-
->
-```
-
-Plan only는 Repository와 Goal을, Decision은 Repository / Decision Goal / Context Files를 입력받는다.
-Context Files는 한 줄에 한 경로씩 최소 1개를 입력한 뒤 빈 줄로 마친다.
-
-```sh
-pnpm plan . "README.md의 소개 문구를 더 명확하게 수정해줘"
-```
-
-독립 `execute` 명령과 위치 인자를 사용한 Plan & Execute는 종료 코드 1과 함께 안내를 출력한다. 현재 Phase B의 Assignment 실행은 승인 Snapshot의 Context를 읽기 전용으로 제공한다.
+기존 독립 `plan`과 `execute` 명령 및 위치 인자 방식은 종료 코드 1로 거부된다.
+Task Detailing과 수정 실행은 승인된 Phase B Assignment에서 수행한다.
 
 ## v4 현재 진입점
 
@@ -168,41 +152,14 @@ Command unit test는 동일 Goal / Decision 배열의 identity와 Comparison 실
 이번 closeout에 기록하지 않는다. Relation / rationale / statement의 의미적 정확성은 Harness의
 구조·참조 검증으로 증명되지 않는다. 구현 범위와 남은 평가는 [Roadmap](docs/roadmap.md#v3--agreement--conflict--structured-decision-comparison)에 둔다.
 
-## Adaptive Planning / Fast Path
+## Assignment 기반 Task Detailing
 
-기존 Planning은 단순한 작업에서도 Codex Planner를 호출했다. 현재는 Repository overview를
-수집하고 `inspectInitialFiles()`로 Goal에 명시된 파일을 exact-match inspection한 뒤,
-보수적인 trivial task detection을 수행한다.
+Phase B의 수정 Assignment는 Governance의 Write Eligibility 확인 후 승인된 Read Session의 Context로
+상세 계획을 수립한다. Codex Planner가 추가 파일을 요청하면 같은 Session에서 승인된 Snapshot을 조회한다.
+Planner가 구조화된 Implementation Plan을 반환하면 Harness가 TaskContract를 생성하고 Governance가
+Assignment에 귀속시킨다. 수정 실행에는 별도의 Write Authorization과 Claim이 필요하다.
 
-```text
-Goal
-↓
-Repository inspection
-↓
-Initial exact-match inspection
-↓
-Trivial task detection
-├─ YES → Fast Path TaskDraft → TaskContract
-│          rounds = 0, Planner LLM 호출 = 0
-└─ NO  → 기존 Planning Loop → Codex Planner → inspect / complete
-```
-
-Fast Path는 모든 자연어를 이해하려 하지 않고, 확실한 textual edit만 처리한다.
-예를 들어 `README.md의 소개 문구를 수정해줘`, `README의 오타를 수정해줘`,
-`notes.txt의 문구를 수정해줘`가 대상이다. 복잡하거나 모호한 요청은 기존 Planner로
-fallback한다. `README 좀 더 정확하게 수정해줘`처럼 구체적인 textual edit 의도가
-불명확한 요청도 fallback한다.
-
-- 대상은 `.md`, `.txt`이며 initial inspection 결과가 정확히 한 파일이어야 한다.
-- 파일명은 실제 Repository 파일과 일치해야 하며 basename ambiguity를 방지한다.
-- `../README.md`, `..\README.md` 같은 traversal 표현은 Fast Path에서 차단한다.
-- 삭제, 이동, rename, 코드 구현·리팩토링·dependency·API·설정 변경은 대상으로 삼지 않는다.
-- False positive보다 false negative를 허용한다. 애매하면 Planner를 사용한다.
-
-Fast Path도 기존 `buildTaskContract()`를 사용해 Harness ID와 Human constraints를 보존하고
-최종 schema validation을 수행한다. Planning limits와 inspection safety 검사는 유지한다.
-Fast Path의 verification은 `git diff --check`이며, 일반 작업은 TaskContract에 지정된
-verification command를 Harness가 실행한다.
+독립 v1 Planning과 단순 문구 수정용 Fast Path는 제거했다. 다음 수치는 독립 CLI가 제공되던 당시의 기록이다.
 
 ### E2E 측정
 

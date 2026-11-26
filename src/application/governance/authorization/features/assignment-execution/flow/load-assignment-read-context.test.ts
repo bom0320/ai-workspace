@@ -192,3 +192,55 @@ it("checks actual serialized bytes and stops before loading more files after exp
     { timeoutMs: 1000, ignoreReplaceObjects: true }
   );
 });
+
+it("retains the cumulative file budget across approved inspections", () => {
+  const entries = Array.from({ length: 33 }, (_, index) =>
+    blob(`docs/${index}.md`)
+  );
+  const scopes = [{ kind: "directory" as const, path: "docs" }];
+  vi.mocked(listRepositoryFilesAtCommit).mockReturnValue(entries);
+  const initial = loadAssignmentReadContext(
+    source,
+    scopes,
+    () => 1000,
+    entries.slice(0, 32).map(({ path }) => path)
+  );
+  expect(initial.files).toHaveLength(32);
+  expect(() =>
+    loadAssignmentReadContext(
+      source,
+      scopes,
+      () => 1000,
+      ["docs/32.md"],
+      initial
+    )
+  ).toThrow("validation");
+  expect(loadSnapshotFiles).toHaveBeenCalledTimes(32);
+});
+
+it("counts already supplied context bytes when loading more files", () => {
+  const entries = Array.from({ length: 4 }, (_, index) =>
+    blob(`docs/${index}.md`, 16 * 1024)
+  );
+  const scopes = [{ kind: "directory" as const, path: "docs" }];
+  vi.mocked(listRepositoryFilesAtCommit).mockReturnValue(entries);
+  vi.mocked(loadSnapshotFiles).mockImplementation((_snapshot, paths) =>
+    paths.map((path) => ({ path, content: "a".repeat(16 * 1024) }))
+  );
+  const initial = loadAssignmentReadContext(
+    source,
+    scopes,
+    () => 1000,
+    entries.slice(0, 3).map(({ path }) => path)
+  );
+  expect(() =>
+    loadAssignmentReadContext(
+      source,
+      scopes,
+      () => 1000,
+      ["docs/3.md"],
+      initial
+    )
+  ).toThrow("validation");
+  expect(initial.files).toHaveLength(3);
+});

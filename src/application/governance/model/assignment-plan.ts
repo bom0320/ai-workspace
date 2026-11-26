@@ -7,6 +7,7 @@ const digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const assignmentPlanSchema = z
   .object({
     id: digest,
+    writeDetailingVersion: z.literal(1).optional(),
     decompositionBinding: digest,
     staffingBinding: digest,
     snapshot: repositorySnapshotSchema,

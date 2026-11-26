@@ -1,7 +1,7 @@
 import type { AssignmentExecutionRequest } from "@/application/governance/index.js";
 import {
-  executeAssignmentRead,
-  type AssignmentReadOutput,
+  executeAssignment,
+  type AssignmentExecutionOutput as IndividualAssignmentOutput,
 } from "@/application/execution/index.js";
 import {
   getPreparedAssignmentPlan,
@@ -24,7 +24,7 @@ export type AssignmentExecutionOutput =
   | {
       status: AssignmentExecutionStatus;
       planId: string;
-      results: (AssignmentReadOutput & {
+      results: (IndividualAssignmentOutput & {
         assignmentId: string;
         workItemId: string;
       })[];
@@ -45,7 +45,7 @@ export type AssignmentExecutionOptions = {
     string,
     Pick<
       Extract<AssignmentExecutionRequest, { access: "read" }>,
-      "readScopes" | "timeoutMs"
+      "readScopes" | "timeoutMs" | "initialReadPaths"
     >
   >;
 };
@@ -83,7 +83,7 @@ export async function coordinateAssignmentExecutions(
     return { status: "denied" as const, failure: "plan" as const, planId };
   }
 
-  const results: (AssignmentReadOutput & {
+  const results: (IndividualAssignmentOutput & {
     assignmentId: string;
     workItemId: string;
   })[] = [...recorded];
@@ -128,13 +128,16 @@ export async function coordinateAssignmentExecutions(
       } = eligible[cursor++]!;
       running.set(
         assignmentId,
-        executeAssignmentRead({
+        executeAssignment({
           handoff,
           request: {
             planId,
             assignmentId,
             access: "read",
             readScopes: context.readScopes,
+            ...(context.initialReadPaths && {
+              initialReadPaths: context.initialReadPaths,
+            }),
             timeoutMs: context.timeoutMs,
           },
         }).then((result) => ({ assignmentId, workItemId, ...result }))

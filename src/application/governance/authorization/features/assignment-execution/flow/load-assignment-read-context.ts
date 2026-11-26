@@ -25,7 +25,9 @@ export function loadAssignmentReadContext(
     assignment,
   }: ReturnType<typeof resolveAssignmentExecution>,
   scopes: PathScope[],
-  remainingTime: () => number
+  remainingTime: () => number,
+  selectedPaths?: readonly string[],
+  previous?: CollaborativeSpecialistContext
 ): CollaborativeSpecialistContext {
   if (scopes.some(({ path }) => !isInspectablePath(path)))
     throw new AssignmentExecutionError("authority");
@@ -50,27 +52,48 @@ export function loadAssignmentReadContext(
     )
   )
     throw new AssignmentExecutionError("authority");
+  const priorPaths = previous?.files.map(({ path }) => path) ?? [];
   if (
-    files.length > maxFiles ||
-    files.some(({ size }) => size === null || size > maxFileBytes) ||
-    files.reduce((total, { size }) => total + (size ?? 0), 0) > maxContextBytes
+    selectedPaths?.some(
+      (path) =>
+        priorPaths.includes(path) || !files.some((file) => file.path === path)
+    )
+  )
+    throw new AssignmentExecutionError("validation");
+  const selected = selectedPaths
+    ? files.filter(({ path }) => selectedPaths.includes(path))
+    : files;
+  const cumulative = [...priorPaths, ...selected.map(({ path }) => path)];
+  if (
+    cumulative.length > maxFiles ||
+    selected.some(({ size }) => size === null || size > maxFileBytes) ||
+    selected.reduce((total, { size }) => total + (size ?? 0), 0) >
+      maxContextBytes
   )
     throw new AssignmentExecutionError("validation");
 
-  const context: CollaborativeSpecialistContext = {
-    goal,
-    approvedDirection: synthesisProposal.direction.text,
-    workItem: {
-      id: workItem.id,
-      objective: workItem.objective,
-      deliverable: workItem.deliverable,
-    },
-    assignmentObjective: assignment.objective,
-    assignmentDeliverable: assignment.deliverable,
-    repositoryCommitSha: snapshot.commitSha,
-    predecessorResults: [],
-    repositoryFiles: files.map(({ path, size }) => ({ path, size: size ?? 0 })),
-    files: files.flatMap(({ path }) => {
+  const context: CollaborativeSpecialistContext = previous
+    ? { ...previous, files: [...previous.files] }
+    : {
+        goal,
+        approvedDirection: synthesisProposal.direction.text,
+        workItem: {
+          id: workItem.id,
+          objective: workItem.objective,
+          deliverable: workItem.deliverable,
+        },
+        assignmentObjective: assignment.objective,
+        assignmentDeliverable: assignment.deliverable,
+        repositoryCommitSha: snapshot.commitSha,
+        predecessorResults: [],
+        repositoryFiles: files.map(({ path, size }) => ({
+          path,
+          size: size ?? 0,
+        })),
+        files: [],
+      };
+  context.files.push(
+    ...selected.flatMap(({ path }) => {
       const timeoutMs = remainingTime();
       try {
         return loadSnapshotFiles(snapshot, [path], {
@@ -80,8 +103,8 @@ export function loadAssignmentReadContext(
       } catch {
         throw new AssignmentExecutionError("validation");
       }
-    }),
-  };
+    })
+  );
   // Phase A references cannot expand the Claim or expose other file paths.
   const suppliedPaths = new Set(context.files.map(({ path }) => path));
   const analysisEvidence = (workItem.sources ?? []).flatMap((source) => {

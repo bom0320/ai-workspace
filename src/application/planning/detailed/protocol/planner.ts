@@ -10,6 +10,7 @@ import type { InspectRequest, InspectedFile } from "./inspection.js";
 export type PlannerContext = {
   goal: GoalSpec;
   detail?: DetailedPlanningInput;
+  assignmentDetail?: PlanningState["assignmentDetail"];
   repository: {
     name: string;
     fileTree: string[];

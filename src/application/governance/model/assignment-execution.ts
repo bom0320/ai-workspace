@@ -1,3 +1,4 @@
+import { taskContractSchema } from "@/contracts/task.js";
 import { z } from "zod";
 import { agentDecisionSchema } from "@/application/decision/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
@@ -24,6 +25,9 @@ export const assignmentReadRequestSchema = z.strictObject({
   ...requestFields,
   access: z.literal("read"),
   readScopes,
+  initialReadPaths: executionBoundsSchema.shape.readPaths
+    .refine((paths) => paths.length > 0 && paths.length <= 32)
+    .optional(),
 });
 export const assignmentWriteRequestSchema = z.strictObject({
   ...requestFields,
@@ -53,6 +57,7 @@ export const authorizedAssignmentReadExecutionSchema = z.strictObject({
   ...authorizationFields,
   access: z.literal("read"),
   readScopes,
+  initialReadPaths: assignmentReadRequestSchema.shape.initialReadPaths,
   authority: specialistAuthoritySchema.extend({
     repositoryAccess: z.literal("read"),
     shellExecution: z.literal(false),
@@ -97,6 +102,9 @@ export const assignmentExecutionFailureStageSchema = z.enum([
   "handoff",
   "snapshot",
   "execution",
+  "planning-blocked",
+  "legacy-write-plan",
+  "planning",
 ]);
 export type AssignmentExecutionFailureStage = z.infer<
   typeof assignmentExecutionFailureStageSchema
@@ -118,16 +126,58 @@ export const assignmentExecutionRecordSchema = z
     reservedAt: z.iso.datetime(),
     claimedAt: z.iso.datetime().optional(),
     failure: z
-      .object({ stage: assignmentExecutionFailureStageSchema, digest })
-      .strict()
-      .optional(),
-    result: z
       .object({
-        decision: agentDecisionSchema,
-        contextDigest: digest.optional(),
+        stage: assignmentExecutionFailureStageSchema,
         digest,
+        reason: z.string().trim().min(1).max(2048).optional(),
       })
       .strict()
       .optional(),
+    result: z
+      .union([
+        z
+          .object({
+            decision: agentDecisionSchema,
+            contextDigest: digest.optional(),
+            digest,
+          })
+          .strict(),
+        z.strictObject({
+          status: z.literal("task-prepared"),
+          contextDigest: digest,
+          task: taskContractSchema.strict(),
+          taskContractBinding: digest,
+          digest,
+        }),
+      ])
+      .optional(),
   })
   .strict();
+
+type AssignmentExecutionRecord = z.infer<
+  typeof assignmentExecutionRecordSchema
+>;
+type PreparedTask = Extract<
+  NonNullable<AssignmentExecutionRecord["result"]>,
+  { status: "task-prepared" }
+>;
+
+export function digestPreparedAssignmentTask(
+  record: Pick<AssignmentExecutionRecord, "id" | "binding">,
+  result: Pick<PreparedTask, "status" | "contextDigest" | "task">
+) {
+  const subject = {
+    id: record.id,
+    binding: record.binding,
+    contextDigest: result.contextDigest,
+  };
+  const taskContractBinding = governanceDigest({
+    ...subject,
+    status: result.status,
+    task: result.task,
+  });
+  return {
+    taskContractBinding,
+    digest: governanceDigest({ ...subject, taskContractBinding }),
+  };
+}

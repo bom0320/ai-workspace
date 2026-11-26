@@ -1,11 +1,11 @@
 import { expect, it, vi } from "vitest";
-import { executeAssignmentRead } from "@/application/execution/index.js";
+import { executeAssignment } from "@/application/execution/index.js";
 import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
 import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
 import { coordinateAssignmentExecutions } from "./coordinate-assignment-executions.js";
 
 vi.mock("@/application/execution/index.js", () => ({
-  executeAssignmentRead: vi.fn(),
+  executeAssignment: vi.fn(),
 }));
 vi.mock("@/application/governance/index.js", () => ({
   getPreparedAssignmentPlan: vi.fn(),
@@ -59,11 +59,11 @@ function fixture(
   const gates = new Map(
     assignments.map(([id]) => [
       id,
-      deferred<Awaited<ReturnType<typeof executeAssignmentRead>>>(),
+      deferred<Awaited<ReturnType<typeof executeAssignment>>>(),
     ])
   );
   const started: string[] = [];
-  vi.mocked(executeAssignmentRead).mockImplementation(
+  vi.mocked(executeAssignment).mockImplementation(
     async ({ request: { assignmentId } }) => {
       started.push(assignmentId);
       return gates.get(assignmentId)!.promise;

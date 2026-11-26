@@ -1,3 +1,4 @@
+import type { AssignmentTaskDetailingInput } from "../../data-flow/detailed/input.js";
 import { z } from "zod";
 import type { GoalSpec } from "@/contracts/goal.js";
 
@@ -27,6 +28,13 @@ export type DetailedPlanningInput = z.infer<typeof detailedPlanningInputSchema>;
 export type PlanningState = {
   goal: GoalSpec;
   detail?: DetailedPlanningInput;
+  assignmentDetail?: Pick<
+    AssignmentTaskDetailingInput,
+    "specialist" | "executionBounds"
+  > & {
+    workItem: AssignmentTaskDetailingInput["context"]["workItem"];
+    analysisEvidence?: AssignmentTaskDetailingInput["context"]["analysisEvidence"];
+  };
   repository: RepositoryInfo;
   inspectedFiles: InspectedFile[];
 };

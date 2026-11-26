@@ -222,7 +222,7 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 
 **후속 검증.** 기존 Step 4.3의 직접 실행 통합 사례는 새 경로의 거부·무예약·무실행, 초안 보존 및 구형 Ledger 거부 사례로 교체했다. Assignment Authorization과 Runtime이 연결되면 유효한 Reservation과 Budget·중복 제어, 저장 실패의 원자성, 권한 만료·철회·Snapshot drift, 승인된 Context와 Evidence, Worker Scope·Verification·Timeout·Artifact, 검증된 결과에 따른 선행 Work Item 진행을 새 진입점에서 검증한다.
 
-**Phase B Planning과 Execution.** `workDecomposition`은 Agent와 Timeout 설정을 받고, `selectWorkItemIds`는 검증된 제안에서 업무를 선택한다. 선택이 비어 있지 않고 `assignmentPlanning` Agent가 설정됐으면 `assign-specialists`가 `createAssignmentPlan()`을 호출해 배정 계획을 검증·등록한다. `assignmentExecution`을 설정한 경우에만 등록 성공 후 `execute-assignments`가 `coordinateAssignmentExecutions()`를 호출한다. Coordinator는 검증된 Plan에서 실행 대상을 선택하고, 공유 동시성 한도에서 `executeAssignmentRead()`를 호출한다.
+**Phase B Planning과 Execution.** `workDecomposition`은 Agent와 Timeout 설정을 받고, `selectWorkItemIds`는 검증된 제안에서 업무를 선택한다. 선택이 비어 있지 않고 `assignmentPlanning` Agent가 설정됐으면 `assign-specialists`가 `createAssignmentPlan()`을 호출해 배정 계획을 검증·등록한다. `assignmentExecution`을 설정한 경우에만 등록 성공 후 `execute-assignments`가 `coordinateAssignmentExecutions()`를 호출한다. Coordinator는 검증된 Plan에서 실행 대상을 선택하고, 공유 동시성 한도에서 `executeAssignment()`를 호출한다.
 
 **Step 5.3.1 계약 교체.** Assignment Planning은 선택된 Work Item과 승인된 Specialist 후보, 정책과 위임의 공통 접근 상한을 받는다. 각 Assignment는 `specialistId`와 `repositoryAccessCeiling`을 가진다. 선택한 모든 Work Item을 배정한다. 하나의 Work Item에 read만, write만, 또는 두 상한을 혼합해 배정할 수 있다. read/write는 업무 범위의 상한이며 실제 수정·Shell·Runtime 권한은 별도 승인에서 결정한다.
 
@@ -243,7 +243,7 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 
 #### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
 
-**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3–5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
+**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3 Task Detailing Implemented, 5.3.4–5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
 
 | 개념 | 소유권과 의미 |
 | --- | --- |
@@ -261,11 +261,11 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 
 Read Reservation은 공통 SpecialistAuthority의 read·Shell 비활성화와 승인 Snapshot, 위임·정책 Binding, 범위·시간을 포함한 Permit을 저장하고 예산을 한 번 소비한다. 같은 Plan·Assignment·접근 종류의 중복 예약을 거부하며, 같은 위임의 동일 Work Item은 실행을 예약한 Plan에 고정된다. Claim은 제출된 Permit과 저장된 Digest, 현재 정책·위임·Snapshot 및 남은 시간을 검증하고 사용 시각을 한 번 기록한다. 과거 기록은 저장 당시 정책으로 검증한다. 신규 실행 레코드 형식과 호환되지 않는 기존 Assignment 실행 기록은 자동 변환하지 않는다.
 
-**5.3.2.3 실행 및 Context 경계.** 성공한 Claim을 같은 프로세스에서 한 번 소비하기 직전에 Ledger의 정책·위임·Snapshot·권한 Binding 및 만료를 재검증한다. 복사한 Permit이나 저장된 Claim으로 접근을 다시 시작할 수 없다. Harness는 승인된 Git Snapshot에서 안전한 읽기 Scope의 일반 UTF-8 파일만 제공한다. 1회 조회에서 최대 32개 파일, 파일당 16 KiB, 직렬화된 전체 Context 64 KiB로 제한한다. 파일 목록과 크기, `AGENTS.md` 또는 `package.json`의 내용에도 같은 범위를 적용한다.
+**5.3.2.3 실행 및 Context 경계.** 성공한 Claim을 같은 프로세스에서 한 번 소비하기 직전에 Ledger의 정책·위임·Snapshot·권한 Binding 및 만료를 재검증한다. 복사한 Permit이나 저장된 Claim으로 접근을 다시 시작할 수 없다. Harness는 승인된 Git Snapshot에서 안전한 읽기 Scope의 일반 UTF-8 파일만 제공한다. 세션 누적 최대 32개 파일, 파일당 16 KiB, 직렬화된 전체 Context 64 KiB로 제한한다. 파일 목록과 크기, `AGENTS.md` 또는 `package.json`의 내용에도 같은 범위를 적용한다.
 
 `execute-assignments`는 등록된 Plan과 선택 범위를 재검증한다. 독립 Assignment는 읽기·쓰기 상한 모두 명시적인 읽기 설정이 있으면 공유 동시성 한도에서 실행한다. 승인된 방향·현재 업무 정보·읽기 전용 Authority를 Context-only Codex에 전달한다. Harness는 실제로 제공한 파일과 행을 기준으로 Evidence를 확인하고 Snapshot·현재 권한·시간을 재검증한 뒤 결과와 Context Digest 또는 실패 단계를 기록한다.
 
-읽기 성공은 `read-completed` 실행 결과다. Assignment와 Work Item의 전체 완료는 미확정이며, 그 결과가 필요한 업무는 검증된 완료 계약이 연결될 때까지 대기한다. 후속 Step 5.3.3에서 제한된 Planner 조사와 TaskContract Binding을 연결한다. 쓰기 권한 발급, Codex Worktree 수정 실행 및 다중 Worktree 통합은 후속 범위다. 기존 Worktree·Scope·Verification·Evidence·Artifact Pipeline을 재사용할 수 있다.
+읽기 성공은 `read-completed` 실행 결과다. Assignment와 Work Item의 전체 완료는 미확정이며, 그 결과가 필요한 업무는 검증된 완료 계약이 연결될 때까지 대기한다. 신규 Write Assignment는 읽기 Claim에서 Task Detailing으로 진행하고 검증된 계약을 `task-prepared`로 기록한다. 쓰기 권한 발급, Codex Worktree 수정 실행 및 다중 Worktree 통합은 후속 범위다. 기존 Worktree·Scope·Verification·Evidence·Artifact Pipeline을 재사용할 수 있다.
 
 ```text
 Approved Direction + ExecutionDelegation
@@ -322,7 +322,11 @@ Staffing, Decision, Comparison, Analysis, Synthesis, Governance, Work Decomposit
 
 `sources`의 Specialist ID와 배열 Index는 승인된 분석을 참조한다. 분해 결과를 받을 때와 Ledger에 등록할 때 참조를 검증한다. 근거가 없으면 생략할 수 있다. 읽기 실행에는 인용된 Evidence 중 Claim으로 로딩한 파일의 경로와 행 위치만 포함한다. 이전 분석의 자유 서술은 전달하지 않으며, 참조가 읽기 범위나 실행 권한을 추가하지 않는다. 기존 기록에는 이 필드가 없어도 읽을 수 있다. 새 필드가 포함된 기록은 이를 모르는 이전 버전의 strict Schema에서 거부될 수 있다.
 
-후속 Task Detailing은 Assignment Read Session의 canonical Work Item·Assignment 및 승인된 Context를 입력으로 사용한다. 추가 조사는 별도의 승인과 수명 경계가 필요하다. 이 단계의 계약과 Runtime은 해당 기능이 연결될 때 정의한다.
+Assignment Planning은 분석·설계·검토에 `read`, 실제 코드 변경이 필요한 역할에 `write`를 선택한다. 새 Write Plan은 `writeDetailingVersion: 1`을 Plan Digest에 포함한다. 버전이 없는 과거 Write Plan은 기록으로 보존하고 새 실행 요청은 거부한다. 신규 실행은 Claim에서 복원한 상한으로 분기한다. Read는 기존 Specialist와 Evidence 검증을 사용하고, Write는 Governance의 Eligibility를 통과하면 바로 Task Detailing으로 진입한다. 변경이 불필요하거나 계획을 수립할 수 없으면 Planner 사유를 중단 결과에 기록한다.
+
+`initialReadPaths`는 기존 읽기 요청의 선택 필드이며 Reservation Binding에 포함된다. 생략 시 기존 초기 조회를 유지한다. 추가 조회는 같은 Read Session에서만 수행하며 Planner 최대 4회, 조회당 최대 4개, 누적 최대 32개, 파일당 16 KiB, 직렬화 Context 최대 64 KiB를 적용한다. 각 호출은 최초 Claim Deadline의 남은 시간을 사용한다.
+
+Task Detailing은 기존 Planner와 TaskDraft 생성·반복 기능을 활용해 구체적인 `implementationSteps`를 작성한다. Governance는 내용을 기존 Human 제약, 수정 범위, 검증 명령과 대조하고 전체 TaskContract를 누적 Context Digest 및 Read Binding에 연결해 원자적으로 저장한다. Coordinator는 기록된 `task-prepared` 참조를 복원한다. Assignment 완료 및 Write 권한 발급은 후속 책임이다.
 
 독립 `independent-direction-review` 대상과 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 

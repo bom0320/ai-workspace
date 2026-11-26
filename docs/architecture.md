@@ -970,6 +970,8 @@ Governance 공통 model/ledger.ts와 records/governance-transaction.ts는 Approv
 
 Phase A와 Phase B의 `graph.ts`는 실행 순서와 분기를 정의한다. 각 Phase의 `data-flow.ts`는 Node가 소비하고 갱신할 수 있는 State 필드를 선언하며, Node는 그 선언에서 파생한 타입을 사용한다. Application 최상위의 `data-flow/`는 실제 업무 함수의 입출력 계약을 소유한다. 공유 도메인 모델과 AI 메시지 스키마는 기존 계약을 재사용한다. Application과 Governance의 의존성은 공통 계약 계층을 향한다. Governance는 승인과 기록을 재검증하고, Claim에서 소비한 읽기 Session은 프로세스 내부에서 관리한다. [Workflow Data Flow](workflow-architecture.md#phase-a-data-flow)
 
+새 Phase B Write Assignment는 읽기 Claim과 Write Eligibility를 거쳐 Task Detailing으로 진입한다. 상세 계획은 공급된 Snapshot Context를 분석하고 기존 Planning Loop를 사용한다. Governance가 계약의 수정 범위와 검증 명령을 확인한 뒤 `implementationSteps`를 포함한 계약을 실행 기록에 귀속한다. 작업자 Prompt는 계약에 Implementation Steps가 있으면 순서대로 표시한다. [Task Detailing 흐름](workflow-architecture.md#phase-b-data-flow)
+
 | Records 위치 | 관리하는 기록과 조회 책임 |
 | --- | --- |
 | `analysis/` | 최초 분석과 Refinement의 출처 및 누적 예산, Claim에 결합된 Decision Digest와 Refinement 요청 |

@@ -1,5 +1,9 @@
-import type { AssignmentReadInput } from "../../../data-flow/assignment/input.js";
-import type { AssignmentReadOutput } from "../../../data-flow/assignment/output.js";
+import {
+  detailAssignmentTask,
+  AssignmentPlanningBlockedError,
+} from "@/application/planning/index.js";
+import type { AssignmentExecutionInput } from "../../../data-flow/assignment/input.js";
+import type { AssignmentExecutionOutput } from "../../../data-flow/assignment/output.js";
 import { ZodError } from "zod";
 import { runCollaborativeSpecialist } from "@/application/decision/index.js";
 import {
@@ -13,11 +17,12 @@ import {
 import { RepositorySnapshotMismatchError } from "@/services/repository-snapshot/index.js";
 import { checkReadOnlyRuntime } from "../../check-execution-runtime.js";
 
-export async function executeAssignmentRead({
+export async function executeAssignment({
   handoff,
   request,
-}: AssignmentReadInput): Promise<AssignmentReadOutput> {
-  let stage: "authority" | "claim" | "execution" | "handoff" = "authority";
+}: AssignmentExecutionInput): Promise<AssignmentExecutionOutput> {
+  let stage: "authority" | "claim" | "execution" | "handoff" | "planning" =
+    "authority";
   let id: string | undefined;
   try {
     if (
@@ -35,6 +40,31 @@ export async function executeAssignmentRead({
       handoff,
       claimed
     );
+    if (session.assignment.repositoryAccessCeiling === "write") {
+      const executionBounds = session.checkWriteEligibility();
+      stage = "planning";
+      const result = await detailAssignmentTask({
+        context: session.context,
+        specialist: session.specialist,
+        assignment: session.assignment,
+        workItem: session.workItem,
+        executionBounds,
+        repositoryRoot: permit.snapshot.repositoryRoot,
+        deadlineMs: session.deadlineMs,
+        limits: session.inspectionLimits,
+        inspect: session.inspect,
+        assertEligible: () => {
+          session.checkWriteEligibility();
+        },
+      });
+      if (result.status === "failed")
+        throw new AssignmentExecutionError("planning");
+      stage = "handoff";
+      return {
+        status: "task-prepared",
+        ...session.recordPreparedTask(result.task),
+      };
+    }
     const timeoutMs = session.deadlineMs - Date.now();
     if (timeoutMs < 1) throw new AssignmentExecutionError("claim");
     stage = "execution";
@@ -50,8 +80,13 @@ export async function executeAssignmentRead({
       ...session.recordResult(decision),
     };
   } catch (error) {
-    const failure =
-      error instanceof AssignmentExecutionError
+    const reason =
+      error instanceof AssignmentPlanningBlockedError
+        ? error.message
+        : undefined;
+    const failure = reason
+      ? "planning-blocked"
+      : error instanceof AssignmentExecutionError
         ? error.failure
         : error instanceof RepositorySnapshotMismatchError
           ? "snapshot"
@@ -63,7 +98,7 @@ export async function executeAssignmentRead({
     if (!id) return { status: "denied" as const, failure };
     let failureRecorded = false;
     try {
-      recordAssignmentFailure(handoff, request.planId, id, failure);
+      recordAssignmentFailure(handoff, request.planId, id, failure, reason);
       failureRecorded = true;
     } catch {
       // The original rejection remains observable even if persistence fails.
@@ -73,6 +108,7 @@ export async function executeAssignmentRead({
       failure,
       invocationId: id,
       failureRecorded,
+      ...(reason && { reason }),
     };
   }
 }

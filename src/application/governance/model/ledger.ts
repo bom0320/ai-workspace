@@ -1,3 +1,4 @@
+import { digestPreparedAssignmentTask } from "./assignment-execution.js";
 import {
   assignmentDelegationBinding,
   assignmentExecutionRecordSchema,
@@ -165,6 +166,10 @@ export const governanceLedgerSchema = z
         );
         const policy = policyRecord?.policy;
         const { execution, request } = record;
+        const preparedDigests =
+          record.result && "status" in record.result
+            ? digestPreparedAssignmentTask(record, record.result)
+            : undefined;
         const count = (executionCounts.get(record.delegationId) ?? 0) + 1;
         const key = JSON.stringify([
           request.planId,
@@ -208,6 +213,8 @@ export const governanceLedgerSchema = z
           execution.expiresAt !== delegation.grant.expiresAt ||
           governanceDigest(execution.snapshot) !==
             governanceDigest(plan.snapshot) ||
+          governanceDigest(execution.initialReadPaths ?? null) !==
+            governanceDigest(request.initialReadPaths ?? null) ||
           governanceDigest(execution.readScopes) !==
             governanceDigest(request.readScopes) ||
           record.binding !== governanceDigest({ request, execution }) ||
@@ -240,19 +247,32 @@ export const governanceLedgerSchema = z
                   id: record.id,
                   binding: record.binding,
                   stage: record.failure.stage,
+                  ...(record.failure.reason && {
+                    reason: record.failure.reason,
+                  }),
                 }))) ||
           (record.result &&
             (!record.claimedAt ||
-              record.result.decision.specialistId !== assignment.specialistId ||
-              record.result.digest !==
-                governanceDigest({
-                  id: record.id,
-                  binding: record.binding,
-                  decision: record.result.decision,
-                  ...(record.result.contextDigest && {
-                    contextDigest: record.result.contextDigest,
-                  }),
-                })))
+              ("status" in record.result
+                ? plan.writeDetailingVersion !== 1 ||
+                  assignment.repositoryAccessCeiling !== "write" ||
+                  !record.result.task.implementationSteps?.length ||
+                  record.result.taskContractBinding !==
+                    preparedDigests?.taskContractBinding ||
+                  record.result.digest !== preparedDigests?.digest
+                : (plan.writeDetailingVersion === 1 &&
+                    assignment.repositoryAccessCeiling === "write") ||
+                  record.result.decision.specialistId !==
+                    assignment.specialistId ||
+                  record.result.digest !==
+                    governanceDigest({
+                      id: record.id,
+                      binding: record.binding,
+                      decision: record.result.decision,
+                      ...(record.result.contextDigest && {
+                        contextDigest: record.result.contextDigest,
+                      }),
+                    }))))
         )
           context.addIssue({
             code: "custom",

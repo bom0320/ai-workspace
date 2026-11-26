@@ -60,6 +60,9 @@ export function registerAssignmentPlan(
         snapshot: context.snapshot,
         selectedWorkItemIds: [...selectedIds],
         assignments,
+        ...(assignments.some(
+          ({ repositoryAccessCeiling }) => repositoryAccessCeiling === "write"
+        ) && { writeDetailingVersion: 1 as const }),
       };
       const plan = { ...subject, id: governanceDigest(subject) };
       if (!context.entry.assignmentPlans?.some(({ id }) => id === plan.id)) {

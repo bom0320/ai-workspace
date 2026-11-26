@@ -1574,6 +1574,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     {
       fastPath = false,
       directoryScope = false,
+      detailingContext = false,
       codexMode = false,
       beforePhaseB,
       assignmentAgent,
@@ -1582,6 +1583,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     }: {
       fastPath?: boolean;
       directoryScope?: boolean;
+      detailingContext?: boolean;
       codexMode?: boolean;
       specialistCount?: number;
       beforePhaseB?: (approvedDirection: string) => void;
@@ -1594,7 +1596,23 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     writeFileSync(join(root, target), "Original content\n");
     writeFileSync(join(root, "docs-extra", "other.md"), "Outside scope\n");
     symlinkSync("../a.ts", join(root, "docs", "link.ts"));
-    git("add", target, "docs/link.ts", "docs-extra/other.md");
+    const additional = [
+      "docs/extra-1.md",
+      "docs/extra-2.md",
+      "docs/extra-3.md",
+      "docs/extra-4.md",
+    ];
+    if (detailingContext) {
+      for (const file of additional)
+        writeFileSync(join(root, file), "Additional context\n");
+    }
+    git(
+      "add",
+      target,
+      "docs/link.ts",
+      "docs-extra/other.md",
+      ...(detailingContext ? additional : [])
+    );
     git("commit", "--quiet", "-m", "Add execution target");
     const workerMode = codexMode
       ? { workerMode: "codex-worktree" as const }
@@ -1763,6 +1781,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     expect(preparedContext.staffingBinding).toBe(plan.staffingBinding);
     expect(Object.keys(assignmentAgent.mock.calls[0][0]).sort()).toEqual([
       "repositoryAccessCeilings",
+      "repositoryAccessGuidance",
       "specialists",
       "workItems",
     ]);
@@ -1940,7 +1959,6 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
   it.each([
     "read",
-    "write",
     "bad-evidence",
     "drift",
     "expired",
@@ -1963,7 +1981,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               specialistId: specialists[0].id,
               objective: "Inspect the supplied README",
               deliverable: "Scoped findings",
-              repositoryAccessCeiling: mode === "write" ? "write" : "read",
+              repositoryAccessCeiling: "read",
               dependsOn: id === "dependent" ? ["review"] : [],
             })),
           assignmentExecution: {
@@ -2044,8 +2062,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "policy-change": "handoff",
         "save-failure": "handoff",
       } as const;
-      const failure =
-        mode === "read" || mode === "write" ? undefined : failures[mode];
+      const failure = mode === "read" ? undefined : failures[mode];
       const expected = failure
         ? { status: "failed", failure, failureRecorded: true }
         : { status: "read-completed" };
@@ -2078,6 +2095,301 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       }
       expect(before()).toBe("Original content\n");
     }
+  );
+
+  it.each([
+    "prepared",
+    "inspection",
+    "outside",
+    "budget",
+    "blocked",
+    "invalid-scope",
+    "forbidden",
+    "verification",
+    "missing-steps",
+    "round-limit",
+    "legacy",
+    "deadline",
+  ] as const)(
+    "details a write Assignment with %s",
+    async (mode) => {
+      const path = "docs/README.md";
+      const steps = [
+        "Replace the original first line",
+        "Keep the trailing newline",
+      ];
+      const settings = {
+        readScopes: [{ kind: "directory" as const, path: "docs" }],
+        initialReadPaths: [path],
+        timeoutMs: 12_000,
+      };
+      const prompts: string[] = [];
+      const { assignmentPlanResult, assignmentExecutionResult, handoff } =
+        await planExecutionItems(true, mode === "budget" ? 1 : 2, [], path, {
+          codexMode: true,
+          directoryScope: true,
+          detailingContext: true,
+          assignmentAgent: async ({
+            specialists,
+            repositoryAccessGuidance,
+          }) => {
+            expect(repositoryAccessGuidance.write).toContain("modifying");
+            const assignment = {
+              id: "detail",
+              workItemId: "first",
+              specialistId: specialists[0].id,
+              objective: "Revise README",
+              deliverable: "Corrected README",
+              repositoryAccessCeiling: "write",
+              dependsOn: [],
+            };
+            return mode === "inspection"
+              ? [assignment, { ...assignment, id: "other" }]
+              : [assignment];
+          },
+          ...(mode !== "legacy" && {
+            assignmentExecution: { contexts: { detail: settings } },
+          }),
+          beforePhaseB() {
+            const command = vi.mocked(processRuntime.runCommand);
+            const previous = command.getMockImplementation()!;
+            command.mockImplementation(async (name, args, options) => {
+              if (name !== "codex") return previous(name, args, options);
+              const prompt = args.at(-1)!;
+              expect(prompt).not.toContain("SpecialistContext:");
+              expect(args).toContain("read-only");
+              expect(args.join(" ")).toContain("shell_tool=false");
+              expect(options.cwd).not.toBe(root);
+              expect(options.timeoutMs).toBeLessThanOrEqual(settings.timeoutMs);
+              prompts.push(prompt);
+              const context = JSON.parse(prompt.split("PlannerContext:\n")[1]);
+              expect(context.assignmentDetail.specialist.id).toBeTruthy();
+              expect(
+                context.assignmentDetail.executionBounds.writeScopes
+              ).toEqual(settings.readScopes);
+              expect(
+                context.inspectedFiles.map(({ path }: { path: string }) => path)
+              ).toEqual([
+                path,
+                ...Array.from(
+                  { length: prompts.length - 1 },
+                  (_, index) => "docs/extra-" + (index + 1) + ".md"
+                ),
+              ]);
+              let output: unknown;
+              if (mode === "blocked")
+                output = {
+                  type: "blocked",
+                  reason: "The requested behavior is already implemented.",
+                };
+              else if (mode === "outside")
+                output = {
+                  type: "inspect",
+                  request: { paths: ["docs-extra/other.md"] },
+                };
+              else if (
+                mode === "deadline" ||
+                mode === "round-limit" ||
+                (mode === "inspection" && prompts.length === 1)
+              ) {
+                output = {
+                  type: "inspect",
+                  request: { paths: ["docs/extra-" + prompts.length + ".md"] },
+                };
+                if (mode === "deadline")
+                  vi.spyOn(Date, "now").mockReturnValue(
+                    Date.now() + settings.timeoutMs * 2
+                  );
+              } else
+                output = {
+                  type: "complete",
+                  task: {
+                    objective: "Correct the supplied README",
+                    targetRepository: context.goal.targetRepository,
+                    ...(mode !== "missing-steps" && {
+                      implementationSteps: steps,
+                    }),
+                    allowedPaths: [
+                      mode === "invalid-scope" ? "docs-extra/other.md" : path,
+                    ],
+                    forbiddenPaths: mode === "forbidden" ? [path] : [],
+                    constraints: [],
+                    acceptanceCriteria: ["Corrected wording is present"],
+                    verification: [
+                      mode === "verification"
+                        ? "pnpm test"
+                        : "git diff --check",
+                    ],
+                  },
+                };
+              return {
+                stdout: JSON.stringify(output),
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+              };
+            });
+          },
+        });
+      if (mode === "deadline") vi.mocked(Date.now).mockRestore();
+      if (
+        handoff?.status !== "completed" ||
+        assignmentPlanResult?.status !== "prepared"
+      )
+        throw new Error("Expected prepared Plan and Handoff.");
+      const { plan } = assignmentPlanResult;
+      expect(plan.writeDetailingVersion).toBe(1);
+      const request = {
+        access: "read",
+        planId: plan.id,
+        assignmentId: "detail",
+        ...settings,
+      };
+      if (mode === "legacy") {
+        const { id: _id, writeDetailingVersion: _version, ...subject } = plan;
+        const legacy = { id: governanceDigest(subject), ...subject };
+        withGovernanceRecords((raw, save) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          Object.values(ledger.repositories)[0].assignmentPlans!.push(legacy);
+          save(ledger);
+        });
+        expect(
+          governance.getPreparedAssignmentPlan(handoff, legacy.id).plan
+        ).toEqual(legacy);
+        expect(() =>
+          governance.reserveAssignmentExecution(handoff, {
+            ...request,
+            planId: legacy.id,
+          })
+        ).toThrow("legacy-write-plan");
+        expect(prompts).toHaveLength(0);
+        return;
+      }
+      const failures = {
+        outside: "validation",
+        budget: "budget",
+        blocked: "planning-blocked",
+        "invalid-scope": "validation",
+        forbidden: "validation",
+        verification: "validation",
+        "missing-steps": "validation",
+        "round-limit": "planning",
+        deadline: "claim",
+        prepared: undefined,
+        inspection: undefined,
+      };
+      const failure = failures[mode];
+      expect(prompts).toHaveLength(
+        mode === "budget"
+          ? 0
+          : mode === "round-limit"
+            ? 4
+            : mode === "inspection"
+              ? 2
+              : 1
+      );
+      expect(readFileSync(join(root, path), "utf8")).toBe("Original content\n");
+      if (failure) {
+        expect(assignmentExecutionResult).toMatchObject({
+          status: "failed",
+          results: [
+            {
+              status: "failed",
+              failure,
+              failureRecorded: true,
+              ...(mode === "blocked" && {
+                reason: "The requested behavior is already implemented.",
+              }),
+            },
+          ],
+        });
+        return;
+      }
+      expect(assignmentExecutionResult).toMatchObject({
+        status: "pending",
+        workItemResults: [{ workItemId: "first", status: "pending" }],
+        results: [
+          {
+            assignmentId: "detail",
+            status: "task-prepared",
+            taskContractBinding: expect.stringMatching(/^[a-f0-9]{64}$/),
+          },
+        ],
+      });
+      const [restored] = governance.getAssignmentExecutionResults(
+        handoff,
+        plan.id
+      );
+      if (restored?.status !== "task-prepared")
+        throw new Error("Missing prepared task.");
+      const { coordinateAssignmentExecutions } =
+        await import("../../phase-b/features/execution/coordination/coordinate-assignment-executions.js");
+      expect(
+        await coordinateAssignmentExecutions(
+          { handoff, plan, selectedWorkItemIds: ["first"] },
+          {
+            contexts: { detail: settings },
+          }
+        )
+      ).toMatchObject({ status: "pending", results: [restored] });
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, request)
+      ).toThrow("duplicate");
+      expect(() =>
+        governance.reserveAssignmentExecution(handoff, {
+          access: "write",
+          planId: plan.id,
+          assignmentId: "detail",
+          taskContractBinding: restored.taskContractBinding,
+          readPaths: [path],
+          timeoutMs: 1000,
+        })
+      ).toThrow("unsupported");
+      if (mode === "inspection") {
+        const other = governance.reserveAssignmentExecution(handoff, {
+          ...request,
+          assignmentId: "other",
+        });
+        governance.claimAssignmentExecution(handoff, other);
+        withGovernanceRecords((raw, save) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          const [original, duplicate] = Object.values(ledger.repositories)[0]
+            .assignmentExecutions!;
+          duplicate.result = structuredClone(original.result);
+          save(ledger);
+        });
+        expect(() =>
+          governance.getAssignmentExecutionResults(handoff, plan.id)
+        ).toThrow("Invalid Assignment execution record");
+      }
+      if (mode === "prepared") {
+        const constraints =
+          governance.getApprovedDecision(handoff.decision.id).context.goal
+            .constraints ?? [];
+        withGovernanceRecords((raw, save) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          const records = Object.values(ledger.repositories)[0]
+            .assignmentExecutions!;
+          expect(records).toHaveLength(1);
+          const result = records[0].result;
+          if (!result || !("status" in result))
+            throw new Error("Missing task.");
+          expect(result.task.implementationSteps).toEqual(steps);
+          expect(result.task.constraints).toEqual(
+            expect.arrayContaining(constraints)
+          );
+          result.task.implementationSteps = ["Altered instructions"];
+          save(ledger);
+        });
+        expect(() =>
+          governance.getAssignmentExecutionResults(handoff, plan.id)
+        ).toThrow();
+      }
+    },
+    30_000
   );
 
   it.each(["assignment-only", "dependent", "independent"] as const)(

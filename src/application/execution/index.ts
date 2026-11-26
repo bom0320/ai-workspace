@@ -11,6 +11,6 @@ export type {
   ExecutionOutcome,
   ReadOnlyExecutionOutcome,
 } from "./data-flow/work-item/output.js";
-export { executeAssignmentRead } from "./flow/work-item/assignment/execute-assignment-read.js";
-export type { AssignmentReadInput } from "./data-flow/assignment/input.js";
-export type { AssignmentReadOutput } from "./data-flow/assignment/output.js";
+export { executeAssignment } from "./flow/work-item/assignment/execute-assignment.js";
+export type { AssignmentExecutionInput } from "./data-flow/assignment/input.js";
+export type { AssignmentExecutionOutput } from "./data-flow/assignment/output.js";

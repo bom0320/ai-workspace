@@ -13,6 +13,11 @@ export const taskContractSchema = z.object({
   // Outcome the Worker must achieve for this task.
   objective: nonEmptyString,
 
+  implementationSteps: z
+    .array(z.string().refine((step) => step.trim().length > 0))
+    .min(1)
+    .optional(),
+
   // Repository where the task will be executed.
   targetRepository: nonEmptyString,
 

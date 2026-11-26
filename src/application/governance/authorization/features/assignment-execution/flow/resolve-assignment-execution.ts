@@ -59,6 +59,17 @@ export function resolveAssignmentBinding(
     throw new AssignmentExecutionError("authority");
   const requested = { readScopes: request.readScopes, writeScopes: [] };
   if (
+    (request.initialReadPaths &&
+      !isExecutionScopeContained(
+        {
+          readScopes: request.initialReadPaths.map((path) => ({
+            kind: "file",
+            path,
+          })),
+          writeScopes: [],
+        },
+        requested
+      )) ||
     !isExecutionScopeContained(requested, executionScopes(delegation.grant)) ||
     !isExecutionScopeContained(requested, executionScopes(policy)) ||
     request.timeoutMs >

@@ -1,3 +1,10 @@
+import { taskContractSchema } from "@/contracts/task.js";
+import { isContextScopeContained } from "@/services/repository-inspection/index.js";
+import {
+  executionScopes,
+  executionBoundsSchema,
+} from "../../../../approval/features/system-policy/model/execution-system-policy.js";
+import { validateTaskExecutionContract } from "../../work-item-execution/flow/validation/validate-task-execution-contract.js";
 import { assertGovernedGitConfiguration } from "@/infrastructure/git/index.js";
 import {
   agentDecisionSchema,
@@ -10,6 +17,7 @@ import { governanceDigest } from "@/services/governance-records/index.js";
 import {
   AssignmentExecutionError,
   assignmentExecutionRequestSchema,
+  digestPreparedAssignmentTask,
   authorizedAssignmentReadExecutionSchema,
 } from "../../../../model/assignment-execution.js";
 import { withGovernanceLedger } from "../../../../records/governance-transaction.js";
@@ -30,6 +38,11 @@ export function reserveAssignmentExecution(handoff: Handoff, input: unknown) {
     if (request.access !== "read")
       throw new AssignmentExecutionError("unsupported");
     const { entry, delegation, policy, assignment } = context;
+    if (
+      assignment.repositoryAccessCeiling === "write" &&
+      context.plan.writeDetailingVersion !== 1
+    )
+      throw new AssignmentExecutionError("legacy-write-plan");
     const prior = entry.assignmentExecutions ?? [];
     const workReservations = entry.executionReservations ?? [];
     if (
@@ -199,7 +212,8 @@ export function consumeAssignmentReadContext(
       const context = loadAssignmentReadContext(
         resolved,
         permit.readScopes,
-        remainingTime
+        remainingTime,
+        permit.initialReadPaths
       );
       return {
         context,
@@ -209,7 +223,83 @@ export function consumeAssignmentReadContext(
         deadlineMs,
       };
     });
-  const contextDigest = governanceDigest(context);
+  const isReadAssignment = assignment.repositoryAccessCeiling === "read";
+  let inspectedContext = context;
+  let detailing = false;
+  let inspections = 0;
+  const inspectionLimits = {
+    maxRounds: 4,
+    maxFilesPerRequest: 4,
+    maxTotalFiles: 32,
+  } as const;
+  const validateAnalysis = (input: unknown) => {
+    try {
+      const decision = agentDecisionSchema.parse(input);
+      if (decision.specialistId !== permit.specialistId) throw new Error();
+      validateDecisionEvidence(context, decision);
+      return decision;
+    } catch {
+      throw new AssignmentExecutionError("validation");
+    }
+  };
+
+  const eligibleBounds = ({
+    resolved,
+    remainingTime,
+  }: ReturnType<typeof resolveLiveClaim>) => {
+    const { entry, assignment, delegation, policy } = resolved;
+    const { grant } = delegation;
+    if (resolved.plan.writeDetailingVersion !== 1)
+      throw new AssignmentExecutionError("legacy-write-plan");
+    const permitted = executionScopes(policy).writeScopes;
+    const granted = executionScopes(grant).writeScopes;
+    const within = (
+      scope: (typeof permitted)[number],
+      allowedScopes: typeof permitted
+    ) => isContextScopeContained(scope, { allowedScopes });
+    const writeScopes = [
+      ...granted.filter((scope) => within(scope, permitted)),
+      ...permitted.filter((scope) => within(scope, granted)),
+    ].filter(
+      (scope, index, scopes) =>
+        scopes.findIndex(
+          ({ path, kind }) => path === scope.path && kind === scope.kind
+        ) === index
+    );
+    if (
+      assignment.repositoryAccessCeiling !== "write" ||
+      !writeScopes.length ||
+      grant.workerMode !== "codex-worktree" ||
+      policy.workerMode !== "codex-worktree"
+    )
+      throw new AssignmentExecutionError("authority");
+    const count = [
+      ...(entry.executionReservations ?? []),
+      ...(entry.assignmentExecutions ?? []),
+    ].filter(({ delegationId }) => delegationId === delegation.id).length;
+    if (
+      count >= Math.min(grant.budget.maxExecutions, policy.budget.maxExecutions)
+    )
+      throw new AssignmentExecutionError("budget");
+    remainingTime();
+    return {
+      readScopes: permit.readScopes,
+      writeScopes,
+      shellCommands: grant.shellCommands.filter((command) =>
+        policy.shellCommands.includes(command)
+      ),
+      budget: {
+        maxExecutions:
+          Math.min(grant.budget.maxExecutions, policy.budget.maxExecutions) -
+          count,
+        maxTimeoutMs: Math.min(
+          grant.budget.maxTimeoutMs,
+          policy.budget.maxTimeoutMs,
+          Date.parse(grant.expiresAt) - Date.now()
+        ),
+      },
+    };
+  };
   let finalized = false;
   return {
     context: structuredClone(context),
@@ -218,17 +308,93 @@ export function consumeAssignmentReadContext(
     assignment,
     authority: permit.authority,
     deadlineMs,
-    recordResult(input: unknown) {
+    inspectionLimits,
+    checkWriteEligibility() {
       if (finalized) throw new AssignmentExecutionError("claim");
+      const bounds = withGovernanceLedger((ledger) =>
+        eligibleBounds(resolveLiveClaim(ledger))
+      );
+      detailing = true;
+      return bounds;
+    },
+    inspect(paths: string[]) {
+      if (!detailing || finalized) throw new AssignmentExecutionError("claim");
+      if (++inspections >= inspectionLimits.maxRounds)
+        throw new AssignmentExecutionError("validation");
+      const requested = executionBoundsSchema.shape.readPaths.parse(paths);
+      if (
+        !requested.length ||
+        requested.length > inspectionLimits.maxFilesPerRequest
+      )
+        throw new AssignmentExecutionError("validation");
+      inspectedContext = withGovernanceLedger((ledger) => {
+        const live = resolveLiveClaim(ledger);
+        eligibleBounds(live);
+        return loadAssignmentReadContext(
+          live.resolved,
+          permit.readScopes,
+          live.remainingTime,
+          requested,
+          inspectedContext
+        );
+      });
+      return structuredClone(inspectedContext);
+    },
+    recordPreparedTask(input: unknown) {
+      if (!detailing || finalized) throw new AssignmentExecutionError("claim");
       finalized = true;
-      const decision = agentDecisionSchema.parse(input);
-      if (decision.specialistId !== permit.specialistId)
-        throw new AssignmentExecutionError("validation");
-      try {
-        validateDecisionEvidence(context, decision);
-      } catch {
-        throw new AssignmentExecutionError("validation");
-      }
+      return withGovernanceLedger((ledger, save) => {
+        const live = resolveLiveClaim(ledger);
+        const bounds = eligibleBounds(live);
+        const task = taskContractSchema.strict().parse(input);
+        try {
+          validateTaskExecutionContract(task, bounds);
+          const { goal } = inspectedContext;
+          const conflicts = task.allowedPaths.some((path) =>
+            task.forbiddenPaths.some(
+              (forbidden) =>
+                path.startsWith(forbidden + "/") ||
+                forbidden.startsWith(path + "/")
+            )
+          );
+          if (
+            conflicts ||
+            !task.implementationSteps?.length ||
+            task.targetRepository !== goal.targetRepository ||
+            !task.objective.trim() ||
+            !task.acceptanceCriteria.length ||
+            task.acceptanceCriteria.some((criterion) => !criterion.trim()) ||
+            !(goal.constraints ?? []).every((constraint) =>
+              task.constraints.includes(constraint)
+            )
+          )
+            throw new Error("Invalid prepared task.");
+        } catch {
+          throw new AssignmentExecutionError("validation");
+        }
+        const result = {
+          status: "task-prepared" as const,
+          task,
+          contextDigest: governanceDigest(inspectedContext),
+        };
+        const { record } = live;
+        const digests = digestPreparedAssignmentTask(record, result);
+        record.result = { ...result, ...digests };
+        live.remainingTime();
+        save();
+        return {
+          invocationId: record.id,
+          resultDigest: digests.digest,
+          taskContractBinding: digests.taskContractBinding,
+        };
+      });
+    },
+    recordResult(input: unknown) {
+      if (!isReadAssignment || detailing || finalized)
+        throw new AssignmentExecutionError("claim");
+      finalized = true;
+      const decision = validateAnalysis(input);
+      const contextDigest = governanceDigest(inspectedContext);
       return withGovernanceLedger((ledger, save) => {
         const { record, remainingTime } = resolveLiveClaim(ledger);
         const resultDigest = governanceDigest({

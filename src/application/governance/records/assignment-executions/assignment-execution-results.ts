@@ -19,7 +19,8 @@ export function recordAssignmentFailure(
   handoff: Handoff,
   planId: string,
   id: string,
-  failure: AssignmentExecutionFailureStage
+  failure: AssignmentExecutionFailureStage,
+  reason?: string
 ) {
   const stage = assignmentExecutionFailureStageSchema.parse(failure);
   return withGovernanceLedger((ledger, save) => {
@@ -48,7 +49,13 @@ export function recordAssignmentFailure(
       throw new AssignmentExecutionError("handoff");
     record.failure = {
       stage,
-      digest: governanceDigest({ id, binding: record.binding, stage }),
+      ...(reason && { reason }),
+      digest: governanceDigest({
+        id,
+        binding: record.binding,
+        stage,
+        ...(reason && { reason }),
+      }),
     };
     save();
   });
@@ -71,9 +78,15 @@ export function getAssignmentExecutionResults(
     } & (
       | { status: "read-completed"; resultDigest: string }
       | {
+          status: "task-prepared";
+          resultDigest: string;
+          taskContractBinding: string;
+        }
+      | {
           status: "failed";
           failure: AssignmentExecutionFailureStage;
           failureRecorded: true;
+          reason?: string;
         }
     );
     return (entry.assignmentExecutions ?? []).flatMap<Reference>((record) => {
@@ -95,6 +108,7 @@ export function getAssignmentExecutionResults(
             invocationId: record.id,
             failure: record.failure.stage,
             failureRecorded: true,
+            ...(record.failure.reason && { reason: record.failure.reason }),
           },
         ];
       }
@@ -114,7 +128,12 @@ export function getAssignmentExecutionResults(
         throw new AssignmentExecutionError("handoff");
       return [
         {
-          status: "read-completed" as const,
+          ...("status" in record.result
+            ? {
+                status: "task-prepared" as const,
+                taskContractBinding: record.result.taskContractBinding,
+              }
+            : { status: "read-completed" as const }),
           assignmentId: assignment.id,
           workItemId: assignment.workItemId,
           invocationId: record.id,

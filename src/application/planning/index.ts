@@ -19,3 +19,5 @@ export {
 } from "./assignment/flow/create-assignment-plan.js";
 export type { CreateAssignmentPlanInput } from "./data-flow/assignment/input.js";
 export type { AssignmentPlanningOutput } from "./data-flow/assignment/output.js";
+export { detailAssignmentTask } from "./detailed/flow/detail-assignment-task.js";
+export { AssignmentPlanningBlockedError } from "./detailed/planner/codex-planner.js";

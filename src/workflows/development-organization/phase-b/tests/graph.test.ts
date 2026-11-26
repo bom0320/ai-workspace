@@ -1,5 +1,5 @@
 import {
-  executeAssignmentRead,
+  executeAssignment,
   executeWorkItem,
 } from "@/application/execution/index.js";
 import { beforeEach, expect, expectTypeOf, it, vi } from "vitest";
@@ -24,7 +24,7 @@ vi.mock("@/application/planning/index.js", () => ({
 }));
 
 vi.mock("@/application/execution/index.js", () => ({
-  executeAssignmentRead: vi.fn(),
+  executeAssignment: vi.fn(),
   executeWorkItem: vi
     .fn()
     .mockResolvedValue({ status: "blocked", reason: "Runtime unsupported." }),
@@ -340,7 +340,7 @@ it.each([
     expect(createAssignmentPlan).not.toHaveBeenCalled();
     expect(beginValidatedWorkItemExecutionSource).not.toHaveBeenCalled();
     expect(executeWorkItem).not.toHaveBeenCalled();
-    expect(executeAssignmentRead).not.toHaveBeenCalled();
+    expect(executeAssignment).not.toHaveBeenCalled();
   }
 );
 
@@ -369,7 +369,7 @@ it.each([
     expect(result.workDecompositionResult?.status).not.toBe("proposed");
     expect(selectWorkItemIds).not.toHaveBeenCalled();
     expect(createAssignmentPlan).not.toHaveBeenCalled();
-    expect(executeAssignmentRead).not.toHaveBeenCalled();
+    expect(executeAssignment).not.toHaveBeenCalled();
   }
 );
 
@@ -386,7 +386,7 @@ it("stops before selection when Handoff verification is denied", async () => {
   expect(result.handoffResult?.status).toBe("denied");
   expect(decomposeApprovedWork).not.toHaveBeenCalled();
   expect(selectWorkItemIds).not.toHaveBeenCalled();
-  expect(executeAssignmentRead).not.toHaveBeenCalled();
+  expect(executeAssignment).not.toHaveBeenCalled();
 });
 
 it("validates all selected IDs before Assignment Planning", async () => {
@@ -414,7 +414,7 @@ it("skips Assignment Planning and Execution for an empty selection", async () =>
   }).invoke(input);
   expect(result.selectedWorkItemIds).toEqual([]);
   expect(createAssignmentPlan).not.toHaveBeenCalled();
-  expect(executeAssignmentRead).not.toHaveBeenCalled();
+  expect(executeAssignment).not.toHaveBeenCalled();
 });
 
 it("takes the selection and Plan only from the current Graph run", async () => {
@@ -500,7 +500,7 @@ it.each([
       workItems: combinedItems,
       specialistSources: [],
     });
-    vi.mocked(executeAssignmentRead).mockResolvedValueOnce({
+    vi.mocked(executeAssignment).mockResolvedValueOnce({
       status: "read-completed",
       invocationId: "invocation",
       resultDigest: "digest",
@@ -546,7 +546,7 @@ it.each([
     expect(getPreparedAssignmentPlan).toHaveBeenCalledTimes(
       shouldExecute ? 1 : 0
     );
-    expect(executeAssignmentRead).toHaveBeenCalledTimes(shouldExecute ? 1 : 0);
+    expect(executeAssignment).toHaveBeenCalledTimes(shouldExecute ? 1 : 0);
     if (shouldExecute) {
       expect(result.assignmentExecutionResult).toMatchObject({
         status: "pending",

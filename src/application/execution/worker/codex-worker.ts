@@ -26,6 +26,15 @@ export async function runCodexWorker(
     "Objective:",
     task.objective,
     "",
+    ...(task.implementationSteps
+      ? [
+          "Implementation Steps:",
+          ...task.implementationSteps.map(
+            (step, index) => `${index + 1}. ${step}`
+          ),
+          "",
+        ]
+      : []),
     "Allowed paths:",
     task.allowedPaths.map((path) => `- ${path}`).join("\n") || "- (none)",
     "",

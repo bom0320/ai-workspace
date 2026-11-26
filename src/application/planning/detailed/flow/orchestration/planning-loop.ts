@@ -90,12 +90,14 @@ export async function runPlanningLoop({
   limits,
   goalId,
   taskId,
+  inspect = inspectNewContext,
 }: {
   initialState: PlanningState;
   planner: Planner;
   limits: PlanningLimits;
   goalId: string;
   taskId: string;
+  inspect?: (state: PlanningState, paths: string[]) => PlanningState;
 }): Promise<PlanningResult> {
   let state = initialState;
   let rounds = 0;
@@ -127,7 +129,7 @@ export async function runPlanningLoop({
     }
 
     try {
-      state = inspectNewContext(state, inspection.paths);
+      state = inspect(state, inspection.paths);
     } catch (error) {
       if (error instanceof InspectionRequestError) {
         return fail("Inspection request is invalid.");

@@ -27,6 +27,33 @@ beforeEach(() => {
 });
 
 describe("runCodexWorker", () => {
+  it("includes ordered implementation steps only when supplied", async () => {
+    runCommandMock.mockResolvedValue({
+      stdout: "done",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+    });
+    await runCodexWorker(task, "/tmp/workspace", 1000);
+    await runCodexWorker(
+      {
+        ...task,
+        implementationSteps: [
+          "Inspect current logic",
+          "Update the allowed file",
+        ],
+      },
+      "/tmp/workspace",
+      1000
+    );
+    expect(runCommandMock.mock.calls[0][1].at(-1)).not.toContain(
+      "Implementation Steps:"
+    );
+    expect(runCommandMock.mock.calls[1][1].at(-1)).toContain(
+      "Implementation Steps:\n1. Inspect current logic\n2. Update the allowed file\n\nAllowed paths:"
+    );
+  });
+
   it("records setup, actual process timing and output processing without changing stdout", async () => {
     const telemetry: ExecutionTelemetry = { totalDurationMs: 0 };
 

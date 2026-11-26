@@ -12,6 +12,7 @@ import { validateAssignmentProposal } from "@/contracts/assignment/validate-assi
 export type AssignmentPlanAgent = (
   context: ReturnType<typeof getAssignmentPlanContext> & {
     workItems: CreateAssignmentPlanInput["proposal"]["workItems"];
+    repositoryAccessGuidance: { read: string; write: string };
   }
 ) => Promise<unknown>;
 
@@ -49,7 +50,17 @@ export async function createAssignmentPlan(
 
   let input: unknown;
   try {
-    input = await agent(structuredClone({ ...context, workItems }));
+    input = await agent(
+      structuredClone({
+        ...context,
+        workItems,
+        repositoryAccessGuidance: {
+          read: "Choose read for analysis, research, design or review that requires no repository changes.",
+          write:
+            "Choose write only when the assignment objective and deliverable call for implementing or modifying repository files.",
+        },
+      })
+    );
   } catch {
     return denied("agent");
   }

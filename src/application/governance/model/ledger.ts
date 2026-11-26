@@ -1,3 +1,4 @@
+import { implementationPlanMatchesPaths } from "@/contracts/task.js";
 import { digestPreparedAssignmentTask } from "./assignment-execution.js";
 import {
   assignmentDelegationBinding,
@@ -256,7 +257,13 @@ export const governanceLedgerSchema = z
               ("status" in record.result
                 ? plan.writeDetailingVersion !== 1 ||
                   assignment.repositoryAccessCeiling !== "write" ||
-                  !record.result.task.implementationSteps?.length ||
+                  (record.result.task.implementationPlan
+                    ? record.result.task.implementationSteps !== undefined ||
+                      !implementationPlanMatchesPaths(
+                        record.result.task.implementationPlan,
+                        record.result.task.allowedPaths
+                      )
+                    : !record.result.task.implementationSteps?.length) ||
                   record.result.taskContractBinding !==
                     preparedDigests?.taskContractBinding ||
                   record.result.digest !== preparedDigests?.digest

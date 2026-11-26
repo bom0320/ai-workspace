@@ -2106,7 +2106,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     "invalid-scope",
     "forbidden",
     "verification",
-    "missing-steps",
+    "missing-plan",
+    "uncovered-path",
+    "outside-step",
+    "uninspected",
+    "new-file",
+    "symlink",
+    "mixed-plan",
+    "historical-result",
     "round-limit",
     "legacy",
     "deadline",
@@ -2118,6 +2125,30 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "Replace the original first line",
         "Keep the trailing newline",
       ];
+      const targetPath =
+        {
+          "invalid-scope": "docs-extra/other.md",
+          uninspected: "docs/extra-1.md",
+          "new-file": "docs/new.md",
+          symlink: "docs/link.ts",
+        }[mode as string] ?? path;
+      const implementationPlan = {
+        background: "Make the supplied README clearer.",
+        currentState: "The supplied README starts with the original wording.",
+        targetDesign: "Use the corrected wording and retain its newline.",
+        steps: [
+          {
+            title:
+              mode === "new-file"
+                ? "Create the companion file"
+                : "Update the documentation",
+            targetPaths: [
+              mode === "outside-step" ? "docs/unapproved.md" : targetPath,
+            ],
+            instructions: steps,
+          },
+        ],
+      };
       const settings = {
         readScopes: [{ kind: "directory" as const, path: "docs" }],
         initialReadPaths: [path],
@@ -2206,12 +2237,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
                   task: {
                     objective: "Correct the supplied README",
                     targetRepository: context.goal.targetRepository,
-                    ...(mode !== "missing-steps" && {
+                    ...(mode !== "missing-plan" && { implementationPlan }),
+                    ...(["missing-plan", "mixed-plan"].includes(mode) && {
                       implementationSteps: steps,
                     }),
-                    allowedPaths: [
-                      mode === "invalid-scope" ? "docs-extra/other.md" : path,
-                    ],
+                    allowedPaths:
+                      mode === "uncovered-path"
+                        ? [path, "docs/new.md"]
+                        : [targetPath],
                     forbiddenPaths: mode === "forbidden" ? [path] : [],
                     constraints: [],
                     acceptanceCriteria: ["Corrected wording is present"],
@@ -2273,7 +2306,14 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "invalid-scope": "validation",
         forbidden: "validation",
         verification: "validation",
-        "missing-steps": "validation",
+        "missing-plan": "validation",
+        "uncovered-path": "validation",
+        "outside-step": "validation",
+        uninspected: "validation",
+        symlink: "validation",
+        "mixed-plan": "validation",
+        "new-file": undefined,
+        "historical-result": undefined,
         "round-limit": "planning",
         deadline: "claim",
         prepared: undefined,
@@ -2313,6 +2353,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           {
             assignmentId: "detail",
             status: "task-prepared",
+            planFormat: "structured",
             taskContractBinding: expect.stringMatching(/^[a-f0-9]{64}$/),
           },
         ],
@@ -2364,6 +2405,41 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           governance.getAssignmentExecutionResults(handoff, plan.id)
         ).toThrow("Invalid Assignment execution record");
       }
+      if (mode === "historical-result") {
+        const { digestPreparedAssignmentTask } =
+          await import("@/application/governance/model/assignment-execution.js");
+        withGovernanceRecords((raw, save) => {
+          const ledger =
+            raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+          const record = Object.values(ledger.repositories)[0]
+            .assignmentExecutions![0];
+          const result = record.result;
+          if (!result || !("status" in result))
+            throw new Error("Missing task.");
+          const { implementationPlan: _plan, ...task } = result.task;
+          const legacy = {
+            ...result,
+            task: { ...task, implementationSteps: steps },
+          };
+          record.result = {
+            ...legacy,
+            ...digestPreparedAssignmentTask(record, legacy),
+          };
+          save(ledger);
+        });
+        const ledgerPath = join(
+          home,
+          ".ai-workspace-governance",
+          "records.json"
+        );
+        const original = readFileSync(ledgerPath, "utf8");
+        expect(
+          governance.getAssignmentExecutionResults(handoff, plan.id)
+        ).toMatchObject([
+          { status: "task-prepared", planFormat: "legacy-steps" },
+        ]);
+        expect(readFileSync(ledgerPath, "utf8")).toBe(original);
+      }
       if (mode === "prepared") {
         const constraints =
           governance.getApprovedDecision(handoff.decision.id).context.goal
@@ -2377,11 +2453,13 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           const result = records[0].result;
           if (!result || !("status" in result))
             throw new Error("Missing task.");
-          expect(result.task.implementationSteps).toEqual(steps);
+          expect(result.task.implementationPlan).toEqual(implementationPlan);
           expect(result.task.constraints).toEqual(
             expect.arrayContaining(constraints)
           );
-          result.task.implementationSteps = ["Altered instructions"];
+          result.task.implementationPlan!.steps[0].instructions = [
+            "Altered instructions",
+          ];
           save(ledger);
         });
         expect(() =>

@@ -59,7 +59,9 @@ export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
         ? [
             "Choose exactly one next action: inspect, complete, or blocked.",
             'If already implemented, no repository changes are needed, or the supplied bounds make the work impossible, return {"type":"blocked","reason":"..."} and explain why.',
-            "On complete, include implementationSteps with concrete ordered steps grounded in the supplied files. Explain the logic to change and behavior to preserve. Do not merely repeat the objective.",
+            "On complete, include implementationPlan with background, currentState, targetDesign, and ordered steps. Ground currentState in actual supplied file contents. For each step, name the files and functions to modify or create, explain the change, and state what behavior to preserve. Keep the plan proportional to the Assignment.",
+            "List exact affected files in step targetPaths. Their union must equal allowedPaths. Use an empty targetPaths list for a step with no changes. Do not include implementationSteps.",
+            "Distinguish new files from edits. Inspect every existing target before proposing a change; a file name in the tree is insufficient. If required files cannot be inspected, return blocked. Stay within this Assignment and preserve the approved direction and Human constraints.",
             "Treat prior evidence locations as reference only. Cite or rely on code behavior only when the relevant file content has been supplied.",
           ]
         : ["Choose exactly one next action: inspect or complete."]),
@@ -68,7 +70,7 @@ export function createCodexPlanner(options: CodexPlannerOptions = {}): Planner {
       "For complete, return a TaskDraft only when enough evidence is available.",
       "Do not generate id or goalId. The Harness supplies identifiers and preserves Human constraints.",
       options.governedAssignment
-        ? 'Complete format: {"type":"complete","task":{"objective":"...","targetRepository":"...","implementationSteps":["..."],"allowedPaths":[],"forbiddenPaths":[],"constraints":[],"acceptanceCriteria":[],"verification":[]}}'
+        ? 'Complete format: {"type":"complete","task":{"objective":"...","targetRepository":"...","implementationPlan":{"background":"...","currentState":"...","targetDesign":"...","steps":[{"title":"...","targetPaths":["src/example.ts"],"instructions":["..."]}]},"allowedPaths":[],"forbiddenPaths":[],"constraints":[],"acceptanceCriteria":[],"verification":[]}}'
         : 'Complete format: {"type":"complete","task":{"objective":"...","targetRepository":"...","allowedPaths":[],"forbiddenPaths":[],"constraints":[],"acceptanceCriteria":[],"verification":[]}}',
       "Inspection paths are investigation requests, not permission to modify files.",
       "Verification entries MUST be executable shell commands, each runnable exactly as written.",

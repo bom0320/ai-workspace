@@ -326,7 +326,9 @@ Assignment Planning은 분석·설계·검토에 `read`, 실제 코드 변경이
 
 `initialReadPaths`는 기존 읽기 요청의 선택 필드이며 Reservation Binding에 포함된다. 생략 시 기존 초기 조회를 유지한다. 추가 조회는 같은 Read Session에서만 수행하며 Planner 최대 4회, 조회당 최대 4개, 누적 최대 32개, 파일당 16 KiB, 직렬화 Context 최대 64 KiB를 적용한다. 각 호출은 최초 Claim Deadline의 남은 시간을 사용한다.
 
-Task Detailing은 기존 Planner와 TaskDraft 생성·반복 기능을 활용해 구체적인 `implementationSteps`를 작성한다. Governance는 내용을 기존 Human 제약, 수정 범위, 검증 명령과 대조하고 전체 TaskContract를 누적 Context Digest 및 Read Binding에 연결해 원자적으로 저장한다. Coordinator는 기록된 `task-prepared` 참조를 복원한다. Assignment 완료 및 Write 권한 발급은 후속 책임이다.
+Task Detailing은 기존 Planner와 TaskDraft 생성·반복 기능으로 `implementationPlan`을 작성한다. 계획은 배경, 현재 코드 구조, 목표 설계 및 순서가 있는 단계별 제목·대상 경로·지시를 담는다. Step별 수정 대상 경로의 합집합은 `allowedPaths`와 일치해야 한다. Governance는 현재 Human 제약, 승인 범위, 금지 경로와 검증 명령을 확인한다. 기존 파일은 Read Session에서 내용이 제공된 일반 파일이어야 하며, 새 파일은 승인된 Snapshot에서 기존 경로와 충돌하지 않아야 한다. Snapshot 경로 존재 확인에 사용한 전체 트리는 Planner에 전달하지 않는다.
+
+전체 TaskContract를 누적 Context Digest 및 Read Binding과 묶어 원자적으로 저장한다. 이전 `implementationSteps` 기반 기록은 원래 Digest로 읽으며, 복원한 `task-prepared` 참조의 `planFormat`으로 `legacy-steps`와 `structured`를 구분한다. 신규 기록은 구조화된 계획을 요구한다. Assignment 완료 및 Write 권한 발급은 후속 책임이다.
 
 독립 `independent-direction-review` 대상과 Governance API는 방향 단독 승인과 사후 위임을 지원한다. 이 경로의 승인 기록은 기존 출처와 효력을 유지한다. 이전 Review에 검증된 CEO 제안이 없거나 위임이 사후 승인으로 발급된 경우 정상 Handoff의 근거로 사용되지 않는다. 변경 반영은 Human Change Review & Delivery의 Apply / Commit / Push 경계에서 처리한다.
 

@@ -63,3 +63,60 @@ describe("taskContractSchema", () => {
     ).toBe(false);
   });
 });
+
+describe("implementationPlanSchema", () => {
+  const plan = {
+    background: "Updates require a single path.",
+    currentState: "The schema accepts historical tasks.",
+    targetDesign: "The structured contract remains optional.",
+    steps: [
+      {
+        title: "Extend schema",
+        targetPaths: ["src/contracts/task.ts"],
+        instructions: ["Add the optional field."],
+      },
+    ],
+  };
+  it("accepts an ordered plan, including steps without write targets", () => {
+    const implementationPlan = {
+      ...plan,
+      steps: [
+        ...plan.steps,
+        {
+          title: "Review constraints",
+          targetPaths: [],
+          instructions: ["Check the constraints."],
+        },
+      ],
+    };
+    expect(
+      taskContractSchema.parse({ ...validTaskContract, implementationPlan })
+        .implementationPlan
+    ).toEqual(implementationPlan);
+  });
+  it.each(["background", "currentState", "targetDesign"] as const)(
+    "rejects blank %s",
+    (field) => {
+      expect(
+        taskContractSchema.safeParse({
+          ...validTaskContract,
+          implementationPlan: { ...plan, [field]: " " },
+        }).success
+      ).toBe(false);
+    }
+  );
+  it.each([
+    { steps: [] },
+    { steps: [{ ...plan.steps[0], instructions: [] }] },
+    { steps: [{ ...plan.steps[0], title: "" }] },
+    { steps: [{ ...plan.steps[0], instructions: [" "] }] },
+    { steps: [{ ...plan.steps[0], targetPaths: [" "] }] },
+  ])("rejects incomplete steps $steps", ({ steps }) => {
+    expect(
+      taskContractSchema.safeParse({
+        ...validTaskContract,
+        implementationPlan: { ...plan, steps },
+      }).success
+    ).toBe(false);
+  });
+});

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskContract } from "@/contracts/task.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 
-import { runCodexWorker } from "./codex-worker.js";
+import { createCodexWorkerPrompt, runCodexWorker } from "./codex-worker.js";
 import type { ExecutionTelemetry } from "../model/result.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
@@ -51,6 +51,42 @@ describe("runCodexWorker", () => {
     );
     expect(runCommandMock.mock.calls[1][1].at(-1)).toContain(
       "Implementation Steps:\n1. Inspect current logic\n2. Update the allowed file\n\nAllowed paths:"
+    );
+  });
+
+  it("renders the structured plan and preserves contractual constraints", () => {
+    const prompt = createCodexWorkerPrompt({
+      ...task,
+      implementationPlan: {
+        background: "Avoid duplicate requests",
+        currentState: "getUser checks the completed cache",
+        targetDesign: "Track requests in flight",
+        steps: [
+          {
+            title: "Change getUser",
+            targetPaths: ["src/allowed.ts"],
+            instructions: [
+              "Reuse an existing promise",
+              "Remove rejected requests",
+            ],
+          },
+          {
+            title: "Review behavior",
+            targetPaths: [],
+            instructions: ["Check independent IDs"],
+          },
+        ],
+      },
+    });
+    expect(prompt).toContain(
+      "Background:\nAvoid duplicate requests\n\nCurrent State:\ngetUser checks the completed cache\n\nTarget Design:\nTrack requests in flight"
+    );
+    expect(prompt).toContain(
+      "Step 1. Change getUser\nTarget Paths:\n- src/allowed.ts\nInstructions:\n- Reuse an existing promise\n- Remove rejected requests\nStep 2. Review behavior"
+    );
+    expect(prompt).toContain("Constraints:\n- Do not add dependencies");
+    expect(prompt).toContain(
+      "Acceptance criteria:\n- The change behaves as requested"
     );
   });
 

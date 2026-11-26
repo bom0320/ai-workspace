@@ -1,11 +1,17 @@
-import { taskContractSchema } from "@/contracts/task.js";
+import {
+  implementationPlanMatchesPaths,
+  taskContractSchema,
+} from "@/contracts/task.js";
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import {
   executionScopes,
   executionBoundsSchema,
 } from "../../../../approval/features/system-policy/model/execution-system-policy.js";
 import { validateTaskExecutionContract } from "../../work-item-execution/flow/validation/validate-task-execution-contract.js";
-import { assertGovernedGitConfiguration } from "@/infrastructure/git/index.js";
+import {
+  assertGovernedGitConfiguration,
+  listRepositoryFilesAtCommit,
+} from "@/infrastructure/git/index.js";
 import {
   agentDecisionSchema,
   validateDecisionEvidence,
@@ -359,7 +365,12 @@ export function consumeAssignmentReadContext(
           );
           if (
             conflicts ||
-            !task.implementationSteps?.length ||
+            !task.implementationPlan ||
+            task.implementationSteps !== undefined ||
+            !implementationPlanMatchesPaths(
+              task.implementationPlan,
+              task.allowedPaths
+            ) ||
             task.targetRepository !== goal.targetRepository ||
             !task.objective.trim() ||
             !task.acceptanceCriteria.length ||
@@ -369,7 +380,45 @@ export function consumeAssignmentReadContext(
             )
           )
             throw new Error("Invalid prepared task.");
-        } catch {
+
+          // Check existence against the full approved tree internally. Only Read Session
+          // blobs can provide content, and unapproved paths are never sent to the Planner.
+          const tree = listRepositoryFilesAtCommit(
+            permit.snapshot.repositoryRoot,
+            permit.snapshot.commitSha,
+            {
+              timeoutMs: live.remainingTime(),
+              ignoreReplaceObjects: true,
+            }
+          );
+          const supplied = new Set(
+            inspectedContext.files.map(({ path }) => path)
+          );
+          const existing = new Map(tree.map(({ path, mode }) => [path, mode]));
+          for (const path of task.allowedPaths) {
+            const mode = existing.get(path);
+            if (mode !== undefined) {
+              if (
+                (mode !== "100644" && mode !== "100755") ||
+                !supplied.has(path)
+              )
+                throw new Error(
+                  "Existing target was not supplied as a regular Snapshot file."
+                );
+              continue;
+            }
+            if (
+              tree.some(
+                ({ path: entry }) =>
+                  entry.startsWith(path + "/") || path.startsWith(entry + "/")
+              )
+            )
+              throw new Error(
+                "New target collides with an existing Snapshot path."
+              );
+          }
+        } catch (error) {
+          if (error instanceof AssignmentExecutionError) throw error;
           throw new AssignmentExecutionError("validation");
         }
         const result = {

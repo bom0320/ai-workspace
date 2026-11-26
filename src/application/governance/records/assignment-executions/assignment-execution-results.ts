@@ -79,6 +79,7 @@ export function getAssignmentExecutionResults(
       | { status: "read-completed"; resultDigest: string }
       | {
           status: "task-prepared";
+          planFormat: "structured" | "legacy-steps";
           resultDigest: string;
           taskContractBinding: string;
         }
@@ -131,6 +132,9 @@ export function getAssignmentExecutionResults(
           ...("status" in record.result
             ? {
                 status: "task-prepared" as const,
+                planFormat: record.result.task.implementationPlan
+                  ? ("structured" as const)
+                  : ("legacy-steps" as const),
                 taskContractBinding: record.result.taskContractBinding,
               }
             : { status: "read-completed" as const }),

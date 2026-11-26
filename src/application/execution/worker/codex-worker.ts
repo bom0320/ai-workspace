@@ -3,19 +3,8 @@ import { runCommand } from "@/infrastructure/process/index.js";
 
 import type { ExecutionTelemetry } from "../model/result.js";
 
-export async function runCodexWorker(
-  task: TaskContract,
-  workspaceRoot: string,
-  timeoutMs: number,
-  telemetry?: Pick<
-    ExecutionTelemetry,
-    | "workerSetupDurationMs"
-    | "codexProcessDurationMs"
-    | "workerOutputProcessingDurationMs"
-  >
-): Promise<string> {
-  const setupStartedAt = performance.now();
-  const prompt = [
+export function createCodexWorkerPrompt(task: TaskContract): string {
+  return [
     "Complete the following task within the provided repository workspace.",
     "",
     "The Harness will execute the TaskContract verification commands after you finish.",
@@ -26,15 +15,39 @@ export async function runCodexWorker(
     "Objective:",
     task.objective,
     "",
-    ...(task.implementationSteps
+    ...(task.implementationPlan
       ? [
-          "Implementation Steps:",
-          ...task.implementationSteps.map(
-            (step, index) => `${index + 1}. ${step}`
+          "Background:",
+          task.implementationPlan.background,
+          "",
+          "Current State:",
+          task.implementationPlan.currentState,
+          "",
+          "Target Design:",
+          task.implementationPlan.targetDesign,
+          "",
+          "Implementation Plan:",
+          ...task.implementationPlan.steps.flatMap(
+            ({ title, targetPaths, instructions }, index) => [
+              `Step ${index + 1}. ${title}`,
+              "Target Paths:",
+              ...targetPaths.map((path) => `- ${path}`),
+              ...(targetPaths.length ? [] : ["- (none)"]),
+              "Instructions:",
+              ...instructions.map((instruction) => `- ${instruction}`),
+            ]
           ),
           "",
         ]
-      : []),
+      : task.implementationSteps
+        ? [
+            "Implementation Steps:",
+            ...task.implementationSteps.map(
+              (step, index) => `${index + 1}. ${step}`
+            ),
+            "",
+          ]
+        : []),
     "Allowed paths:",
     task.allowedPaths.map((path) => `- ${path}`).join("\n") || "- (none)",
     "",
@@ -52,6 +65,21 @@ export async function runCodexWorker(
     "Verification:",
     task.verification.map((command) => `- ${command}`).join("\n") || "- (none)",
   ].join("\n");
+}
+
+export async function runCodexWorker(
+  task: TaskContract,
+  workspaceRoot: string,
+  timeoutMs: number,
+  telemetry?: Pick<
+    ExecutionTelemetry,
+    | "workerSetupDurationMs"
+    | "codexProcessDurationMs"
+    | "workerOutputProcessingDurationMs"
+  >
+): Promise<string> {
+  const setupStartedAt = performance.now();
+  const prompt = createCodexWorkerPrompt(task);
   const processCallStartedAt = performance.now();
   if (telemetry)
     telemetry.workerSetupDurationMs = processCallStartedAt - setupStartedAt;

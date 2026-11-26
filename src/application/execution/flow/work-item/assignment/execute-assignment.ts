@@ -62,6 +62,7 @@ export async function executeAssignment({
       stage = "handoff";
       return {
         status: "task-prepared",
+        planFormat: "structured",
         ...session.recordPreparedTask(result.task),
       };
     }

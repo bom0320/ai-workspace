@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
 import type { GoalSpec } from "@/contracts/goal.js";
-import { taskContractSchema } from "@/contracts/task.js";
+import { taskContractSchema } from "@/contracts/specialist/task-contract.js";
 
 import type { TaskDraft } from "../../protocol/planner.js";
 import { buildTaskContract } from "./build-task-contract.js";

@@ -1,4 +1,4 @@
-import { taskContractSchema } from "@/contracts/task.js";
+import { taskContractSchema } from "@/contracts/specialist/task-contract.js";
 import { z } from "zod";
 import { agentDecisionSchema } from "@/application/specialist/analysis/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";

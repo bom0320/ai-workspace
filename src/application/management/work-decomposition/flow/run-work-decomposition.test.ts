@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { getApprovedDecision } from "@/application/governance/index.js";
 import { runCommand } from "@/infrastructure/process/index.js";
-import { decomposeApprovedWork, type WorkItem } from "../index.js";
+import { decomposeApprovedWork } from "../index.js";
+import { type WorkItem } from "@/contracts/management/work-item.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({
   runCommand: vi.fn(),

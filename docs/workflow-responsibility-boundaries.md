@@ -12,6 +12,10 @@ Step 4에서 Stage 1 / 2의 중복 통합 State도 제거했다. 이 문서는 �
 현재 Phase A와 Phase B Graph는 각각 제공된다. Organization 상위 Graph, 결과 통합 및 영속 복구는 후속 범위다.
 Phase A는 Human Direction Review까지 같은 Graph를 사용한다. 아래 Step별 CLI 및 실행 대상 결정은 당시의 설계 이력이다.
 
+역할 간 공유 데이터는 [Contracts 소유권](architecture.md#contracts-소유권과-의존-방향)을 따른다.
+예를 들어 WorkItem과 ExecutionAssignment는 공유 구조이고, Work Item 출처를 실제 승인 분석 기록과
+대조하는 규칙은 Application에 둔다. Workflow의 State와 Handoff는 Phase 간 실행 경계를 표현한다.
+
 ## 1. 문제와 책임 모델
 
 초기 리팩토링에서는 폴더와 실행 경계를 먼저 정하고 기능을 배치했다. Staffing Setup Subgraph를 통한

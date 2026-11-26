@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { phaseBAssignmentSchema } from "./phase-b-assignment.js";
+import { executionAssignmentSchema } from "./execution-assignment.js";
 
 const assignment = {
   id: "analyze",
@@ -12,9 +12,9 @@ const assignment = {
 };
 
 it("accepts read and write ceilings", () => {
-  expect(phaseBAssignmentSchema.parse(assignment)).toEqual(assignment);
+  expect(executionAssignmentSchema.parse(assignment)).toEqual(assignment);
   expect(
-    phaseBAssignmentSchema.safeParse({
+    executionAssignmentSchema.safeParse({
       ...assignment,
       repositoryAccessCeiling: "write",
     }).success
@@ -33,6 +33,6 @@ it.each([
   { executor: { kind: "worker", mode: "unknown" } },
 ])("rejects invalid fields and authority overrides %j", (override) => {
   expect(
-    phaseBAssignmentSchema.safeParse({ ...assignment, ...override }).success
+    executionAssignmentSchema.safeParse({ ...assignment, ...override }).success
   ).toBe(false);
 });

@@ -5,7 +5,7 @@ import { validateContextAccessPolicy } from "@/services/repository-inspection/in
 import {
   staffingSystemPolicySchema,
   type StaffingSystemPolicy,
-} from "../../model/policy.js";
+} from "@/contracts/governance/staffing-system-policy.js";
 
 export function validateSystemConfiguration(
   input: unknown

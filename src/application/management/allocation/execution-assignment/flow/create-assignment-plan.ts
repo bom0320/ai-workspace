@@ -5,9 +5,9 @@ import {
   getAssignmentPlanContext,
   registerAssignmentPlan,
 } from "@/application/governance/index.js";
-import { phaseBAssignmentsSchema } from "@/contracts/assignment/phase-b-assignment.js";
-import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
-import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
+import { executionAssignmentsSchema } from "@/contracts/management/execution-assignment.js";
+import { selectAssignmentWorkItems } from "@/contracts/management/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/management/validate-assignment-proposal.js";
 
 export type AssignmentPlanAgent = (
   context: ReturnType<typeof getAssignmentPlanContext> & {
@@ -65,7 +65,7 @@ export async function createAssignmentPlan(
     return denied("agent");
   }
 
-  const parsed = phaseBAssignmentsSchema.safeParse(input);
+  const parsed = executionAssignmentsSchema.safeParse(input);
   if (
     !parsed.success ||
     validateAssignmentProposal(parsed.data, workItems, {

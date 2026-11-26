@@ -24,6 +24,10 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 - [Workflow Architecture](docs/workflow-architecture.md)
 - [Roadmap](docs/roadmap.md)
 
+공유 계약은 [Contracts 소유권과 의존 방향](docs/architecture.md#contracts-소유권과-의존-방향)을 따른다.
+업무와 배정은 Management 계약, 구현 계획과 실행 계약은 Specialist 계약으로 공유한다. Agent Protocol, 실행 State,
+Phase Handoff 및 Governance 기록은 해당 기능이 소유한다.
+
 ## 사전 준비
 
 - Node.js 20 이상과 pnpm (설치된 LangChain core의 Node 요구사항)

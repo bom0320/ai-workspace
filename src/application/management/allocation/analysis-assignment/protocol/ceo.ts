@@ -2,13 +2,11 @@ import { z } from "zod";
 
 import type { StaffingContext } from "./context.js";
 
-import {
-  staffingAssignmentSchema,
-  staffingProposalSchema,
-} from "../model/staffing.js";
+import { analysisAssignmentSchema } from "@/contracts/management/analysis-assignment.js";
+import { staffingProposalSchema } from "../model/staffing.js";
 
 // CEO messages share the proposal fields but cannot supply Harness-owned data.
-export const staffingAssignmentDraftSchema = staffingAssignmentSchema.omit({
+export const staffingAssignmentDraftSchema = analysisAssignmentSchema.omit({
   assignmentId: true,
 });
 

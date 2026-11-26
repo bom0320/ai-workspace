@@ -1,4 +1,4 @@
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import { runCodexWorker } from "../worker/codex-worker.js";
 import { addExecutionFailure, type ExecutionState } from "../model/state.js";
 

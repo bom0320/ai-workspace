@@ -1,12 +1,12 @@
 import { validateDependencies } from "../shared/validate-dependencies.js";
-import type { PhaseBAssignment } from "./phase-b-assignment.js";
+import type { ExecutionAssignment } from "./execution-assignment.js";
 
 export function validateAssignmentProposal(
-  assignments: readonly PhaseBAssignment[],
+  assignments: readonly ExecutionAssignment[],
   workItems: readonly { id: string }[],
   bounds?: {
     specialistIds: readonly string[];
-    repositoryAccessCeilings: readonly PhaseBAssignment["repositoryAccessCeiling"][];
+    repositoryAccessCeilings: readonly ExecutionAssignment["repositoryAccessCeiling"][];
   }
 ): string | undefined {
   const dependencyError = validateDependencies(assignments, "Assignment");

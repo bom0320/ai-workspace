@@ -1,4 +1,4 @@
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 
 import type { ExecutionTelemetry } from "../model/result.js";

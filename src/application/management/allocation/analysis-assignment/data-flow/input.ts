@@ -1,5 +1,5 @@
 import type { GoalSpec } from "@/contracts/goal.js";
-import type { StaffingSystemPolicy } from "@/contracts/staffing/system-policy.js";
+import type { StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import type { CEOStaffingAgent } from "../protocol/ceo.js";
 import type { StaffingAssignmentConstraints } from "../protocol/context.js";
 

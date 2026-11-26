@@ -1,4 +1,4 @@
-import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
+import type { ExecutionAssignment } from "@/contracts/management/execution-assignment.js";
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
@@ -76,7 +76,7 @@ export function prepareAssignmentContext(
     permitted[kind].some((scope) =>
       isContextScopeContained(scope, { allowedScopes: granted[kind] })
     );
-  const repositoryAccessCeilings: PhaseBAssignment["repositoryAccessCeiling"][] =
+  const repositoryAccessCeilings: ExecutionAssignment["repositoryAccessCeiling"][] =
     [];
   if (overlaps("readScopes")) repositoryAccessCeilings.push("read");
   if (

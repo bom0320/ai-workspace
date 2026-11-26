@@ -5,7 +5,7 @@ import {
   assertGovernedGitConfiguration,
   stageWorkspaceSnapshot,
 } from "@/infrastructure/git/index.js";
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 import type { VerificationResult } from "@/services/verification/index.js";
 import { addExecutionFailure, type ExecutionState } from "../../model/state.js";

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sourceReferenceSchema } from "@/contracts/management/source-reference.js";
 
 // Common Validation
 export const synthesisTextSchema = z
@@ -6,33 +7,6 @@ export const synthesisTextSchema = z
   .min(1)
   .refine((value) => value.trim().length > 0);
 
-// SourceReference Schemas
-// These are pointers into supplied data, never new Repository Evidence.
-const recommendationReferenceSchema = z
-  .object({
-    kind: z.literal("recommendation"),
-    specialistId: synthesisTextSchema,
-  })
-  .strict();
-const decisionItemReferenceSchema = z
-  .object({
-    kind: z.enum(["evidence", "risk", "uncertainty"]),
-    specialistId: synthesisTextSchema,
-    index: z.number().int().nonnegative(),
-  })
-  .strict();
-const comparisonReferenceSchema = z
-  .object({
-    kind: z.enum(["finding", "gap"]),
-    index: z.number().int().nonnegative(),
-  })
-  .strict();
-
-export const sourceReferenceSchema = z.discriminatedUnion("kind", [
-  recommendationReferenceSchema,
-  decisionItemReferenceSchema,
-  comparisonReferenceSchema,
-]);
 export const synthesisSourcesSchema = z.array(sourceReferenceSchema).min(1);
 
 // Proposal Component Schemas
@@ -72,5 +46,4 @@ export const synthesisProposalSchema = z
   .strict();
 
 // Type Exports
-export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type SynthesisProposal = z.infer<typeof synthesisProposalSchema>;

@@ -1,9 +1,7 @@
 export {
   intentAnalysisSchema,
-  staffingAssignmentSchema,
   staffingProposalSchema,
   type IntentAnalysis,
-  type StaffingAssignment,
   type StaffingProposal,
 } from "./model/staffing.js";
 export {
@@ -18,10 +16,8 @@ export {
   staffingContextSchema,
   staffingAssignmentConstraintsSchema,
   type StaffingAssignmentConstraints,
-  staffingInspectionLimitsSchema,
   specialistCandidateSchema,
   type StaffingContext,
-  type StaffingInspectionLimits,
   type SpecialistCandidate,
 } from "./protocol/context.js";
 export {

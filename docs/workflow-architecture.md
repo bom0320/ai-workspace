@@ -160,7 +160,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 | --- | --- | --- |
 | 목적 | 해결 방향을 판단할 분석 조직 구성 | 승인된 방향을 실현할 업무 구성 |
 | 입력 | Original Human Goal / Constraints와 분석 Context | `ApprovedDecision`에서 복원된 승인 방향과 근거 |
-| 출력 | `StaffingAssignment`를 포함한 StaffingProposal | Work Item과 선행 의존성으로 구성한 Work Decomposition |
+| 출력 | `AnalysisAssignment`를 포함한 StaffingProposal | Work Item과 선행 의존성으로 구성한 Work Decomposition |
 | 초점 | Specialist·분석 Context·Budget | 업무 독립성·기대 산출물·의존성 |
 | 실행 권한 | 제안 이후 별도 Governance 승인·Authorization 필요 | 분해 결과와 별도로 업무별 승인·Authorization 필요 |
 
@@ -181,7 +181,7 @@ CEO는 Human이 승인한 방향을 독립적으로 완료·검증할 수 있는
 | 개념 | 책임 |
 | --- | --- |
 | Work Item | CEO가 정의하는 업무의 목적, 기대 산출물, 선행 의존성. 구현된 Schema는 제안 내부 ID, objective, deliverable, dependsOn과 선택적 rationale·suggestedRoles를 정의한다. rationale은 업무를 독립 실행 단위로 분리한 근거이며, 작성 시 비어 있지 않아야 한다. 복수 업무 제안에서 CEO는 각 업무의 책임·산출물·검증 경계를 근거로 분리 이유를 설명한다. 선행 관계는 dependsOn에 기록한다. |
-| Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 계획 준비는 Phase A에서 승인된 Specialist 출처를 재사용하며, 기존 `StaffingAssignment`는 Phase A 분석 배치 계약이다. |
+| Specialist Assignment | 특정 Work Item에서 Specialist가 담당할 역할과 작업. Work Item 수와 Specialist 수는 독립적이다. Phase B의 계획 준비는 Phase A에서 승인된 Specialist 출처를 재사용하며, 기존 `AnalysisAssignment`는 Phase A 분석 배치 계약이다. |
 | `TaskContract` | Repository 변경의 수정 가능·금지 범위, Constraints, Acceptance Criteria, Verification을 구체화하는 기존 v1/v0 계약. 필요한 Human Task Approval과 Execution의 입력이다. |
 
 CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계약 생성은 개별 Planning의 책임이며 실행 권한은 Governance 경계에서 확인한다. 읽기 전용 분석·설계·검토는 업무에 맞는 Context와 권한 계약을 사용한다. Repository 변경은 `TaskContract`와 필요한 Human Task Approval을 거친다. 테스트 명령처럼 Shell을 사용하는 업무는 변경 여부와 관계없이 별도의 실행 권한 검증이 필요하다.
@@ -206,7 +206,7 @@ CEO Work Decomposition의 종료점은 업무와 의존성의 제안이다. 계�
 
 **Step 5.3.1 계약 교체.** Assignment Planning은 선택된 Work Item과 승인된 Specialist 후보, 정책과 위임의 공통 접근 상한을 받는다. 각 Assignment는 `specialistId`와 `repositoryAccessCeiling`을 가진다. 선택한 모든 Work Item을 배정한다. 하나의 Work Item에 read만, write만, 또는 두 상한을 혼합해 배정할 수 있다. read/write는 업무 범위의 상한이며 실제 수정·Shell·Runtime 권한은 별도 승인에서 결정한다.
 
-[Assignment Schema](../src/contracts/assignment/phase-b-assignment.ts)는 구조를 정의한다. [선택 범위 확인](../src/contracts/assignment/select-assignment-work-items.ts)과 [관계 검증](../src/contracts/assignment/validate-assignment-proposal.ts)은 Planning과 Governance가 공유한다. Work Decomposition과 Assignment는 [공통 의존성 검증](../src/contracts/shared/validate-dependencies.ts)을 사용한다. 승인 출처와 정책·위임에서 허용하는 배정 범위는 Governance가 결정한다.
+[Assignment Schema](../src/contracts/management/execution-assignment.ts)는 구조를 정의한다. [선택 범위 확인](../src/contracts/management/select-assignment-work-items.ts)과 [관계 검증](../src/contracts/management/validate-assignment-proposal.ts)은 Planning과 Governance가 공유한다. Work Decomposition과 Assignment는 [공통 의존성 검증](../src/contracts/shared/validate-dependencies.ts)을 사용한다. 승인 출처와 정책·위임에서 허용하는 배정 범위는 Governance가 결정한다.
 
 Governance는 등록과 조회에서 승인 출처·Decomposition·Snapshot을 재검증한다. Plan ID는 Decomposition과 Staffing Binding, Snapshot, `selectedWorkItemIds`, Assignment 목록을 함께 해시한다. 기존 `executor` 형식의 Plan이 있는 Ledger는 로드에 실패하며 자동 변환·삭제·초기화는 없다. 독립 단일 Work Item 실행은 Plan이 배정된 업무를 우회 실행할 수 없다.
 
@@ -233,7 +233,7 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 | Authorization | Harness가 유효한 승인·위임·정책·Snapshot·범위·예산을 검증해 개별 실행에 부여하는 권한 |
 | Runtime / Verification | Runtime은 승인된 실행을 수행한다. Harness는 별도로 변경 범위·검증 결과·Evidence를 확인하고 기록한다. |
 
-**Phase A 불변 조건.** [Staffing System Policy](../src/contracts/staffing/system-policy.ts)와 [Proposal 검증](../src/application/management/allocation/analysis-assignment/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/specialist/analysis/agent/invoke-codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
+**Phase A 불변 조건.** [Staffing System Policy](../src/contracts/governance/staffing-system-policy.ts)와 [Proposal 검증](../src/application/management/allocation/analysis-assignment/flow/validation/validate-proposal.ts)은 읽기 전용·Shell 비활성화 Specialist만 허용한다. [Invocation Authorization](../src/application/governance/authorization/features/specialist-invocation/flow/authorize-invocation.ts)과 Claim은 승인 Scope와 Snapshot의 Context 및 예산을 검증한다. [Codex Specialist Runtime](../src/application/specialist/analysis/agent/invoke-codex-specialist.ts)은 공급된 Context만 사용하는 읽기 전용 실행을 유지하며 Shell과 Repository 수정을 허용하지 않는다. Specialist는 독립적인 `AgentDecision`을 생성한다. 기존 Staffing Approval, Authorization, Comparison, CEO Synthesis의 의미와 계약을 유지한다. Phase B의 Repository 수정에는 유효한 ApprovedDecision, ExecutionDelegation, 개별 Assignment Authorization이 각각 필요하다.
 
 **5.3.2.1 Identity와 Authority 분리.** 공통 `SpecialistDefinition`에는 ID·역할·기본 전문 업무를 둔다. `SpecialistAuthority`는 정책과 개별 실행 계약이 사용하는 공통 권한 표현이다. Phase A의 정책 등록과 Invocation은 기존처럼 Identity와 읽기 전용 Authority를 함께 저장·검증한다. Claim 후에는 둘을 분리해 Decision Runtime에 전달하며 Runtime은 권한 누락, 쓰기 또는 Shell 허용을 거부한다. Phase B는 승인 당시의 평면 정책 등록 항목으로 기존 Staffing Binding을 재현한 뒤 Identity만 복원한다. 이 단계에서 Phase B 읽기·수정 권한 발급은 연결하지 않는다.
 
@@ -282,6 +282,11 @@ Work Item Coordination / Integration
 Governance 내부의 `resolveExecutionHandoff()`는 원본 `SynthesisContext`와 검증된 `SynthesisProposal` 전체를 함께 복원한다. `prepareAssignmentContext()`는 그 정보를 보존한 채 Specialist 출처, Staffing Binding, 배정 가능한 접근 상한을 추가한다. Assignment Planning Agent에는 선택한 Work Item, Specialist 후보, 접근 상한을 전달한다. 읽기 실행의 Context 구성에서는 기존 Goal과 Proposal의 승인 방향을 선택해 사용한다. [Assignment Context 준비](../src/application/governance/records/assignment-plans/prepare-assignment-context.ts)
 
 Approval의 `execution-delegation/`은 위임 제안·승인·조회와 위임 기록 검증을 담당한다. 같은 계층의 `phase-handoff/`는 승인 결정과 위임을 복원해 전달된 쌍을 원본 기록 및 현재 정책과 대조한다. Phase A 완료 시에는 `verifyExecutionHandoff()`가 검증된 승인 쌍을 반환하고, Phase B 진입 시에는 `verifyPhaseBHandoff()`가 검증된 분석 Context를 반환한다. 두 함수는 공통 검증과 Snapshot 확인을 사용한다. Assignment 준비와 실행 권한 검증은 각자의 Ledger 트랜잭션에서 `resolveExecutionHandoff()`를 재사용하고 Snapshot을 검사한다.
+
+공유 WorkItem과 두 Assignment의 구조는 [Management 계약](../src/contracts/management/)에서,
+TaskContract와 ImplementationPlan은 [Specialist 계약](../src/contracts/specialist/)에서 정의한다.
+Workflow는 이 계약들을 사용해 State와 Phase Handoff를 구성한다. Governance는 승인·위임·기록을 대조하며,
+구조적 검증을 통과한 Handoff나 배정만으로 실행 권한을 발급하지 않는다.
 
 ### Phase A Data Flow
 

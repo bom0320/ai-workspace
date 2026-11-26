@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { phaseBAssignmentsSchema } from "@/contracts/assignment/phase-b-assignment.js";
+import { executionAssignmentsSchema } from "@/contracts/management/execution-assignment.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -12,7 +12,7 @@ export const assignmentPlanSchema = z
     staffingBinding: digest,
     snapshot: repositorySnapshotSchema,
     selectedWorkItemIds: z.array(z.string().min(1)).min(1),
-    assignments: phaseBAssignmentsSchema,
+    assignments: executionAssignmentsSchema,
   })
   .strict();
 

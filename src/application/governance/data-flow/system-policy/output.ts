@@ -1,4 +1,4 @@
-import type { StaffingSystemPolicy } from "../../approval/features/system-policy/model/policy.js";
+import type { StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import type { StaffingAssignmentConstraints } from "@/application/management/allocation/analysis-assignment/index.js";
 
 export type StaffingSystemPolicyResult =

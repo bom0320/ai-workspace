@@ -1,4 +1,4 @@
-import { staffingSystemPolicySchema } from "../staffing/system-policy.js";
+import { staffingSystemPolicySchema } from "../governance/staffing-system-policy.js";
 import { describe, expect, it } from "vitest";
 import { specialistDefinitionsSchema } from "./definition.js";
 

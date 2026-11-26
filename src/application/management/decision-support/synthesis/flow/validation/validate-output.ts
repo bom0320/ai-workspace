@@ -1,9 +1,7 @@
 import type { SynthesisContext } from "../../data-flow/input.js";
 import type { CEOSynthesisDecision } from "../../protocol/ceo.js";
-import type {
-  SourceReference,
-  SynthesisProposal,
-} from "../../model/proposal.js";
+import type { SourceReference } from "@/contracts/management/source-reference.js";
+import type { SynthesisProposal } from "../../model/proposal.js";
 
 function key(source: SourceReference): string {
   return JSON.stringify(source);

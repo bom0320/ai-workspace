@@ -27,8 +27,8 @@ import {
   configureHumanDelegation,
   getApprovedStaffingScope,
   type StaffingApprovalResult,
-  type StaffingSystemPolicy,
 } from "@/application/governance/index.js";
+import { type StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import { confirmHumanAction } from "@/infrastructure/terminal/index.js";
 import { withGovernanceRecords } from "@/services/governance-records/index.js";
 

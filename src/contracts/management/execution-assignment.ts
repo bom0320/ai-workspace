@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const text = z.string().trim().min(1);
 
-export const phaseBAssignmentSchema = z
+export const executionAssignmentSchema = z
   .object({
     id: text,
     workItemId: text,
@@ -14,5 +14,7 @@ export const phaseBAssignmentSchema = z
   })
   .strict();
 
-export const phaseBAssignmentsSchema = z.array(phaseBAssignmentSchema).min(1);
-export type PhaseBAssignment = z.infer<typeof phaseBAssignmentSchema>;
+export const executionAssignmentsSchema = z
+  .array(executionAssignmentSchema)
+  .min(1);
+export type ExecutionAssignment = z.infer<typeof executionAssignmentSchema>;

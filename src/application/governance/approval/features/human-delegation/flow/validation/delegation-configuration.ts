@@ -7,10 +7,8 @@ import {
   type HumanDelegationPolicyInput,
   type RecordedHumanDelegationPolicy,
 } from "../../model/policy.js";
-import {
-  requireCurrentSystemPolicy,
-  type StaffingSystemPolicy,
-} from "../../../system-policy/model/policy.js";
+import { requireCurrentSystemPolicy } from "../../../system-policy/model/policy.js";
+import { type StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import type { RepositoryGovernance } from "../../../../../model/ledger.js";
 
 // A delegation may narrow the configured system boundaries, never expand them.

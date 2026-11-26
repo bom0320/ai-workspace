@@ -11,7 +11,7 @@ import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { phaseACompletionSchema } from "../contracts/phase-handoff.js";
 import { assessmentResultSchema } from "@/application/management/decision-support/analysis-review/index.js";
-import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
+import { staffingSystemPolicySchema } from "@/contracts/governance/staffing-system-policy.js";
 import {
   approvalRecordSchema,
   approvedOperatingScopeSchema,

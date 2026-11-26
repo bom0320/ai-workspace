@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { taskContractSchema } from "./task.js";
+import { taskContractSchema } from "./task-contract.js";
 
 const validTaskContract = {
   id: "task-001",
   goalId: "goal-001",
   objective: "Implement the TaskContract schema",
   targetRepository: "ai-workspace",
-  allowedPaths: ["src/contracts/task.ts", "src/contracts/task.test.ts"],
+  allowedPaths: [
+    "src/contracts/specialist/task-contract.ts",
+    "src/contracts/specialist/task-contract.test.ts",
+  ],
   forbiddenPaths: ["docs/architecture.md", "README.md"],
   constraints: ["Do not add other contracts"],
   acceptanceCriteria: ["Valid contracts parse successfully"],
@@ -58,7 +61,7 @@ describe("taskContractSchema", () => {
     expect(
       taskContractSchema.safeParse({
         ...validTaskContract,
-        allowedPaths: "src/contracts/task.ts",
+        allowedPaths: "src/contracts/specialist/task-contract.ts",
       }).success
     ).toBe(false);
   });
@@ -72,7 +75,7 @@ describe("implementationPlanSchema", () => {
     steps: [
       {
         title: "Extend schema",
-        targetPaths: ["src/contracts/task.ts"],
+        targetPaths: ["src/contracts/specialist/task-contract.ts"],
         instructions: ["Add the optional field."],
       },
     ],

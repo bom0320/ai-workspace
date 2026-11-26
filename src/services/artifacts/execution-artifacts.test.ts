@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";
 
 import {

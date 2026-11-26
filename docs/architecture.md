@@ -276,7 +276,7 @@ Budget / Evidence / Verification / Human Approval을 통제한다. 재작업·�
 | 현재 모델 | 책임과 산출물 | 포함하지 않는 의미 |
 | --- | --- | --- |
 | StaffingAssignmentDraft | Specialist ID / 이번 Goal의 판단 objective / contextPaths / 선택 rationale을 제안 | 실행 Scope, SpecialistAuthority, Approval 또는 상세 구현 계약 |
-| StaffingAssignment | 위 제안에 Harness 소유 assignmentId를 포함하는 공식 Proposal의 항목 | Human Approval이나 운영 권한 발급 |
+| AnalysisAssignment | 위 제안에 Harness 소유 assignmentId를 포함하는 공식 Proposal의 항목 | Human Approval이나 운영 권한 발급 |
 | TaskDraft | objective / targetRepository / allowedPaths / forbiddenPaths / constraints / acceptanceCriteria / verification을 담는 구조화된 Repository 실행 명세 초안 | Staffing 선택이나 승인된 해결 방향 자체 |
 | TaskContract | Harness가 TaskDraft에 id / goalId를 부여하고 원본 Goal의 targetRepository와 Human Constraints를 보존한 v1/v0 실행 계약 | 모든 업무 유형의 범용 계약이나 후속 Delivery의 포괄 승인 |
 
@@ -607,7 +607,7 @@ runStaffingProposal은 통합·제거했다. StaffingDraft는 CEO의 중간 산�
 flow 루트에는 run-staffing 진입점과 테스트를 두며 Context 조사는 inspection, 입력·Proposal 검사는
 validation/validate-proposal, ID 발급·Schema 구성은 transformation/build-staffing-proposal에 둔다.
 System Policy가 등록 Specialist·접근 범위·Inspection limits·maxAgentInvocations의 단일 운영 조건이다.
-공통 `contracts/staffing/system-policy.ts`가 Schema와 타입, Inspection Limits를 소유한다. Governance는
+공통 `contracts/governance/staffing-system-policy.ts`가 Schema와 타입, Inspection Limits를 소유한다. Governance는
 Human 설정·승인·정책 버전을 소유하고 Staffing은 이 계약을 받아 검증한다. 기존 Limits 공개 경로는
 re-export로 유지한다. 독립 StaffingProposalPolicy / Enforcement Rule Schema와 model/policy.ts는 제거했다.
 계약을 공통으로 둬서 Staffing이 Governance workflow를 import하거나 순환 의존을 만들지 않는다.
@@ -920,7 +920,7 @@ E2E나 분산/네트워크 저장소 보장을 의미하지 않는다. 자세한
 | ApprovedOperatingScope / ApprovedAssignment / InvokeSpecialistRequest / AuthorizedSpecialistInvocation / AuthorityVerdict | Schema / Scope issuance / Invocation Authorization / 단일 Decision Workflow implemented | application/governance의 strict 구조 계약. Step 3은 Scope를, Step 4는 예약된 Invocation 입력을 발급하며 실제 Specialist 실행은 하지 않음 |
 | DecisionRound | Conditional | 동일 Snapshot 아래 독립 Decision들의 고유 비교 단위가 실제 필요할 때만. Workflow step 복제라면 만들지 않음 |
 | DecisionRun | Conditional | Goal → Decision / Evidence → Human governance result의 고유 audit lifecycle이 필요할 때만. Runtime run/session 복제라면 만들지 않음 |
-| IntentAnalysis / StaffingAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Staffing Approval은 Step 3 | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
+| IntentAnalysis / AnalysisAssignment / StaffingProposal / StaffingAssignmentDraft / StaffingDraft / CEOStaffingDecision | Schema / Draft Loop / Proposal Finalization implemented; Staffing Approval은 Step 3 | application/staffing의 strict 구조 계약. 제안·조사 요청·Human 확인을 표현하며 승인이나 실행 권한은 제공하지 않음 |
 | InvocationReservation | Implemented | authorization/features/specialist-invocation/model/reservation.ts의 발급 입력 digest와 Scope 전체 호출 예산 예약. 실행 완료·환불 기록은 아님 |
 | InvocationEligibility / InvocationEvaluationContext | Implemented | 순수 evaluateInvocationRequest의 입력·평가 결과. Authorization / Budget Reservation 아님 |
 | CEOStaffingAgent / StaffingRunResult / runStaffing | Implemented | CEO Loop와 R2 검증·최종화를 조합. Proposal / Escalation / Failure 반환; 승인 / 실행 권한 없음 |
@@ -935,6 +935,30 @@ Agent 상태 resume와 전체 durable workflow를 구분하며 관련 policy / r
 [Project Direction](project-direction.md#외부-기술과의-관계-및-도입-시점)에 둔다.
 
 ## 7. Application Structure Convention
+
+### Contracts 소유권과 의존 방향
+
+| 계약 영역 | 소유하는 공유 도메인 |
+| --- | --- |
+| `contracts/goal.ts` | Human Goal과 제약 |
+| `contracts/management/` | WorkItem, AnalysisAssignment, ExecutionAssignment, SourceReference 및 배정 범위·관계 검증 |
+| `contracts/specialist/` | SpecialistDefinition, SpecialistAuthority 표현, ImplementationPlan, TaskContract |
+| `contracts/governance/` | Staffing과 Governance가 공유하는 StaffingSystemPolicy 및 Inspection Limits |
+| `contracts/repository/` | RepositorySnapshot, InspectedFile, ContextAccessPolicy 및 PathScope |
+| `contracts/shared/` | 업무 분해와 배정이 재사용하는 순수 의존성 검증 |
+
+여러 역할 사이에서 독립적인 의미를 갖는 데이터는 Contracts에 둔다. Zod 스키마에서 타입을 파생하며,
+공유 검증은 외부 상태 없이 판정할 수 있는 불변 조건을 다룬다. Work Item 선택은 배정 후보와
+Ledger가 동일한 비어 있지 않은 선택 범위 및 중복·누락 규칙을 적용하기 위해 공유한다.
+SourceReference 구조는 Contracts가, 승인 Context에 있는 Evidence·판단·비교 결과와의 대조는 Application이 소유한다.
+
+Workflow와 CLI는 Application을 호출하고, Application·Services·Infrastructure는 공유 Contracts를 참조한다.
+Contracts는 이들 상위 계층을 import하지 않는다. 개별 기능의 상태·제안·기록은 `model/`, Agent 메시지는
+`protocol/`, 기능의 실행 입출력은 `data-flow/`에 둔다. Phase Handoff는 Workflow 경계 계약이다.
+ExecutionSystemPolicy는 승인·위임·정책 버전 및 기록 검증이 소유하는 Governance Application에 둔다.
+계약 파싱의 성공은 승인이나 실행 권한을 부여하지 않는다. Governance는 원본 Ledger와 현재 정책을 검증한다.
+TaskContract는 과거 `implementationSteps` 기록도 기존 구조로 파싱하며, 신규 수정 실행은 구조화된 ImplementationPlan을 요구한다.
+
 
 현재 application과 module의 소스 배치 기준은 다음과 같다.
 
@@ -1242,9 +1266,9 @@ src/
 
 | 검증 규칙 | 소유 모듈 | 대표 Schema / 함수와 구현 위치 | 호출자 | 검증 시점 | 분류 |
 | --- | --- | --- | --- | --- | --- |
-| Goal / Task 구조, 실행 명세 필드 | Contracts | `goalSpecSchema`, `taskContractSchema` — `contracts/goal.ts`, `contracts/task.ts` | CLI, Planning Finalizer, Staffing, Governance | Goal 입력·Task 로딩/최종화 | Schema |
+| Goal / Task 구조, 실행 명세 필드 | Contracts | `goalSpecSchema`, `taskContractSchema` — `contracts/goal.ts`, `contracts/specialist/task-contract.ts` | CLI, Planning Finalizer, Staffing, Governance | Goal 입력·Task 로딩/최종화 | Schema |
 | Snapshot / 파일 / Specialist / PathScope 공통 구조 | Contracts | `repositorySnapshotSchema`, `inspectedFileSchema`, `specialistDefinitionSchema`, `specialistAuthoritySchema`, `contextAccessPolicySchema` — `contracts/repository/`, `contracts/specialist/` | 각 Application의 합성 Schema·접근 검증 | 입력·Context/기록 구성 | Schema |
-| System 설정, 등록 ID 고유성, Phase A read-only / shell-disabled | Staffing 공통 계약 | `staffingSystemPolicySchema`, `staffingInspectionLimitsSchema` — `contracts/staffing/system-policy.ts` | Governance 설정/조회, Staffing 입력·Proposal 재검증 | 정책 설정·Staffing·Approval | Schema + Policy |
+| System 설정, 등록 ID 고유성, Phase A read-only / shell-disabled | Staffing 공통 계약 | `staffingSystemPolicySchema`, `staffingInspectionLimitsSchema` — `contracts/governance/staffing-system-policy.ts` | Governance 설정/조회, Staffing 입력·Proposal 재검증 | 정책 설정·Staffing·Approval | Schema + Policy |
 | Repository 실체와 Commit 파일 데이터의 기술적 유효성 | Git Infrastructure | `resolveRepositoryRoot()`, `readRepositoryFileAtCommit()` — `infrastructure/git/repository/repository.ts`; `listRepositoryFilesAtCommit()` — `commit-files.ts` | Planning, Snapshot 서비스, Staffing, Decision, Governance 경로 확인 | Repository 해석·Commit tree/blob 로딩 | Policy + Lifecycle |
 | HEAD·Clean 상태와 Snapshot 일치 | Repository Snapshot 서비스 | `captureRepositorySnapshot()`, `assertRepositoryMatchesSnapshot()` — `services/repository-snapshot/repository-snapshot.ts` | Decision, Staffing, Governance Approval/Scope 조회 | Capture·Agent/파일 로딩 전후·발급 전 | Lifecycle |
 | 상대경로·정규 표현, File/Directory 포함 관계 | Repository Inspection 서비스 | `isRepositoryRelativePath()`, `isUnambiguousRepositoryPath()` — `discovery.ts`; `validateContextAccessPolicy()`, `isContextPathAllowed()`, `isContextScopeContained()` — `services/repository-inspection/access-policy.ts` | Decision loader, Staffing, Delegation, Invocation 평가 | 경로 입력·목록 노출·내용 요청·범위 포함 검사 | Schema + Policy |
@@ -1282,7 +1306,7 @@ contracts/repository/context-access-policy.ts: PathScope → ContextAccessPolicy
 SpecialistDefinition → specialistDefinitionsSchema (등록 목록 ID 고유성)
 Staffing 등록 항목 + ContextAccessPolicy + StaffingInspectionLimits → StaffingSystemPolicy
 GoalSpec + RepositorySnapshot + Intent/Assignment/Budget → StaffingProposal
-StaffingAssignment.omit(assignmentId) → StaffingAssignmentDraft
+AnalysisAssignment.omit(assignmentId) → StaffingAssignmentDraft
 StaffingProposal.omit(id, goal, snapshot) + Draft assignments → StaffingDraft → CEOStaffingDecision
 SpecialistDefinition.pick(id, role, objective) + Goal/Files/Limits → StaffingContext
 GoalSpec + Snapshot + ApprovedAssignment/Budget → ApprovedOperatingScope

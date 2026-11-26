@@ -7,10 +7,10 @@ import type { GoalSpec } from "@/contracts/goal.js";
 
 import {
   intentAnalysisSchema,
-  staffingAssignmentSchema,
   staffingProposalSchema,
   type StaffingProposal,
 } from "../index.js";
+import { analysisAssignmentSchema } from "@/contracts/management/analysis-assignment.js";
 
 const intent = {
   problem: "Login failures",
@@ -134,7 +134,7 @@ describe("StaffingProposal — unapproved structure only", () => {
 
   it("rejects authority injected into a proposal assignment", () => {
     expect(
-      staffingAssignmentSchema.safeParse({
+      analysisAssignmentSchema.safeParse({
         ...assignment,
         authority: { repositoryAccess: "write", shellExecution: true },
       }).success

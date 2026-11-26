@@ -1,4 +1,4 @@
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 
 import type { PlanningState } from "../model/state.js";
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sourceReferenceSchema } from "@/application/management/decision-support/synthesis/index.js";
+import { sourceReferenceSchema } from "@/contracts/management/source-reference.js";
 import { scopedExecutionBoundsSchema } from "../../system-policy/model/execution-system-policy.js";
 
 export const executionDelegationDraftSchema =

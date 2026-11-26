@@ -6,10 +6,8 @@ import {
 import type { CommitFile } from "@/infrastructure/git/index.js";
 
 import type { StaffingContextState } from "../../model/state.js";
-import type {
-  StaffingContext,
-  StaffingInspectionLimits,
-} from "../../protocol/context.js";
+import type { StaffingContext } from "../../protocol/context.js";
+import type { StaffingInspectionLimits } from "@/contracts/governance/staffing-system-policy.js";
 
 export function byteLength(context: StaffingContext): number {
   return Buffer.byteLength(JSON.stringify(context), "utf8");

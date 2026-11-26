@@ -1,3 +1,3 @@
-import type { StaffingAssignment } from "@/application/management/allocation/analysis-assignment/index.js";
+import type { AnalysisAssignment } from "@/contracts/management/analysis-assignment.js";
 
-export type AssignmentChange = Omit<StaffingAssignment, "assignmentId">;
+export type AssignmentChange = Omit<AnalysisAssignment, "assignmentId">;

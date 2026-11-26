@@ -19,10 +19,12 @@ import {
   staffingContextSchema,
   staffingAssignmentConstraintsSchema,
   type StaffingAssignmentConstraints,
-  staffingInspectionLimitsSchema,
   type StaffingContext,
-  type StaffingInspectionLimits,
 } from "../../protocol/context.js";
+import {
+  staffingInspectionLimitsSchema,
+  type StaffingInspectionLimits,
+} from "@/contracts/governance/staffing-system-policy.js";
 import { addInspectedFiles, loadRepositoryMetadata } from "./inspect-files.js";
 import { seedInitialFiles } from "./initial-seeding.js";
 import {

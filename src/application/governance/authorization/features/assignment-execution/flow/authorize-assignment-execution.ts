@@ -1,7 +1,5 @@
-import {
-  implementationPlanMatchesPaths,
-  taskContractSchema,
-} from "@/contracts/task.js";
+import { implementationPlanMatchesPaths } from "@/contracts/specialist/implementation-plan.js";
+import { taskContractSchema } from "@/contracts/specialist/task-contract.js";
 import { isContextScopeContained } from "@/services/repository-inspection/index.js";
 import {
   executionScopes,

@@ -4,7 +4,7 @@ import type { InspectedFile } from "@/contracts/repository/inspected-file.js";
 import { listRepositoryFilesAtCommit } from "@/infrastructure/git/index.js";
 import { assertRepositoryMatchesSnapshot } from "@/services/repository-snapshot/index.js";
 import { staffingProposalSchema } from "../../model/staffing.js";
-import { staffingSystemPolicySchema } from "@/contracts/staffing/system-policy.js";
+import { staffingSystemPolicySchema } from "@/contracts/governance/staffing-system-policy.js";
 import { createAllowedFileTree } from "../inspection/context-policy.js";
 import { validateProposal } from "./validate-proposal.js";
 

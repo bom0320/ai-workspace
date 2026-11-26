@@ -1,5 +1,5 @@
 import type { StaffingProposal } from "@/application/management/allocation/analysis-assignment/index.js";
-import type { StaffingSystemPolicy } from "../../approval/features/system-policy/model/policy.js";
+import type { StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import type { HumanDelegationPolicyInput } from "../../approval/features/human-delegation/model/policy.js";
 import type { ApprovedOperatingScope } from "../../model/authority.js";
 import type { ApprovalRecord } from "../../approval/features/proposal-management/model/approval.js";

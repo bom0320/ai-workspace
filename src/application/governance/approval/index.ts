@@ -1,8 +1,4 @@
-export {
-  staffingSystemPolicySchema,
-  requireCurrentSystemPolicy,
-  type StaffingSystemPolicy,
-} from "./features/system-policy/model/policy.js";
+export { requireCurrentSystemPolicy } from "./features/system-policy/model/policy.js";
 export {
   humanDelegationPolicyInputSchema,
   humanDelegationPolicySchema,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pathScopeSchema } from "@/contracts/repository/context-access-policy.js";
-import { sourceReferenceSchema } from "@/application/management/decision-support/synthesis/index.js";
+import { sourceReferenceSchema } from "@/contracts/management/source-reference.js";
 
 const text = z.string().trim().min(1);
 const sources = z.array(sourceReferenceSchema).min(1);

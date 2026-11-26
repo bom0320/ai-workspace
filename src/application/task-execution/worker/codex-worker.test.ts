@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import { runCommand } from "@/infrastructure/process/index.js";
 
 import { createCodexWorkerPrompt, runCodexWorker } from "./codex-worker.js";

@@ -6,8 +6,8 @@ import {
   runSynthesis,
   type SynthesisContext,
   type CEOSynthesisDecision,
-  type SourceReference,
 } from "../index.js";
+import { type SourceReference } from "@/contracts/management/source-reference.js";
 
 vi.mock("@/infrastructure/process/index.js", () => ({ runCommand: vi.fn() }));
 const command = vi.mocked(runCommand);

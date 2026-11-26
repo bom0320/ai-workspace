@@ -1,4 +1,4 @@
-import type { WorkItem } from "@/application/management/work-decomposition/index.js";
+import type { WorkItem } from "@/contracts/management/work-item.js";
 import type { PhaseBNodeInput, PhaseBNodeOutput } from "../../../data-flow.js";
 
 export type SelectWorkItemIds = (

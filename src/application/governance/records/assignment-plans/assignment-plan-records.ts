@@ -1,11 +1,11 @@
 import type { GovernanceLedger } from "../../model/ledger.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
 import {
-  phaseBAssignmentsSchema,
-  type PhaseBAssignment,
-} from "@/contracts/assignment/phase-b-assignment.js";
-import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
-import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
+  executionAssignmentsSchema,
+  type ExecutionAssignment,
+} from "@/contracts/management/execution-assignment.js";
+import { selectAssignmentWorkItems } from "@/contracts/management/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/management/validate-assignment-proposal.js";
 import type { AssignmentPlan } from "../../model/assignment-plan.js";
 import { withGovernanceLedger } from "../governance-transaction.js";
 import {
@@ -23,7 +23,7 @@ export class AssignmentRegistrationError extends Error {
 
 function assertAssignments(
   context: ReturnType<typeof resolveProposalContext>,
-  assignments: PhaseBAssignment[],
+  assignments: ExecutionAssignment[],
   selectedIds: readonly string[]
 ) {
   const workItems = selectAssignmentWorkItems(
@@ -51,7 +51,7 @@ export function registerAssignmentPlan(
       failure = "provenance";
       const context = resolveProposalContext(ledger, handoff, proposal);
       failure = "proposal";
-      const assignments = phaseBAssignmentsSchema.parse(input);
+      const assignments = executionAssignmentsSchema.parse(input);
       assertAssignments(context, assignments, selectedIds);
       failure = "ledger";
       const subject = {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
 import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
-import { staffingSpecialistSchema } from "@/contracts/staffing/system-policy.js";
+import { staffingSpecialistSchema } from "@/contracts/governance/staffing-system-policy.js";
 
 const nonEmptyString = z.string().min(1);
 const positiveInteger = z.number().int().positive();

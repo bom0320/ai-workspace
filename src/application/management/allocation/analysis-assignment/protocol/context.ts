@@ -5,8 +5,7 @@ import { goalSpecSchema } from "@/contracts/goal.js";
 import { inspectedFileSchema } from "@/contracts/repository/inspected-file.js";
 import { pathScopeSchema } from "@/contracts/repository/context-access-policy.js";
 
-import { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
-export { staffingInspectionLimitsSchema } from "@/contracts/staffing/system-policy.js";
+import { staffingInspectionLimitsSchema } from "@/contracts/governance/staffing-system-policy.js";
 const nonnegativeInteger = z.number().int().nonnegative();
 export const staffingAssignmentConstraintsSchema = z
   .object({
@@ -49,8 +48,5 @@ export const staffingContextSchema = z
   })
   .strict();
 
-export type StaffingInspectionLimits = z.infer<
-  typeof staffingInspectionLimitsSchema
->;
 export type SpecialistCandidate = z.infer<typeof specialistCandidateSchema>;
 export type StaffingContext = z.infer<typeof staffingContextSchema>;

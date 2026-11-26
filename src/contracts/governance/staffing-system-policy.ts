@@ -21,6 +21,10 @@ export const staffingInspectionLimitsSchema = z
   })
   .strict();
 
+export type StaffingInspectionLimits = z.infer<
+  typeof staffingInspectionLimitsSchema
+>;
+
 // Preserve the flat policy entry and its existing signed representation.
 export const staffingSpecialistSchema = specialistDefinitionSchema.extend({
   authority: specialistAuthoritySchema,

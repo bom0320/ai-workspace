@@ -59,7 +59,7 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 - `docs/architecture.md`: 시스템 설계와 책임 경계의 기준 문서
 - `docs/workflow-architecture.md`: Organization 실행 계약·Phase Handoff·State / Output 소유권과 Step 2.5 재검토 기준
 - `src/cli/cli.ts`: 사람의 Governance 정책·위임·승인 관리 명령.
-- `src/contracts/`: Application 경계를 공유하는 runtime-validated 계약.
+- `src/contracts/`: 역할 간 공유 도메인의 Zod 스키마, 파생 타입 및 순수 불변 조건. `management/`는 업무·배정·출처, `specialist/`는 전문가·권한 표현·구현 계획·실행 계약, `governance/`는 공유 Staffing 정책, `repository/`는 Snapshot·Context 스코프·검사 파일 계약을 소유한다. `goal.ts`는 Human Goal, `shared/`는 실제 여러 계약에서 사용하는 순수 검증을 제공한다.
 - `src/application/management/`: 분석·실행 배정, 비교·Assessment·Synthesis, 업무 분해.
 - `src/application/specialist/`: 승인된 분석, Assignment 상세 계획, Assignment 실행 연결.
 - `src/application/governance/`: 승인·권한·Ledger·예약·일회 Claim 검증 및 기록.
@@ -76,6 +76,11 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 - co-located `*.test.ts`: 해당 구현 모듈의 unit test
 
 현재 존재하지 않는 디렉터리를 예상 구조로 미리 추가하지 않는다.
+
+Application은 업무 로직과 기능별 `model/`, Agent `protocol/`, 기능 입출력 `data-flow/`를 소유한다.
+Workflow는 State와 Phase Handoff를 소유한다. Contracts는 Application·Workflow·Services·Infrastructure·CLI를 import하지 않는다.
+새 계약은 역할 간 공유되는 독립 개념일 때 Contracts에 둔다. 스키마 검증은 구조와 순수 불변 조건을 확인하며
+실제 승인·Authority·Ledger 무결성은 Governance가 검증한다.
 
 ## 6. Coding Rules
 

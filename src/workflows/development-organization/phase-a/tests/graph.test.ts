@@ -6,13 +6,13 @@ import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   getStaffingSystemPolicy,
   getApprovedStaffingScope,
-  type StaffingSystemPolicy,
   type StaffingApprovalResult,
   type StaffingSystemPolicyResult,
   approveStaffingProposal,
   authorizeSpecialistInvocation,
   claimAuthorizedInvocation,
 } from "@/application/governance/index.js";
+import { type StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import {
   runStaffing,
   type StaffingProposal,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { GoalSpec } from "@/contracts/goal.js";
-import { taskContractSchema } from "@/contracts/task.js";
+import { taskContractSchema } from "@/contracts/specialist/task-contract.js";
 
 import type { PlanningLimits } from "../model/limits.js";
 import type { PlanningState } from "../model/state.js";

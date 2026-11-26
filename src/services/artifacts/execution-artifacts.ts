@@ -3,7 +3,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import {
   getRepositoryHead,
   writeWorkspacePatch,

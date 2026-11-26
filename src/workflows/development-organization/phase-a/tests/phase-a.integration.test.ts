@@ -33,8 +33,8 @@ import {
   getStaffingSystemPolicy,
   getApprovedStaffingScope,
   type StaffingApprovalResult,
-  type StaffingSystemPolicy,
 } from "@/application/governance/index.js";
+import { type StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 import { confirmHumanAction } from "@/infrastructure/terminal/index.js";
 import {
   withGovernanceRecords,
@@ -1742,17 +1742,20 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     if (approved.directionGovernanceResult?.status !== "approved")
       throw new Error(JSON.stringify(approved.directionGovernanceResult));
     const decision = approved.directionGovernanceResult.decision;
-    let workItems: import("@/application/management/work-decomposition/index.js").WorkItem[] =
-      ["first", "second", "third"].map((id) => ({
-        id,
-        objective: fastPath
-          ? `Fix typos in ${target}`
-          : `Revise ${id} wording in ${target}`,
-        deliverable: fastPath
-          ? `Corrected typos in ${target}`
-          : `Revised ${target}`,
-        dependsOn: [],
-      }));
+    let workItems: import("@/contracts/management/work-item.js").WorkItem[] = [
+      "first",
+      "second",
+      "third",
+    ].map((id) => ({
+      id,
+      objective: fastPath
+        ? `Fix typos in ${target}`
+        : `Revise ${id} wording in ${target}`,
+      deliverable: fastPath
+        ? `Corrected typos in ${target}`
+        : `Revised ${target}`,
+      dependsOn: [],
+    }));
     const agent: NonNullable<
       NonNullable<PhaseBGraphOptions["workDecomposition"]>["agent"]
     > = async ({ decisions }) => ({

@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { executeAssignment } from "@/application/specialist/execution/index.js";
 import { getPreparedAssignmentPlan } from "@/application/governance/index.js";
-import type { PhaseBAssignment } from "@/contracts/assignment/phase-b-assignment.js";
+import type { ExecutionAssignment } from "@/contracts/management/execution-assignment.js";
 import { coordinateAssignmentExecutions } from "./coordinate-assignment-executions.js";
 
 vi.mock("@/application/specialist/execution/index.js", () => ({
@@ -35,7 +35,7 @@ function fixture(
       snapshot: { repositoryRoot: "/repo", commitSha: "sha" },
       selectedWorkItemIds: Object.keys(dependencies),
       assignments: assignments.map(
-        ([id, workItemId, dependsOn = [], ceiling]): PhaseBAssignment => ({
+        ([id, workItemId, dependsOn = [], ceiling]): ExecutionAssignment => ({
           id,
           workItemId,
           dependsOn,

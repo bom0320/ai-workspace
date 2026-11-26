@@ -3,11 +3,7 @@ export {
   workDecompositionResultSchema,
   type WorkDecompositionResult,
 } from "./data-flow/output.js";
-export {
-  workItemSchema,
-  validateWorkItemSources,
-  type WorkItem,
-} from "./model/work.js";
+export { validateWorkItemSources } from "./flow/validation/validate-work-item-sources.js";
 export type {
   CEOWorkDecompositionAgent,
   WorkDecompositionContext,

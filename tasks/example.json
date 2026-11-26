@@ -4,7 +4,7 @@
   "objective": "Add a concise comment above taskContractSchema stating that it is the runtime source of truth",
   "targetRepository": "ai-workspace",
   "allowedPaths": [
-    "src/contracts/task.ts"
+    "src/contracts/specialist/task-contract.ts"
   ],
   "forbiddenPaths": [
     "docs/architecture.md",
@@ -17,11 +17,11 @@
     "Use the exact sentence: TaskContract schema is the runtime source of truth."
   ],
   "acceptanceCriteria": [
-    "src/contracts/task.ts contains the requested source-of-truth comment",
+    "src/contracts/specialist/task-contract.ts contains the requested source-of-truth comment",
     "The schema implementation remains unchanged"
   ],
   "verification": [
     "git diff --check",
-    "node -e \"const fs = require('node:fs'); const text = fs.readFileSync('src/contracts/task.ts', 'utf8'); if (!text.includes('TaskContract schema is the runtime source of truth.')) process.exit(1)\""
+    "node -e \"const fs = require('node:fs'); const text = fs.readFileSync('src/contracts/specialist/task-contract.ts', 'utf8'); if (!text.includes('TaskContract schema is the runtime source of truth.')) process.exit(1)\""
   ]
 }

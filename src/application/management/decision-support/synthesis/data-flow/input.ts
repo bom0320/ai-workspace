@@ -1,6 +1,6 @@
 import type { CEOSynthesisDecision } from "../protocol/ceo.js";
 import { z } from "zod";
-import { staffingAssignmentSchema } from "@/application/management/allocation/analysis-assignment/index.js";
+import { analysisAssignmentSchema } from "@/contracts/management/analysis-assignment.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 import { agentDecisionSchema } from "@/application/specialist/analysis/index.js";
 import { comparisonPayloadSchema } from "@/application/management/decision-support/comparison/index.js";
@@ -21,7 +21,7 @@ export const synthesisContextSchema = z
     repositoryCommitSha: synthesisTextSchema,
     assignments: z
       .array(
-        staffingAssignmentSchema.pick({
+        analysisAssignmentSchema.pick({
           assignmentId: true,
           specialistId: true,
           objective: true,

@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterEach, expect, it, vi } from "vitest";
 
-import type { TaskContract } from "@/contracts/task.js";
+import type { TaskContract } from "@/contracts/specialist/task-contract.js";
 import { createExecutionRun } from "@/services/artifacts/index.js";
 import { removeExecutionWorkspace } from "@/infrastructure/git/index.js";
 

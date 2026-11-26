@@ -6,7 +6,7 @@ import {
   ceoWorkDecompositionDecisionSchema,
   type WorkDecompositionContext,
 } from "../protocol/ceo.js";
-import { validateWorkItemSources } from "../model/work.js";
+import { validateWorkItemSources } from "./validation/validate-work-item-sources.js";
 import type { WorkDecompositionResult } from "../data-flow/output.js";
 import {
   CodexWorkDecompositionError,

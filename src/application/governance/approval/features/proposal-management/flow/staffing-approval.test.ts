@@ -36,9 +36,9 @@ import {
   approvedOperatingScopeSchema,
   approvalRecordSchema,
   type StaffingApprovalResult,
-  type StaffingSystemPolicy,
   type HumanDelegationPolicyInput,
 } from "../../../../index.js";
+import { type StaffingSystemPolicy } from "@/contracts/governance/staffing-system-policy.js";
 
 import * as staffingValidation from "@/application/management/allocation/analysis-assignment/index.js";
 import * as gitInfrastructure from "@/infrastructure/git/index.js";

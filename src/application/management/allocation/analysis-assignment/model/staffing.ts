@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { repositorySnapshotSchema } from "@/contracts/repository/snapshot.js";
+import { analysisAssignmentSchema } from "@/contracts/management/analysis-assignment.js";
 import { goalSpecSchema } from "@/contracts/goal.js";
 
 const nonEmptyString = z.string().min(1);
@@ -15,18 +16,6 @@ export const intentAnalysisSchema = z
   })
   .strict();
 
-export const staffingAssignmentSchema = z
-  .object({
-    assignmentId: nonEmptyString,
-    // References an existing SpecialistDefinition; registration is validated later.
-    specialistId: nonEmptyString,
-    // Goal-specific delegation, not the SpecialistDefinition's default objective.
-    objective: nonEmptyString,
-    contextPaths: z.array(nonEmptyString).min(1),
-    rationale: nonEmptyString,
-  })
-  .strict();
-
 // Harness-owned proposal envelope. Parsing proves neither issuance nor approval.
 // Finalization must supply IDs, the original Goal, and the captured Snapshot.
 export const staffingProposalSchema = z
@@ -35,7 +24,7 @@ export const staffingProposalSchema = z
     goal: goalSpecSchema.strict(),
     snapshot: repositorySnapshotSchema,
     intent: intentAnalysisSchema,
-    assignments: z.array(staffingAssignmentSchema).min(1),
+    assignments: z.array(analysisAssignmentSchema).min(1),
     budget: z
       .object({
         maxAgentInvocations: z.number().int().positive(),
@@ -57,5 +46,4 @@ export const staffingProposalSchema = z
   .strict();
 
 export type IntentAnalysis = z.infer<typeof intentAnalysisSchema>;
-export type StaffingAssignment = z.infer<typeof staffingAssignmentSchema>;
 export type StaffingProposal = z.infer<typeof staffingProposalSchema>;

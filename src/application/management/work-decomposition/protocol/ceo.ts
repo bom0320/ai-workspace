@@ -6,7 +6,7 @@ import type {
 } from "@/application/management/decision-support/synthesis/index.js";
 import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
 import { escalationSchema } from "../data-flow/output.js";
-import { workItemsSchema } from "../model/work.js";
+import { workItemsSchema } from "@/contracts/management/work-item.js";
 
 export type WorkDecompositionContext = Pick<
   SynthesisContext,

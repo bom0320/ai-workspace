@@ -1,5 +1,8 @@
 import type { GoalSpec } from "@/contracts/goal.js";
-import { taskContractSchema, type TaskContract } from "@/contracts/task.js";
+import {
+  taskContractSchema,
+  type TaskContract,
+} from "@/contracts/specialist/task-contract.js";
 
 import type { TaskDraft } from "../../protocol/planner.js";
 

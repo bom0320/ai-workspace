@@ -1,5 +1,5 @@
 import { validateTaskExecutionContract } from "../authorization/validate-task-execution-contract.js";
-import { implementationPlanMatchesPaths } from "@/contracts/task.js";
+import { implementationPlanMatchesPaths } from "@/contracts/specialist/implementation-plan.js";
 import { digestPreparedAssignmentTask } from "./assignment-execution.js";
 import {
   assignmentDelegationBinding,
@@ -9,8 +9,8 @@ import {
 } from "./assignment-execution.js";
 import { assignmentPlanSchema } from "./assignment-plan.js";
 import { governanceDigest } from "@/services/governance-records/index.js";
-import { selectAssignmentWorkItems } from "@/contracts/assignment/select-assignment-work-items.js";
-import { validateAssignmentProposal } from "@/contracts/assignment/validate-assignment-proposal.js";
+import { selectAssignmentWorkItems } from "@/contracts/management/select-assignment-work-items.js";
+import { validateAssignmentProposal } from "@/contracts/management/validate-assignment-proposal.js";
 import { approvedDecisionSchema } from "../approval/features/direction-review/model/approved-decision.js";
 import {
   directionAnalysisSchema,

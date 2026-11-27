@@ -1778,6 +1778,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     let assignmentPlanResult;
     let assignmentExecutionResult;
     let workItemResults;
+    let finalResult;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1790,6 +1791,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         }),
         assignmentExecution,
         assignmentIntegration,
+        workItemIntegration: assignmentIntegration,
       }).invoke({ handoff });
       expect(state.handoffResult?.status).toBe("accepted");
       if (state.workDecompositionResult?.status !== "proposed")
@@ -1798,6 +1800,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assignmentPlanResult = state.assignmentPlanResult;
       assignmentExecutionResult = state.assignmentExecutionResult;
       workItemResults = state.workItemResults;
+      finalResult = state.finalResult;
     } else {
       // Seed a historical decomposition to test handoff and reservation rejection.
       registerWorkDecomposition({
@@ -1810,6 +1813,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assignmentPlanResult,
       assignmentExecutionResult,
       workItemResults,
+      finalResult,
       handoff,
       decision,
       workItems,
@@ -2031,6 +2035,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
 
   it.each([
     "read",
+    "read-integrated",
     "bad-evidence",
     "drift",
     "expired",
@@ -2039,76 +2044,80 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
   ] as const)(
     "runs a requested Phase B Specialist read with %s",
     async (mode) => {
+      const integrates = mode === "read-integrated";
       let suppliedDirection: string | undefined;
       const specialistCalls: string[][] = [];
       const started = Date.now();
       const before = () => readFileSync(join(root, "README.md"), "utf8");
-      const { assignmentExecutionResult, assignmentPlanResult, handoff } =
-        await planExecutionItems(true, 2, [], "README.md", {
-          codexMode: true,
-          assignmentAgent: async ({ specialists }) =>
-            ["review", "dependent"].map((id) => ({
+      const {
+        assignmentExecutionResult,
+        assignmentPlanResult,
+        handoff,
+        finalResult,
+      } = await planExecutionItems(true, 2, [], "README.md", {
+        codexMode: true,
+        assignmentIntegration: integrates,
+        assignmentAgent: async ({ specialists }) =>
+          (integrates ? ["review"] : ["review", "dependent"]).map((id) => ({
+            id,
+            workItemId: "first",
+            specialistId: specialists[0].id,
+            objective: "Inspect the supplied README",
+            deliverable: "Scoped findings",
+            repositoryAccessCeiling: "read",
+            dependsOn: id === "dependent" ? ["review"] : [],
+          })),
+        assignmentExecution: {
+          contexts: Object.fromEntries(
+            ["review", "dependent"].map((id) => [
               id,
-              workItemId: "first",
-              specialistId: specialists[0].id,
-              objective: "Inspect the supplied README",
-              deliverable: "Scoped findings",
-              repositoryAccessCeiling: "read",
-              dependsOn: id === "dependent" ? ["review"] : [],
-            })),
-          assignmentExecution: {
-            contexts: Object.fromEntries(
-              ["review", "dependent"].map((id) => [
-                id,
-                {
-                  readScopes: [{ kind: "file", path: "README.md" }],
-                  timeoutMs: 5000,
-                },
-              ])
-            ),
-          },
-          beforePhaseB(direction) {
-            suppliedDirection = direction;
-            const command = vi.mocked(processRuntime.runCommand);
-            const previous = command.getMockImplementation()!;
-            command.mockImplementation(async (name, args, options) => {
-              if (name !== "codex") return previous(name, args, options);
-              specialistCalls.push(args);
-              if (mode === "drift")
-                writeFileSync(join(root, "README.md"), "Snapshot drift");
-              if (mode === "expired")
-                vi.spyOn(Date, "now").mockReturnValue(started + 60_000);
-              if (mode === "policy-change") configureExecutionPolicy(null);
-              if (mode === "save-failure")
-                vi.spyOn(filesystem, "renameSync").mockImplementationOnce(
-                  () => {
-                    throw new Error("Unable to persist read result");
-                  }
-                );
-              expect(options.cwd).not.toBe(root);
-              return {
-                stdout: JSON.stringify({
-                  recommendation: "Review complete",
-                  evidence: [
-                    {
-                      path:
-                        mode === "bad-evidence"
-                          ? "docs-extra/other.md"
-                          : "README.md",
-                      lineStart: 1,
-                      description: "Relevant text",
-                    },
-                  ],
-                  risks: [],
-                  uncertainty: [],
-                }),
-                stderr: "",
-                exitCode: 0,
-                timedOut: false,
-              };
-            });
-          },
-        });
+              {
+                readScopes: [{ kind: "file", path: "README.md" }],
+                timeoutMs: 5000,
+              },
+            ])
+          ),
+        },
+        beforePhaseB(direction) {
+          suppliedDirection = direction;
+          const command = vi.mocked(processRuntime.runCommand);
+          const previous = command.getMockImplementation()!;
+          command.mockImplementation(async (name, args, options) => {
+            if (name !== "codex") return previous(name, args, options);
+            specialistCalls.push(args);
+            if (mode === "drift")
+              writeFileSync(join(root, "README.md"), "Snapshot drift");
+            if (mode === "expired")
+              vi.spyOn(Date, "now").mockReturnValue(started + 60_000);
+            if (mode === "policy-change") configureExecutionPolicy(null);
+            if (mode === "save-failure")
+              vi.spyOn(filesystem, "renameSync").mockImplementationOnce(() => {
+                throw new Error("Unable to persist read result");
+              });
+            expect(options.cwd).not.toBe(root);
+            return {
+              stdout: JSON.stringify({
+                recommendation: "Review complete",
+                evidence: [
+                  {
+                    path:
+                      mode === "bad-evidence"
+                        ? "docs-extra/other.md"
+                        : "README.md",
+                    lineStart: 1,
+                    description: "Relevant text",
+                  },
+                ],
+                risks: [],
+                uncertainty: [],
+              }),
+              stderr: "",
+              exitCode: 0,
+              timedOut: false,
+            };
+          });
+        },
+      });
       expect(specialistCalls).toHaveLength(1);
       expect(specialistCalls[0]).toContain("read-only");
       expect(specialistCalls[0].join(" ")).toContain("shell_tool=false");
@@ -2134,16 +2143,23 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         "policy-change": "handoff",
         "save-failure": "handoff",
       } as const;
-      const failure = mode === "read" ? undefined : failures[mode];
+      const failure =
+        mode === "read" || mode === "read-integrated"
+          ? undefined
+          : failures[mode];
       const expected = failure
         ? { status: "failed", failure, failureRecorded: true }
         : { status: "read-completed" };
       expect(assignmentExecutionResult).toMatchObject({
-        status: failure ? "failed" : "pending",
+        status: failure
+          ? "failed"
+          : integrates
+            ? "execution-completed"
+            : "pending",
         results: [{ assignmentId: "review", ...expected }],
-        pendingAssignments: [
-          { assignmentId: "dependent", reason: "dependency-pending" },
-        ],
+        pendingAssignments: !integrates
+          ? [{ assignmentId: "dependent", reason: "dependency-pending" }]
+          : [],
       });
       if (
         handoff?.status !== "completed" ||
@@ -2164,6 +2180,73 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             assignmentPlanResult.plan.id
           )
         ).toMatchObject([{ assignmentId: "review", ...expected }]);
+      }
+      if (integrates) {
+        expect(finalResult?.status).toBe("read-integrated");
+        if (finalResult?.status !== "read-integrated")
+          throw new Error("Missing FinalResult");
+        const [ref] = finalResult.workItemResults;
+        const restored = governance.getIntegratedAssignmentSources(
+          handoff,
+          assignmentPlanResult.plan.id,
+          ref!.workItemId
+        );
+        expect(restored?.digest).toBe(ref!.digest);
+        expect(restored?.assignments[0]?.execution.result).toMatchObject({
+          decision: {
+            recommendation: "Review complete",
+            evidence: [{ path: "README.md", lineStart: 1 }],
+          },
+        });
+        const future =
+          Date.parse(handoff.executionDelegation.grant.expiresAt) + 1;
+        const clock = vi.spyOn(Date, "now").mockReturnValue(future);
+        try {
+          expect(() =>
+            governance.getRecordedWorkItemIntegrations(
+              handoff,
+              assignmentPlanResult.plan.id
+            )
+          ).toThrow();
+          expect(
+            governance.getIntegratedAssignmentSources(
+              handoff,
+              assignmentPlanResult.plan.id,
+              ref!.workItemId
+            )?.digest
+          ).toBe(ref!.digest);
+        } finally {
+          clock.mockRestore();
+        }
+        const ledgerPath = join(
+          home,
+          ".ai-workspace-governance",
+          "records.json"
+        );
+        const ledgerBytes = readFileSync(ledgerPath, "utf8");
+        try {
+          withGovernanceRecords((raw, save) => {
+            const ledger =
+              raw as import("@/application/governance/model/ledger.js").GovernanceLedger;
+            const entry = Object.values(ledger.repositories).find(
+              ({ workItemIntegrations }) => workItemIntegrations?.length
+            )!;
+            const [record] = entry.workItemIntegrations!;
+            record!.result.assignmentResults[0]!.invocationId =
+              "foreign-invocation";
+            const { digest: _digest, ...subject } = record!;
+            record!.digest = governanceRecords.governanceDigest(subject);
+            save(ledger);
+          });
+          expect(() =>
+            governance.getRecordedWorkItemIntegrations(
+              handoff,
+              assignmentPlanResult.plan.id
+            )
+          ).toThrow("Invalid Work Item integration binding");
+        } finally {
+          writeFileSync(ledgerPath, ledgerBytes);
+        }
       }
       expect(before()).toBe("Original content\n");
     }
@@ -2245,6 +2328,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         assignmentExecutionResult,
         handoff,
         workItemResults,
+        finalResult,
       } = await planExecutionItems(true, mode === "budget" ? 1 : 2, [], path, {
         codexMode: true,
         assignmentIntegration: mode === "write-completed",
@@ -2525,6 +2609,40 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
               { assignmentId: "detail", status: "write-completed" },
             ],
           });
+          if (finalResult?.status !== "write-integrated")
+            throw new Error(JSON.stringify(finalResult));
+          try {
+            const [ref] = finalResult.workItemResults;
+            const source = governance.getIntegratedAssignmentSources(
+              handoff,
+              plan.id,
+              ref!.workItemId
+            );
+            expect(source?.digest).toBe(ref!.digest);
+            const assignmentSource = source?.assignments[0];
+            expect(assignmentSource).toMatchObject({
+              execution: {
+                request: { assignmentId: "detail", access: "write" },
+                result: { passed: true },
+              },
+              prepared: {
+                result: {
+                  task: { implementationPlan: { steps: expect.any(Array) } },
+                },
+              },
+            });
+            expect(
+              readFileSync(
+                join(finalResult.artifacts.directory, "changes.patch"),
+                "utf8"
+              )
+            ).toContain("+Verified correction");
+          } finally {
+            rmSync(finalResult.artifacts.directory, {
+              recursive: true,
+              force: true,
+            });
+          }
           if (integrated?.status === "write-integrated") {
             try {
               expect(

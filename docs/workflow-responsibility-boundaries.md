@@ -68,6 +68,16 @@ Governance의 Authorization / Claim을 사용한다. Governance는 Staffing Appr
 서로 다른 Stage에서 재사용된다. Stage를 나눈다고 Application 기능을 복제하거나 Stage마다 새 Application을
 만들지 않는다.
 
+### Phase B의 통합 경계
+
+| Stage | 성공 결과와 책임 |
+| --- | --- |
+| Assignment Integration | 실행이 완료된 개별 Work Item의 보고서와 통합 Patch를 만들고, Cleanup 이후 Governance에 성공 결과를 기록한다. |
+| Work Item Integration | 선택된 전체 Work Item의 성공 기록을 확인하고, 원본 출처 참조와 필요한 최종 Patch를 `FinalResult`로 제공한다. |
+
+Workflow는 진입 조건을 판단하고 `workItemResults`와 `finalResult`를 별도로 보존한다. Governance는 통합 결과의
+출처를, Integration Application은 Worktree의 Patch 적용과 범위·검증을 담당한다. CEO 평가와 Human Delivery는 별도 단계다.
+
 ### Stage 결과와 외부 Workflow 결과
 
 Stage가 성공해도 다음 Stage의 선행조건을 만족하지 않으면 진행할 수 없다. Proposal은 Stage 1의 성공

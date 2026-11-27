@@ -52,3 +52,9 @@ export {
   recordAssignmentFailure,
   getAssignmentExecutionResults,
 } from "./records/assignment-executions/assignment-execution-results.js";
+
+export {
+  getRecordedWorkItemIntegrations,
+  getIntegratedAssignmentSources,
+} from "./records/work-item-integrations/work-item-integration-records.js";
+export type { WorkItemResult } from "./model/work-item-integration.js";

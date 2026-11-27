@@ -1,3 +1,4 @@
+import { workItemIntegrationRecordSchema } from "./work-item-integration.js";
 import { validateTaskExecutionContract } from "../authorization/validate-task-execution-contract.js";
 import { implementationPlanMatchesPaths } from "@/contracts/specialist/implementation-plan.js";
 import { digestPreparedAssignmentTask } from "./assignment-execution.js";
@@ -69,6 +70,9 @@ export const governanceLedgerSchema = z
             .array(executionDecompositionSchema)
             .optional(),
           assignmentPlans: z.array(assignmentPlanSchema).optional(),
+          workItemIntegrations: z
+            .array(workItemIntegrationRecordSchema)
+            .optional(),
           workItemExecutionSources: z
             .array(workItemExecutionSourceSchema)
             .optional(),
@@ -355,6 +359,81 @@ export const governanceLedgerSchema = z
         assignmentKeys.add(key);
         workItemPlans.set(workKey, request.planId);
         executionCounts.set(record.delegationId, count);
+      }
+      const integrationKeys = new Set<string>();
+      for (const { digest, ...record } of entry.workItemIntegrations ?? []) {
+        const { delegationId, approvalBinding, result } = record;
+        const plan = entry.assignmentPlans?.find(
+          ({ id }) => id === result.planId
+        );
+        const delegation = entry.executionDelegations?.find(
+          ({ id }) => id === delegationId
+        );
+        const approval = entry.approvedDecisions?.find(
+          ({ id }) => id === delegation?.approvedDecisionId
+        );
+        const decomposition = entry.executionDecompositions?.find(
+          ({ binding }) => binding === plan?.decompositionBinding
+        );
+        const required = plan?.assignments.filter(
+          ({ workItemId }) => workItemId === result.workItemId
+        );
+        const integrationKey = JSON.stringify([
+          delegationId,
+          result.planId,
+          result.workItemId,
+        ]);
+        if (
+          integrationKeys.has(integrationKey) ||
+          !approval ||
+          approval.id !== decomposition?.approvedDecisionId ||
+          approvalBinding !== governanceDigest(approval) ||
+          !plan?.selectedWorkItemIds.includes(result.workItemId) ||
+          governanceDigest(plan.snapshot) !==
+            governanceDigest(result.snapshot) ||
+          digest !== governanceDigest(record) ||
+          required?.length !== result.assignmentResults.length ||
+          (result.status === "write-integrated") !==
+            result.assignmentResults.some(
+              ({ status }) => status === "write-completed"
+            ) ||
+          !result.assignmentResults.every((ref, index) => {
+            const assignment = required?.[index];
+            const source = entry.assignmentExecutions?.find(
+              ({ id }) => id === ref.invocationId
+            );
+            if (
+              ref.assignmentId !== assignment?.id ||
+              !source?.claimedAt ||
+              source.failure ||
+              source.delegationId !== delegationId ||
+              source.request.planId !== result.planId ||
+              source.request.assignmentId !== ref.assignmentId ||
+              source.result?.digest !== ref.resultDigest
+            )
+              return false;
+            if (ref.status === "read-completed")
+              return (
+                assignment?.repositoryAccessCeiling === "read" &&
+                isAssignmentReadRecord(source) &&
+                !!source.result &&
+                !("status" in source.result)
+              );
+            return (
+              assignment?.repositoryAccessCeiling === "write" &&
+              !isAssignmentReadRecord(source) &&
+              source.result?.passed &&
+              source.request.taskContractBinding === ref.taskContractBinding &&
+              governanceDigest(source.result.artifacts) ===
+                governanceDigest(ref.artifacts)
+            );
+          })
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Invalid Work Item integration binding.",
+          });
+        integrationKeys.add(integrationKey);
       }
       if (!hasValidExecutionReservations(entry, key, executionIds))
         context.addIssue({

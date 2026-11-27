@@ -11,6 +11,7 @@ import {
 } from "./features/work-decomposition/nodes/select-work-items.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { integrateAssignments } from "./features/integration/nodes/integrate-assignments.js";
+import { integrateWorkItems } from "./features/integration/nodes/integrate-work-items.js";
 import { phaseBInput, phaseBState } from "./state.js";
 
 const phaseBGraphOptionsSchema = z.strictObject({
@@ -28,6 +29,7 @@ const phaseBGraphOptionsSchema = z.strictObject({
     .custom<SelectWorkItemIds>((value) => typeof value === "function")
     .optional(),
   assignmentIntegration: z.boolean().optional(),
+  workItemIntegration: z.boolean().optional(),
   assignmentPlanning: z
     .custom<AssignmentPlanAgent>((value) => typeof value === "function")
     .optional(),
@@ -56,6 +58,7 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
     assignmentPlanning,
     assignmentExecution,
     assignmentIntegration,
+    workItemIntegration,
   } = parsed.data;
 
   if (assignmentPlanning && !selectWorkItemIds)
@@ -65,6 +68,9 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
 
   if (assignmentIntegration && !assignmentExecution)
     throw new Error("Assignment Integration requires Assignment Execution.");
+
+  if (workItemIntegration && !assignmentIntegration)
+    throw new Error("Work Item Integration requires Assignment Integration.");
 
   return new StateGraph({ state: phaseBState, input: phaseBInput })
     .addNode(
@@ -81,6 +87,7 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
       createExecuteAssignmentsNode(assignmentExecution)
     )
     .addNode("integrate-assignments", integrateAssignments)
+    .addNode("integrate-work-items", integrateWorkItems)
     .addEdge(START, "run-work-decomposition")
     .addConditionalEdges(
       "run-work-decomposition",
@@ -119,11 +126,18 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
             ({ status }) => status === "execution-completed"
           )
           ? "integrate-assignments"
-          : END;
+          : workItemIntegration
+            ? "integrate-work-items"
+            : END;
       },
-      ["integrate-assignments", END]
+      ["integrate-assignments", "integrate-work-items", END]
     )
-    .addEdge("integrate-assignments", END)
+    .addConditionalEdges(
+      "integrate-assignments",
+      () => (workItemIntegration ? "integrate-work-items" : END),
+      ["integrate-work-items", END]
+    )
+    .addEdge("integrate-work-items", END)
     .compile()
     .withConfig({ recursionLimit: Number.MAX_SAFE_INTEGER });
 }

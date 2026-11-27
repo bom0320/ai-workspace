@@ -31,6 +31,10 @@ export const phaseBDataFlow = {
     input: ["handoff", "assignmentExecutionResult"],
     output: ["workItemResults"],
   },
+  "integrate-work-items": {
+    input: ["handoff", "assignmentPlanResult", "workItemResults"],
+    output: ["finalResult"],
+  },
 } as const satisfies Record<
   string,
   {

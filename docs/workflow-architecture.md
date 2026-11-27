@@ -104,7 +104,7 @@ Workflow Feature는 각 Phase의 업무 진행 단계에 따라 배치한다. �
 | B | `work-decomposition/` | `management/work-decomposition/` |
 | B | `execution-assignment/` | `management/allocation/execution-assignment/` |
 | B | `assignment-execution/` | `specialist/execution/` |
-| B | `integration/` | `integration/assignment/` |
+| B | `integration/` | `integration/assignment/`, `integration/work-item/` |
 
 `nodes/`는 Graph Node와 Node Factory를 소유한다. Phase A의 승인된 Specialist 호출 연결과 요청 검증은 각각 `specialist-analysis/execution/`과 `specialist-analysis/validation/`에 두고, Refinement 상태 변환은 `decision-support/analysis-review/refinement-state.ts`에 둔다. Phase B의 Work Item 선택은 `work-decomposition/nodes/`에 두고, 복수 Assignment 실행은 `assignment-execution/coordination/`에서 조정한다.
 
@@ -242,7 +242,7 @@ Coordination의 최상위 상태는 실패, 거부, 대기, 완료 순으로 집
 
 #### Phase B Step 5.3 — Multi-Specialist Capability & Governed Execution
 
-**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3 Task Detailing Implemented, 5.3.4 Implementation Runtime Implemented, 5.3.5 Execution Coordination Implemented, 5.3.6.1 Assignment Integration Implemented, 5.3.6.2 및 5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
+**상태 — 5.3.1 및 5.3.2 읽기 실행 Implemented, 5.3.3 Task Detailing Implemented, 5.3.4 Implementation Runtime Implemented, 5.3.5 Execution Coordination Implemented, 5.3.6.1 Assignment Integration 및 5.3.6.2 Work Item Integration Implemented, 5.3.7 Planned.** 기존 모델은 분석을 Specialist에, Repository 수정 책임을 별도 Worker Assignment에 배치했다. 이 구분은 읽기 전용 협업과 기존 수정 Runtime을 단계적으로 검증하는 데 유용했지만, 개발 결과의 책임과 출처를 배정된 전문 직원에게 일관되게 연결하기 어렵다. Step 5.3에서는 CEO가 정의한 Work Item에 Frontend, Backend, UX, Security, QA 등 여러 Specialist를 배정할 수 있게 한다. 한 Specialist도 여러 Work Item에 배정될 수 있다. 배정된 Specialist는 업무에 따라 분석·설계·구현·테스트·검토를 수행한다. 기존 Codex Worker는 수정 Assignment를 수행하는 내부 Runtime으로 재사용한다.
 
 | 개념 | 소유권과 의미 |
 | --- | --- |
@@ -264,7 +264,7 @@ Read Reservation은 공통 SpecialistAuthority의 read·Shell 비활성화와 �
 
 `execute-assignments`는 등록된 Plan과 선택 범위를 재검증한다. 독립 Assignment는 읽기·쓰기 상한 모두 명시적인 읽기 설정이 있으면 공유 동시성 한도에서 실행한다. 승인된 방향·현재 업무 정보·읽기 전용 Authority를 Context-only Codex에 전달한다. Harness는 실제로 제공한 파일과 행을 기준으로 Evidence를 확인하고 Snapshot·현재 권한·시간을 재검증한 뒤 결과와 Context Digest 또는 실패 단계를 기록한다.
 
-읽기 성공은 `read-completed` 실행 결과다. Assignment와 Work Item의 전체 완료는 미확정이며, 그 결과가 필요한 업무는 검증된 완료 계약이 연결될 때까지 대기한다. 신규 Write Assignment는 읽기 Claim에서 Task Detailing으로 진행하고 검증된 계약을 `task-prepared`로 기록한다. 구조화된 계약의 개별 쓰기 실행은 5.3.4에서 연결한다. 다중 Worktree 통합은 후속 범위다. 기존 Worktree·Scope·Verification·Evidence·Artifact Pipeline을 재사용할 수 있다.
+읽기 성공은 `read-completed` 실행 결과다. Assignment와 Work Item의 전체 완료는 미확정이며, 그 결과가 필요한 업무는 검증된 완료 계약이 연결될 때까지 대기한다. 신규 Write Assignment는 읽기 Claim에서 Task Detailing으로 진행하고 검증된 계약을 `task-prepared`로 기록한다. 구조화된 계약의 개별 쓰기 실행은 5.3.4, 개별 및 최종 산출물 통합은 5.3.6에서 기존 Worktree·Scope·Verification·Evidence·Artifact 기능을 재사용한다.
 
 ```text
 Approved Direction + ExecutionDelegation
@@ -286,7 +286,7 @@ Work Item Coordination / Integration
 
 구현 TaskContract는 승인 방향과 Human 제약을 보존하고, Plan·Work Item·Assignment·담당 Specialist 및 승인 Snapshot에 결합한다. Planning 결과를 근거로 Governance가 실제 수정 범위와 실행 조건을 검증한 뒤에만 Runtime을 시작한다. Coordination은 기존 Work Item 및 Assignment 의존성과 공유 동시성 한도를 재사용한다. 완료·검증·저장된 결과만 후속 업무의 출처로 넘기며, 분석 결과는 참고 자료로 전달한다. 실패한 실행은 결과와 원인을 보존하고 의존 업무를 차단한다.
 
-복수 구현 결과는 원본 Repository와 분리된 작업 공간에서 출처와 변경 범위를 확인하고, 선행 관계에 맞춰 통합한 뒤 다시 검증한다. 충돌·범위 위반·검증 실패 시 완료 처리를 보류하고 근거를 남긴다. Work Item 완료에는 필수 Assignment의 검증 및 필요한 통합 검증이 모두 필요하다. 최종 평가와 원본 반영은 후속 CEO Evaluation 및 Human Change Review / Delivery의 경계를 따른다.
+복수 구현 결과는 원본 Repository와 분리된 작업 공간에서 출처와 변경 범위를 확인하고, 현재 등록된 Plan 순서대로 통합한 뒤 다시 검증한다. 충돌·범위 위반·검증 실패 시 완료 처리를 보류하고 근거를 남긴다. Work Item 완료에는 필수 Assignment의 검증 및 필요한 통합 검증이 모두 필요하다. 최종 평가와 원본 반영은 후속 CEO Evaluation 및 Human Change Review / Delivery의 경계를 따른다.
 
 **구현 전 결정할 사항.** 5.3.1에서 새 Assignment Schema와 Plan Digest 범위를 적용했다. 구체적인 Activity 구분은 후속 단계에서 정한다. Capability의 저장 형식, 위임 필드, TaskContract Binding 및 결과 Ledger 구조, 실행 인스턴스 표현은 다음 구현에서 검토한다. 통합 순서 및 충돌 처리 알고리즘, 재시도·재작업·재승인 정책도 이 결정에서 확정하지 않는다.
 
@@ -381,6 +381,20 @@ Fingerprint를 반환하고 통합 Worktree를 제거한다. 확정된 WorkItemR
 현재 승인·정책·Snapshot과 위임 만료, 정책·위임의 시간 상한을 적용한다. 별도 통합 예산은 현재 정책에
 정의되어 있지 않다. 지원되는 `git diff --check`는 Patch 검사 범위의 결과만 제공한다.
 
+**5.3.6.2 Work Item Integration.** `workItemIntegration: true`는 `assignmentIntegration: true`와 함께
+설정한다. `integrate-work-items`는 개별 Work Item 통합 후 실행하며, 개별 통합 대상이 없어도
+전체 통합이 요청된 경우 등록된 Plan을 확인한다. 실패한 통합은 `failed`, 필수 결과가 누락된 경우는
+`pending`과 누락 ID 목록으로 `finalResult`에 기록한다.
+
+Governance는 성공한 WorkItemResult를 승인과 위임, Plan, Snapshot, Assignment Invocation 및 Digest와 연결해 저장한다.
+이전 Ledger는 기존 형식 그대로 읽는다. 이전 WorkItemResult가 State에만 남아 있으면 최종 통합의 출처로 사용하지 않으며,
+필요한 경우 기존에 기록된 Assignment 결과로 Work Item 통합을 수행해 Ledger 기록을 생성한다.
+최종 통합은 선택된 Work Item의 기록을 Plan 순서대로 읽고, 변경이 있으면 각 Work Item의 통합 Patch를
+기존 승인 Snapshot의 새 Worktree에서 검증·적용한다. 결과는 `read-integrated` 또는 `write-integrated`이며
+Work Item의 기록 Digest를 포함한다. 수정 결과는 최종 Patch·보고서 Fingerprint와 변경 경로를 추가로 포함한다.
+후속 평가에서는 `getIntegratedAssignmentSources()`로 원본 분석·Evidence와 구현 계약·Artifact를 조회한다.
+이 조회는 위임 만료 후에도 승인된 과거 기록을 읽을 수 있으며, 현재 Repository 접근이나 통합 실행 권한을 발급하지 않는다.
+
 **Step 10.2-1 — Execution Delegation 발급:** 먼저 `configureExecutionSystemPolicy()`로 Repository별 실행 상한을 제시하고 별도의 일회용 Human Confirmation으로 정책 버전을 등록한다. 정책과 위임은 읽기·쓰기 각각에 File / Directory Scope를 지정하며, 명시된 검증 명령과 실행 횟수·시간 상한을 포함한다. R4의 PathScope 구조와 경로 경계 기반 포함 규칙을 사용한다. 기존 `readPaths`·`writePaths` 기록은 저장 형태를 보존하며 정확한 File Scope로 해석한다. Directory 권한에는 명시적 승인이 필요하다. 초기 명령 식별자는 고정 argv의 `git diff --check`만 지원한다. 승인된 실행 정책이 없으면 위임을 발급할 수 없다.
 
 Phase A의 `approve` Action에 실행 위임을 포함하면 승인 바인딩이 정책 버전과 정확한 위임 범위·만료 시점을 포함한다. 확인 콜백은 이 Action을 인간에게 보여 주고 같은 바인딩의 Receipt를 받아야 한다. Governance는 확정 직전에 현재 정책을 다시 확인하고 Direction Resolution, `ApprovedDecision`, `ExecutionDelegation`을 한 번에 저장한다. 방향 단독 승인은 기존 형태를 유지한다.
@@ -470,7 +484,7 @@ State는 실행 데이터이며 Governance Ledger의 신뢰 기록을 대체하�
 
 ### 현재 Phase B StateSchema
 
-`phaseBState`는 `handoff`, `handoffResult`, `workDecompositionResult`, `selectedWorkItemIds`, `assignmentPlanResult`, `assignmentExecutionResult`를 소유한다. 공개 입력은 Phase A의 성공 결과인 `PhaseBHandoff`를 받는다. Assignment Plan과 실행 권한의 신뢰 근거는 Governance Ledger에서 확인한다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
+`phaseBState`는 `handoff`, `handoffResult`, `workDecompositionResult`, `selectedWorkItemIds`, `assignmentPlanResult`, `assignmentExecutionResult`, `workItemResults`, `finalResult`를 소유한다. 공개 입력은 Phase A의 성공 결과인 `PhaseBHandoff`를 받는다. Assignment Plan과 실행 권한의 신뢰 근거는 Governance Ledger에서 확인한다. [Phase B State](../src/workflows/development-organization/phase-b/state.ts)
 
 ## 6. Graph / Subgraph Boundary Principles
 

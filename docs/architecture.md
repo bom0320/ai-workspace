@@ -31,8 +31,9 @@ Application의 책임은 조직의 역할과 실행 경계에 따라 나뉜다.
 | `specialist/execution/` | Assignment의 읽기·수정 절차와 Governance 호출 연결 |
 | `governance/` | 승인 출처와 기록 검증, 개별 실행 권한 발급·소비 |
 | `task-execution/` | 소비된 Write Claim으로 Worktree 실행, Scope·Verification·Artifact 처리 |
+| `integration/` | 검증된 Assignment 및 Work Item 산출물을 각각 WorkItemResult와 FinalResult로 통합 |
 
-Phase A와 Phase B의 Graph는 각 기능의 순서와 상태를 소유한다. 예전 Work Item 직접 실행 진입점은 제거했고, 기존 Work Item Source·Reservation의 Ledger 검증과 실행 예산·중복 차단은 유지한다. Evaluation과 Integration은 후속 기능이다.
+Phase A와 Phase B의 Graph는 각 기능의 순서와 상태를 소유한다. 예전 Work Item 직접 실행 진입점은 제거했고, 기존 Work Item Source·Reservation의 Ledger 검증과 실행 예산·중복 차단은 유지한다. CEO Evaluation은 후속 기능이다.
 
 
 Development Organization이 현재 실행 모델의 기준이다. 각 Phase는 독립 Graph API로 제공된다.
@@ -40,7 +41,7 @@ Development Organization이 현재 실행 모델의 기준이다. 각 Phase는 �
 - Phase A는 Human Goal의 해결 방향을 분석하고 승인한다. System Policy, Staffing 승인, Specialist Authorization과 읽기 전용 분석, Comparison, Assessment·Refinement, CEO Synthesis, Human Direction Review 순서로 진행한다.
 - Phase B는 검증된 Handoff를 받아 Work Item을 분해·선택하고 Specialist에게 배정한다. 읽기 Assignment는 분석과 Evidence를 기록한다. 수정 Assignment는 승인된 Read Session에서 계획을 구체화하고, TaskContract Binding과 별도 Write Authorization·Claim을 거쳐 격리된 Worktree에서 구현·검증한다.
 - Application은 역할별 기능을 제공하고 Workflow는 실행 순서·분기·상태를 조정한다. Governance는 승인·권한·기록 무결성을 소유하며 Runtime은 제한된 분석·계획·구현을 수행한다.
-- Organization 상위 Graph, 자동 Phase 전환, Integration, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
+- Phase B는 옵션에 따라 Assignment 결과를 Work Item별로 통합하고, 선택된 전체 Work Item의 `FinalResult`를 생성한다. Organization 상위 Graph, 자동 Phase 전환, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
 
 Codex CLI는 Planner, Specialist, Comparator 및 구현 Runtime을 제공한다. 승인된 수정 실행만
 `task-execution`의 Worktree·Scope·Verification·Artifact 경계를 사용한다. CLI는 Governance 관리만 제공한다.
@@ -104,6 +105,19 @@ Prepared Task 검증, Context Digest·Binding 계산 및 결과 저장은 동일
 읽기 참조 또는 통합 Patch와 보고서를 반환한다. Phase B는 Integration 옵션이 켜져 있고 개별 Work Item의
 실행이 완료된 경우에 이 기능을 호출한다. 원본 Repository나 기존 Assignment Worktree에 Patch를 적용하지 않는다.
 [Workflow 실행 계약](workflow-architecture.md#4-phase-a--phase-b-handoff-contract)
+
+#### Work Item Integration
+
+`application/integration/work-item/`은 등록된 Plan의 선택 순서대로 Ledger에 기록된 모든 Work Item 결과를 복원한다.
+읽기 전용 Plan은 원본 결과의 출처 참조만 반환한다. 수정 결과가 있으면 승인 Snapshot의 새 Worktree에서 각 Work Item의
+검증된 Patch를 적용하고 해당 업무의 실제 변경 경로와 승인 범위를 검사한다. 공통 Git 검증과 Artifact 보존은
+Assignment Integration과 공유한다.
+
+Work Item 성공 기록은 통합 Worktree 제거 후에 Plan·위임·승인·Snapshot·Assignment 결과와 함께 바인딩한다.
+`FinalResult`는 이 기록의 Digest를 참조한다. Governance 조회로 원본 분석·Evidence, Prepared TaskContract와 실행 Artifact를
+복원할 수 있다. 성공한 Artifact는 Worktree Cleanup 후에도 유지된다. 현재 저장 위치는 Repository 외부의
+Runtime 임시 디렉터리이므로 후속 평가가 끝날 때까지 운영체제나 외부 정리 도구가 이 파일을 제거하지 않아야 한다.
+최종 통합은 승인된 원본 저장소에 변경사항을 반영하거나 Delivery 권한을 부여하지 않는다.
 
 ### Phase A Decision Governance
 
@@ -305,10 +319,9 @@ Budget / Evidence / Verification / Human Approval을 통제한다. 재작업·�
 진행하며 범위를 바꾸면 필요한 승인과 Authorization을 다시 거쳐야 한다. Reject / 승인 대기 / validation
 실패 시 실행하지 않고, Override도 변경 내용에 대한 검증과 필요한 승인을 충족해야 한다.
 
-현재 v2 Specialist는 read-only Decision Agent다. 미래의 설계·구현·QA·리뷰 업무 수행은 역할과 승인된
-권한에 맞는 실행 경계가 추가로 필요하며 현재 Specialist runtime에 write 권한을 주는 근거가 아니다.
-실제 병렬 실행, 다중 Writing Worker, 다중 Worktree 통합·충돌 해결과 CEO 진행 관리는 미구현이다.
-각 업무의 산출물·승인 대상과 통합·실패·종료 정책은 후속 설계 대상이며 여기서 새 Schema를 확정하지 않는다.
+Phase A Specialist는 읽기 전용 분석을 수행한다. Phase B는 승인된 Assignment를 동시성 한도에서 실행하고,
+별도 Write 권한으로 구현한 결과를 Work Item 및 Plan 단위로 통합한다. 자동 충돌 해결, 의존 업무의 자동
+재개 및 CEO 진행 관리는 후속 설계 범위다.
 
 ### Assignment와 Repository 실행 계약
 
@@ -1192,7 +1205,7 @@ Planning의 현재 종료 처리는 단순하다. `buildTaskContract`는 데이�
 
 ### 7.6 Current Source Layout
 
-테스트는 구현 파일과 함께 배치한다. Evaluation과 Integration은 후속 기능이다.
+테스트는 구현 파일과 함께 배치한다. CEO Evaluation은 후속 기능이다.
 
 ```text
 src/
@@ -1228,10 +1241,14 @@ src/
 │  │  ├─ records/
 │  │  ├─ data-flow/
 │  │  └─ model/
-│  └─ task-execution/
-│     ├─ flow/verification/
-│     ├─ model/
-│     └─ worker/
+│  ├─ task-execution/
+│  │  ├─ flow/verification/
+│  │  ├─ model/
+│  │  └─ worker/
+│  └─ integration/
+│     ├─ assignment/
+│     ├─ work-item/
+│     └─ shared/
 ├─ workflows/development-organization/
 │  ├─ phase-a/
 │  └─ phase-b/

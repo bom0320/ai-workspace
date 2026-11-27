@@ -1,38 +1,7 @@
-import type { RepositorySnapshot } from "@/contracts/repository/snapshot.js";
+import type { WorkItemResult } from "@/application/governance/index.js";
+import type { IntegrationFailure } from "../../shared/integrate-patches.js";
 
-type AssignmentResultReference = {
-  assignmentId: string;
-  invocationId: string;
-  resultDigest: string;
-} & (
-  | { status: "read-completed" }
-  | {
-      status: "write-completed";
-      taskContractBinding: string;
-      artifacts: {
-        directory: string;
-        patchDigest: string;
-        resultDigest: string;
-      };
-    }
-);
-
-export type WorkItemResult = {
-  planId: string;
-  workItemId: string;
-  snapshot: RepositorySnapshot;
-  assignmentResults: AssignmentResultReference[];
-} & (
-  | { status: "read-integrated" }
-  | {
-      status: "write-integrated";
-      artifacts: {
-        directory: string;
-        patchDigest: string;
-        resultDigest: string;
-      };
-    }
-);
+export type { WorkItemResult };
 
 export type AssignmentIntegrationOutput =
   | WorkItemResult
@@ -41,13 +10,5 @@ export type AssignmentIntegrationOutput =
       status: "failed";
       planId: string;
       workItemId: string;
-      failure:
-        | "source"
-        | "artifact"
-        | "workspace"
-        | "patch"
-        | "scope"
-        | "verification"
-        | "preservation"
-        | "cleanup";
+      failure: IntegrationFailure;
     };

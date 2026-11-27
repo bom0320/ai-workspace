@@ -21,6 +21,11 @@ import {
 import { applyWorkspacePatch } from "@/infrastructure/git/index.js";
 import { integrateAssignmentResults } from "./integrate-assignment-results.js";
 
+vi.mock(
+  "@/application/governance/records/work-item-integrations/work-item-integration-records.js",
+  () => ({ recordWorkItemIntegration: vi.fn((_handoff, result) => result) })
+);
+
 vi.mock("@/application/governance/index.js", () => ({
   getPreparedAssignmentPlan: vi.fn(),
   getAssignmentExecutionResults: vi.fn(),

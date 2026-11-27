@@ -1,11 +1,20 @@
-import { execFileSync } from "node:child_process";
+import {
+  execFileSync,
+  type ExecFileSyncOptionsWithStringEncoding,
+} from "node:child_process";
 
 // Exact Git paths, including whitespace/newlines; no shell parsing or quoting.
 // Callers attach their own Evidence / use-case failure meaning.
 export function getWorkspaceChangedPaths(
   workspaceRoot: string,
-  baseCommit: string
+  baseCommit: string,
+  remaining?: () => number
 ): string[] {
+  const options = (): ExecFileSyncOptionsWithStringEncoding => ({
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    ...(remaining && { timeout: remaining(), killSignal: "SIGKILL" }),
+  });
   const tracked = execFileSync(
     "git",
     [
@@ -19,7 +28,7 @@ export function getWorkspaceChangedPaths(
       baseCommit,
       "--",
     ],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    options()
   );
   const staged = execFileSync(
     "git",
@@ -35,12 +44,12 @@ export function getWorkspaceChangedPaths(
       baseCommit,
       "--",
     ],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    options()
   );
   const untracked = execFileSync(
     "git",
     ["-C", workspaceRoot, "ls-files", "--others", "--exclude-standard", "-z"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    options()
   );
   return [
     ...new Set(

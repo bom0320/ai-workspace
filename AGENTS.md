@@ -9,7 +9,7 @@ Development Organization이 현재 실행 모델의 기준이다. 각 Phase는 �
 - Phase A는 Human Goal의 해결 방향을 분석하고 승인한다. System Policy, Staffing 승인, Specialist Authorization과 읽기 전용 분석, Comparison, Assessment·Refinement, CEO Synthesis, Human Direction Review 순서로 진행한다.
 - Phase B는 검증된 Handoff를 받아 Work Item을 분해·선택하고 Specialist에게 배정한다. 읽기 Assignment는 분석과 Evidence를 기록한다. 수정 Assignment는 승인된 Read Session에서 계획을 구체화하고, TaskContract Binding과 별도 Write Authorization·Claim을 거쳐 격리된 Worktree에서 구현·검증한다.
 - Application은 역할별 기능을 제공하고 Workflow는 실행 순서·분기·상태를 조정한다. Governance는 승인·권한·기록 무결성을 소유하며 Runtime은 제한된 분석·계획·구현을 수행한다.
-- Organization 상위 Graph, 자동 Phase 전환, Integration, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
+- Phase B는 옵션에 따라 Assignment 결과를 Work Item별로 통합하고, 선택된 전체 Work Item의 `FinalResult`를 생성한다. Organization 상위 Graph, 자동 Phase 전환, Evaluation, Rework, Reporting과 Delivery 연결은 후속 범위다.
 
 > Reliable Worker before Agent Team
 
@@ -65,6 +65,7 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 - `src/application/governance/`: 승인·권한·Ledger·예약·일회 Claim 검증 및 기록.
 - `src/application/governance/authorization/features/assignment-execution/flow/`: Assignment의 Context·Binding·예약·Claim·Read Session·Write 실행 권한. 프로세스 내부 Claim 등록은 발급 파일에, Runtime Permit 등록은 Write 소비 파일에 캡슐화한다.
 - `src/application/task-execution/`: `runtime/`은 Specialist가 예약 전에 호출하는 환경 검사, `flow/`는 승인 Permit을 소비하는 Worktree 실행·검증·결과 확정, `worker/`는 Codex 프로세스 실행.
+- `src/application/integration/`: `assignment/`은 Work Item의 산출물을 통합하고, `work-item/`은 Ledger에 기록된 전체 선택 결과에서 FinalResult를 만든다. 기존 승인 Snapshot의 격리 Worktree와 검증·Artifact 기능을 공유한다.
 - `src/workflows/development-organization/phase-a/` 및 `phase-b/`: 각 Phase의 Graph, State, Data Flow 및 테스트.
 - Workflow의 `features/`는 Phase의 업무 진행 단계로 구분한다. Graph Node와 Factory는 `nodes/`에 두고, 호출 연결·사전 검증·복수 실행 조정·State 변환은 각 Feature에서 실제 책임에 맞게 배치한다. [Workflow Feature와 Application 대응](docs/workflow-architecture.md#현재-workflow-feature와-application의-대응)
 - `src/infrastructure/codex/`: 외부 Codex 실행 설정과 격리 Context lifecycle.
@@ -98,6 +99,7 @@ Workflow는 State와 Phase Handoff를 소유한다. Contracts는 Application·Wo
 - 테스트는 가능하면 구현 파일과 co-location을 유지한다.
 - Cross-module import는 `@/*` source alias와 각 module의 `index.ts`를 사용한다.
 - 좁은 내부 연결 예외: Phase A의 `features/decision-support/synthesis/nodes/run-ceo-synthesis.ts`만 Governance의 내부 `direction-review/flow/review-management.ts`에서 `registerDirectionReview`를 직접 import한다. 원시 Review 등록은 public barrel에 노출하지 않고 실제 `runSynthesis()` 검증 성공 직후에만 호출한다.
+- 좁은 내부 연결 예외: `integration/assignment/flow/integrate-assignment-results.ts`만 Governance의 `records/work-item-integrations/work-item-integration-records.ts`에서 통합 기록 writer를 직접 import한다. Cleanup 성공 후 기록하며 writer는 public barrel에 노출하지 않는다.
 - Same-module internal import는 상대경로를 사용하며, 상위 mega barrel은 만들지 않는다.
 
 ## 7. Validation

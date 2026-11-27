@@ -62,12 +62,15 @@ export function getExecutionBaseCommit(workspaceRoot: string): string {
 export function preserveExecutionChanges(
   workspaceRoot: string,
   runDirectory: string,
-  baseCommit: string
+  baseCommit: string,
+  staged?: { remaining: () => number }
 ): void {
   const patchPath = join(runDirectory, "changes.patch");
   try {
     writeFileSync(join(runDirectory, "base-commit.txt"), `${baseCommit}\n`);
-    writeWorkspacePatch(workspaceRoot, baseCommit, patchPath);
+    if (staged)
+      writeWorkspacePatch(workspaceRoot, baseCommit, patchPath, staged);
+    else writeWorkspacePatch(workspaceRoot, baseCommit, patchPath);
   } catch (error) {
     // Cleanup failures previously escaped the finally block without the
     // preservation wrapper, taking precedence over any generation failure.

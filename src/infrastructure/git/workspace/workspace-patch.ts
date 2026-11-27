@@ -17,7 +17,8 @@ export class WorkspacePatchCleanupError extends Error {
 export function writeWorkspacePatch(
   workspaceRoot: string,
   baseCommit: string,
-  patchPath: string
+  patchPath: string,
+  staged?: { remaining: () => number }
 ): void {
   const temporaryIndex = join(
     dirname(patchPath),
@@ -26,7 +27,8 @@ export function writeWorkspacePatch(
   const gitEnvironment = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
   let patchDescriptor: number | undefined;
   try {
-    stageWorkspaceSnapshot(workspaceRoot, baseCommit, temporaryIndex);
+    if (!staged)
+      stageWorkspaceSnapshot(workspaceRoot, baseCommit, temporaryIndex);
     patchDescriptor = openSync(patchPath, "w");
     execFileSync(
       "git",
@@ -42,7 +44,8 @@ export function writeWorkspacePatch(
         "--",
       ],
       {
-        env: gitEnvironment,
+        env: staged ? undefined : gitEnvironment,
+        timeout: staged?.remaining(),
         stdio: ["ignore", patchDescriptor, "pipe"],
       }
     );

@@ -1,3 +1,4 @@
+import type { AssignmentIntegrationOutput } from "@/application/integration/assignment/index.js";
 import type { VerifiedPhaseBContext } from "@/application/governance/index.js";
 import type { AssignmentPlanningOutput } from "@/application/management/allocation/execution-assignment/index.js";
 import type { AssignmentExecutionOutput } from "./features/execution/coordination/coordinate-assignment-executions.js";
@@ -24,6 +25,7 @@ export const phaseBState = new StateSchema({
   assignmentExecutionResult: z.custom<AssignmentExecutionOutput>().optional(),
   assignmentPlanResult: z.custom<AssignmentPlanningOutput>().optional(),
   workDecompositionResult: workDecompositionResultSchema.optional(),
+  workItemResults: z.array(z.custom<AssignmentIntegrationOutput>()).optional(),
   selectedWorkItemIds: z.array(z.string()).optional(),
 });
 

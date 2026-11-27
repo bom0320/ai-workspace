@@ -1643,6 +1643,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       beforePhaseB,
       assignmentAgent,
       assignmentExecution,
+      assignmentIntegration,
       specialistCount = 1,
     }: {
       fastPath?: boolean;
@@ -1653,6 +1654,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       beforePhaseB?: (approvedDirection: string) => void;
       assignmentExecution?: PhaseBGraphOptions["assignmentExecution"];
       assignmentAgent?: PhaseBGraphOptions["assignmentPlanning"];
+      assignmentIntegration?: boolean;
     } = {}
   ) {
     mkdirSync(join(root, "docs"), { recursive: true });
@@ -1775,6 +1777,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     const handoff = approved.phaseACompletion;
     let assignmentPlanResult;
     let assignmentExecutionResult;
+    let workItemResults;
     if (withDelegation) {
       if (handoff?.status !== "completed")
         throw new Error(JSON.stringify(handoff));
@@ -1786,6 +1789,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           selectWorkItemIds: () => ["first"],
         }),
         assignmentExecution,
+        assignmentIntegration,
       }).invoke({ handoff });
       expect(state.handoffResult?.status).toBe("accepted");
       if (state.workDecompositionResult?.status !== "proposed")
@@ -1793,6 +1797,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       workItems = state.workDecompositionResult.workItems;
       assignmentPlanResult = state.assignmentPlanResult;
       assignmentExecutionResult = state.assignmentExecutionResult;
+      workItemResults = state.workItemResults;
     } else {
       // Seed a historical decomposition to test handoff and reservation rejection.
       registerWorkDecomposition({
@@ -1804,6 +1809,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
     return {
       assignmentPlanResult,
       assignmentExecutionResult,
+      workItemResults,
       handoff,
       decision,
       workItems,
@@ -2234,165 +2240,165 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
           executesWrite && mode !== "write-resume" ? 12_000 : 16_000,
       };
       const prompts: string[] = [];
-      const { assignmentPlanResult, assignmentExecutionResult, handoff } =
-        await planExecutionItems(true, mode === "budget" ? 1 : 2, [], path, {
-          codexMode: true,
-          directoryScope: true,
-          detailingContext: true,
-          assignmentAgent: async ({
-            specialists,
-            repositoryAccessGuidance,
-          }) => {
-            expect(repositoryAccessGuidance.write).toContain("modifying");
-            const assignment = {
-              id: "detail",
-              workItemId: "first",
-              specialistId: specialists[0].id,
-              objective: "Revise README",
-              deliverable: "Corrected README",
-              repositoryAccessCeiling: "write",
-              dependsOn: [],
-            };
-            return mode === "inspection"
-              ? [assignment, { ...assignment, id: "other" }]
-              : [assignment];
-          },
-          ...(mode !== "legacy" && {
-            assignmentExecution: { contexts: { detail: settings } },
-          }),
-          beforePhaseB() {
-            const command = vi.mocked(processRuntime.runCommand);
-            const previous = command.getMockImplementation()!;
-            command.mockImplementation(async (name, args, options) => {
-              if (name !== "codex") {
-                if (name === "git") {
-                  const actual = await vi.importActual<typeof processRuntime>(
-                    "@/infrastructure/process/command-runner.js"
-                  );
-                  return actual.runCommand(name, args, options);
-                }
-                return previous(name, args, options);
+      const {
+        assignmentPlanResult,
+        assignmentExecutionResult,
+        handoff,
+        workItemResults,
+      } = await planExecutionItems(true, mode === "budget" ? 1 : 2, [], path, {
+        codexMode: true,
+        assignmentIntegration: mode === "write-completed",
+        directoryScope: true,
+        detailingContext: true,
+        assignmentAgent: async ({ specialists, repositoryAccessGuidance }) => {
+          expect(repositoryAccessGuidance.write).toContain("modifying");
+          const assignment = {
+            id: "detail",
+            workItemId: "first",
+            specialistId: specialists[0].id,
+            objective: "Revise README",
+            deliverable: "Corrected README",
+            repositoryAccessCeiling: "write",
+            dependsOn: [],
+          };
+          return mode === "inspection"
+            ? [assignment, { ...assignment, id: "other" }]
+            : [assignment];
+        },
+        ...(mode !== "legacy" && {
+          assignmentExecution: { contexts: { detail: settings } },
+        }),
+        beforePhaseB() {
+          const command = vi.mocked(processRuntime.runCommand);
+          const previous = command.getMockImplementation()!;
+          command.mockImplementation(async (name, args, options) => {
+            if (name !== "codex") {
+              if (name === "git") {
+                const actual = await vi.importActual<typeof processRuntime>(
+                  "@/infrastructure/process/command-runner.js"
+                );
+                return actual.runCommand(name, args, options);
               }
-              const prompt = args.at(-1)!;
-              if (args.includes("workspace-write")) {
-                workerPrompts.push(prompt);
-                expect(options.cwd).not.toBe(root);
-                expect(prompt).toContain("Implementation Plan:");
-                expect(prompt).toContain(steps[0]);
-                expect(
-                  execFileSync("git", ["rev-parse", "HEAD"], {
-                    cwd: options.cwd,
-                    encoding: "utf8",
-                  }).trim()
-                ).toBe(git("rev-parse", "HEAD").trim());
-                if (mode === "write-scope")
-                  writeFileSync(
-                    join(options.cwd, "docs-extra/other.md"),
-                    "Out of scope\n"
-                  );
-                else
-                  writeFileSync(
-                    join(options.cwd, path),
-                    mode === "write-verification"
-                      ? "Bad whitespace  \n"
-                      : "Verified correction\n"
-                  );
-                if (mode === "write-verification")
-                  execFileSync("git", ["add", path], { cwd: options.cwd });
-                if (mode === "write-artifact") {
-                  const original = filesystem.writeFileSync;
-                  vi.spyOn(filesystem, "writeFileSync").mockImplementation(
-                    (file, data, options) => {
-                      if (String(file).endsWith("/result.json"))
-                        throw new Error("Artifact store failed.");
-                      return original(file, data, options);
-                    }
-                  );
-                }
-                return {
-                  stdout: "Implemented",
-                  stderr: "",
-                  exitCode: 0,
-                  timedOut: false,
-                };
-              }
-              expect(prompt).not.toContain("SpecialistContext:");
-              expect(args).toContain("read-only");
-              expect(args.join(" ")).toContain("shell_tool=false");
+              return previous(name, args, options);
+            }
+            const prompt = args.at(-1)!;
+            if (args.includes("workspace-write")) {
+              workerPrompts.push(prompt);
               expect(options.cwd).not.toBe(root);
-              expect(options.timeoutMs).toBeLessThanOrEqual(settings.timeoutMs);
-              prompts.push(prompt);
-              const context = JSON.parse(prompt.split("PlannerContext:\n")[1]);
-              expect(context.assignmentDetail.specialist.id).toBeTruthy();
+              expect(prompt).toContain("Implementation Plan:");
+              expect(prompt).toContain(steps[0]);
               expect(
-                context.assignmentDetail.executionBounds.writeScopes
-              ).toEqual(settings.readScopes);
-              expect(
-                context.inspectedFiles.map(({ path }: { path: string }) => path)
-              ).toEqual([
-                path,
-                ...Array.from(
-                  { length: prompts.length - 1 },
-                  (_, index) => "docs/extra-" + (index + 1) + ".md"
-                ),
-              ]);
-              let output: unknown;
-              if (mode === "blocked")
-                output = {
-                  type: "blocked",
-                  reason: "The requested behavior is already implemented.",
-                };
-              else if (mode === "outside")
-                output = {
-                  type: "inspect",
-                  request: { paths: ["docs-extra/other.md"] },
-                };
-              else if (
-                mode === "deadline" ||
-                mode === "round-limit" ||
-                (mode === "inspection" && prompts.length === 1)
-              ) {
-                output = {
-                  type: "inspect",
-                  request: { paths: ["docs/extra-" + prompts.length + ".md"] },
-                };
-                if (mode === "deadline")
-                  vi.spyOn(Date, "now").mockReturnValue(
-                    Date.now() + settings.timeoutMs * 2
-                  );
-              } else
-                output = {
-                  type: "complete",
-                  task: {
-                    objective: "Correct the supplied README",
-                    targetRepository: context.goal.targetRepository,
-                    ...(mode !== "missing-plan" && { implementationPlan }),
-                    ...(["missing-plan", "mixed-plan"].includes(mode) && {
-                      implementationSteps: steps,
-                    }),
-                    allowedPaths:
-                      mode === "uncovered-path"
-                        ? [path, "docs/new.md"]
-                        : [targetPath],
-                    forbiddenPaths: mode === "forbidden" ? [path] : [],
-                    constraints: [],
-                    acceptanceCriteria: ["Corrected wording is present"],
-                    verification: [
-                      mode === "verification"
-                        ? "pnpm test"
-                        : "git diff --check",
-                    ],
-                  },
-                };
+                execFileSync("git", ["rev-parse", "HEAD"], {
+                  cwd: options.cwd,
+                  encoding: "utf8",
+                }).trim()
+              ).toBe(git("rev-parse", "HEAD").trim());
+              if (mode === "write-scope")
+                writeFileSync(
+                  join(options.cwd, "docs-extra/other.md"),
+                  "Out of scope\n"
+                );
+              else
+                writeFileSync(
+                  join(options.cwd, path),
+                  mode === "write-verification"
+                    ? "Bad whitespace  \n"
+                    : "Verified correction\n"
+                );
+              if (mode === "write-verification")
+                execFileSync("git", ["add", path], { cwd: options.cwd });
+              if (mode === "write-artifact") {
+                const original = filesystem.writeFileSync;
+                vi.spyOn(filesystem, "writeFileSync").mockImplementation(
+                  (file, data, options) => {
+                    if (String(file).endsWith("/result.json"))
+                      throw new Error("Artifact store failed.");
+                    return original(file, data, options);
+                  }
+                );
+              }
               return {
-                stdout: JSON.stringify(output),
+                stdout: "Implemented",
                 stderr: "",
                 exitCode: 0,
                 timedOut: false,
               };
-            });
-          },
-        });
+            }
+            expect(prompt).not.toContain("SpecialistContext:");
+            expect(args).toContain("read-only");
+            expect(args.join(" ")).toContain("shell_tool=false");
+            expect(options.cwd).not.toBe(root);
+            expect(options.timeoutMs).toBeLessThanOrEqual(settings.timeoutMs);
+            prompts.push(prompt);
+            const context = JSON.parse(prompt.split("PlannerContext:\n")[1]);
+            expect(context.assignmentDetail.specialist.id).toBeTruthy();
+            expect(
+              context.assignmentDetail.executionBounds.writeScopes
+            ).toEqual(settings.readScopes);
+            expect(
+              context.inspectedFiles.map(({ path }: { path: string }) => path)
+            ).toEqual([
+              path,
+              ...Array.from(
+                { length: prompts.length - 1 },
+                (_, index) => "docs/extra-" + (index + 1) + ".md"
+              ),
+            ]);
+            let output: unknown;
+            if (mode === "blocked")
+              output = {
+                type: "blocked",
+                reason: "The requested behavior is already implemented.",
+              };
+            else if (mode === "outside")
+              output = {
+                type: "inspect",
+                request: { paths: ["docs-extra/other.md"] },
+              };
+            else if (
+              mode === "deadline" ||
+              mode === "round-limit" ||
+              (mode === "inspection" && prompts.length === 1)
+            ) {
+              output = {
+                type: "inspect",
+                request: { paths: ["docs/extra-" + prompts.length + ".md"] },
+              };
+              if (mode === "deadline")
+                vi.spyOn(Date, "now").mockReturnValue(
+                  Date.now() + settings.timeoutMs * 2
+                );
+            } else
+              output = {
+                type: "complete",
+                task: {
+                  objective: "Correct the supplied README",
+                  targetRepository: context.goal.targetRepository,
+                  ...(mode !== "missing-plan" && { implementationPlan }),
+                  ...(["missing-plan", "mixed-plan"].includes(mode) && {
+                    implementationSteps: steps,
+                  }),
+                  allowedPaths:
+                    mode === "uncovered-path"
+                      ? [path, "docs/new.md"]
+                      : [targetPath],
+                  forbiddenPaths: mode === "forbidden" ? [path] : [],
+                  constraints: [],
+                  acceptanceCriteria: ["Corrected wording is present"],
+                  verification: [
+                    mode === "verification" ? "pnpm test" : "git diff --check",
+                  ],
+                },
+              };
+            return {
+              stdout: JSON.stringify(output),
+              stderr: "",
+              exitCode: 0,
+              timedOut: false,
+            };
+          });
+        },
+      });
       if (mode === "deadline") vi.mocked(Date.now).mockRestore();
       if (
         handoff?.status !== "completed" ||
@@ -2509,6 +2515,32 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
             },
           ],
         });
+        if (mode === "write-completed") {
+          const integrated = workItemResults?.[0];
+          expect(integrated).toMatchObject({
+            status: "write-integrated",
+            planId: plan.id,
+            workItemId: "first",
+            assignmentResults: [
+              { assignmentId: "detail", status: "write-completed" },
+            ],
+          });
+          if (integrated?.status === "write-integrated") {
+            try {
+              expect(
+                readFileSync(
+                  join(integrated.artifacts.directory, "changes.patch"),
+                  "utf8"
+                )
+              ).toContain("README.md");
+            } finally {
+              rmSync(integrated.artifacts.directory, {
+                recursive: true,
+                force: true,
+              });
+            }
+          }
+        }
         expect(workerPrompts).toHaveLength(1);
         expect(prompts).toHaveLength(1);
         const records = governance.getAssignmentExecutionResults(

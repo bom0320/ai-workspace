@@ -98,6 +98,13 @@ Session은 Inspection, Write Eligibility, 결과 기록 때마다 최신 Ledger�
 Prepared Task 검증, Context Digest·Binding 계산 및 결과 저장은 동일 트랜잭션에서 수행한다.
 실패 기록과 결과 복원은 `records/assignment-executions/`가 담당한다.
 
+#### Assignment Integration
+
+`application/integration/assignment/`은 완료된 Work Item의 검증된 Assignment 결과를 조회하고
+읽기 참조 또는 통합 Patch와 보고서를 반환한다. Phase B는 Integration 옵션이 켜져 있고 개별 Work Item의
+실행이 완료된 경우에 이 기능을 호출한다. 원본 Repository나 기존 Assignment Worktree에 Patch를 적용하지 않는다.
+[Workflow 실행 계약](workflow-architecture.md#4-phase-a--phase-b-handoff-contract)
+
 ### Phase A Decision Governance
 
 `createPhaseAGraph()`는 기본적으로 방향과 실행 위임의 동시 승인까지 진행한다. 방향 단독 승인이 필요한 경우

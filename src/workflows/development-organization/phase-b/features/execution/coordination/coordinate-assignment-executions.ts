@@ -29,7 +29,7 @@ export type AssignmentExecutionOutput =
         assignmentId: string;
         workItemId: string;
       })[];
-      workItemResults: {
+      workItemExecutionStatuses: {
         workItemId: string;
         status: AssignmentExecutionStatus;
       }[];
@@ -182,7 +182,7 @@ export async function coordinateAssignmentExecutions(
     results.push(finished);
   }
 
-  const workItemResults = selectedWorkItemIds.map((workItemId) => {
+  const workItemExecutionStatuses = selectedWorkItemIds.map((workItemId) => {
     const required = plan.assignments.filter(
       (assignment) => assignment.workItemId === workItemId
     );
@@ -205,13 +205,15 @@ export async function coordinateAssignmentExecutions(
   });
   return {
     status: aggregateStatus(
-      workItemResults,
-      workItemResults.length > 0 &&
-        workItemResults.every(({ status }) => status === "execution-completed")
+      workItemExecutionStatuses,
+      workItemExecutionStatuses.length > 0 &&
+        workItemExecutionStatuses.every(
+          ({ status }) => status === "execution-completed"
+        )
     ),
     planId,
     results,
-    workItemResults,
+    workItemExecutionStatuses,
     pendingAssignments,
   };
 }

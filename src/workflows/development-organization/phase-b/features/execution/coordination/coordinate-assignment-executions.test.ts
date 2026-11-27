@@ -183,7 +183,7 @@ it("keeps an independent execution running when a predecessor fails", async () =
   fixtureRun.fail("a");
   fixtureRun.complete("b");
   expect(await result).toMatchObject({
-    workItemResults: [
+    workItemExecutionStatuses: [
       { workItemId: "A", status: "failed" },
       { workItemId: "B", status: "execution-completed" },
       { workItemId: "C", status: "pending" },
@@ -230,7 +230,7 @@ it("completes all selected Work Items with matching read and write results", asy
   await expect(result).resolves.toMatchObject({
     planId: "plan",
     status: "execution-completed",
-    workItemResults: [
+    workItemExecutionStatuses: [
       { workItemId: "A", status: "execution-completed" },
       { workItemId: "B", status: "execution-completed" },
     ],
@@ -288,7 +288,7 @@ it("requires the correct result for every registered Assignment", async () => {
         reason: "dependency-pending",
       },
     ]),
-    workItemResults: [
+    workItemExecutionStatuses: [
       { workItemId: "A", status: "pending" },
       { workItemId: "B", status: "pending" },
       { workItemId: "C", status: "pending" },
@@ -326,7 +326,7 @@ it("reuses completed results and skips already reserved Assignments", async () =
   await expect(run(["done", "reserved"])).resolves.toMatchObject({
     status: "denied",
     results: recorded,
-    workItemResults: [
+    workItemExecutionStatuses: [
       { workItemId: "A", status: "execution-completed" },
       { workItemId: "B", status: "denied" },
     ],

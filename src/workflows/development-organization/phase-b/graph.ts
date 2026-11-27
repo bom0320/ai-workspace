@@ -10,6 +10,7 @@ import {
   type SelectWorkItemIds,
 } from "./features/planning/nodes/select-work-items.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
+import { integrateAssignments } from "./features/integration/nodes/integrate-assignments.js";
 import { phaseBInput, phaseBState } from "./state.js";
 
 const phaseBGraphOptionsSchema = z.strictObject({
@@ -26,6 +27,7 @@ const phaseBGraphOptionsSchema = z.strictObject({
   selectWorkItemIds: z
     .custom<SelectWorkItemIds>((value) => typeof value === "function")
     .optional(),
+  assignmentIntegration: z.boolean().optional(),
   assignmentPlanning: z
     .custom<AssignmentPlanAgent>((value) => typeof value === "function")
     .optional(),
@@ -53,12 +55,16 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
     selectWorkItemIds,
     assignmentPlanning,
     assignmentExecution,
+    assignmentIntegration,
   } = parsed.data;
 
   if (assignmentPlanning && !selectWorkItemIds)
     throw new Error("Assignment Planning requires Work Item selection.");
   if (assignmentExecution && !assignmentPlanning)
     throw new Error("Assignment Execution requires Assignment Planning.");
+
+  if (assignmentIntegration && !assignmentExecution)
+    throw new Error("Assignment Integration requires Assignment Execution.");
 
   return new StateGraph({ state: phaseBState, input: phaseBInput })
     .addNode(
@@ -74,6 +80,7 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
       "execute-assignments",
       createExecuteAssignmentsNode(assignmentExecution)
     )
+    .addNode("integrate-assignments", integrateAssignments)
     .addEdge(START, "run-work-decomposition")
     .addConditionalEdges(
       "run-work-decomposition",
@@ -101,7 +108,22 @@ export function createPhaseBGraph(options: PhaseBGraphOptions = {}) {
           : END,
       ["execute-assignments", END]
     )
-    .addEdge("execute-assignments", END)
+    .addConditionalEdges(
+      "execute-assignments",
+      (state) => {
+        const result = state.assignmentExecutionResult;
+        return assignmentIntegration &&
+          result &&
+          "workItemExecutionStatuses" in result &&
+          result.workItemExecutionStatuses.some(
+            ({ status }) => status === "execution-completed"
+          )
+          ? "integrate-assignments"
+          : END;
+      },
+      ["integrate-assignments", END]
+    )
+    .addEdge("integrate-assignments", END)
     .compile()
     .withConfig({ recursionLimit: Number.MAX_SAFE_INTEGER });
 }

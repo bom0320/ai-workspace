@@ -66,7 +66,10 @@ export function recordAssignmentFailure(
 
 export function getAssignmentExecutionResults(
   handoff: Handoff,
-  planId: string
+  planId: string,
+  {
+    includeIntegrationScope = false,
+  }: { includeIntegrationScope?: boolean } = {}
 ) {
   return withGovernanceLedger((ledger) => {
     const { entry, delegation, plan } = resolvePreparedAssignmentPlan(
@@ -87,6 +90,12 @@ export function getAssignmentExecutionResults(
           specialistId: string;
           taskContractBinding: string;
           artifacts: ReturnType<typeof fingerprintExecutionArtifacts>;
+          integrationScope?: {
+            allowedPaths: string[];
+            forbiddenPaths: string[];
+            verification: string[];
+            deadlineMs: number;
+          };
         }
       | {
           status: "task-prepared";
@@ -142,7 +151,7 @@ export function getAssignmentExecutionResults(
           handoff,
           record.request
         );
-        const { binding } = bindAssignmentWriteExecution(
+        const { binding, task } = bindAssignmentWriteExecution(
           context,
           record.request,
           record.id
@@ -197,6 +206,21 @@ export function getAssignmentExecutionResults(
             status: "write-completed",
             resultDigest,
             artifacts,
+            ...(includeIntegrationScope && {
+              integrationScope: {
+                allowedPaths: task.allowedPaths,
+                forbiddenPaths: task.forbiddenPaths,
+                verification: task.verification,
+                deadlineMs: Math.min(
+                  Date.parse(delegation.grant.expiresAt),
+                  Date.now() +
+                    Math.min(
+                      context.policy.budget.maxTimeoutMs,
+                      delegation.grant.budget.maxTimeoutMs
+                    )
+                ),
+              },
+            }),
             specialistId: context.specialist.id,
             taskContractBinding: record.request.taskContractBinding,
           },

@@ -1,3 +1,4 @@
+import { integrateAssignmentResults } from "@/application/integration/assignment/index.js";
 import { executeAssignment } from "@/application/specialist/execution/index.js";
 import { beforeEach, expect, expectTypeOf, it, vi } from "vitest";
 import { phaseBDataFlow } from "../data-flow.js";
@@ -60,6 +61,10 @@ vi.mock(
     };
   }
 );
+
+vi.mock("@/application/integration/assignment/index.js", () => ({
+  integrateAssignmentResults: vi.fn(),
+}));
 
 const decompositionInput = { approvedDecisionId: "approved-1" };
 const direction = {
@@ -170,6 +175,9 @@ const workItems = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getPreparedAssignmentPlan).mockReset();
+  vi.mocked(executeAssignment).mockReset();
+  vi.mocked(integrateAssignmentResults).mockReset();
   vi.mocked(getApprovedDecision).mockReturnValue(approval);
   vi.mocked(verifyPhaseBHandoff).mockReturnValue(approved);
 });
@@ -546,3 +554,54 @@ it.each([
     }
   }
 );
+
+it("integrates a completed Work Item while other Work Items are pending", async () => {
+  const plan = {
+    ...combinedPlan,
+    assignments: combinedPlan.assignments.map((assignment) =>
+      assignment.id === "ready"
+        ? { ...assignment, repositoryAccessCeiling: "read" as const }
+        : assignment
+    ),
+  };
+  vi.mocked(createAssignmentPlan).mockResolvedValueOnce({
+    status: "prepared",
+    plan,
+  });
+  vi.mocked(getPreparedAssignmentPlan).mockReturnValueOnce({
+    plan,
+    workItems: combinedItems,
+    specialistSources: [],
+  });
+  vi.mocked(executeAssignment).mockResolvedValueOnce({
+    status: "read-completed",
+    invocationId: "read",
+    resultDigest: "digest",
+  });
+  const integrated = {
+    status: "read-integrated" as const,
+    workItemId: "ready",
+    planId: plan.id,
+    snapshot: plan.snapshot,
+    assignmentResults: [],
+  };
+  vi.mocked(integrateAssignmentResults).mockResolvedValueOnce(integrated);
+  const state = await createPhaseBGraph({
+    workDecomposition: {
+      agent: async () => ({ type: "propose", workItems: combinedItems }),
+    },
+    selectWorkItemIds: () => combinedItems.map(({ id }) => id),
+    assignmentPlanning: vi.fn(),
+    assignmentExecution: {
+      contexts: { ready: { readScopes: [], timeoutMs: 1000 } },
+    },
+    assignmentIntegration: true,
+  }).invoke(input);
+  expect(state.assignmentExecutionResult?.status).toBe("pending");
+  expect(integrateAssignmentResults).toHaveBeenCalledExactlyOnceWith({
+    handoff,
+    planId: plan.id,
+    workItemId: "ready",
+  });
+  expect(state.workItemResults).toEqual([integrated]);
+});

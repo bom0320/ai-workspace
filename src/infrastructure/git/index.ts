@@ -27,3 +27,4 @@ export {
   stageWorkspaceSnapshot,
   WorkspacePatchCleanupError,
 } from "./workspace/workspace-patch.js";
+export { applyWorkspacePatch } from "./workspace/apply-workspace-patch.js";

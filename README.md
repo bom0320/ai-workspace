@@ -21,6 +21,7 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 
 - [Project Direction](docs/project-direction.md)
 - [Architecture](docs/architecture.md)
+- [Phase B E2E 및 Phase A 회귀 검증](docs/phase-b-e2e-validation-2026-11-27.md)
 - [Workflow Architecture](docs/workflow-architecture.md) · [Phase별 Feature와 Application 대응](docs/workflow-architecture.md#현재-workflow-feature와-application의-대응)
 - [Roadmap](docs/roadmap.md)
 
@@ -151,9 +152,8 @@ chore: ...
 
 ```text
 Phase A Handoff → Work Decomposition → Work Item Selection → Specialist 배정
-→ Assignment Plan 등록 → 선택적 Assignment 읽기 실행
-→ Governance Authorization / Reservation / Claim → 승인된 Snapshot Context
-→ Specialist 읽기 실행 → Evidence 검증 → Phase B State
+→ Assignment Plan 등록 → 승인된 Read / Write Assignment 실행
+→ 실행 완료 Work Item별 Assignment Integration → Work Item Integration → FinalResult
 ```
 
 ## TaskContract 예시

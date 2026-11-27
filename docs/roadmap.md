@@ -256,7 +256,7 @@ schema는 해당 단계에서 정한다. 새 abstraction이나 조직 역할을 
 | 5.3.5 | Assignment Result & Execution Coordination | 검증된 Assignment 결과를 Work Item별로 대조해 실행 완료 상태를 집계. 통합과 의존성 해제는 후속 범위 | Implemented |
 | 5.3.6.1 | Assignment Integration | 동일 Work Item의 실행 참조와 격리된 통합 Patch를 WorkItemResult로 제공 | Implemented |
 | 5.3.6.2 | Work Item Integration | Ledger에 귀속된 선택 Work Item 전체의 결과를 검증하고 FinalResult 생성 | Implemented |
-| 5.3.7 | E2E & Phase A Regression Tests | 분석→승인된 구현→통합과 거부·실패 경로, 기존 Phase A 독립 실행 계약 검증 | Planned |
+| 5.3.7 | E2E & Phase A Regression Tests | [자동화 검증 및 출처 추적](phase-b-e2e-validation-2026-11-27.md), 실제 Codex·Human 전체 E2E 대기 | Partial |
 
 ### Development Organization 실행 경로 일원화
 

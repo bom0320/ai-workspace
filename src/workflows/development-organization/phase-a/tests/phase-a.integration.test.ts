@@ -1,3 +1,4 @@
+import { fingerprintExecutionArtifacts } from "@/services/artifacts/index.js";
 import { prepareAssignmentContext } from "@/application/governance/records/assignment-plans/prepare-assignment-context.js";
 import { withGovernanceLedger } from "@/application/governance/records/governance-transaction.js";
 import * as governanceRecords from "@/services/governance-records/index.js";
@@ -1645,12 +1646,18 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       assignmentExecution,
       assignmentIntegration,
       specialistCount = 1,
+      selectedIds = ["first"],
+      secondDependsOnFirst = false,
+      policyMaxExecutions,
     }: {
       fastPath?: boolean;
       directoryScope?: boolean;
       detailingContext?: boolean;
       codexMode?: boolean;
       specialistCount?: number;
+      selectedIds?: string[];
+      secondDependsOnFirst?: boolean;
+      policyMaxExecutions?: number;
       beforePhaseB?: (approvedDirection: string) => void;
       assignmentExecution?: PhaseBGraphOptions["assignmentExecution"];
       assignmentAgent?: PhaseBGraphOptions["assignmentPlanning"];
@@ -1687,6 +1694,12 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       ? configureExecutionPolicy({
           ...(directoryScope ? scopedPolicy : executionPolicy),
           ...workerMode,
+          ...(policyMaxExecutions && {
+            budget: {
+              ...executionPolicy.budget,
+              maxExecutions: policyMaxExecutions,
+            },
+          }),
         })
       : undefined;
     const {
@@ -1756,7 +1769,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       deliverable: fastPath
         ? `Corrected typos in ${target}`
         : `Revised ${target}`,
-      dependsOn: [],
+      dependsOn: id === "second" && secondDependsOnFirst ? ["first"] : [],
     }));
     const agent: NonNullable<
       NonNullable<PhaseBGraphOptions["workDecomposition"]>["agent"]
@@ -1787,7 +1800,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
         workDecomposition: { agent },
         ...(assignmentAgent && {
           assignmentPlanning: assignmentAgent,
-          selectWorkItemIds: () => ["first"],
+          selectWorkItemIds: () => selectedIds,
         }),
         assignmentExecution,
         assignmentIntegration,
@@ -1819,6 +1832,347 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       workItems,
     };
   }
+
+  it.each(["completed", "dependency-pending", "scope-failure"] as const)(
+    "runs a multi-Specialist two-Work-Item workflow through final integration (%s)",
+    async (mode) => {
+      const paths = { first: "docs/README.md", second: "docs/extra-1.md" };
+      const targets = [paths.first, paths.second];
+      options.goal = {
+        ...options.goal,
+        objective: "Review and correct wording in both documentation files",
+        constraints: ["Preserve formatting and unrelated files"],
+      };
+      const contexts = Object.fromEntries(
+        [
+          ["review", paths.first],
+          ["edit-first", paths.first],
+          ["edit-second", paths.second],
+        ].map(([id, path]) => [
+          id,
+          {
+            readScopes: [{ kind: "file" as const, path }],
+            initialReadPaths: [path],
+            timeoutMs: 12000,
+            writeTimeoutMs: 12000,
+          },
+        ])
+      );
+      const artifacts = new Set<string>();
+      const workerPaths: string[] = [];
+      const workerWorktrees = new Set<string>();
+      let activeCalls = 0;
+      let peakCalls = 0;
+      let initialCalls = 0;
+      let release!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let baseline: { head: string; tree: string; status: string } | undefined;
+      const repositoryState = () => ({
+        head: git("rev-parse", "HEAD"),
+        tree: git("worktree", "list", "--porcelain"),
+        status: git("status", "--porcelain"),
+      });
+      try {
+        const output = await planExecutionItems(true, 5, [], paths.first, {
+          codexMode: true,
+          directoryScope: true,
+          detailingContext: true,
+          specialistCount: 2,
+          policyMaxExecutions: 5,
+          selectedIds: ["first", "second"],
+          secondDependsOnFirst: mode === "dependency-pending",
+          assignmentIntegration: true,
+          assignmentExecution: { contexts, maxConcurrentRuns: 2 },
+          assignmentAgent: async ({ specialists }) => [
+            {
+              id: "review",
+              workItemId: "first",
+              specialistId: specialists[0].id,
+              repositoryAccessCeiling: "read",
+              objective: "Review the supplied text",
+              deliverable: "Scoped evidence",
+              dependsOn: [],
+            },
+            ...(["first", "second"] as const).map((id, index) => ({
+              id: `edit-${id}`,
+              workItemId: id,
+              specialistId: specialists[index === 0 ? 1 : 0].id,
+              repositoryAccessCeiling: "write" as const,
+              objective: `Correct ${paths[id]}`,
+              deliverable: `Updated ${paths[id]}`,
+              dependsOn: [],
+            })),
+          ],
+          beforePhaseB() {
+            baseline = repositoryState();
+            const command = vi.mocked(processRuntime.runCommand);
+            const previous = command.getMockImplementation()!;
+            command.mockImplementation(async (name, args, options) => {
+              if (name !== "codex") return previous(name, args, options);
+              activeCalls++;
+              peakCalls = Math.max(peakCalls, activeCalls);
+              try {
+                if (++initialCalls <= 2) {
+                  if (initialCalls === 2) release();
+                  await ready;
+                }
+                const prompt = args.at(-1)!;
+                let response: unknown;
+                if (args.includes("workspace-write")) {
+                  const path = targets.find((target) =>
+                    prompt.includes(`Correct ${target}`)
+                  )!;
+                  expect(targets).toContain(path);
+                  expect(options.cwd).not.toBe(root);
+                  workerPaths.push(path);
+                  workerWorktrees.add(realpathSync(options.cwd!));
+                  writeFileSync(join(options.cwd, path), `Corrected ${path}\n`);
+                  if (mode === "scope-failure" && path === paths.second)
+                    writeFileSync(
+                      join(options.cwd, "docs-extra/other.md"),
+                      "Out of scope\n"
+                    );
+                  return {
+                    stdout: "Implemented",
+                    stderr: "",
+                    exitCode: 0,
+                    timedOut: false,
+                  };
+                }
+                expect(args).toContain("read-only");
+                expect(args.join(" ")).toContain("shell_tool=false");
+                if (prompt.includes("SpecialistContext:\n")) {
+                  const context = JSON.parse(
+                    prompt.split("SpecialistContext:\n")[1]
+                  );
+                  expect(
+                    context.files.map(({ path }: { path: string }) => path)
+                  ).toEqual([paths.first]);
+                  response = {
+                    recommendation: "Retain the existing section",
+                    evidence: [
+                      {
+                        path: paths.first,
+                        lineStart: 1,
+                        description: "Original text",
+                      },
+                    ],
+                    risks: [],
+                    uncertainty: [],
+                  };
+                } else {
+                  const context = JSON.parse(
+                    prompt.split("PlannerContext:\n")[1]
+                  );
+                  const [path] = context.inspectedFiles.map(
+                    ({ path }: { path: string }) => path
+                  );
+                  expect(targets).toContain(path);
+                  expect(context.inspectedFiles).toHaveLength(1);
+                  response = {
+                    type: "complete",
+                    task: {
+                      objective: `Correct ${path}`,
+                      implementationPlan: {
+                        background: "Correct approved wording",
+                        currentState: "Original wording exists",
+                        targetDesign: "Use corrected wording in the same file",
+                        steps: [
+                          {
+                            title: "Replace wording",
+                            targetPaths: [path],
+                            instructions: ["Replace the original text."],
+                          },
+                        ],
+                      },
+                      targetRepository: context.goal.targetRepository,
+                      allowedPaths: [path],
+                      forbiddenPaths: [],
+                      constraints: [],
+                      acceptanceCriteria: ["Corrected wording present"],
+                      verification: ["git diff --check"],
+                    },
+                  };
+                }
+                return {
+                  stdout: JSON.stringify(response),
+                  stderr: "",
+                  exitCode: 0,
+                  timedOut: false,
+                };
+              } finally {
+                activeCalls--;
+              }
+            });
+          },
+        });
+        const {
+          handoff,
+          assignmentPlanResult,
+          assignmentExecutionResult,
+          workItemResults,
+          finalResult,
+        } = output;
+        if (
+          handoff?.status !== "completed" ||
+          assignmentPlanResult?.status !== "prepared"
+        )
+          throw new Error(JSON.stringify({ handoff, assignmentPlanResult }));
+        const { plan } = assignmentPlanResult;
+        const records = withGovernanceLedger((ledger) =>
+          Object.values(ledger.repositories).flatMap(
+            (entry) => entry.assignmentExecutions ?? []
+          )
+        );
+        for (const record of records)
+          if (
+            record.result &&
+            "artifacts" in record.result &&
+            record.result.artifacts
+          )
+            artifacts.add(record.result.artifacts.directory);
+        for (const result of [...(workItemResults ?? []), finalResult])
+          if (result?.status === "write-integrated")
+            artifacts.add(result.artifacts.directory);
+        expect(records).toHaveLength(mode === "dependency-pending" ? 3 : 5);
+        expect(records.every(({ claimedAt }) => claimedAt)).toBe(true);
+        expect(peakCalls).toBe(2);
+        expect(
+          new Set(plan.assignments.map(({ specialistId }) => specialistId)).size
+        ).toBe(2);
+        expect(workerPaths.sort()).toEqual(
+          mode === "dependency-pending" ? [paths.first] : [...targets].sort()
+        );
+        expect(
+          workItemResults
+            ?.filter(({ status }) => status === "write-integrated")
+            .map(({ workItemId }) => workItemId)
+        ).toEqual(mode === "completed" ? ["first", "second"] : ["first"]);
+        const after = repositoryState();
+        expect(after.head).toBe(baseline?.head);
+        expect(after.status).toBe(baseline?.status);
+        // The execution engine retains its Worktrees for inspection. Integration
+        // must remove its own Worktrees and leave those execution Worktrees alone.
+        const listRoots = (list: string) =>
+          list
+            .split("\n")
+            .filter((line) => line.startsWith("worktree "))
+            .map((line) => line.slice(9));
+        expect(new Set(listRoots(after.tree))).toEqual(
+          new Set([...listRoots(baseline!.tree), ...workerWorktrees])
+        );
+        if (mode === "dependency-pending") {
+          expect(
+            records.every(
+              ({ request }) => request.assignmentId !== "edit-second"
+            )
+          ).toBe(true);
+          expect(assignmentExecutionResult).toMatchObject({
+            pendingAssignments: [
+              {
+                assignmentId: "edit-second",
+                workItemId: "second",
+                reason: "dependency-pending",
+              },
+            ],
+          });
+          expect(finalResult).toMatchObject({
+            status: "pending",
+            missingWorkItemIds: ["second"],
+          });
+        } else if (mode === "scope-failure") {
+          expect(assignmentExecutionResult).toMatchObject({ status: "failed" });
+          expect(finalResult).toMatchObject({ status: "failed" });
+          expect(
+            records.find(
+              ({ request }) =>
+                request.assignmentId === "edit-second" &&
+                request.access === "write"
+            )?.result
+          ).toMatchObject({ passed: false });
+        } else {
+          if (finalResult?.status !== "write-integrated")
+            throw new Error(JSON.stringify(finalResult));
+          expect(finalResult.changedPaths).toEqual([...targets].sort());
+          expect(finalResult.snapshot).toEqual(plan.snapshot);
+          expect(
+            finalResult.workItemResults.map(({ workItemId }) => workItemId)
+          ).toEqual(plan.selectedWorkItemIds);
+          const patch = readFileSync(
+            join(finalResult.artifacts.directory, "changes.patch"),
+            "utf8"
+          );
+          for (const path of targets)
+            expect(patch).toContain(`+Corrected ${path}`);
+          expect(
+            fingerprintExecutionArtifacts(finalResult.artifacts.directory)
+          ).toEqual(finalResult.artifacts);
+          const report = JSON.parse(
+            readFileSync(
+              join(finalResult.artifacts.directory, "result.json"),
+              "utf8"
+            )
+          );
+          expect(report.verification).toMatchObject({
+            passed: true,
+            commands: [{ command: "git diff --check" }],
+          });
+          for (const ref of finalResult.workItemResults) {
+            const restored = governance.getIntegratedAssignmentSources(
+              handoff,
+              plan.id,
+              ref.workItemId
+            );
+            expect(restored?.digest).toBe(ref.digest);
+            const assignmentIds = plan.assignments
+              .filter(({ workItemId }) => workItemId === ref.workItemId)
+              .map(({ id }) => id);
+            expect(
+              restored?.assignments.map(
+                ({ execution }) => execution.request.assignmentId
+              )
+            ).toEqual(assignmentIds);
+            for (const { execution, prepared } of restored!.assignments) {
+              const definition = plan.assignments.find(
+                ({ id }) => id === execution.request.assignmentId
+              )!;
+              expect(execution.execution.specialistId).toBe(
+                definition.specialistId
+              );
+              if (definition.repositoryAccessCeiling === "read") {
+                expect(execution.result).toMatchObject({
+                  contextDigest: expect.any(String),
+                  decision: {
+                    specialistId: definition.specialistId,
+                    evidence: [{ path: paths.first }],
+                  },
+                });
+              } else {
+                expect(execution.result).toMatchObject({
+                  passed: true,
+                  artifacts: { patchDigest: expect.any(String) },
+                });
+                expect(prepared?.result).toMatchObject({
+                  contextDigest: expect.any(String),
+                  taskContractBinding:
+                    execution.request.access === "write" &&
+                    execution.request.taskContractBinding,
+                  task: { implementationPlan: { steps: expect.any(Array) } },
+                });
+              }
+            }
+          }
+        }
+      } finally {
+        for (const workspace of workerWorktrees)
+          git("worktree", "remove", "--force", workspace);
+        for (const directory of artifacts)
+          rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  );
 
   it("prepares a provenance-bound Assignment Plan without starting execution", async () => {
     const assignmentAgent = vi.fn<

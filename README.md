@@ -21,7 +21,7 @@ Staffing·Refinement 승인이 필요할 때는 동일한 Human 확인 콜백을
 
 - [Project Direction](docs/project-direction.md)
 - [Architecture](docs/architecture.md)
-- [Workflow Architecture](docs/workflow-architecture.md)
+- [Workflow Architecture](docs/workflow-architecture.md) · [Phase별 Feature와 Application 대응](docs/workflow-architecture.md#현재-workflow-feature와-application의-대응)
 - [Roadmap](docs/roadmap.md)
 
 공유 계약은 [Contracts 소유권과 의존 방향](docs/architecture.md#contracts-소유권과-의존-방향)을 따른다.

@@ -20,8 +20,8 @@ import {
 } from "@/application/management/allocation/analysis-assignment/index.js";
 import { createPhaseAGraph as createGraph } from "../graph.js";
 import { phaseADataFlow } from "../data-flow.js";
-import { executeNextSpecialist } from "../features/decision/nodes/execute-next-specialist.js";
-import { compareSpecialistDecisions } from "../features/comparison/nodes/compare-specialist-decisions.js";
+import { executeNextSpecialist } from "../features/specialist-analysis/nodes/execute-next-specialist.js";
+import { compareSpecialistDecisions } from "../features/decision-support/comparison/nodes/compare-specialist-decisions.js";
 import {
   phaseAState,
   type PhaseAState,
@@ -32,17 +32,17 @@ import type { SpecialistDecisionsWorkflowResult } from "../state.js";
 import {
   runAuthorizedSpecialistDecision,
   InvocationClaimError,
-} from "../features/decision/execution/authorized-specialist-decision.js";
+} from "../features/specialist-analysis/execution/authorized-specialist-decision.js";
 import { compareDecisions } from "@/application/management/decision-support/comparison/index.js";
 import type {
   AuthorizedSpecialistInvocation,
   InvokeSpecialistRequest,
 } from "@/application/governance/index.js";
 vi.mock(
-  "../features/decision/execution/authorized-specialist-decision.js",
+  "../features/specialist-analysis/execution/authorized-specialist-decision.js",
   async (original) => ({
     ...(await original<
-      typeof import("../features/decision/execution/authorized-specialist-decision.js")
+      typeof import("../features/specialist-analysis/execution/authorized-specialist-decision.js")
     >()),
     runAuthorizedSpecialistDecision: vi.fn(),
   })

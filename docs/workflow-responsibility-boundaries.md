@@ -132,13 +132,13 @@ Node가 다른 Node를 직접 호출해 별도의 Orchestrator를 만들지 않�
 | Node / 코드 근거 | 현재 실행·관찰 경계 | 유지 또는 조정·통합 검토 근거 |
 | --- | --- | --- |
 | [load-system-policy](../src/workflows/development-organization/phase-a/features/governance/nodes/system-policy/load-system-policy.ts) | Repository 입력 확인, Governance 정책 조회, 과거 실행 State 초기화. ready / denied로 분기 | 유지 근거: 정책 조회 실패 시 CEO 실행을 차단하는 독립적인 선행조건. 정책 유효성 자체는 Governance가 판단 |
-| [run-staffing](../src/workflows/development-organization/phase-a/features/staffing/nodes/run-staffing.ts) | 기존 runStaffing을 한 번 호출해 proposed / failed / escalated 관찰 | 유지 근거: 독립 CEO 실행과 성공·실패·Escalation 분기. Proposal 완성 Loop·최종화는 Application 내부에 유지 |
+| [run-staffing](../src/workflows/development-organization/phase-a/features/analysis-assignment/nodes/run-staffing.ts) | 기존 runStaffing을 한 번 호출해 proposed / failed / escalated 관찰 | 유지 근거: 독립 CEO 실행과 성공·실패·Escalation 분기. Proposal 완성 Loop·최종화는 Application 내부에 유지 |
 | [evaluate-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/staffing-approval/evaluate-staffing-approval.ts) | 원본 Proposal로 approveStaffingProposal 호출, approved / approval-required / denied에 따라 다음 경로 선택 | 유지 근거: Human 확인 필요 여부가 바뀌는 분기. 위임 승인 시 여기서 Scope 발급까지 완료될 수 있어 순수 조회로 취급하거나 무조건 재실행하면 안 됨 |
 | [confirm-staffing-approval](../src/workflows/development-organization/phase-a/features/governance/nodes/staffing-approval/confirm-staffing-approval.ts) | 승인 필요 시 분리된 review로 Human 콜백 호출, 원본 Proposal·실제 receipt로 최종 승인 요청 | 유지 근거: Human 대기·거부·예외와 최신 정책 재검증의 경계. 내부의 확인과 확정을 함수 개수만으로 나누지 않음. 현재 Interrupt / Resume는 아님 |
 | 과거 collect-staffing-approval-result (Step 4에서 제거) | Stage 1 / 2 종료 결과를 다시 통합해 저장하던 Node | Graph의 분기는 각 Stage 결과로, 외부 반환 변환은 Entry Point로 분리. 별도 Node·중복 State 없이 기존 CLI 계약 유지 |
-| [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. Step 3에서 Scope 조회는 Node 한 곳에 두고 helper는 순수 배치 검증으로 변경 |
-| [execute-next-specialist](../src/workflows/development-organization/phase-a/features/decision/nodes/execute-next-specialist.ts) | 한 요청의 Authorization → Claim·v2 실행 → Decision 수집·Index 갱신. authorization / claim / decision 실패와 준비 요청 부재 시 preflight 실패 기록 | 유지 근거: Assignment별 실행·관찰과 즉시 중단. 반복은 Edge가 결정하며 Invocation은 로컬 변수. 권한 부작용을 고려해 무조건 여러 Node로 쪼개지 않음 |
-| [compare-specialist-decisions](../src/workflows/development-organization/phase-a/features/comparison/nodes/compare-specialist-decisions.ts) | 모든 Decision 수집 후 Stage 3 완료 결과로 기존 compareDecisions 호출 또는 단일 비교 생략 | 독립 Stage 4로 completed / skipped / failed 기록. 실패해도 Stage 3 결과 보존 |
+| [preflight-specialist-decisions](../src/workflows/development-organization/phase-a/features/specialist-analysis/nodes/preflight-specialist-decisions.ts) | 저장 Scope 대조·모든 Assignment의 요청 구성·배치 검증 후 준비 결과 반환 | 유지 근거: 전체 검사 실패 시 첫 Reservation도 만들지 않는 실행 전 경계. Step 3에서 Scope 조회는 Node 한 곳에 두고 helper는 순수 배치 검증으로 변경 |
+| [execute-next-specialist](../src/workflows/development-organization/phase-a/features/specialist-analysis/nodes/execute-next-specialist.ts) | 한 요청의 Authorization → Claim·v2 실행 → Decision 수집·Index 갱신. authorization / claim / decision 실패와 준비 요청 부재 시 preflight 실패 기록 | 유지 근거: Assignment별 실행·관찰과 즉시 중단. 반복은 Edge가 결정하며 Invocation은 로컬 변수. 권한 부작용을 고려해 무조건 여러 Node로 쪼개지 않음 |
+| [compare-specialist-decisions](../src/workflows/development-organization/phase-a/features/decision-support/comparison/nodes/compare-specialist-decisions.ts) | 모든 Decision 수집 후 Stage 3 완료 결과로 기존 compareDecisions 호출 또는 단일 비교 생략 | 독립 Stage 4로 completed / skipped / failed 기록. 실패해도 Stage 3 결과 보존 |
 | 과거 complete-specialist-decisions (Step 3.1에서 제거) | 비어 있지 않은 전체 Specialist 결과를 Comparison 전에 확정 | Step 2에서 Stage 3 완료를 분리했고 Step 3.1에서 검사를 Execute Node에 통합. 완료 계약이 별도 Node를 요구하지는 않음 |
 
 ### Graph 반복과 Application 내부 Loop
@@ -241,7 +241,7 @@ Workflow → runAuthorizedSpecialistDecision()
 → collectIndependentDecisions() → Snapshot / Evidence Validation → AgentDecision
 ```
 
-[단일 실행 함수](../src/workflows/development-organization/phase-a/features/decision/execution/authorized-specialist-decision.ts)는
+[단일 실행 함수](../src/workflows/development-organization/phase-a/features/specialist-analysis/execution/authorized-specialist-decision.ts)는
 Governance Claim을 호출한 뒤 반환된 Invocation의 Snapshot·Goal·Specialist·Assignment Objective·files를
 [Decision Application](../src/application/specialist/analysis/flow/independent/collect-independent-decisions.ts)에 전달한다.
 Claim은 저장 Reservation의 존재·Binding / Digest·최신 승인/정책/Context와 일회 사용 여부를 검증하고
@@ -269,9 +269,9 @@ Evidence 경로·줄 범위 또는 Reference 구조의 유효성이 AI 분석 �
 ### Specialist Preflight의 중복과 목적 구분
 
 Step 3 이전에는 Preflight Node와 Workflow Validation이 각각 getApprovedStaffingScope()를 호출했다.
-현재 [Preflight Node](../src/workflows/development-organization/phase-a/features/decision/nodes/preflight-specialist-decisions.ts)가
+현재 [Preflight Node](../src/workflows/development-organization/phase-a/features/specialist-analysis/nodes/preflight-specialist-decisions.ts)가
 Governance를 통해 한 번 조회하고 State의 승인 ID / Version과 대조한다. 이어
-[순수 배치 검증 함수](../src/workflows/development-organization/phase-a/features/decision/validation/validate-specialist-request-batch.ts)에
+[순수 배치 검증 함수](../src/workflows/development-organization/phase-a/features/specialist-analysis/validation/validate-specialist-request-batch.ts)에
 그 Scope와 생성한 요청을 전달한다. 함수는 조회·예약·승인 인증을 하지 않는다.
 
 | 검사 / 시점 | 현재 소유자와 유지·제거 이유 |

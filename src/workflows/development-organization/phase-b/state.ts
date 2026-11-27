@@ -1,7 +1,7 @@
 import type { AssignmentIntegrationOutput } from "@/application/integration/assignment/index.js";
 import type { VerifiedPhaseBContext } from "@/application/governance/index.js";
 import type { AssignmentPlanningOutput } from "@/application/management/allocation/execution-assignment/index.js";
-import type { AssignmentExecutionOutput } from "./features/execution/coordination/coordinate-assignment-executions.js";
+import type { AssignmentExecutionOutput } from "./features/assignment-execution/coordination/coordinate-assignment-executions.js";
 import { StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { workDecompositionResultSchema } from "@/application/management/work-decomposition/index.js";

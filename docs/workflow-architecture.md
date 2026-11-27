@@ -89,6 +89,25 @@ Stage별 업무 목적·입력·성공 결과·후속 진행 조건은
 [Stage 책임 경계](workflow-responsibility-boundaries.md#2-첫-번째-경계--stage)를 따른다.
 이 절은 Phase별 목표 순서와 현재 실제 연결 범위를 설명한다.
 
+### 현재 Workflow Feature와 Application의 대응
+
+Workflow Feature는 각 Phase의 업무 진행 단계에 따라 배치한다. 아래 Application 경로는 각 Feature가 주로 호출하는 업무 기능을 가리킨다.
+
+| Phase | Workflow `features/` | 주요 `application/` 경로 |
+| --- | --- | --- |
+| A | `analysis-assignment/` | `management/allocation/analysis-assignment/` |
+| A | `specialist-analysis/` | `specialist/analysis/` |
+| A | `decision-support/comparison/` | `management/decision-support/comparison/` |
+| A | `decision-support/analysis-review/` | `management/decision-support/analysis-review/` |
+| A | `decision-support/synthesis/` | `management/decision-support/synthesis/` |
+| A | `governance/` | `governance/` |
+| B | `work-decomposition/` | `management/work-decomposition/` |
+| B | `execution-assignment/` | `management/allocation/execution-assignment/` |
+| B | `assignment-execution/` | `specialist/execution/` |
+| B | `integration/` | `integration/assignment/` |
+
+`nodes/`는 Graph Node와 Node Factory를 소유한다. Phase A의 승인된 Specialist 호출 연결과 요청 검증은 각각 `specialist-analysis/execution/`과 `specialist-analysis/validation/`에 두고, Refinement 상태 변환은 `decision-support/analysis-review/refinement-state.ts`에 둔다. Phase B의 Work Item 선택은 `work-decomposition/nodes/`에 두고, 복수 Assignment 실행은 `assignment-execution/coordination/`에서 조정한다.
+
 ### Phase A — Decision & Approval
 
 해결 방향을 판단하고 Human 승인을 받는 것이 목적이다. 목표 순서는 다음과 같다.
@@ -504,7 +523,7 @@ DevelopmentOrganizationGraph
 CLI는 필요한 실행 단위를 호출할 수 있어야 하지만 그 사실만으로 독립 Subgraph를 정당화하지 않는다.
 Graph별 디렉터리 응집성과 런타임 Subgraph 도입도 다른 판단이다. 현재는 Application 기능 소유권에 맞춰
 features/ 아래 staffing / governance / decision / comparison 영역의 nodes/에 실제 Node를 배치한다.
-Workflow 전용 Preflight 검증과 단일 실행 보조 함수는 features/decision/validation, features/decision/execution에 둔다.
+Workflow 전용 Preflight 검증과 단일 실행 보조 함수는 features/specialist-analysis/validation, features/specialist-analysis/execution에 둔다.
 entrypoints/는 외부 Graph 호출 인터페이스, features/는 기능별 내부 실행 모듈을 분류한다.
 features/는 새 Application 계층이 아니며 이번 이동은 실행 구조가 아닌 디렉터리 분류 기준의 정리다.
 당시 디렉터리 정리에서는 실행 계약을 유지했다. 후속 Step 2에서 Stage 3 / 4의 결과·완료 순서를 분리했으며 후속 Step 3에서 Preflight 조회를 단일화했다. Specialist별 순서·반복·실패·Comparison 진입은 Phase A Edge가 소유한다.

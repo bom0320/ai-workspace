@@ -1,11 +1,14 @@
-import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import { approveRefinementProposal } from "@/application/governance/approval/features/proposal-management/flow/approve-staffing-proposal.js";
 import { prepareAnalysisRefinement } from "@/application/governance/records/analysis/prepare-analysis-refinement.js";
 import {
   beginBatch,
   refinementApproval,
   refinementBasis,
-} from "./refinement-state.js";
+} from "../refinement-state.js";
 
 export function prepareRefinementNode(
   state: PhaseANodeInput<"prepare-refinement">

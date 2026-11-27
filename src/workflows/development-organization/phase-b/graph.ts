@@ -2,13 +2,13 @@ import { END, START, StateGraph } from "@langchain/langgraph";
 import { z } from "zod";
 import type { RunWorkDecompositionOptions } from "@/application/management/work-decomposition/index.js";
 import type { AssignmentPlanAgent } from "@/application/management/allocation/execution-assignment/index.js";
-import type { AssignmentExecutionOptions } from "./features/execution/coordination/coordinate-assignment-executions.js";
-import { createAssignSpecialistsNode } from "./features/planning/nodes/assign-specialists.js";
-import { createExecuteAssignmentsNode } from "./features/execution/nodes/execute-assignments.js";
+import type { AssignmentExecutionOptions } from "./features/assignment-execution/coordination/coordinate-assignment-executions.js";
+import { createAssignSpecialistsNode } from "./features/execution-assignment/nodes/assign-specialists.js";
+import { createExecuteAssignmentsNode } from "./features/assignment-execution/nodes/execute-assignments.js";
 import {
   createSelectWorkItemsNode,
   type SelectWorkItemIds,
-} from "./features/planning/nodes/select-work-items.js";
+} from "./features/work-decomposition/nodes/select-work-items.js";
 import { createRunWorkDecompositionNode } from "./features/work-decomposition/nodes/run-work-decomposition.js";
 import { integrateAssignments } from "./features/integration/nodes/integrate-assignments.js";
 import { phaseBInput, phaseBState } from "./state.js";

@@ -1,4 +1,7 @@
-import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 // Narrow internal integration: raw Review registration is not a public Governance API.
 import { registerDirectionReview } from "@/application/governance/approval/features/direction-review/flow/review-management.js";
 import {

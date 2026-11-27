@@ -1,7 +1,10 @@
-import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import { approveRefinementProposal } from "@/application/governance/approval/features/proposal-management/flow/approve-staffing-proposal.js";
-import type { StaffingConfirmationOptions } from "../../governance/nodes/staffing-approval/confirm-staffing-approval.js";
-import { refinementApproval, refinementBasis } from "./refinement-state.js";
+import type { StaffingConfirmationOptions } from "../../../governance/nodes/staffing-approval/confirm-staffing-approval.js";
+import { refinementApproval, refinementBasis } from "../refinement-state.js";
 
 export function createConfirmRefinementNode(
   confirm: StaffingConfirmationOptions["confirmApproval"]

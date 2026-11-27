@@ -1,4 +1,7 @@
-import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
+import type {
+  PhaseANodeInput,
+  PhaseANodeOutput,
+} from "../../../../data-flow.js";
 import {
   assessAnalysis,
   type AssessmentAgent,

@@ -3,7 +3,7 @@ import type { StaffingApprovalResult } from "@/application/governance/index.js";
 import type { AnalysisRefinement } from "@/application/governance/model/analysis-refinement.js";
 import { projectRefinementRequests } from "@/application/governance/records/analysis/refinement-records.js";
 import type { PhaseANodeInput, PhaseANodeOutput } from "../../../data-flow.js";
-import { assessmentBasis } from "./assess-analysis.js";
+import { assessmentBasis } from "./nodes/assess-analysis.js";
 
 export function refinementBasis(
   state: Pick<

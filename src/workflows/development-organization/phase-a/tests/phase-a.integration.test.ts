@@ -13,7 +13,7 @@ import { registerWorkDecomposition } from "@/application/governance/records/work
 import * as governance from "@/application/governance/index.js";
 import * as processRuntime from "@/infrastructure/process/index.js";
 import { createPhaseAGraph as createGraph } from "../index.js";
-import { runAuthorizedSpecialistDecision } from "../features/decision/execution/authorized-specialist-decision.js";
+import { runAuthorizedSpecialistDecision } from "../features/specialist-analysis/execution/authorized-specialist-decision.js";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -2493,7 +2493,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       }
       if (executesWrite) {
         const { coordinateAssignmentExecutions } =
-          await import("../../phase-b/features/execution/coordination/coordinate-assignment-executions.js");
+          await import("../../phase-b/features/assignment-execution/coordination/coordinate-assignment-executions.js");
         const runAgain = () =>
           coordinateAssignmentExecutions(
             { handoff, plan, selectedWorkItemIds: ["first"] },
@@ -2585,7 +2585,7 @@ describe("Approved dynamic Specialists → v2 Decisions → v3 Comparison", () =
       if (restored?.status !== "task-prepared")
         throw new Error("Missing prepared task.");
       const { coordinateAssignmentExecutions } =
-        await import("../../phase-b/features/execution/coordination/coordinate-assignment-executions.js");
+        await import("../../phase-b/features/assignment-execution/coordination/coordinate-assignment-executions.js");
       expect(
         await coordinateAssignmentExecutions(
           { handoff, plan, selectedWorkItemIds: ["first"] },
